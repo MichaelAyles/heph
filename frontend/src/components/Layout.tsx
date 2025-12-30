@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, PlusCircle, Settings, Layers } from 'lucide-react'
+import { Home, PlusCircle, Settings, Layers, LogOut, User } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useAuthStore } from '@/stores/auth'
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
@@ -11,6 +12,7 @@ const navigation = [
 
 export function Layout() {
   const location = useLocation()
+  const { user, logout } = useAuthStore()
 
   return (
     <div className="min-h-screen flex">
@@ -45,10 +47,25 @@ export function Layout() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-surface-700">
-          <p className="text-xs text-steel-dim font-mono">
-            Gemini 3.0 Flash
-          </p>
+        <div className="p-4 border-t border-surface-700 space-y-3">
+          {/* User */}
+          <div className="flex items-center gap-2 text-sm">
+            <User className="w-4 h-4 text-steel-dim" strokeWidth={1.5} />
+            <span className="text-steel truncate">{user?.displayName || user?.username}</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-steel-dim font-mono">
+              Gemini 3.0 Flash
+            </p>
+            <button
+              onClick={logout}
+              className="p-1.5 text-steel-dim hover:text-steel hover:bg-surface-800 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" strokeWidth={1.5} />
+            </button>
+          </div>
         </div>
       </aside>
 

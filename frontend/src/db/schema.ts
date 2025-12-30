@@ -6,11 +6,31 @@
  */
 
 // =============================================================================
+// USERS & AUTH
+// =============================================================================
+
+export interface User {
+  id: string
+  username: string
+  displayName: string | null
+  createdAt: string
+  lastLoginAt: string | null
+}
+
+export interface Session {
+  id: string
+  userId: string
+  expiresAt: string
+  createdAt: string
+}
+
+// =============================================================================
 // PROJECTS
 // =============================================================================
 
 export interface Project {
   id: string
+  userId: string
   name: string
   description: string | null
   status: ProjectStatus
@@ -147,8 +167,25 @@ export interface SystemSettings {
 // DB Row Types (snake_case from SQLite)
 // =============================================================================
 
+export interface UserRow {
+  id: string
+  username: string
+  password_hash: string
+  display_name: string | null
+  created_at: string
+  last_login_at: string | null
+}
+
+export interface SessionRow {
+  id: string
+  user_id: string
+  expires_at: string
+  created_at: string
+}
+
 export interface ProjectRow {
   id: string
+  user_id: string
   name: string
   description: string | null
   status: string
@@ -195,9 +232,29 @@ export interface SettingsRow {
 // Transform Functions
 // =============================================================================
 
+export function userFromRow(row: UserRow): User {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at,
+  }
+}
+
+export function sessionFromRow(row: SessionRow): Session {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  }
+}
+
 export function projectFromRow(row: ProjectRow): Project {
   return {
     id: row.id,
+    userId: row.user_id,
     name: row.name,
     description: row.description,
     status: row.status as ProjectStatus,

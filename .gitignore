@@ -4,5 +4,8 @@ claude.md
 agents.md
 .claude/
 
+# Cloudflare local state
+.wrangler/
+
 # OS
 .DS_Store

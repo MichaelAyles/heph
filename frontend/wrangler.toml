@@ -6,7 +6,7 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "phaestus"
-database_id = "" # Fill in after running: wrangler d1 create phaestus
+database_id = "57a03632-4d39-4504-9c34-731b4c58db4a"
 
 # R2 Storage
 [[r2_buckets]]
