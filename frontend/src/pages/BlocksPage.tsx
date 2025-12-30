@@ -1,85 +1,14 @@
 import { useState } from 'react'
-import { Search, Cpu, Battery, Radio, Lightbulb, Cable, Wrench } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Search, Cpu, Battery, Radio, Lightbulb, Cable, Wrench, Loader2 } from 'lucide-react'
 import { clsx } from 'clsx'
-import type { BlockCategory } from '@/db/schema'
+import type { BlockCategory, PcbBlock } from '@/db/schema'
 
-// Static block data for now - will come from DB
-const BLOCKS = [
-  {
-    id: 'mcu-esp32c6',
-    slug: 'mcu-esp32c6',
-    name: 'ESP32-C6 MCU',
-    category: 'mcu' as BlockCategory,
-    description: 'WiFi 6, BLE 5.3, Zigbee/Thread. System controller.',
-    widthUnits: 2,
-    heightUnits: 2,
-  },
-  {
-    id: 'power-lipo',
-    slug: 'power-lipo',
-    name: 'LiPo Battery',
-    category: 'power' as BlockCategory,
-    description: 'Single-cell LiPo with TP4056 charger. USB-C input.',
-    widthUnits: 1,
-    heightUnits: 2,
-  },
-  {
-    id: 'sensor-bme280',
-    slug: 'sensor-bme280',
-    name: 'BME280 Environment',
-    category: 'sensor' as BlockCategory,
-    description: 'Temperature, humidity, pressure. I2C interface.',
-    widthUnits: 1,
-    heightUnits: 1,
-  },
-  {
-    id: 'sensor-sht40',
-    slug: 'sensor-sht40',
-    name: 'SHT40 Temp/Humidity',
-    category: 'sensor' as BlockCategory,
-    description: 'High-accuracy temperature and humidity. I2C.',
-    widthUnits: 1,
-    heightUnits: 1,
-  },
-  {
-    id: 'sensor-pir',
-    slug: 'sensor-pir',
-    name: 'PIR Motion',
-    category: 'sensor' as BlockCategory,
-    description: 'Passive infrared motion detector. GPIO output.',
-    widthUnits: 1,
-    heightUnits: 1,
-  },
-  {
-    id: 'output-led-ws2812',
-    slug: 'output-led-ws2812',
-    name: 'WS2812B LED',
-    category: 'output' as BlockCategory,
-    description: 'Addressable RGB LED connector. Single data line.',
-    widthUnits: 1,
-    heightUnits: 1,
-  },
-  {
-    id: 'output-buzzer',
-    slug: 'output-buzzer',
-    name: 'Piezo Buzzer',
-    category: 'output' as BlockCategory,
-    description: 'Piezo with driver transistor. PWM input.',
-    widthUnits: 1,
-    heightUnits: 1,
-  },
-  {
-    id: 'conn-oled',
-    slug: 'conn-oled',
-    name: 'OLED Connector',
-    category: 'connector' as BlockCategory,
-    description: '4-pin JST-SH for I2C OLED display module.',
-    widthUnits: 1,
-    heightUnits: 1,
-  },
-]
-
-const CATEGORIES: { id: BlockCategory | 'all'; name: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[] = [
+const CATEGORIES: {
+  id: BlockCategory | 'all'
+  name: string
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+}[] = [
   { id: 'all', name: 'All', icon: Cpu },
   { id: 'mcu', name: 'MCU', icon: Cpu },
   { id: 'power', name: 'Power', icon: Battery },
@@ -89,17 +18,32 @@ const CATEGORIES: { id: BlockCategory | 'all'; name: string; icon: React.Compone
   { id: 'utility', name: 'Utility', icon: Wrench },
 ]
 
+async function fetchBlocks(
+  category: BlockCategory | 'all',
+  search: string
+): Promise<{ blocks: PcbBlock[]; total: number }> {
+  const params = new URLSearchParams()
+  if (category !== 'all') params.set('category', category)
+  if (search) params.set('search', search)
+
+  const response = await fetch(`/api/blocks?${params.toString()}`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch blocks')
+  }
+  return response.json()
+}
+
 export function BlocksPage() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<BlockCategory | 'all'>('all')
 
-  const filteredBlocks = BLOCKS.filter((block) => {
-    const matchesSearch =
-      block.name.toLowerCase().includes(search.toLowerCase()) ||
-      block.description.toLowerCase().includes(search.toLowerCase())
-    const matchesCategory = category === 'all' || block.category === category
-    return matchesSearch && matchesCategory
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['blocks', category, search],
+    queryFn: () => fetchBlocks(category, search),
+    staleTime: 60000, // Cache for 1 minute
   })
+
+  const blocks = data?.blocks ?? []
 
   return (
     <div className="flex-1 flex flex-col">
@@ -107,7 +51,10 @@ export function BlocksPage() {
       <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700">
         <h1 className="text-base font-semibold text-steel tracking-tight">BLOCK LIBRARY</h1>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-dim" strokeWidth={1.5} />
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-dim"
+            strokeWidth={1.5}
+          />
           <input
             type="text"
             value={search}
@@ -143,14 +90,21 @@ export function BlocksPage() {
 
         {/* Block Grid */}
         <main className="flex-1 p-6 overflow-auto">
-          <div className="grid grid-cols-3 gap-4">
-            {filteredBlocks.map((block) => (
-              <BlockCard key={block.id} block={block} />
-            ))}
-          </div>
-          {filteredBlocks.length === 0 && (
-            <div className="text-center text-steel-dim py-12 font-mono text-sm">
-              No blocks found.
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 text-copper animate-spin" strokeWidth={1.5} />
+            </div>
+          ) : error ? (
+            <div className="text-center text-red-400 py-12 font-mono text-sm">
+              Failed to load blocks.
+            </div>
+          ) : blocks.length === 0 ? (
+            <div className="text-center text-steel-dim py-12 font-mono text-sm">No blocks found.</div>
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              {blocks.map((block) => (
+                <BlockCard key={block.id} block={block} />
+              ))}
             </div>
           )}
         </main>
@@ -159,7 +113,7 @@ export function BlocksPage() {
   )
 }
 
-function BlockCard({ block }: { block: (typeof BLOCKS)[0] }) {
+function BlockCard({ block }: { block: PcbBlock }) {
   const CategoryIcon = CATEGORIES.find((c) => c.id === block.category)?.icon || Cpu
 
   return (

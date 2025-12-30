@@ -6,7 +6,7 @@
 import type { Env } from '../env'
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ['/api/auth/login', '/api/auth/logout', '/api/auth/me']
+const PUBLIC_ROUTES = ['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/blocks']
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url)

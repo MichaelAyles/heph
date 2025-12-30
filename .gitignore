@@ -6,6 +6,7 @@ agents.md
 
 # Cloudflare local state
 .wrangler/
+.dev.vars
 
 # OS
 .DS_Store

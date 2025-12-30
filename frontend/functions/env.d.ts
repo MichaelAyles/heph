@@ -12,8 +12,10 @@ export interface Env {
   // Environment variables
   ENVIRONMENT: string
 
-  // Secrets (set via wrangler secret put)
+  // Secrets (set via wrangler secret put or .dev.vars)
   OPENROUTER_API_KEY: string
+  TEXT_MODEL_SLUG?: string
+  IMAGE_MODEL_SLUG?: string
 }
 
 // Extend the context with our typed env
