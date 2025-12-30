@@ -1,0 +1,17 @@
+name = "phaestus"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "phaestus"
+database_id = "" # Fill in after running: wrangler d1 create phaestus
+
+# R2 Storage
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "phaestus-assets"
+
+[vars]
+ENVIRONMENT = "development"

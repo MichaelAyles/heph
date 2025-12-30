@@ -1,0 +1,5 @@
+export { HomePage } from './HomePage'
+export { NewProjectPage } from './NewProjectPage'
+export { ProjectPage } from './ProjectPage'
+export { SettingsPage } from './SettingsPage'
+export { BlocksPage } from './BlocksPage'

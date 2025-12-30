@@ -1,0 +1,80 @@
+/* IBM Plex Sans & Mono */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+
+@import 'tailwindcss';
+
+@theme {
+  /* Typography - IBM Plex */
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
+
+  /* Phaestus Brand Colors */
+  --color-copper: #C47A4A;
+  --color-copper-burnt: #A9653E;
+  --color-copper-light: #D4956A;
+  --color-copper-glow: #E8A878;
+
+  /* Surface Colors */
+  --color-iron: #1F242B;
+  --color-ash: #121417;
+  --color-steel: #F2F2F2;
+  --color-steel-dim: #A0A0A0;
+
+  /* Semantic mappings for Tailwind */
+  --color-brand-400: #D4956A;
+  --color-brand-500: #C47A4A;
+  --color-brand-600: #A9653E;
+  --color-brand-700: #8B5233;
+
+  /* Dark theme surface colors */
+  --color-surface-950: #121417;
+  --color-surface-900: #1F242B;
+  --color-surface-800: #282D35;
+  --color-surface-700: #353B45;
+  --color-surface-600: #454C58;
+}
+
+html {
+  @apply antialiased;
+}
+
+body {
+  @apply bg-surface-950 text-steel min-h-screen;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+}
+
+#root {
+  @apply min-h-screen;
+}
+
+/* Sharp corners - no rounded elements per brand guide */
+* {
+  border-radius: 0 !important;
+}
+
+/* Override for specific elements that need subtle corners */
+.rounded-sm { border-radius: 2px !important; }
+.rounded { border-radius: 4px !important; }
+.rounded-lg { border-radius: 4px !important; }
+.rounded-xl { border-radius: 4px !important; }
+.rounded-full { border-radius: 9999px !important; }
+
+/* Copper accent borders */
+.border-copper {
+  border-color: var(--color-copper);
+}
+
+/* Selection color */
+::selection {
+  background-color: rgba(196, 122, 74, 0.3);
+  color: var(--color-steel);
+}
+
+/* Copper gradient matching P logo - heat radiates from top-right */
+.bg-copper-gradient {
+  background: radial-gradient(ellipse at top right, var(--color-copper-light) 0%, var(--color-copper-burnt) 70%);
+}
+
+.bg-copper-gradient:hover {
+  background: radial-gradient(ellipse at top right, var(--color-copper) 0%, #8B5233 70%);
+}

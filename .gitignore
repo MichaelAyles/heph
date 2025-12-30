@@ -1,0 +1,8 @@
+# Project-specific exclusions
+/inspiration/
+claude.md
+agents.md
+.claude/
+
+# OS
+.DS_Store
