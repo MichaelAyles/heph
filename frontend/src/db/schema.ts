@@ -39,17 +39,87 @@ export interface Project {
   updatedAt: string
 }
 
-export type ProjectStatus = 'draft' | 'analyzing' | 'designing' | 'complete' | 'error'
+export type ProjectStatus =
+  | 'draft'        // Just created
+  | 'analyzing'    // Running feasibility
+  | 'rejected'     // Failed feasibility
+  | 'refining'     // User answering questions
+  | 'generating'   // Creating blueprint images
+  | 'selecting'    // User picking blueprint
+  | 'finalizing'   // Generating final spec
+  | 'complete'     // Spec locked
+
+// =============================================================================
+// PROJECT SPEC - New Pipeline
+// =============================================================================
 
 export interface ProjectSpec {
+  // Original user input
   description: string
-  requirements: Requirement[]
-  formFactor: FormFactor | null
-  blocks: SelectedBlock[]
+
+  // Step 1: Feasibility analysis
+  feasibility: FeasibilityAnalysis | null
+
+  // Step 2: User decisions
+  openQuestions: OpenQuestion[]
   decisions: Decision[]
+
+  // Step 3-4: Blueprints
+  blueprints: Blueprint[]
+  selectedBlueprint: number | null // index into blueprints array
+
+  // Step 5: Final locked spec
+  finalSpec: FinalSpec | null
 }
 
-export interface Requirement {
+export interface FeasibilityAnalysis {
+  communication: { type: string; confidence: number; notes: string }
+  processing: { level: string; confidence: number; notes: string }
+  power: { options: string[]; confidence: number; notes: string }
+  inputs: { items: string[]; confidence: number }
+  outputs: { items: string[]; confidence: number }
+  overallScore: number // 0-100
+  manufacturable: boolean
+  rejectionReason?: string
+}
+
+export interface OpenQuestion {
+  id: string
+  question: string
+  options: string[]
+}
+
+export interface Decision {
+  questionId: string
+  question: string
+  answer: string
+  timestamp: string
+}
+
+export interface Blueprint {
+  url: string
+  prompt: string
+}
+
+export interface FinalSpec {
+  name: string
+  summary: string
+  pcbSize: { width: number; height: number; unit: 'mm' }
+  inputs: { type: string; count: number; notes: string }[]
+  outputs: { type: string; count: number; notes: string }[]
+  power: { source: string; voltage: string; current: string; batteryLife?: string }
+  communication: { type: string; protocol: string }
+  enclosure: { style: string; width: number; height: number; depth: number }
+  estimatedBOM: { item: string; quantity: number; unitCost: number }[]
+  locked: boolean
+  lockedAt: string
+}
+
+// =============================================================================
+// LEGACY TYPES (kept for backwards compatibility during migration)
+// =============================================================================
+
+export interface LegacyRequirement {
   id: string
   text: string
   category: RequirementCategory
@@ -67,34 +137,11 @@ export type RequirementCategory =
   | 'mechanical'
   | 'other'
 
-export interface FormFactor {
-  type: 'handheld' | 'desktop' | 'wall-mount' | 'wearable' | 'enclosure-free'
-  width: number // mm
-  height: number // mm
-  depth: number // mm
-  apertures: Aperture[]
-}
-
-export interface Aperture {
-  type: 'usb-c' | 'button' | 'led' | 'display' | 'sensor' | 'vent' | 'other'
-  position: 'top' | 'bottom' | 'left' | 'right' | 'front' | 'back'
-  width: number
-  height: number
-}
-
 export interface SelectedBlock {
   blockId: string
   quantity: number
   position?: { x: number; y: number } // grid position
   config?: Record<string, unknown>
-}
-
-export interface Decision {
-  id: string
-  question: string
-  answer: string
-  rationale: string
-  timestamp: string
 }
 
 // =============================================================================

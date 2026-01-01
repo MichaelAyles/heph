@@ -1,5 +1,6 @@
 import type { Env } from '../../env'
 import { calculateImageCost } from './pricing'
+import { createLogger } from '../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -14,6 +15,7 @@ interface User {
   id: string
   username: string
   displayName: string | null
+  isAdmin?: boolean
 }
 
 interface ImageRequest {
@@ -24,11 +26,18 @@ interface ImageRequest {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, data } = context
   const user = data.user as User
+  const requestId = (data.requestId as string) || crypto.randomUUID().replace(/-/g, '')
+  const logger = createLogger(env, user, requestId)
   const startTime = Date.now()
 
   try {
     const body = (await context.request.json()) as ImageRequest
     const { prompt } = body
+
+    await logger.debug('llm', 'Image request received', {
+      promptLength: prompt?.length,
+      model: body.model,
+    })
 
     if (!prompt) {
       return Response.json({ error: 'Prompt required' }, { status: 400 })
@@ -73,7 +82,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('Image API error:', errorText)
+      await logger.error('llm', 'Image API error', { error: errorText, model })
 
       // Log failed request
       const id = crypto.randomUUID().replace(/-/g, '')
@@ -153,13 +162,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .bind(id, user.id, model, latencyMs, costUsd)
       .run()
 
+    await logger.llm('Image generated', { model, latencyMs, costUsd })
+
     return Response.json({
       imageUrl,
       model,
       latencyMs,
     })
   } catch (error) {
-    console.error('Image error:', error)
+    await logger.error('llm', 'Image error', { error: String(error) })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

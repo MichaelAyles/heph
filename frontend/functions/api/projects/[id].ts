@@ -76,7 +76,17 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       values.push(body.description)
     }
     if (body.status !== undefined) {
-      const validStatuses = ['draft', 'analyzing', 'designing', 'complete', 'error']
+      const validStatuses = [
+        'draft',
+        'analyzing',
+        'rejected',
+        'refining',
+        'generating',
+        'selecting',
+        'finalizing',
+        'complete',
+        'error',
+      ]
       if (!validStatuses.includes(body.status)) {
         return Response.json({ error: 'Invalid status' }, { status: 400 })
       }

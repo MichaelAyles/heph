@@ -1,6 +1,5 @@
 # Project-specific exclusions
 /inspiration/
-claude.md
 agents.md
 .claude/
 

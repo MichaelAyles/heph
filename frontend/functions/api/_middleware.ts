@@ -4,13 +4,20 @@
  */
 
 import type { Env } from '../env'
+import { createLogger } from '../lib/logger'
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/blocks']
 
 export const onRequest: PagesFunction<Env> = async (context) => {
+  const { env } = context
   const url = new URL(context.request.url)
   const path = url.pathname
+  const method = context.request.method
+  const requestId = crypto.randomUUID().replace(/-/g, '')
+
+  // Store request ID for logging
+  context.data.requestId = requestId
 
   // Allow public routes
   if (PUBLIC_ROUTES.some((route) => path.startsWith(route))) {
@@ -26,27 +33,43 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Validate session
-  const { env } = context
+  // Validate session and get user with admin status
   const result = await env.DB.prepare(
-    `SELECT u.id, u.username, u.display_name
+    `SELECT u.id, u.username, u.display_name, u.is_admin
      FROM sessions s
      JOIN users u ON s.user_id = u.id
      WHERE s.id = ? AND s.expires_at > datetime('now')`
   )
     .bind(sessionId)
-    .first<{ id: string; username: string; display_name: string | null }>()
+    .first<{ id: string; username: string; display_name: string | null; is_admin: number }>()
 
   if (!result) {
     return Response.json({ error: 'Session expired' }, { status: 401 })
   }
+
+  const isAdmin = result.is_admin === 1
 
   // Attach user to context data for downstream handlers
   context.data.user = {
     id: result.id,
     username: result.username,
     displayName: result.display_name,
+    isAdmin,
   }
 
-  return context.next()
+  // Log request for admin users
+  if (isAdmin) {
+    const logger = createLogger(env, context.data.user as any, requestId)
+    await logger.api(`${method} ${path}`, {
+      query: Object.fromEntries(url.searchParams),
+    })
+  }
+
+  const response = await context.next()
+
+  // Add request ID to response headers
+  const newResponse = new Response(response.body, response)
+  newResponse.headers.set('X-Request-ID', requestId)
+
+  return newResponse
 }

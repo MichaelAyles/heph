@@ -25,6 +25,7 @@ export interface AppContext {
     id: string
     username: string
     displayName: string | null
+    isAdmin: boolean
   }
 }
 

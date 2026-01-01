@@ -1,6 +1,7 @@
 export { HomePage } from './HomePage'
 export { NewProjectPage } from './NewProjectPage'
-export { ProjectPage } from './ProjectPage'
+export { SpecPage } from './SpecPage'
+export { SpecViewerPage } from './SpecViewerPage'
 export { SettingsPage } from './SettingsPage'
 export { BlocksPage } from './BlocksPage'
 export { LoginPage } from './LoginPage'

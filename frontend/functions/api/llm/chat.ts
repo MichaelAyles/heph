@@ -1,5 +1,6 @@
 import type { Env } from '../../env'
 import { calculateCost } from './pricing'
+import { createLogger } from '../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -14,6 +15,7 @@ interface User {
   id: string
   username: string
   displayName: string | null
+  isAdmin?: boolean
 }
 
 interface ChatMessage {
@@ -32,11 +34,19 @@ interface ChatRequest {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, data } = context
   const user = data.user as User
+  const requestId = (data.requestId as string) || crypto.randomUUID().replace(/-/g, '')
+  const logger = createLogger(env, user, requestId)
   const startTime = Date.now()
 
   try {
     const body = (await context.request.json()) as ChatRequest
     const { messages, projectId } = body
+
+    await logger.debug('llm', 'Chat request received', {
+      messageCount: messages?.length,
+      projectId,
+      model: body.model,
+    })
 
     if (!messages || messages.length === 0) {
       return Response.json({ error: 'Messages required' }, { status: 400 })
@@ -105,7 +115,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!response.ok) {
       const error = await response.text()
-      console.error('LLM API error:', error)
+      await logger.error('llm', 'LLM API error', { error, model, provider })
 
       // Log failed request
       await logLlmRequest(
@@ -176,9 +186,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       null
     )
 
+    await logger.llm('Chat completed', {
+      model,
+      latencyMs,
+      promptTokens: usage?.promptTokens,
+      completionTokens: usage?.completionTokens,
+      contentLength: content.length,
+    })
+
     return Response.json({ content, model, usage })
   } catch (error) {
-    console.error('Chat error:', error)
+    await logger.error('llm', 'Chat error', { error: String(error) })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

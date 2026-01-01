@@ -5,7 +5,8 @@ import { Loader2 } from 'lucide-react'
 import { Layout } from '@/components/Layout'
 import { HomePage } from '@/pages/HomePage'
 import { NewProjectPage } from '@/pages/NewProjectPage'
-import { ProjectPage } from '@/pages/ProjectPage'
+import { SpecPage } from '@/pages/SpecPage'
+import { SpecViewerPage } from '@/pages/SpecViewerPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { BlocksPage } from '@/pages/BlocksPage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -26,7 +27,8 @@ function AuthenticatedApp() {
       <Route path="/" element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="new" element={<NewProjectPage />} />
-        <Route path="project/:id" element={<ProjectPage />} />
+        <Route path="project/:id" element={<SpecPage />} />
+        <Route path="project/:id/view" element={<SpecViewerPage />} />
         <Route path="blocks" element={<BlocksPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

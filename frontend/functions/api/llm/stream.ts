@@ -1,5 +1,6 @@
 import type { Env } from '../../env'
 import { calculateCost } from './pricing'
+import { createLogger } from '../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -14,6 +15,7 @@ interface User {
   id: string
   username: string
   displayName: string | null
+  isAdmin?: boolean
 }
 
 interface ChatMessage {
@@ -32,10 +34,18 @@ interface StreamRequest {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, data } = context
   const user = data.user as User
+  const requestId = (data.requestId as string) || crypto.randomUUID().replace(/-/g, '')
+  const logger = createLogger(env, user, requestId)
 
   try {
     const body = (await context.request.json()) as StreamRequest
     const { messages, projectId } = body
+
+    await logger.debug('llm', 'Stream request received', {
+      messageCount: messages?.length,
+      projectId,
+      model: body.model,
+    })
 
     if (!messages || messages.length === 0) {
       return Response.json({ error: 'Messages required' }, { status: 400 })
@@ -104,9 +114,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!upstreamResponse.ok) {
       const error = await upstreamResponse.text()
-      console.error('LLM stream error:', error)
+      await logger.error('llm', 'LLM stream error', { error, model, provider })
       return Response.json({ error: 'LLM API error' }, { status: 502 })
     }
+
+    await logger.llm('Stream started', { model, provider })
 
     // Create a TransformStream to process and forward the response
     const { readable, writable } = new TransformStream()
@@ -122,7 +134,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       },
     })
   } catch (error) {
-    console.error('Stream error:', error)
+    await logger.error('llm', 'Stream error', { error: String(error) })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
