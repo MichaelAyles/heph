@@ -8,77 +8,82 @@ PHAESTUS is an AI-powered hardware design platform that transforms natural langu
 
 ## Commands
 
+All commands run from `frontend/`:
+
 ```bash
-# Development (frontend only, no API)
-pnpm dev
+# Development
+pnpm dev           # Frontend only (port 5173, no API)
+pnpm dev:full      # Full stack with D1/R2 (port 8788)
 
-# Development (full stack with Cloudflare Pages Functions)
-pnpm dev:full
+# Build & Deploy
+pnpm build         # TypeScript + Vite build
+pnpm deploy        # Build and deploy to Cloudflare Pages
 
-# Build
-pnpm build
-
-# Type checking
-pnpm typecheck
-
-# Linting and formatting
-pnpm lint
-pnpm lint:fix
-pnpm format
+# Code Quality
+pnpm typecheck     # Type checking
+pnpm lint          # ESLint
+pnpm lint:fix      # Fix lint issues
+pnpm format        # Prettier
 
 # Database
 pnpm db:migrate        # Run migrations locally
 pnpm db:migrate:remote # Run migrations on production D1
 pnpm db:reset          # Reset local DB and re-run all migrations
-
-# Deploy
-pnpm deploy
 ```
-
-## Architecture
-
-### Two Dev Server Modes
-
-- `pnpm dev` - Vite dev server on port 5173 (frontend only, no API)
-- `pnpm dev:full` - Builds then runs wrangler pages dev on port 8788 (full stack with D1/R2 bindings)
 
 Use `dev:full` when working with API endpoints or database.
 
+## Architecture
+
+### Spec Pipeline
+
+The app guides users through a 5-step spec development process:
+
+1. **Feasibility Analysis** - Scores the idea across categories (communication, processing, power, I/O)
+2. **Refinement** - Surfaces questions to lock down open decisions
+3. **Blueprints** - Generates 4 product render variations
+4. **Selection** - User picks their favorite design
+5. **Finalization** - Generates locked spec with BOM
+
+LLM prompt templates for each stage live in `src/prompts/`.
+
+Hard rejections: FPGA, high voltage (>24V), safety-critical systems, healthcare devices.
+
 ### Cloudflare Pages Functions
 
-API endpoints live in `functions/api/` using file-based routing:
+API endpoints in `functions/api/` using file-based routing:
 
 ```
 functions/api/
-├── _middleware.ts     # Auth middleware (checks session cookie)
-├── auth/              # Login/logout/me endpoints
-├── llm/               # LLM proxy (chat, stream, image)
-│   └── pricing.ts     # Cost calculation per model
+├── _middleware.ts     # Auth middleware (session cookie check)
+├── auth/              # Login/logout/me
+├── llm/               # LLM proxy (chat, stream, image) + pricing.ts
+├── admin/             # Debug logs (admin only)
 ├── settings/          # Config and usage stats
 ├── projects/          # CRUD for projects
 └── blocks/            # PCB block library
 ```
 
-All protected routes require a valid session cookie. Public routes are defined in `_middleware.ts`.
+Public routes defined in `_middleware.ts`. Everything else requires session cookie.
 
 ### Environment & Secrets
 
-Secrets are configured in `.dev.vars` (local) or via `wrangler secret` (production):
+Create `frontend/.dev.vars` for local development:
+```env
+OPENROUTER_API_KEY=sk-or-v1-...
+TEXT_MODEL_SLUG=google/gemini-2.0-flash-001
+IMAGE_MODEL_SLUG=google/gemini-2.0-flash-exp
+```
 
-- `OPENROUTER_API_KEY` - Required for LLM API calls
-- `TEXT_MODEL_SLUG` - Default text model (e.g., `google/gemini-3-flash-preview`)
-- `IMAGE_MODEL_SLUG` - Default image model (e.g., `google/gemini-2.5-flash-image`)
+Production secrets via `wrangler secret`. Bindings in `wrangler.toml`: `DB` (D1), `STORAGE` (R2).
 
-Bindings defined in `wrangler.toml`:
-- `DB` - D1 database (SQLite)
-- `STORAGE` - R2 bucket for file storage
-
-### Frontend Structure
+### Frontend
 
 ```
 src/
 ├── pages/           # Route components
-├── components/      # Shared UI components
+├── components/      # Shared UI
+├── prompts/         # LLM prompt templates (feasibility, blueprint, etc.)
 ├── services/llm.ts  # LLM client (calls /api/llm/*)
 ├── stores/auth.ts   # Zustand auth store
 └── db/schema.ts     # TypeScript types for DB tables
@@ -91,39 +96,32 @@ D1 (SQLite) with migrations in `migrations/`. Key tables:
 - `projects`, `conversations` - User data
 - `pcb_blocks` - Pre-validated circuit modules (21 seeded)
 - `llm_requests` - Usage tracking with cost
-- `system_settings` - Configuration
+- `debug_logs` - Admin logging
 
 ### LLM Integration
 
-All LLM requests proxy through `/api/llm/*` to keep API keys server-side. The service supports:
-- OpenRouter (default) - 300+ models
-- Direct Gemini API
+All LLM requests proxy through `/api/llm/*` (keys stay server-side):
+- `POST /api/llm/chat` - Non-streaming
+- `POST /api/llm/stream` - Streaming (SSE)
+- `POST /api/llm/image` - Image generation
 
-Cost tracking is automatic - every request logs model, tokens, and calculated USD cost.
+Cost tracking automatic via `llm_requests` table.
 
 ### Auth
 
-Simple password auth with session cookies (7-day expiry). Default user: `mike`/`mike`. Data model supports future OAuth upgrade without schema changes.
+Session cookies (7-day expiry). Default user: `mike`/`mike` (admin).
 
-### Admin & Debug Logging
+### Debug Logging
 
-The user `mike` has admin privileges (`is_admin = 1`). Admin features:
+Admin-only feature (`functions/lib/logger.ts`):
 
-**Debug Logger** (`functions/lib/logger.ts`):
 ```typescript
-import { createLogger } from '../lib/logger'
-
 const logger = createLogger(env, user, requestId)
 await logger.debug('llm', 'Request received', { model })
 await logger.llm('Chat completed', { latencyMs, tokens })
 await logger.error('llm', 'API error', { error })
 ```
 
-Log levels: `debug`, `info`, `warn`, `error`
 Categories: `general`, `api`, `auth`, `llm`, `project`, `image`, `db`, `middleware`
 
-**Admin API** (`/api/admin/logs`):
-- `GET /api/admin/logs?level=error&category=llm` - View logs with filters
-- `DELETE /api/admin/logs?olderThanDays=7` - Cleanup old logs
-
-Logs are stored in `debug_logs` table for admin users only. Console output is color-coded in development.
+View logs: `GET /api/admin/logs?level=error&category=llm`

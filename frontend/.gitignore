@@ -25,3 +25,6 @@ dist-ssr
 
 # Claude notes
 CLAUDE_NOTES.md
+
+# Test coverage
+coverage/
