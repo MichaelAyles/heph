@@ -328,9 +328,11 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
   const [pendingQuestions, setPendingQuestions] = useState<OpenQuestion[]>(spec.openQuestions)
   const [isChecking, setIsChecking] = useState(false)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
+  // Track all decisions including ones just submitted (to avoid stale closure)
+  const [allDecisions, setAllDecisions] = useState<Decision[]>(spec.decisions || [])
 
   // Check if we need more questions after answering
-  const checkForMoreQuestions = useCallback(async () => {
+  const checkForMoreQuestions = useCallback(async (currentDecisions: Decision[]) => {
     if (!spec.feasibility) return
 
     setIsChecking(true)
@@ -341,7 +343,7 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
           { role: 'system', content: REFINEMENT_SYSTEM_PROMPT },
           {
             role: 'user',
-            content: buildRefinementPrompt(spec.description, spec.feasibility, spec.decisions),
+            content: buildRefinementPrompt(spec.description, spec.feasibility, currentDecisions),
           },
         ],
         temperature: 0.3,
@@ -370,33 +372,46 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
     } finally {
       setIsChecking(false)
     }
-  }, [project.id, spec, onComplete])
+  }, [project.id, spec.feasibility, spec.description, onComplete])
 
   const handleAnswer = (questionId: string, _question: string, answer: string) => {
     setSelectedAnswers((prev) => ({ ...prev, [questionId]: answer }))
   }
 
   const handleSubmitAnswers = () => {
-    // Submit all answers
+    // Build new decisions from current answers
+    const newDecisions: Decision[] = []
     Object.entries(selectedAnswers).forEach(([questionId, answer]) => {
       const question = pendingQuestions.find((q) => q.id === questionId)
       if (question) {
+        const decision: Decision = {
+          questionId,
+          question: question.question,
+          answer,
+          timestamp: new Date().toISOString(),
+        }
+        newDecisions.push(decision)
         onDecision(questionId, question.question, answer)
       }
     })
 
-    // Clear pending and check for more
+    // Update local decisions state with ALL decisions
+    const updatedDecisions = [...allDecisions, ...newDecisions]
+    setAllDecisions(updatedDecisions)
+
+    // Clear pending and check for more with the FULL decision list
     setPendingQuestions([])
     setSelectedAnswers({})
-    checkForMoreQuestions()
+    checkForMoreQuestions(updatedDecisions)
   }
 
-  // If no pending questions, check if we need more
+  // If no pending questions on mount, check if we need more
   useEffect(() => {
     if (pendingQuestions.length === 0 && !isChecking) {
-      checkForMoreQuestions()
+      checkForMoreQuestions(allDecisions)
     }
-  }, [pendingQuestions.length, isChecking, checkForMoreQuestions])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (isChecking) {
     return (
