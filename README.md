@@ -7,7 +7,7 @@
 <p align="center"><strong>Forged Intelligence.</strong> Hardware design from natural language.</p>
 
 <p align="center">
-  <a href="https://phaestus.pages.dev">Live Demo</a> •
+  <a href="https://phaestus.app">Live Demo</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#architecture">Architecture</a>
 </p>
@@ -23,9 +23,9 @@ PHAESTUS transforms specifications into manufacturable hardware:
 
 ## Live Demo
 
-**https://phaestus.pages.dev**
+**https://phaestus.app**
 
-Login: `mike` / `mike`
+Contact: contact@phaestus.app
 
 ## Quick Start
 

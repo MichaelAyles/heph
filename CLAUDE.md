@@ -8,7 +8,7 @@ PHAESTUS is an AI-powered hardware design platform that transforms natural langu
 
 ## Deployment
 
-**Live**: https://phaestus.pages.dev
+**Live**: https://phaestus.app
 
 Hosted on Cloudflare Pages with:
 - **D1 Database**: `phaestus` (SQLite)

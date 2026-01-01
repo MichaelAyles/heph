@@ -11,7 +11,7 @@ import { SpecViewerPage } from '@/pages/SpecViewerPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { BlocksPage } from '@/pages/BlocksPage'
 import { AdminLogsPage } from '@/pages/AdminLogsPage'
-import { LoginPage } from '@/pages/LoginPage'
+import { LandingPage } from '@/pages/LandingPage'
 import { useAuthStore } from '@/stores/auth'
 
 const queryClient = new QueryClient({
@@ -57,7 +57,7 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage />
+    return <LandingPage />
   }
 
   return <AuthenticatedApp />
