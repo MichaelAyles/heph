@@ -43,10 +43,13 @@ If all necessary information has been gathered:
 
 ## Guidelines
 
-1. Maximum 3 questions at a time to avoid overwhelming the user
-2. Only ask questions that materially affect the hardware design
+1. Maximum 2 questions at a time to avoid overwhelming the user
+2. Only ask questions that CRITICALLY affect the hardware design
 3. Provide sensible default options
-4. Mark complete:true when we have enough info for blueprints`
+4. Mark complete:true when we have enough info for blueprints
+5. IMPORTANT: After 2-3 rounds of questions (6+ decisions made), you MUST return complete:true
+6. Don't ask about minor details - assume sensible defaults for anything not critical
+7. If the user has already made decisions about power, connectivity, and form factor, mark complete:true`
 
 export function buildRefinementPrompt(
   description: string,
@@ -54,7 +57,11 @@ export function buildRefinementPrompt(
   decisions: { question: string; answer: string }[]
 ): string {
   const decisionsText = decisions.length > 0
-    ? `\n\nUser Decisions Made:\n${decisions.map(d => `- ${d.question}: ${d.answer}`).join('\n')}`
+    ? `\n\nUser Decisions Made (${decisions.length} total):\n${decisions.map(d => `- ${d.question}: ${d.answer}`).join('\n')}`
+    : ''
+
+  const completeHint = decisions.length >= 3
+    ? '\n\nNOTE: User has answered 3+ questions. Unless something CRITICAL is missing, return complete:true.'
     : ''
 
   return `Project Description:
@@ -63,6 +70,7 @@ export function buildRefinementPrompt(
 Feasibility Analysis:
 ${JSON.stringify(feasibility, null, 2)}
 ${decisionsText}
+${completeHint}
 
 Are there any additional questions needed before generating product blueprints? Respond with JSON only.`
 }
