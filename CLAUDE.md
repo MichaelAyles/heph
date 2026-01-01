@@ -6,6 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PHAESTUS is an AI-powered hardware design platform that transforms natural language specifications into manufacturable hardware (KiCad schematics, PCB layouts, 3D-printable enclosures, firmware scaffolding).
 
+## Deployment
+
+**Live**: https://phaestus.pages.dev
+
+Hosted on Cloudflare Pages with:
+- **D1 Database**: `phaestus` (SQLite)
+- **R2 Bucket**: `phaestus-assets`
+- **Secrets**: `OPENROUTER_API_KEY`, `TEXT_MODEL_SLUG`, `IMAGE_MODEL_SLUG`
+
+Deploy: `pnpm deploy` (builds + deploys to Cloudflare Pages)
+
 ## Commands
 
 All commands run from `frontend/`:
@@ -14,6 +25,11 @@ All commands run from `frontend/`:
 # Development
 pnpm dev           # Frontend only (port 5173, no API)
 pnpm dev:full      # Full stack with D1/R2 (port 8788)
+
+# Testing
+pnpm test          # Run tests in watch mode
+pnpm test:run      # Run tests once
+pnpm test:coverage # Run with coverage report
 
 # Build & Deploy
 pnpm build         # TypeScript + Vite build
@@ -125,3 +141,20 @@ await logger.error('llm', 'API error', { error })
 Categories: `general`, `api`, `auth`, `llm`, `project`, `image`, `db`, `middleware`
 
 View logs: `GET /api/admin/logs?level=error&category=llm`
+
+### Testing
+
+Vitest with 90%+ coverage on testable modules:
+
+```
+src/prompts/*.ts      # LLM prompt templates
+src/db/schema.ts      # Row-to-model transforms
+src/services/llm.ts   # LLM client
+src/stores/auth.ts    # Auth state
+functions/lib/logger.ts     # Debug logger
+functions/api/llm/pricing.ts # Cost calculations
+```
+
+Run tests: `pnpm test` or `pnpm test:coverage`
+
+Note: API endpoint handlers (`functions/api/**`) are excluded from coverage as they require Cloudflare Workers runtime mocking (miniflare).
