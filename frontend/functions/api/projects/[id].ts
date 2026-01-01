@@ -1,4 +1,5 @@
 import type { Env } from '../../env'
+import { createLogger } from '../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -13,6 +14,7 @@ interface User {
   id: string
   username: string
   displayName: string | null
+  isAdmin?: boolean
 }
 
 interface UpdateProjectRequest {
@@ -27,31 +29,48 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const user = data.user as User
   const projectId = params.id as string
 
-  const row = await env.DB.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?')
-    .bind(projectId, user.id)
-    .first()
+  try {
+    const row = await env.DB.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?')
+      .bind(projectId, user.id)
+      .first()
 
-  if (!row) {
-    return Response.json({ error: 'Project not found' }, { status: 404 })
+    if (!row) {
+      return Response.json({ error: 'Project not found' }, { status: 404 })
+    }
+
+    let spec = null
+    if (row.spec) {
+      try {
+        spec = JSON.parse(row.spec as string)
+      } catch (parseError) {
+        console.error('Failed to parse spec JSON:', parseError, 'Raw spec:', row.spec)
+        spec = { error: 'Failed to parse spec', raw: row.spec }
+      }
+    }
+
+    return Response.json({
+      project: {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        status: row.status,
+        spec,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      },
+    })
+  } catch (error) {
+    console.error('Get project error:', error)
+    return Response.json({ error: 'Failed to get project', details: String(error) }, { status: 500 })
   }
-
-  return Response.json({
-    project: {
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      status: row.status,
-      spec: row.spec ? JSON.parse(row.spec as string) : null,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    },
-  })
 }
 
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { env, data, params } = context
   const user = data.user as User
   const projectId = params.id as string
+  const requestId = (data.requestId as string) || crypto.randomUUID().replace(/-/g, '')
+  const logger = createLogger(env, user, requestId)
 
   // Verify ownership
   const existing = await env.DB.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?')
@@ -64,6 +83,15 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
   try {
     const body = (await context.request.json()) as UpdateProjectRequest
+
+    await logger.debug('project', 'PUT request body', {
+      hasName: body.name !== undefined,
+      hasStatus: body.status,
+      hasSpec: body.spec !== undefined,
+      specKeys: body.spec ? Object.keys(body.spec) : null,
+      hasFeasibility: body.spec && 'feasibility' in body.spec ? body.spec.feasibility !== null : null,
+    })
+
     const updates: string[] = []
     const values: (string | null)[] = []
 
@@ -99,6 +127,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }
 
     if (updates.length === 0) {
+      await logger.warn('project', 'No updates provided in PUT')
       return Response.json({ error: 'No updates provided' }, { status: 400 })
     }
 
@@ -106,9 +135,14 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     values.push(new Date().toISOString())
     values.push(projectId)
 
-    await env.DB.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`)
+    const result = await env.DB.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`)
       .bind(...values)
       .run()
+
+    await logger.debug('project', 'Update result', {
+      changes: result.meta.changes,
+      updateCount: updates.length - 1, // -1 for updated_at
+    })
 
     // Fetch updated project
     const row = await env.DB.prepare('SELECT * FROM projects WHERE id = ?')
@@ -127,7 +161,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       },
     })
   } catch (error) {
-    console.error('Update project error:', error)
+    await logger.error('project', 'Update project error', { error: String(error) })
     return Response.json({ error: 'Failed to update project' }, { status: 500 })
   }
 }
