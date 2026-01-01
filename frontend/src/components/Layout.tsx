@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, PlusCircle, Settings, Layers, LogOut, User } from 'lucide-react'
+import { Home, PlusCircle, Settings, Layers, LogOut, User, ScrollText } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/stores/auth'
 
@@ -8,6 +8,10 @@ const navigation = [
   { name: 'New Project', href: '/new', icon: PlusCircle },
   { name: 'Block Library', href: '/blocks', icon: Layers },
   { name: 'Settings', href: '/settings', icon: Settings },
+]
+
+const adminNavigation = [
+  { name: 'Logs', href: '/admin/logs', icon: ScrollText },
 ]
 
 export function Layout() {
@@ -44,6 +48,33 @@ export function Layout() {
               </Link>
             )
           })}
+
+          {/* Admin Navigation */}
+          {user?.isAdmin && (
+            <>
+              <div className="pt-4 pb-2">
+                <span className="px-3 text-xs font-mono text-steel-dim tracking-wide">ADMIN</span>
+              </div>
+              {adminNavigation.map((item) => {
+                const isActive = location.pathname === item.href
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    className={clsx(
+                      'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-copper/10 text-copper border-l-2 border-copper'
+                        : 'text-steel-dim hover:text-steel hover:bg-surface-800'
+                    )}
+                  >
+                    <item.icon className="w-5 h-5" strokeWidth={1.5} />
+                    {item.name}
+                  </Link>
+                )
+              })}
+            </>
+          )}
         </nav>
 
         {/* Footer */}

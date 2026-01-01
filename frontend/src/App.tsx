@@ -9,6 +9,7 @@ import { SpecPage } from '@/pages/SpecPage'
 import { SpecViewerPage } from '@/pages/SpecViewerPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { BlocksPage } from '@/pages/BlocksPage'
+import { AdminLogsPage } from '@/pages/AdminLogsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { useAuthStore } from '@/stores/auth'
 
@@ -31,6 +32,7 @@ function AuthenticatedApp() {
         <Route path="project/:id/view" element={<SpecViewerPage />} />
         <Route path="blocks" element={<BlocksPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="admin/logs" element={<AdminLogsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
