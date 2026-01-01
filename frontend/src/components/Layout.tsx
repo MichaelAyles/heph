@@ -1,10 +1,11 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, PlusCircle, Settings, Layers, LogOut, User, ScrollText } from 'lucide-react'
+import { Home, FolderOpen, PlusCircle, Settings, Layers, LogOut, User, ScrollText } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/stores/auth'
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
+  { name: 'Projects', href: '/projects', icon: FolderOpen },
   { name: 'New Project', href: '/new', icon: PlusCircle },
   { name: 'Block Library', href: '/blocks', icon: Layers },
   { name: 'Settings', href: '/settings', icon: Settings },

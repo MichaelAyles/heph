@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { Layout } from '@/components/Layout'
 import { HomePage } from '@/pages/HomePage'
+import { ProjectsPage } from '@/pages/ProjectsPage'
 import { NewProjectPage } from '@/pages/NewProjectPage'
 import { SpecPage } from '@/pages/SpecPage'
 import { SpecViewerPage } from '@/pages/SpecViewerPage'
@@ -27,6 +28,7 @@ function AuthenticatedApp() {
     <Routes>
       <Route path="/" element={<Layout />}>
         <Route index element={<HomePage />} />
+        <Route path="projects" element={<ProjectsPage />} />
         <Route path="new" element={<NewProjectPage />} />
         <Route path="project/:id" element={<SpecPage />} />
         <Route path="project/:id/view" element={<SpecViewerPage />} />
