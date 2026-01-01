@@ -719,10 +719,14 @@ export function SpecPage() {
 
   // Handlers
   const handleFeasibilityComplete = (feasibility: FeasibilityAnalysis, questions: OpenQuestion[]) => {
+    // Keep status as 'analyzing' - will change to 'refining' when user clicks Continue
     updateMutation.mutate({
-      status: 'refining',
       spec: { ...spec!, feasibility, openQuestions: questions },
     })
+  }
+
+  const handleStartRefinement = () => {
+    updateMutation.mutate({ status: 'refining' })
   }
 
   const handleReject = (reason: string) => {
@@ -824,10 +828,10 @@ export function SpecPage() {
           )}
 
           {/* Show feasibility results before refinement */}
-          {currentStep >= 1 && spec.feasibility && project.status !== 'rejected' && currentStep < 2 && (
+          {currentStep >= 1 && spec.feasibility && project.status === 'analyzing' && currentStep < 2 && (
             <FeasibilityResults
               feasibility={spec.feasibility}
-              onContinue={handleRefinementComplete}
+              onContinue={handleStartRefinement}
             />
           )}
 
