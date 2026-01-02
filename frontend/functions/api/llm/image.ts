@@ -152,6 +152,41 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }, { status: 200 })
     }
 
+    // If we have a base64 image, upload to R2 storage
+    let finalImageUrl = imageUrl
+    if (imageUrl.startsWith('data:image')) {
+      try {
+        // Parse base64 data URL
+        const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/)
+        if (matches) {
+          const mimeType = matches[1]
+          const base64Data = matches[2]
+          const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+
+          // Generate unique filename
+          const imageId = crypto.randomUUID().replace(/-/g, '')
+          const extension = mimeType.split('/')[1] || 'png'
+          const key = `blueprints/${imageId}.${extension}`
+
+          // Upload to R2
+          await env.STORAGE.put(key, binaryData, {
+            httpMetadata: {
+              contentType: mimeType,
+            },
+          })
+
+          // Return the R2 URL (using Cloudflare's public bucket URL or a custom domain)
+          // For now, use a relative path that the frontend can access
+          finalImageUrl = `/api/images/${key}`
+
+          await logger.debug('llm', 'Image uploaded to R2', { key, size: binaryData.length })
+        }
+      } catch (uploadError) {
+        await logger.error('llm', 'Failed to upload image to R2', { error: String(uploadError) })
+        // Fall back to base64 URL if upload fails (will likely fail on DB save anyway)
+      }
+    }
+
     // Log successful request with cost
     const id = crypto.randomUUID().replace(/-/g, '')
     const costUsd = calculateImageCost(model)
@@ -165,7 +200,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await logger.llm('Image generated', { model, latencyMs, costUsd })
 
     return Response.json({
-      imageUrl,
+      imageUrl: finalImageUrl,
       model,
       latencyMs,
     })
