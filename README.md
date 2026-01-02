@@ -14,18 +14,34 @@
 
 ---
 
-PHAESTUS transforms specifications into manufacturable hardware:
+PHAESTUS transforms natural language specifications into manufacturable hardware through a guided 5-step process:
+
+1. **Feasibility Analysis** - Scores your idea across categories (communication, processing, power, I/O)
+2. **Refinement** - Surfaces questions to lock down open decisions
+3. **Blueprints** - Generates product render variations with iterative feedback
+4. **Selection** - Pick your favorite design direction
+5. **Finalization** - Generates locked spec with detailed BOM
+
+Outputs:
 - KiCad schematics and PCB layouts
 - Gerber files for manufacturing
 - 3D-printable enclosures (OpenSCAD/STL)
 - Firmware scaffolding (ESP32/STM32)
-- BOM and documentation
+- Bill of Materials with sourcing
 
 ## Live Demo
 
 **https://phaestus.app**
 
 Contact: contact@phaestus.app
+
+## Scope
+
+PHAESTUS focuses on hobbyist/maker-level hardware. Hard rejections:
+- FPGA designs
+- High voltage (>24V)
+- Safety-critical systems
+- Healthcare/medical devices
 
 ## Quick Start
 
@@ -46,7 +62,7 @@ Open http://localhost:8788
 | **Database** | Cloudflare D1 (SQLite) |
 | **Storage** | Cloudflare R2 |
 | **LLM** | OpenRouter (Gemini 3.0 Flash) |
-| **Testing** | Vitest (90%+ coverage) |
+| **Testing** | Vitest (96%+ coverage) |
 
 ## Architecture
 
@@ -92,6 +108,14 @@ pnpm deploy   # Build and deploy to Cloudflare Pages
 ```
 
 Secrets are managed via `wrangler pages secret put <NAME>`.
+
+## Security
+
+- Bcrypt password hashing (auto-migrates from plaintext)
+- Session-based auth with sliding expiry
+- LLM retry logic with exponential backoff
+- Input validation and length limits
+- Cost tracking for all LLM requests
 
 ## License
 
