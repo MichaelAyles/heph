@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Loader2,
   AlertCircle,
@@ -79,13 +80,20 @@ export function LandingPage() {
             <img src="/logo.png" alt="Phaestus" className="h-8 w-auto" />
             <span className="text-lg font-semibold tracking-tight text-steel">PHAESTUS</span>
           </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowLoginPopover(!showLoginPopover)}
-              className="px-4 py-2 bg-copper-gradient text-ash text-sm font-medium"
+          <div className="flex items-center gap-4">
+            <Link
+              to="/blog"
+              className="text-steel-dim hover:text-steel text-sm font-medium transition-colors"
             >
-              Sign In
-            </button>
+              Blog
+            </Link>
+            <div className="relative">
+              <button
+                onClick={() => setShowLoginPopover(!showLoginPopover)}
+                className="px-4 py-2 bg-copper-gradient text-ash text-sm font-medium"
+              >
+                Sign In
+              </button>
 
             {/* Login Popover */}
             {showLoginPopover && (
@@ -166,6 +174,7 @@ export function LandingPage() {
                 </form>
               </div>
             )}
+            </div>
           </div>
         </div>
       </nav>
