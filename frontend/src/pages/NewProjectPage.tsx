@@ -4,10 +4,12 @@ import { Flame, Loader2, ArrowRight, Terminal, AlertCircle } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const EXAMPLE_PROMPTS = [
-  'Battery-powered plant moisture monitor with WiFi alerts',
-  'Smart doorbell with motion detection and OLED display',
-  'Temperature logger with SD card storage and USB-C charging',
-  'Desk air quality monitor with CO2 and particulate sensors',
+  'Battery-powered capacitive soil moisture monitor with ESP32, 2.4GHz WiFi, push notifications via MQTT, 18650 LiPo cell with solar charging, IP65 outdoor enclosure, 6-month battery life target',
+  'Video doorbell with ESP32-CAM, PIR motion trigger, 1.3" OLED status display, 2-way audio via I2S microphone and speaker, 5V USB-C power, weatherproof housing with 170° wide-angle lens',
+  'Multi-channel temperature logger with 4x thermocouple inputs (K-type), microSD card storage in CSV format, USB-C charging for 2000mAh LiPo, 2.4" TFT display with real-time graphing, configurable sample rates from 1s to 1hr',
+  'Desktop air quality monitor with SCD41 CO2 sensor, PMS5003 particulate sensor (PM2.5/PM10), BME280 for temperature/humidity, 2.8" color LCD dashboard, ESP32 with WiFi for Home Assistant integration, USB-C powered',
+  'USB-C rechargeable wireless presentation clicker with nRF52840 BLE, 400mAh LiPo battery, laser pointer, page up/down buttons, gyro-based air mouse mode, USB-A dongle receiver, 20-meter range, 40-hour battery life',
+  'USB-C power monitor with bidirectional current sensing (0-5A), voltage measurement (5-20V), INA226 precision ADC, 1.8" TFT LCD showing watts/amp-hours, ESP32 with WiFi and Zigbee (CC2530), data logging to cloud via MQTT, inline passthrough design',
 ]
 
 export function NewProjectPage() {
