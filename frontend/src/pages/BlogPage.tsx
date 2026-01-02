@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Calendar, Clock, ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react'
-import { clsx } from 'clsx'
 
 interface BlogPost {
   id: string
