@@ -531,15 +531,19 @@ interface BlueprintStepProps {
 
 function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepProps) {
   const [generating, setGenerating] = useState<boolean[]>([true, true, true, true])
-  const [blueprints, setBlueprints] = useState<{ url: string; prompt: string }[]>([])
+  const [blueprints, setBlueprints] = useState<({ url: string; prompt: string } | null)[]>([null, null, null, null])
   const [errors, setErrors] = useState<string[]>([])
+  const [hasStarted, setHasStarted] = useState(false)
+  const [hasCompleted, setHasCompleted] = useState(false)
 
   useEffect(() => {
-    if (blueprints.length > 0) return // Already generated
+    if (hasStarted) return // Already started generation
+
+    setHasStarted(true)
 
     const prompts = buildBlueprintPrompts(
       spec.description,
-      spec.decisions,
+      spec.decisions || [],
       spec.feasibility || {}
     )
 
@@ -550,7 +554,7 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
           setBlueprints((prev) => {
             const updated = [...prev]
             updated[index] = { url, prompt }
-            return updated.filter(Boolean)
+            return updated
           })
           setGenerating((prev) => {
             const updated = [...prev]
@@ -567,14 +571,20 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
           })
         })
     })
-  }, [spec, blueprints.length])
+  }, [hasStarted, spec.description, spec.decisions, spec.feasibility])
 
   // Check if all done
   useEffect(() => {
-    if (generating.every((g) => !g) && blueprints.length > 0) {
-      onComplete(blueprints)
+    if (hasCompleted) return
+
+    const allDone = generating.every((g) => !g)
+    const validBlueprints = blueprints.filter((b): b is { url: string; prompt: string } => b !== null)
+
+    if (allDone && validBlueprints.length > 0) {
+      setHasCompleted(true)
+      onComplete(validBlueprints)
     }
-  }, [generating, blueprints, onComplete])
+  }, [generating, blueprints, onComplete, hasCompleted])
 
   const activeCount = generating.filter(Boolean).length
 

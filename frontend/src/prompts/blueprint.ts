@@ -16,36 +16,45 @@ export function buildBlueprintPrompts(
     inputs?: { items: string[] }
     outputs?: { items: string[] }
     power?: { options: string[] }
+    communication?: { type: string }
+    processing?: { level: string }
   }
 ): string[] {
-  // Extract key details
+  // Extract all feasibility details
   const inputs = feasibility.inputs?.items || []
   const outputs = feasibility.outputs?.items || []
+  const communication = feasibility.communication?.type
+  const processing = feasibility.processing?.level
+  const powerOptions = feasibility.power?.options || []
 
   // Find enclosure decision if made
   const enclosureDecision = decisions.find(d =>
     d.question.toLowerCase().includes('enclosure') ||
     d.question.toLowerCase().includes('form factor') ||
-    d.question.toLowerCase().includes('style')
+    d.question.toLowerCase().includes('housing')
   )
   const enclosureStyle = enclosureDecision?.answer || 'compact handheld device'
 
-  // Find power decision if made
-  const powerDecision = decisions.find(d =>
-    d.question.toLowerCase().includes('power') ||
-    d.question.toLowerCase().includes('battery')
-  )
-  const powerType = powerDecision?.answer || 'rechargeable battery'
+  // Collect ALL decision answers for the prompt
+  const allDecisionDetails = decisions.map(d => d.answer)
 
-  // Build base description
+  // Build comprehensive feature list from all sources
+  const allFeatures = [
+    // From feasibility analysis
+    ...inputs,
+    ...outputs,
+    ...powerOptions,
+    communication,
+    // From user decisions
+    ...allDecisionDetails,
+  ].filter(Boolean)
+
+  // Deduplicate and clean up
+  const uniqueFeatures = [...new Set(allFeatures.map(f => f.toLowerCase()))]
+  const features = uniqueFeatures.join(', ')
+
+  // Build base description with enclosure style
   const baseDescription = `A ${enclosureStyle} electronic device: ${description}`
-
-  // Features to include
-  const features = [
-    ...inputs.map(i => i.toLowerCase()),
-    ...outputs.map(o => o.toLowerCase()),
-    powerType.toLowerCase(),
-  ].filter(Boolean).join(', ')
 
   // Generate 4 variations
   return [
