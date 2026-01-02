@@ -21,8 +21,8 @@ describe('refinement prompt', () => {
       expect(REFINEMENT_SYSTEM_PROMPT).toContain('additionalQuestions')
     })
 
-    it('should mention maximum 3 questions guideline', () => {
-      expect(REFINEMENT_SYSTEM_PROMPT).toContain('Maximum 3 questions')
+    it('should mention maximum 2 questions guideline', () => {
+      expect(REFINEMENT_SYSTEM_PROMPT).toContain('Maximum 2 questions')
     })
 
     it('should describe both complete and incomplete states', () => {
