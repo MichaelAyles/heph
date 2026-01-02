@@ -850,6 +850,7 @@ export function SpecPage() {
   const handleFinalizeComplete = (finalSpec: FinalSpec) => {
     updateMutation.mutate({
       status: 'complete',
+      name: finalSpec.name || project?.name || 'New Project',
       spec: { ...spec!, finalSpec },
     })
     navigate(`/project/${id}/view`)
