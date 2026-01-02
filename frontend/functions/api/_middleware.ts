@@ -49,6 +49,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   const isAdmin = result.is_admin === 1
 
+  // Extend session on activity (update expiry to 7 days from now)
+  const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  await env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE id = ?')
+    .bind(newExpiresAt, sessionId)
+    .run()
+
   // Attach user to context data for downstream handlers
   context.data.user = {
     id: result.id,

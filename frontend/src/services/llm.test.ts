@@ -44,22 +44,26 @@ describe('llm service', () => {
       expect(result).toEqual(mockResponse)
     })
 
-    it('should throw error on failed request', async () => {
+    it('should throw error on failed request (4xx - no retry)', async () => {
+      // 404 errors don't retry (4xx are client errors)
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        json: () => Promise.resolve({ error: 'Model not found' }),
+        status: 404,
+        json: () => Promise.resolve({ error: 'Model not found (404)' }),
       })
 
       const options: ChatOptions = {
         messages: [{ role: 'user', content: 'Hi!' }],
       }
 
-      await expect(llm.chat(options)).rejects.toThrow('Model not found')
+      await expect(llm.chat(options)).rejects.toThrow('Model not found (404)')
     })
 
-    it('should throw default error when no error message provided', async () => {
+    it('should throw default error when no error message provided (4xx - no retry)', async () => {
+      // 400 errors don't retry
       mockFetch.mockResolvedValueOnce({
         ok: false,
+        status: 400,
         json: () => Promise.resolve({}),
       })
 
@@ -67,7 +71,7 @@ describe('llm service', () => {
         messages: [{ role: 'user', content: 'Hi!' }],
       }
 
-      await expect(llm.chat(options)).rejects.toThrow('LLM request failed')
+      await expect(llm.chat(options)).rejects.toThrow('LLM request failed (400)')
     })
 
     it('should handle messages with different roles', async () => {

@@ -33,23 +33,61 @@ export interface StreamCallbacks {
   onError: (error: Error) => void
 }
 
+const MAX_RETRIES = 3
+const INITIAL_DELAY_MS = 1000
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = MAX_RETRIES,
+  initialDelay: number = INITIAL_DELAY_MS
+): Promise<T> {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+
+      // Don't retry on 4xx errors (client errors)
+      if (lastError.message.includes('400') || lastError.message.includes('401') ||
+          lastError.message.includes('403') || lastError.message.includes('404')) {
+        throw lastError
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      if (attempt < maxRetries - 1) {
+        await sleep(initialDelay * Math.pow(2, attempt))
+      }
+    }
+  }
+
+  throw lastError || new Error('Request failed after retries')
+}
+
 class LLMService {
   /**
-   * Send a chat request (non-streaming)
+   * Send a chat request (non-streaming) with automatic retry
    */
   async chat(options: ChatOptions): Promise<ChatResponse> {
-    const response = await fetch('/api/llm/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(options),
+    return withRetry(async () => {
+      const response = await fetch('/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || `LLM request failed (${response.status})`)
+      }
+
+      return response.json()
     })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'LLM request failed')
-    }
-
-    return response.json()
   }
 
   /**

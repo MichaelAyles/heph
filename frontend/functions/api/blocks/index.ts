@@ -14,23 +14,31 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url)
   const category = url.searchParams.get('category')
   const search = url.searchParams.get('search')
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100)
+  const offset = parseInt(url.searchParams.get('offset') || '0')
 
-  let query = 'SELECT * FROM pcb_blocks WHERE is_active = 1'
-  const params: string[] = []
+  let baseQuery = 'FROM pcb_blocks WHERE is_active = 1'
+  const params: (string | number)[] = []
 
   if (category && category !== 'all') {
-    query += ' AND category = ?'
+    baseQuery += ' AND category = ?'
     params.push(category)
   }
 
   if (search) {
-    query += ' AND (name LIKE ? OR description LIKE ?)'
+    baseQuery += ' AND (name LIKE ? OR description LIKE ?)'
     params.push(`%${search}%`, `%${search}%`)
   }
 
-  query += ' ORDER BY category, name'
+  // Get total count
+  const countResult = await env.DB.prepare(`SELECT COUNT(*) as count ${baseQuery}`)
+    .bind(...params)
+    .first<{ count: number }>()
+  const total = countResult?.count || 0
 
-  const result = await env.DB.prepare(query).bind(...params).all()
+  // Get paginated results
+  const query = `SELECT * ${baseQuery} ORDER BY category, name LIMIT ? OFFSET ?`
+  const result = await env.DB.prepare(query).bind(...params, limit, offset).all()
 
   const blocks = result.results.map((row) => ({
     id: row.id,
@@ -48,5 +56,5 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     isValidated: row.is_validated === 1,
   }))
 
-  return Response.json({ blocks, total: blocks.length })
+  return Response.json({ blocks, total, limit, offset })
 }

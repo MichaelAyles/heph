@@ -116,23 +116,31 @@ function StepIndicator({ currentStep, status }: StepIndicatorProps) {
 // Feasibility Step
 // =============================================================================
 
+interface SuggestedRevisions {
+  summary: string
+  changes: string[]
+  revisedDescription: string
+}
+
 interface FeasibilityStepProps {
   project: Project
   spec: ProjectSpec
   onComplete: (feasibility: FeasibilityAnalysis, questions: OpenQuestion[]) => void
-  onReject: (reason: string) => void
+  onReject: (reason: string, suggestedRevisions?: SuggestedRevisions) => void
 }
 
 function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilityStepProps) {
   const [status, setStatus] = useState('Analyzing your project...')
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     if (spec.feasibility) return // Already done
     if (isRunning) return
 
     setIsRunning(true)
+    setError(null)
 
     const runAnalysis = async () => {
       try {
@@ -154,7 +162,7 @@ function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilitySte
         const result = JSON.parse(jsonMatch[0])
 
         if (!result.manufacturable) {
-          onReject(result.rejectionReason || 'Project is not manufacturable')
+          onReject(result.rejectionReason || 'Project is not manufacturable', result.suggestedRevisions)
           return
         }
 
@@ -179,7 +187,12 @@ function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilitySte
     }
 
     runAnalysis()
-  }, [project.id, spec, isRunning, onComplete, onReject])
+  }, [project.id, spec, isRunning, onComplete, onReject, retryCount])
+
+  const handleRetry = () => {
+    setIsRunning(false)
+    setRetryCount((c) => c + 1)
+  }
 
   if (error) {
     return (
@@ -188,7 +201,13 @@ function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilitySte
           <XCircle className="w-5 h-5" strokeWidth={1.5} />
           <span className="font-semibold">Analysis Failed</span>
         </div>
-        <p className="text-red-300 text-sm">{error}</p>
+        <p className="text-red-300 text-sm mb-4">{error}</p>
+        <button
+          onClick={handleRetry}
+          className="px-4 py-2 bg-copper/20 text-copper border border-copper/30 hover:bg-copper/30 transition-colors text-sm"
+        >
+          Try Again
+        </button>
       </div>
     )
   }
@@ -291,9 +310,11 @@ function FeasibilityResults({ feasibility, onContinue }: FeasibilityResultsProps
 
 interface RejectionDisplayProps {
   reason: string
+  suggestedRevisions?: SuggestedRevisions
+  onAcceptRevision?: (revisedDescription: string) => void
 }
 
-function RejectionDisplay({ reason }: RejectionDisplayProps) {
+function RejectionDisplay({ reason, suggestedRevisions, onAcceptRevision }: RejectionDisplayProps) {
   const navigate = useNavigate()
 
   const handleRequestFeature = () => {
@@ -303,25 +324,51 @@ function RejectionDisplay({ reason }: RejectionDisplayProps) {
   }
 
   return (
-    <div className="bg-red-500/10 border border-red-500/30 p-6">
-      <div className="flex items-center gap-2 text-red-400 mb-4">
-        <AlertTriangle className="w-6 h-6" strokeWidth={1.5} />
-        <span className="text-lg font-semibold">Project Cannot Be Built</span>
-      </div>
-      <p className="text-steel mb-6">{reason}</p>
-      <div className="flex gap-3">
-        <button
-          onClick={() => navigate('/new')}
-          className="px-6 py-2 bg-surface-700 text-steel hover:bg-surface-600 transition-colors"
-        >
-          Start New Project
-        </button>
-        <button
-          onClick={handleRequestFeature}
-          className="px-6 py-2 bg-copper/20 text-copper border border-copper/30 hover:bg-copper/30 transition-colors"
-        >
-          Request Component
-        </button>
+    <div className="space-y-4">
+      <div className="bg-red-500/10 border border-red-500/30 p-6">
+        <div className="flex items-center gap-2 text-red-400 mb-4">
+          <AlertTriangle className="w-6 h-6" strokeWidth={1.5} />
+          <span className="text-lg font-semibold">Project Cannot Be Built As Specified</span>
+        </div>
+        <p className="text-steel mb-4">{reason}</p>
+
+        {suggestedRevisions && (
+          <div className="bg-surface-800 border border-surface-600 p-4 mb-4">
+            <h4 className="text-copper font-medium mb-2">{suggestedRevisions.summary}</h4>
+            <ul className="text-steel-dim text-sm space-y-1 mb-4">
+              {suggestedRevisions.changes.map((change, i) => (
+                <li key={i}>• {change}</li>
+              ))}
+            </ul>
+            <div className="bg-surface-900 border border-surface-700 p-3 mb-4">
+              <span className="text-xs text-steel-dim font-mono block mb-1">REVISED SPECIFICATION</span>
+              <p className="text-steel text-sm">{suggestedRevisions.revisedDescription}</p>
+            </div>
+            {onAcceptRevision && (
+              <button
+                onClick={() => onAcceptRevision(suggestedRevisions.revisedDescription)}
+                className="w-full py-3 bg-copper-gradient text-ash font-semibold hover:opacity-90 transition-opacity"
+              >
+                Use Revised Specification
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/new')}
+            className="px-6 py-2 bg-surface-700 text-steel hover:bg-surface-600 transition-colors"
+          >
+            Start New Project
+          </button>
+          <button
+            onClick={handleRequestFeature}
+            className="px-6 py-2 bg-copper/20 text-copper border border-copper/30 hover:bg-copper/30 transition-colors"
+          >
+            Request Component
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -347,9 +394,17 @@ function RefinementStep({ project, spec, onDecisions, onComplete }: RefinementSt
   // Track all decisions including ones just submitted (to avoid stale closure)
   const [allDecisions, setAllDecisions] = useState<Decision[]>(spec.decisions || [])
 
+  const MAX_REFINEMENT_ROUNDS = 5
+
   // Check if we need more questions after answering
   const checkForMoreQuestions = useCallback(async (currentDecisions: Decision[]) => {
     if (!spec.feasibility) return
+
+    // Force completion after max rounds (roughly 2 questions per round)
+    if (currentDecisions.length >= MAX_REFINEMENT_ROUNDS * 2) {
+      onComplete()
+      return
+    }
 
     setIsChecking(true)
 
@@ -564,6 +619,17 @@ interface BlueprintStepProps {
   onComplete: (blueprints: { url: string; prompt: string }[]) => void
 }
 
+const IMAGE_TIMEOUT_MS = 60000 // 60 seconds per image
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(message)), ms)
+    ),
+  ])
+}
+
 function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepProps) {
   const [generating, setGenerating] = useState<boolean[]>([true, true, true, true])
   const [blueprints, setBlueprints] = useState<({ url: string; prompt: string } | null)[]>([null, null, null, null])
@@ -582,9 +648,13 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
       spec.feasibility || {}
     )
 
-    // Generate all 4 images in parallel
+    // Generate all 4 images in parallel with timeout
     prompts.forEach((prompt, index) => {
-      generateImage(prompt)
+      withTimeout(
+        generateImage(prompt),
+        IMAGE_TIMEOUT_MS,
+        'Image generation timed out after 60s'
+      )
         .then((url) => {
           setBlueprints((prev) => {
             const updated = [...prev]
@@ -796,11 +866,13 @@ function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) 
   const [status, setStatus] = useState('Generating final specification...')
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     if (isRunning || spec.finalSpec) return
 
     setIsRunning(true)
+    setError(null)
 
     const runFinalization = async () => {
       try {
@@ -842,7 +914,12 @@ function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) 
     }
 
     runFinalization()
-  }, [project.id, spec, isRunning, onComplete])
+  }, [project.id, spec, isRunning, onComplete, retryCount])
+
+  const handleRetry = () => {
+    setIsRunning(false)
+    setRetryCount((c) => c + 1)
+  }
 
   if (error) {
     return (
@@ -851,7 +928,13 @@ function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) 
           <XCircle className="w-5 h-5" strokeWidth={1.5} />
           <span className="font-semibold">Generation Failed</span>
         </div>
-        <p className="text-red-300 text-sm">{error}</p>
+        <p className="text-red-300 text-sm mb-4">{error}</p>
+        <button
+          onClick={handleRetry}
+          className="px-4 py-2 bg-copper/20 text-copper border border-copper/30 hover:bg-copper/30 transition-colors text-sm"
+        >
+          Try Again
+        </button>
       </div>
     )
   }
@@ -875,6 +958,7 @@ export function SpecPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [suggestedRevisions, setSuggestedRevisions] = useState<SuggestedRevisions | undefined>()
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ['project', id],
@@ -912,10 +996,28 @@ export function SpecPage() {
     updateMutation.mutate({ status: 'refining' })
   }
 
-  const handleReject = (reason: string) => {
+  const handleReject = (reason: string, revisions?: SuggestedRevisions) => {
+    setSuggestedRevisions(revisions)
     updateMutation.mutate({
       status: 'rejected',
       spec: { ...spec!, feasibility: { ...spec!.feasibility!, rejectionReason: reason, manufacturable: false } as FeasibilityAnalysis },
+    })
+  }
+
+  const handleAcceptRevision = (revisedDescription: string) => {
+    // Reset to analyzing with the revised description
+    setSuggestedRevisions(undefined)
+    updateMutation.mutate({
+      status: 'analyzing',
+      spec: {
+        description: revisedDescription,
+        feasibility: null,
+        openQuestions: [],
+        decisions: [],
+        blueprints: [],
+        selectedBlueprint: null,
+        finalSpec: null,
+      },
     })
   }
 
@@ -953,9 +1055,8 @@ export function SpecPage() {
 
     const newUrl = await generateImage(newPrompt)
 
-    // Update the blueprints array with the regenerated image
-    const updatedBlueprints = [...spec!.blueprints]
-    updatedBlueprints[index] = { url: newUrl, prompt: newPrompt }
+    // Add regenerated image as a new entry, keep original
+    const updatedBlueprints = [...spec!.blueprints, { url: newUrl, prompt: newPrompt }]
 
     updateMutation.mutate({
       spec: { ...spec!, blueprints: updatedBlueprints },
@@ -1018,7 +1119,11 @@ export function SpecPage() {
 
           {/* Rejection */}
           {project.status === 'rejected' && (
-            <RejectionDisplay reason={spec.feasibility?.rejectionReason || 'Project rejected'} />
+            <RejectionDisplay
+              reason={spec.feasibility?.rejectionReason || 'Project rejected'}
+              suggestedRevisions={suggestedRevisions}
+              onAcceptRevision={handleAcceptRevision}
+            />
           )}
 
           {/* Show feasibility results before refinement */}
@@ -1030,7 +1135,7 @@ export function SpecPage() {
           )}
 
           {/* Step 1: Refinement */}
-          {currentStep === 1 && project.status === 'refining' && (
+          {currentStep === 1 && project.status !== 'analyzing' && (
             <RefinementStep
               project={project}
               spec={spec}

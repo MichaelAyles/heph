@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Flame, Loader2, ArrowRight, Terminal, AlertCircle } from 'lucide-react'
 import { clsx } from 'clsx'
 
+const MAX_DESCRIPTION_LENGTH = 2000
+
 const EXAMPLE_PROMPTS = [
   'Battery-powered soil moisture monitor with ESP32-C6 WiFi, BME280 for temperature/humidity, capacitive soil probe input, MQTT alerts to Home Assistant, LiPo battery with USB-C charging (TP4056), 0.96" OLED status display, IP65 weatherproof enclosure',
   'Smart motion-activated doorbell with ESP32-C6 WiFi, PIR motion sensor trigger, 0.96" OLED showing visitor count, piezo buzzer chime, WS2812B status ring, push notifications via MQTT, 5V USB-C powered, weatherproof enclosure',
@@ -104,9 +106,10 @@ export function NewProjectPage() {
             <div className="relative">
               <textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
                 placeholder="I need a device that..."
                 rows={5}
+                maxLength={MAX_DESCRIPTION_LENGTH}
                 className={clsx(
                   'w-full px-4 py-3 bg-surface-800 border text-steel placeholder-steel-dim',
                   'resize-none focus:outline-none',
@@ -114,8 +117,11 @@ export function NewProjectPage() {
                 )}
                 disabled={isCreating}
               />
-              <div className="absolute bottom-3 right-3 text-xs text-steel-dim font-mono">
-                {description.length}
+              <div className={clsx(
+                "absolute bottom-3 right-3 text-xs font-mono",
+                description.length >= MAX_DESCRIPTION_LENGTH ? 'text-red-400' : 'text-steel-dim'
+              )}>
+                {description.length}/{MAX_DESCRIPTION_LENGTH}
               </div>
             </div>
 

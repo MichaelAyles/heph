@@ -83,7 +83,7 @@ export function SpecViewerPage() {
     )
   }
 
-  const totalBOM = finalSpec.estimatedBOM.reduce(
+  const totalBOM = (finalSpec.estimatedBOM || []).reduce(
     (sum, item) => sum + item.quantity * item.unitCost,
     0
   )

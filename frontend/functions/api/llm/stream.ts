@@ -1,6 +1,7 @@
 import type { Env } from '../../env'
 import { calculateCost } from './pricing'
 import { createLogger } from '../../lib/logger'
+import { convertToGeminiFormat } from '../../lib/gemini'
 
 interface PagesFunction<E> {
   (context: {
@@ -194,33 +195,18 @@ async function processStream(
       encoder.encode(`data: ${JSON.stringify({ done: true, content: fullContent })}\n\n`)
     )
 
-    // Log the request
+    // Log the request with estimated token counts
+    // Estimate: ~4 characters per token
     const latencyMs = Date.now() - startTime
-    await logLlmRequest(env, userId, projectId, model, 0, 0, latencyMs, 'success', null)
+    const estimatedCompletionTokens = Math.ceil(fullContent.length / 4)
+    const estimatedPromptTokens = Math.ceil(JSON.stringify(messages).length / 4)
+    await logLlmRequest(env, userId, projectId, model, estimatedPromptTokens, estimatedCompletionTokens, latencyMs, 'success', null)
   } catch (error) {
     console.error('Stream processing error:', error)
     await writer.write(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`))
   } finally {
     await writer.close()
   }
-}
-
-function convertToGeminiFormat(messages: ChatMessage[]) {
-  const result: Array<{ role: string; parts: Array<{ text: string }> }> = []
-
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      result.unshift({ role: 'user', parts: [{ text: msg.content }] })
-      result.splice(1, 0, { role: 'model', parts: [{ text: 'Understood.' }] })
-    } else {
-      result.push({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }],
-      })
-    }
-  }
-
-  return result
 }
 
 async function logLlmRequest(

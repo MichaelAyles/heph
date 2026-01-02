@@ -1,8 +1,9 @@
 /**
  * POST /api/auth/login
- * Simple password authentication
+ * Password authentication with bcrypt
  */
 
+import bcrypt from 'bcryptjs'
 import type { Env } from '../../env'
 
 interface LoginRequest {
@@ -32,9 +33,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
-    // Simple password check (plaintext for now - upgrade to bcrypt later)
-    if (user.password_hash !== password) {
+    // Check password - support both bcrypt hashes and legacy plaintext during migration
+    const isValidPassword = user.password_hash.startsWith('$2')
+      ? await bcrypt.compare(password, user.password_hash)
+      : user.password_hash === password
+
+    if (!isValidPassword) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 })
+    }
+
+    // If password was plaintext, upgrade to bcrypt hash
+    if (!user.password_hash.startsWith('$2')) {
+      const hashedPassword = await bcrypt.hash(password, 10)
+      await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+        .bind(hashedPassword, user.id)
+        .run()
     }
 
     // Create session (expires in 7 days)

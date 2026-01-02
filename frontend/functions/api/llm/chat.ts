@@ -1,6 +1,7 @@
 import type { Env } from '../../env'
 import { calculateCost } from './pricing'
 import { createLogger } from '../../lib/logger'
+import { convertToGeminiFormat } from '../../lib/gemini'
 
 interface PagesFunction<E> {
   (context: {
@@ -199,24 +200,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await logger.error('llm', 'Chat error', { error: String(error) })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
-}
-
-function convertToGeminiFormat(messages: ChatMessage[]) {
-  const result: Array<{ role: string; parts: Array<{ text: string }> }> = []
-
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      result.unshift({ role: 'user', parts: [{ text: msg.content }] })
-      result.splice(1, 0, { role: 'model', parts: [{ text: 'Understood.' }] })
-    } else {
-      result.push({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }],
-      })
-    }
-  }
-
-  return result
 }
 
 async function logLlmRequest(
