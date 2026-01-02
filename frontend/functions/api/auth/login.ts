@@ -23,10 +23,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Find user by username
     const user = await env.DB.prepare(
-      'SELECT id, username, password_hash, display_name FROM users WHERE username = ?'
+      'SELECT id, username, password_hash, display_name, is_admin FROM users WHERE username = ?'
     )
       .bind(username.toLowerCase())
-      .first<{ id: string; username: string; password_hash: string; display_name: string | null }>()
+      .first<{ id: string; username: string; password_hash: string; display_name: string | null; is_admin: number }>()
 
     if (!user) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 })
@@ -56,6 +56,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         id: user.id,
         username: user.username,
         displayName: user.display_name,
+        isAdmin: user.is_admin === 1,
       },
     })
 
