@@ -24,7 +24,6 @@ export function buildBlueprintPrompts(
   const inputs = feasibility.inputs?.items || []
   const outputs = feasibility.outputs?.items || []
   const communication = feasibility.communication?.type
-  const processing = feasibility.processing?.level
   const powerOptions = feasibility.power?.options || []
 
   // Find enclosure decision if made
@@ -47,7 +46,7 @@ export function buildBlueprintPrompts(
     communication,
     // From user decisions
     ...allDecisionDetails,
-  ].filter(Boolean)
+  ].filter((f): f is string => Boolean(f))
 
   // Deduplicate and clean up
   const uniqueFeatures = [...new Set(allFeatures.map(f => f.toLowerCase()))]
