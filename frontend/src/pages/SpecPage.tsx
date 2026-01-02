@@ -320,11 +320,11 @@ function RejectionDisplay({ reason }: RejectionDisplayProps) {
 interface RefinementStepProps {
   project: Project
   spec: ProjectSpec
-  onDecision: (questionId: string, question: string, answer: string) => void
+  onDecisions: (decisions: Decision[]) => void
   onComplete: () => void
 }
 
-function RefinementStep({ project, spec, onDecision, onComplete }: RefinementStepProps) {
+function RefinementStep({ project, spec, onDecisions, onComplete }: RefinementStepProps) {
   const [pendingQuestions, setPendingQuestions] = useState<OpenQuestion[]>(spec.openQuestions)
   const [isChecking, setIsChecking] = useState(false)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
@@ -416,13 +416,15 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
           timestamp: new Date().toISOString(),
         }
         newDecisions.push(decision)
-        onDecision(questionId, question.question, answer)
       }
     })
 
     // Update local decisions state with ALL decisions
     const updatedDecisions = [...allDecisions, ...newDecisions]
     setAllDecisions(updatedDecisions)
+
+    // Save all decisions at once (not one by one to avoid race conditions)
+    onDecisions(updatedDecisions)
 
     // Clear pending and check for more with the FULL decision list
     setPendingQuestions([])
@@ -460,8 +462,27 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
     )
   }
 
+  // Calculate round info (roughly 2 questions per round, ~3 rounds total)
+  const currentRound = Math.floor(allDecisions.length / 2) + 1
+  const estimatedTotalRounds = 3
+  const remainingRounds = Math.max(0, estimatedTotalRounds - currentRound + 1)
+
   return (
     <div className="space-y-4">
+      {/* Progress indicator */}
+      <div className="bg-surface-800 border border-surface-700 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-steel-dim text-sm">
+          <span className="font-mono">REFINEMENT</span>
+          <span className="text-copper">Round {currentRound}</span>
+          {allDecisions.length > 0 && (
+            <span className="text-steel-dim">• {allDecisions.length} decision{allDecisions.length !== 1 ? 's' : ''} made</span>
+          )}
+        </div>
+        <div className="text-xs text-steel-dim">
+          {remainingRounds > 1 ? `~${remainingRounds} rounds remaining` : remainingRounds === 1 ? 'Final round' : 'Almost done'}
+        </div>
+      </div>
+
       {pendingQuestions.map((q) => (
         <div key={q.id} className="bg-surface-900 border border-surface-700 p-6">
           <h4 className="text-steel font-medium mb-4">{q.question}</h4>
@@ -811,18 +832,13 @@ export function SpecPage() {
     })
   }
 
-  const handleDecision = (questionId: string, question: string, answer: string) => {
-    const decision: Decision = {
-      questionId,
-      question,
-      answer,
-      timestamp: new Date().toISOString(),
-    }
-    const newDecisions = [...(spec?.decisions || []), decision]
-    const newQuestions = (spec?.openQuestions || []).filter((q) => q.id !== questionId)
+  const handleDecisions = (decisions: Decision[]) => {
+    // Get the question IDs that have been answered
+    const answeredIds = new Set(decisions.map(d => d.questionId))
+    const newQuestions = (spec?.openQuestions || []).filter((q) => !answeredIds.has(q.id))
 
     updateMutation.mutate({
-      spec: { ...spec!, decisions: newDecisions, openQuestions: newQuestions },
+      spec: { ...spec!, decisions, openQuestions: newQuestions },
     })
   }
 
@@ -919,7 +935,7 @@ export function SpecPage() {
             <RefinementStep
               project={project}
               spec={spec}
-              onDecision={handleDecision}
+              onDecisions={handleDecisions}
               onComplete={handleRefinementComplete}
             />
           )}
