@@ -775,7 +775,9 @@ export function SpecPage() {
   const spec = project?.spec as ProjectSpec | null
   let currentStep = 0
   if (spec?.feasibility && project?.status !== 'rejected') currentStep = 1
-  if ((spec?.decisions?.length ?? 0) > 0 && (spec?.openQuestions?.length ?? 0) === 0) currentStep = 2
+  // Step 2 if we're generating OR if we have decisions and no open questions
+  if (project?.status === 'generating' || project?.status === 'selecting' ||
+      ((spec?.decisions?.length ?? 0) > 0 && (spec?.openQuestions?.length ?? 0) === 0)) currentStep = 2
   if ((spec?.blueprints?.length ?? 0) > 0) currentStep = 3
   if (spec?.selectedBlueprint !== null && spec?.selectedBlueprint !== undefined) currentStep = 4
   if (spec?.finalSpec?.locked) currentStep = 5
