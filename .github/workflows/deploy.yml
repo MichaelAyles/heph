@@ -41,17 +41,14 @@ jobs:
         run: pnpm install
 
       - name: Run tests
-        working-directory: frontend
-        run: pnpm test:run
+        run: pnpm --filter phaestus test:run
 
       - name: Build
-        working-directory: frontend
-        run: pnpm build
+        run: pnpm --filter phaestus build
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=phaestus
-          workingDirectory: frontend
+          command: pages deploy frontend/dist --project-name=phaestus
