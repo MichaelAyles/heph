@@ -328,6 +328,8 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
   const [pendingQuestions, setPendingQuestions] = useState<OpenQuestion[]>(spec.openQuestions)
   const [isChecking, setIsChecking] = useState(false)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
+  const [otherMode, setOtherMode] = useState<Record<string, boolean>>({})
+  const [otherText, setOtherText] = useState<Record<string, string>>({})
   // Track all decisions including ones just submitted (to avoid stale closure)
   const [allDecisions, setAllDecisions] = useState<Decision[]>(spec.decisions || [])
 
@@ -376,6 +378,29 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
 
   const handleAnswer = (questionId: string, _question: string, answer: string) => {
     setSelectedAnswers((prev) => ({ ...prev, [questionId]: answer }))
+    setOtherMode((prev) => ({ ...prev, [questionId]: false }))
+  }
+
+  const handleOtherClick = (questionId: string) => {
+    setOtherMode((prev) => ({ ...prev, [questionId]: true }))
+    setSelectedAnswers((prev) => {
+      const updated = { ...prev }
+      delete updated[questionId]
+      return updated
+    })
+  }
+
+  const handleOtherTextChange = (questionId: string, text: string) => {
+    setOtherText((prev) => ({ ...prev, [questionId]: text }))
+    if (text.trim()) {
+      setSelectedAnswers((prev) => ({ ...prev, [questionId]: text.trim() }))
+    } else {
+      setSelectedAnswers((prev) => {
+        const updated = { ...prev }
+        delete updated[questionId]
+        return updated
+      })
+    }
   }
 
   const handleSubmitAnswers = () => {
@@ -447,7 +472,7 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
                 onClick={() => handleAnswer(q.id, q.question, option)}
                 className={clsx(
                   'px-4 py-3 text-sm text-left border transition-colors',
-                  selectedAnswers[q.id] === option
+                  selectedAnswers[q.id] === option && !otherMode[q.id]
                     ? 'bg-copper/20 border-copper text-copper'
                     : 'bg-surface-800 border-surface-600 text-steel hover:border-copper/50'
                 )}
@@ -455,7 +480,30 @@ function RefinementStep({ project, spec, onDecision, onComplete }: RefinementSte
                 {option}
               </button>
             ))}
+            <button
+              onClick={() => handleOtherClick(q.id)}
+              className={clsx(
+                'px-4 py-3 text-sm text-left border transition-colors',
+                otherMode[q.id]
+                  ? 'bg-copper/20 border-copper text-copper'
+                  : 'bg-surface-800 border-surface-600 text-steel hover:border-copper/50'
+              )}
+            >
+              Other...
+            </button>
           </div>
+          {otherMode[q.id] && (
+            <div className="mt-3">
+              <input
+                type="text"
+                value={otherText[q.id] || ''}
+                onChange={(e) => handleOtherTextChange(q.id, e.target.value)}
+                placeholder="Enter your answer..."
+                className="w-full px-4 py-3 bg-surface-800 border border-surface-600 text-steel placeholder-steel-dim text-sm focus:outline-none focus:border-copper"
+                autoFocus
+              />
+            </div>
+          )}
         </div>
       ))}
 
