@@ -28,21 +28,21 @@ describe('blueprint prompt', () => {
       })
     })
 
-    it('should include features from feasibility inputs', () => {
+    it('should include visible features from feasibility outputs', () => {
       const prompts = buildBlueprintPrompts(basicDescription, basicDecisions, basicFeasibility)
 
-      prompts.forEach((prompt) => {
-        expect(prompt.toLowerCase()).toContain('temperature sensor')
-        expect(prompt.toLowerCase()).toContain('humidity sensor')
-      })
-    })
-
-    it('should include features from feasibility outputs', () => {
-      const prompts = buildBlueprintPrompts(basicDescription, basicDecisions, basicFeasibility)
-
+      // Should include visible elements like LEDs and displays
       prompts.forEach((prompt) => {
         expect(prompt.toLowerCase()).toContain('status led')
         expect(prompt.toLowerCase()).toContain('oled display')
+      })
+    })
+
+    it('should include USB charging port when battery powered', () => {
+      const prompts = buildBlueprintPrompts(basicDescription, basicDecisions, basicFeasibility)
+
+      prompts.forEach((prompt) => {
+        expect(prompt.toLowerCase()).toContain('usb-c charging port')
       })
     })
 
@@ -54,28 +54,30 @@ describe('blueprint prompt', () => {
       })
     })
 
-    it('should use default enclosure if no decision provided', () => {
+    it('should work without enclosure decision', () => {
       const prompts = buildBlueprintPrompts(basicDescription, [], basicFeasibility)
 
+      // Should still generate valid prompts
+      expect(prompts).toHaveLength(4)
       prompts.forEach((prompt) => {
-        expect(prompt.toLowerCase()).toContain('compact handheld device')
+        expect(prompt.toLowerCase()).toContain('smart plant monitor')
       })
     })
 
     it('should have distinct styles for each variation', () => {
       const prompts = buildBlueprintPrompts(basicDescription, basicDecisions, basicFeasibility)
 
-      expect(prompts[0]).toContain('minimal')
-      expect(prompts[1]).toContain('Rounded corners')
-      expect(prompts[2]).toContain('Industrial')
-      expect(prompts[3]).toContain('Sleek modern')
+      expect(prompts[0].toLowerCase()).toContain('minimal')
+      expect(prompts[1].toLowerCase()).toContain('friendly')
+      expect(prompts[2].toLowerCase()).toContain('rugged')
+      expect(prompts[3].toLowerCase()).toContain('premium')
     })
 
-    it('should include "No text or labels" in all prompts', () => {
+    it('should include "No text" in all prompts', () => {
       const prompts = buildBlueprintPrompts(basicDescription, basicDecisions, basicFeasibility)
 
       prompts.forEach((prompt) => {
-        expect(prompt).toContain('No text or labels')
+        expect(prompt).toContain('No text')
       })
     })
 
@@ -107,13 +109,23 @@ describe('blueprint prompt', () => {
       })
     })
 
-    it('should find style question in various phrasings', () => {
-      const decisions = [{ question: 'What style of device?', answer: 'Desktop stand' }]
+    it('should find housing question phrasing', () => {
+      const decisions = [{ question: 'What housing style?', answer: 'Weatherproof box' }]
 
       const prompts = buildBlueprintPrompts(basicDescription, decisions, {})
 
       prompts.forEach((prompt) => {
-        expect(prompt.toLowerCase()).toContain('desktop stand')
+        expect(prompt.toLowerCase()).toContain('weatherproof box')
+      })
+    })
+
+    it('should include display decision in visual features', () => {
+      const decisions = [{ question: 'What display type?', answer: 'E-ink screen' }]
+
+      const prompts = buildBlueprintPrompts(basicDescription, decisions, {})
+
+      prompts.forEach((prompt) => {
+        expect(prompt.toLowerCase()).toContain('e-ink screen')
       })
     })
   })

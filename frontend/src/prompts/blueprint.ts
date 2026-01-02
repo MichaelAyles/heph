@@ -20,54 +20,78 @@ export function buildBlueprintPrompts(
     processing?: { level: string }
   }
 ): string[] {
-  // Extract all feasibility details
-  const inputs = feasibility.inputs?.items || []
-  const outputs = feasibility.outputs?.items || []
-  const communication = feasibility.communication?.type
-  const powerOptions = feasibility.power?.options || []
-
-  // Find enclosure decision if made
-  const enclosureDecision = decisions.find(d =>
+  // Find form factor decision if made
+  const formFactorDecision = decisions.find(d =>
     d.question.toLowerCase().includes('enclosure') ||
     d.question.toLowerCase().includes('form factor') ||
-    d.question.toLowerCase().includes('housing')
+    d.question.toLowerCase().includes('housing') ||
+    d.question.toLowerCase().includes('mount')
   )
-  const enclosureStyle = enclosureDecision?.answer || 'compact handheld device'
+  const formFactor = formFactorDecision?.answer
 
-  // Collect ALL decision answers for the prompt
-  const allDecisionDetails = decisions.map(d => d.answer)
+  // Find display decision if made
+  const displayDecision = decisions.find(d =>
+    d.question.toLowerCase().includes('display') ||
+    d.question.toLowerCase().includes('screen') ||
+    d.question.toLowerCase().includes('lcd')
+  )
+  const displayType = displayDecision?.answer
 
-  // Build comprehensive feature list from all sources
-  const allFeatures = [
-    // From feasibility analysis
-    ...inputs,
-    ...outputs,
-    ...powerOptions,
-    communication,
-    // From user decisions
-    ...allDecisionDetails,
-  ].filter((f): f is string => Boolean(f))
+  // Build visual elements list (things you'd actually SEE on the device)
+  const visualElements: string[] = []
 
-  // Deduplicate and clean up
-  const uniqueFeatures = [...new Set(allFeatures.map(f => f.toLowerCase()))]
-  const features = uniqueFeatures.join(', ')
+  // Add display if present
+  if (displayType) {
+    visualElements.push(displayType.toLowerCase())
+  }
 
-  // Build base description with enclosure style
-  const baseDescription = `A ${enclosureStyle} electronic device: ${description}`
+  // Add visible outputs (LEDs, screens, etc.)
+  const outputs = feasibility.outputs?.items || []
+  outputs.forEach(o => {
+    const lower = o.toLowerCase()
+    if (lower.includes('led') || lower.includes('display') || lower.includes('screen') || lower.includes('button')) {
+      visualElements.push(lower)
+    }
+  })
 
-  // Generate 4 variations
+  // Add visible inputs (buttons, sensors with probes, etc.)
+  const inputs = feasibility.inputs?.items || []
+  inputs.forEach(i => {
+    const lower = i.toLowerCase()
+    if (lower.includes('button') || lower.includes('probe') || lower.includes('moisture') || lower.includes('switch')) {
+      visualElements.push(lower)
+    }
+  })
+
+  // Add USB/charging port if battery powered
+  const powerOptions = feasibility.power?.options || []
+  if (powerOptions.some(p => p.toLowerCase().includes('usb') || p.toLowerCase().includes('battery'))) {
+    visualElements.push('USB-C charging port')
+  }
+
+  const visualFeatures = visualElements.length > 0
+    ? `Visible features: ${[...new Set(visualElements)].join(', ')}.`
+    : ''
+
+  // Build the core product description - this is the MOST important part
+  const productCore = description
+
+  // Form factor hint
+  const formHint = formFactor ? `, ${formFactor.toLowerCase()} style` : ''
+
+  // Generate 4 variations with product description as the focus
   return [
     // Variation 1: Minimal, clean
-    `Simple 3D product render of ${baseDescription}. Clean minimal design with smooth matte finish. Features: ${features}. White background, soft studio lighting, product mockup style. No text or labels.`,
+    `3D product render: ${productCore}. A small consumer electronics device${formHint}. Clean minimal design, smooth white plastic shell, rounded edges. ${visualFeatures} White background, soft studio lighting. No text.`,
 
-    // Variation 2: Rounded, friendly
-    `Simple 3D product render of ${baseDescription}. Rounded corners, friendly approachable design. Features: ${features}. Subtle gradient background, professional product photography style. No text or labels.`,
+    // Variation 2: Compact, friendly
+    `3D product render: ${productCore}. Compact handheld gadget${formHint}. Friendly rounded design, matte finish, subtle color accents. ${visualFeatures} Gradient background, product photography style. No text.`,
 
-    // Variation 3: Industrial, robust
-    `Simple 3D product render of ${baseDescription}. Industrial design with visible mounting points and robust construction. Features: ${features}. Neutral gray background, technical product visualization. No text or labels.`,
+    // Variation 3: Rugged, outdoor
+    `3D product render: ${productCore}. Durable outdoor device${formHint}. Rugged construction, weather-resistant look, dark enclosure with grip texture. ${visualFeatures} Gray background, technical product shot. No text.`,
 
-    // Variation 4: Sleek, modern
-    `Simple 3D product render of ${baseDescription}. Sleek modern design with thin profile and premium finish. Features: ${features}. Dark background with subtle lighting, high-end product shot style. No text or labels.`,
+    // Variation 4: Premium, modern
+    `3D product render: ${productCore}. Premium smart device${formHint}. Sleek modern design, thin profile, brushed aluminum accents. ${visualFeatures} Dark background, dramatic lighting. No text.`,
   ]
 }
 
