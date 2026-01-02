@@ -85,6 +85,7 @@ Respond with a valid JSON object. No text before or after.
   "overallScore": 88,
   "manufacturable": true,
   "rejectionReason": null,
+  "suggestedRevisions": null,
   "openQuestions": [
     {
       "id": "power-source",
@@ -99,6 +100,30 @@ Respond with a valid JSON object. No text before or after.
   ]
 }
 
+For non-manufacturable projects, include suggestedRevisions:
+
+{
+  "communication": { ... },
+  "processing": { ... },
+  "power": { ... },
+  "inputs": { ... },
+  "outputs": { ... },
+  "overallScore": 35,
+  "manufacturable": false,
+  "rejectionReason": "Project requires nRF52840 SoC (only ESP32-C6 available), dedicated gyroscope (only accelerometer available), laser pointer module (not in inventory), and custom USB-A dongle receiver (not supported).",
+  "suggestedRevisions": {
+    "summary": "This can be built as a simplified BLE presentation remote using available components",
+    "changes": [
+      "Replace nRF52840 with ESP32-C6 (BLE 5.3 supported, pairs directly with computer)",
+      "Remove gyroscope air-mouse feature (accelerometer LIS3DH available but less precise)",
+      "Remove laser pointer (use LED indicator instead for visual feedback)",
+      "Remove USB-A dongle (ESP32-C6 BLE pairs directly with host device)"
+    ],
+    "revisedDescription": "USB-C rechargeable wireless presentation remote with ESP32-C6 BLE, 400mAh LiPo battery, LED indicator, 3 navigation buttons (prev/next/start), direct BLE HID pairing with computer, 20-meter range, compact handheld enclosure"
+  },
+  "openQuestions": []
+}
+
 ## Confidence Scoring
 
 - 90-100: Fully supported, standard use case
@@ -111,9 +136,13 @@ Respond with a valid JSON object. No text before or after.
 1. Be conservative with confidence scores
 2. Always identify power source as an open question unless explicitly stated
 3. Reject firmly but politely when criteria are not met
-4. For rejected projects, explain WHY and suggest alternatives if possible
+4. For rejected projects, ALWAYS provide suggestedRevisions with:
+   - A summary of what CAN be built
+   - Specific changes needed (component substitutions, feature removals)
+   - A revised description the user can accept to proceed
 5. Extract ALL implicit requirements (e.g., "smart" implies connectivity)
-6. Consider power budget when assessing feasibility`
+6. Consider power budget when assessing feasibility
+7. When suggesting revisions, prioritize keeping core functionality over nice-to-have features`
 
 export function buildFeasibilityPrompt(description: string): string {
   return `Analyze this product description for feasibility:

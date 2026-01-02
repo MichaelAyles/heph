@@ -19,6 +19,12 @@ describe('feasibility prompt', () => {
       expect(FEASIBILITY_SYSTEM_PROMPT).toContain('JSON')
       expect(FEASIBILITY_SYSTEM_PROMPT).toContain('overallScore')
       expect(FEASIBILITY_SYSTEM_PROMPT).toContain('manufacturable')
+      expect(FEASIBILITY_SYSTEM_PROMPT).toContain('suggestedRevisions')
+    })
+
+    it('should instruct to provide revision suggestions for rejected projects', () => {
+      expect(FEASIBILITY_SYSTEM_PROMPT).toContain('revisedDescription')
+      expect(FEASIBILITY_SYSTEM_PROMPT).toContain('changes')
     })
 
     it('should contain confidence scoring guidelines', () => {
