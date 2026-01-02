@@ -12,7 +12,6 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { BlocksPage } from '@/pages/BlocksPage'
 import { AdminLogsPage } from '@/pages/AdminLogsPage'
 import { LandingPage } from '@/pages/LandingPage'
-import { BlogPage } from '@/pages/BlogPage'
 import { useAuthStore } from '@/stores/auth'
 
 const queryClient = new QueryClient({
@@ -42,15 +41,6 @@ function AuthenticatedApp() {
   )
 }
 
-function PublicRoutes() {
-  return (
-    <Routes>
-      <Route path="/blog" element={<BlogPage />} />
-      <Route path="*" element={<LandingPage />} />
-    </Routes>
-  )
-}
-
 function AppContent() {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore()
 
@@ -67,7 +57,7 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    return <PublicRoutes />
+    return <LandingPage />
   }
 
   return <AuthenticatedApp />
