@@ -815,7 +815,10 @@ export function SpecPage() {
   }
 
   const handleRefinementComplete = () => {
-    updateMutation.mutate({ status: 'generating' })
+    updateMutation.mutate({
+      status: 'generating',
+      spec: { ...spec!, openQuestions: [] },
+    })
   }
 
   const handleBlueprintsComplete = (blueprints: { url: string; prompt: string }[]) => {
