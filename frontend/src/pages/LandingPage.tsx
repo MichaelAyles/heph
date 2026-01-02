@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Loader2,
   AlertCircle,
@@ -12,6 +12,7 @@ import {
   ArrowRight,
   ChevronRight,
   Mail,
+  X,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/stores/auth'
@@ -21,8 +22,38 @@ export function LandingPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [showLoginPopover, setShowLoginPopover] = useState(false)
+  const popoverRef = useRef<HTMLDivElement>(null)
 
   const login = useAuthStore((s) => s.login)
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setShowLoginPopover(false)
+      }
+    }
+
+    if (showLoginPopover) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showLoginPopover])
+
+  // Close popover on escape key
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setShowLoginPopover(false)
+      }
+    }
+
+    if (showLoginPopover) {
+      document.addEventListener('keydown', handleEscape)
+      return () => document.removeEventListener('keydown', handleEscape)
+    }
+  }, [showLoginPopover])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,12 +79,94 @@ export function LandingPage() {
             <img src="/logo.png" alt="Phaestus" className="h-8 w-auto" />
             <span className="text-lg font-semibold tracking-tight text-steel">PHAESTUS</span>
           </div>
-          <a
-            href="#login"
-            className="px-4 py-2 bg-copper-gradient text-ash text-sm font-medium"
-          >
-            Sign In
-          </a>
+          <div className="relative">
+            <button
+              onClick={() => setShowLoginPopover(!showLoginPopover)}
+              className="px-4 py-2 bg-copper-gradient text-ash text-sm font-medium"
+            >
+              Sign In
+            </button>
+
+            {/* Login Popover */}
+            {showLoginPopover && (
+              <div
+                ref={popoverRef}
+                className="absolute right-0 top-full mt-2 w-80 bg-surface-900 border border-surface-600 shadow-2xl z-50"
+              >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
+                  <h3 className="text-sm font-semibold text-steel">Sign In</h3>
+                  <button
+                    onClick={() => setShowLoginPopover(false)}
+                    className="text-steel-dim hover:text-steel transition-colors"
+                  >
+                    <X className="w-4 h-4" strokeWidth={1.5} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                  {error && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" strokeWidth={1.5} />
+                      {error}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-mono text-steel-dim mb-1.5 tracking-wide">
+                      USERNAME
+                    </label>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="Enter username"
+                      autoComplete="username"
+                      className="w-full px-3 py-2 bg-surface-800 border border-surface-600 text-steel placeholder-steel-dim text-sm focus:outline-none focus:border-copper"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-steel-dim mb-1.5 tracking-wide">
+                      PASSWORD
+                    </label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter password"
+                      autoComplete="current-password"
+                      className="w-full px-3 py-2 bg-surface-800 border border-surface-600 text-steel placeholder-steel-dim text-sm focus:outline-none focus:border-copper"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!username.trim() || !password.trim() || isLoading}
+                    className={clsx(
+                      'w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-all',
+                      username.trim() && password.trim() && !isLoading
+                        ? 'bg-copper-gradient text-ash'
+                        : 'bg-surface-700 text-steel-dim cursor-not-allowed'
+                    )}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
+                        Authenticating...
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="w-4 h-4" strokeWidth={1.5} />
+                        Sign In
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -76,13 +189,13 @@ export function LandingPage() {
           </p>
 
           <div className="flex items-center justify-center gap-4">
-            <a
-              href="#login"
+            <button
+              onClick={() => setShowLoginPopover(true)}
               className="inline-flex items-center gap-2 px-8 py-4 bg-copper-gradient text-ash font-semibold text-lg"
             >
               Get Started
               <ArrowRight className="w-5 h-5" strokeWidth={2} />
-            </a>
+            </button>
             <a
               href="#how-it-works"
               className="inline-flex items-center gap-2 px-8 py-4 bg-surface-800 hover:bg-surface-700 text-steel font-medium text-lg border border-surface-600 transition-colors"
@@ -196,78 +309,6 @@ export function LandingPage() {
               </span>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Login Section */}
-      <section id="login" className="py-20 px-6">
-        <div className="max-w-sm mx-auto">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-steel mb-2">Sign In</h2>
-            <p className="text-steel-dim text-sm">Access your hardware projects</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
-                {error}
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-mono text-steel-dim mb-2 tracking-wide">
-                USERNAME
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
-                autoComplete="username"
-                className="w-full px-4 py-3 bg-surface-800 border border-surface-600 text-steel placeholder-steel-dim focus:outline-none focus:border-copper"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono text-steel-dim mb-2 tracking-wide">
-                PASSWORD
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-                autoComplete="current-password"
-                className="w-full px-4 py-3 bg-surface-800 border border-surface-600 text-steel placeholder-steel-dim focus:outline-none focus:border-copper"
-                disabled={isLoading}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!username.trim() || !password.trim() || isLoading}
-              className={clsx(
-                'w-full flex items-center justify-center gap-2 px-6 py-3 font-semibold transition-all mt-6',
-                username.trim() && password.trim() && !isLoading
-                  ? 'bg-copper-gradient text-ash'
-                  : 'bg-surface-700 text-steel-dim cursor-not-allowed'
-              )}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" strokeWidth={1.5} />
-                  Authenticating...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" strokeWidth={1.5} />
-                  Sign In
-                </>
-              )}
-            </button>
-          </form>
         </div>
       </section>
 
