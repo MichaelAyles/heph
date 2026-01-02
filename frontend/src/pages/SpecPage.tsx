@@ -1040,7 +1040,7 @@ export function SpecPage() {
           )}
 
           {/* Step 2: Blueprint Generation */}
-          {currentStep === 2 && project.status === 'generating' && (
+          {currentStep === 2 && (
             <BlueprintStep
               project={project}
               spec={spec}
