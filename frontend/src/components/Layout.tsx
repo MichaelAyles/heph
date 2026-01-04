@@ -1,5 +1,5 @@
-import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, FolderOpen, PlusCircle, Settings, Layers, LogOut, User, ScrollText, Zap, Shield, Pencil } from 'lucide-react'
+import { Outlet, Link, useLocation, useParams } from 'react-router-dom'
+import { Home, FolderOpen, PlusCircle, Settings, Layers, LogOut, User, ScrollText, Zap, Shield, Pencil, Wrench } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
 
@@ -23,7 +23,12 @@ const adminNavigation = [
 
 export function Layout() {
   const location = useLocation()
+  const params = useParams()
   const { user, logout } = useAuthStore()
+
+  // Extract project ID from URL if we're viewing a project
+  const projectIdFromPath = location.pathname.match(/\/project\/([^/]+)/)?.[1]
+  const projectId = params.id || projectIdFromPath
 
   return (
     <div className="min-h-screen flex">
@@ -55,6 +60,27 @@ export function Layout() {
               </Link>
             )
           })}
+
+          {/* Workbench Link - shown when viewing a project */}
+          {projectId && (
+            <>
+              <div className="pt-4 pb-2">
+                <span className="px-3 text-xs font-mono text-steel-dim tracking-wide">CURRENT PROJECT</span>
+              </div>
+              <Link
+                to={`/project/${projectId}/spec`}
+                className={clsx(
+                  'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors',
+                  location.pathname.startsWith(`/project/${projectId}`) && !location.pathname.endsWith('/view')
+                    ? 'bg-copper/10 text-copper border-l-2 border-copper'
+                    : 'text-steel-dim hover:text-steel hover:bg-surface-800'
+                )}
+              >
+                <Wrench className="w-5 h-5" strokeWidth={1.5} />
+                Workbench
+              </Link>
+            </>
+          )}
 
           {/* Admin Navigation */}
           {user?.isAdmin && (

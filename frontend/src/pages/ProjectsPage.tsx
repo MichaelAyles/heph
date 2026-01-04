@@ -10,7 +10,8 @@ import {
   XCircle,
   ArrowRight,
   PlusCircle,
-  Trash2
+  Trash2,
+  Wrench
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -69,10 +70,8 @@ function getStatusLabel(status: string): string {
 }
 
 function getProjectLink(project: Project): string {
-  if (project.status === 'complete') {
-    return `/project/${project.id}/view`
-  }
-  return `/project/${project.id}`
+  // Default to workspace for all projects
+  return `/project/${project.id}/spec`
 }
 
 function formatDate(dateStr: string): string {
@@ -226,6 +225,10 @@ export function ProjectsPage() {
                         >
                           <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                         </button>
+                        <div className="flex items-center gap-1 px-2 py-1 bg-copper/10 text-copper text-xs font-medium rounded">
+                          <Wrench className="w-3 h-3" strokeWidth={1.5} />
+                          Workbench
+                        </div>
                         <ArrowRight
                           className="w-5 h-5 text-surface-600 group-hover:text-copper transition-colors"
                           strokeWidth={1.5}
