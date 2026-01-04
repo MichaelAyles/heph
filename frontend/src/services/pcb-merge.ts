@@ -16,7 +16,7 @@ import {
   TitleBlock,
   Paper,
 } from 'kicadts'
-import type { PlacedBlock, PcbBlock, BlockEdges, NetMapping } from '@/db/schema'
+import type { PlacedBlock, PcbBlock } from '@/db/schema'
 
 // Grid unit size in mm (0.5" = 12.7mm)
 const GRID_UNIT_MM = 12.7
@@ -91,8 +91,7 @@ function transformSymbolPosition(
  * Build the global net list from all blocks
  */
 function buildGlobalNetList(
-  blocks: PcbBlock[],
-  placedBlocks: PlacedBlock[]
+  blocks: PcbBlock[]
 ): Map<string, { id: number; name: string }> {
   const nets = new Map<string, { id: number; name: string }>()
   let netId = 1
@@ -127,7 +126,7 @@ export async function mergeBlockSchematics(
   const blockMap = new Map(blockData.map((b) => [b.id, b]))
 
   // Build global net list
-  const globalNets = buildGlobalNetList(blockData, placedBlocks)
+  const globalNets = buildGlobalNetList(blockData)
   const netAssignments: NetAssignment[] = []
 
   // Calculate board bounds
@@ -209,12 +208,14 @@ export async function mergeBlockSchematics(
     const wires = loaded.schematic.wires || []
     for (const wire of wires) {
       // Transform wire points
-      const points = wire.points
-      if (points) {
-        const xys = points.xys || []
-        for (const xy of xys) {
-          if (xy.x !== undefined) xy.x += loaded.offsetX
-          if (xy.y !== undefined) xy.y += loaded.offsetY
+      const pts = wire.points
+      if (pts) {
+        for (const point of pts.points || []) {
+          // Only Xy has x/y; skip PtsArc for now
+          if ('x' in point && 'y' in point) {
+            point.x += loaded.offsetX
+            point.y += loaded.offsetY
+          }
         }
       }
       mergedSchematic.wires?.push(wire)
@@ -242,8 +243,8 @@ export async function mergeBlockSchematics(
  */
 function generateInterconnectWires(
   loadedBlocks: LoadedBlock[],
-  blockMap: Map<string, PcbBlock>,
-  globalNets: Map<string, { id: number; name: string }>
+  _blockMap: Map<string, PcbBlock>,
+  _globalNets: Map<string, { id: number; name: string }>
 ): Wire[] {
   const wires: Wire[] = []
 
