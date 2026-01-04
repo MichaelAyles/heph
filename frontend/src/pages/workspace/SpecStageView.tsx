@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
+import { useAuthStore } from '@/stores/auth'
 import { llm } from '@/services/llm'
 import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '@/prompts/feasibility'
 import { REFINEMENT_SYSTEM_PROMPT, buildRefinementPrompt } from '@/prompts/refinement'
@@ -224,9 +225,30 @@ function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilitySte
 interface FeasibilityResultsProps {
   feasibility: FeasibilityAnalysis
   onContinue: () => void
+  autoAdvance?: boolean
 }
 
-function FeasibilityResults({ feasibility, onContinue }: FeasibilityResultsProps) {
+function FeasibilityResults({ feasibility, onContinue, autoAdvance = false }: FeasibilityResultsProps) {
+  const [countdown, setCountdown] = useState(3)
+
+  // Auto-advance in Vibe It mode (high scores) or Fix It mode (very high scores)
+  useEffect(() => {
+    if (!autoAdvance) return
+
+    const timer = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(timer)
+          onContinue()
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [autoAdvance, onContinue])
+
   const categories = [
     { key: 'communication', label: 'Communication', data: feasibility.communication },
     { key: 'processing', label: 'Processing', data: feasibility.processing },
@@ -291,7 +313,7 @@ function FeasibilityResults({ feasibility, onContinue }: FeasibilityResultsProps
           onClick={onContinue}
           className="w-full py-3 bg-copper-gradient text-ash font-semibold hover:opacity-90 transition-opacity"
         >
-          Continue to Refinement
+          {autoAdvance ? `Continuing in ${countdown}s... (click to proceed now)` : 'Continue to Refinement'}
         </button>
       </div>
     </div>
@@ -936,7 +958,11 @@ export function SpecStageView() {
   const { project, isLoading } = useWorkspaceContext()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
   const [suggestedRevisions, setSuggestedRevisions] = useState<SuggestedRevisions | undefined>()
+
+  // Get control mode from user settings
+  const controlMode = user?.controlMode || 'fix_it'
 
   const updateMutation = useMutation({
     mutationFn: (updates: Partial<Project>) => updateProject(project!.id, updates),
@@ -1110,6 +1136,13 @@ export function SpecStageView() {
             <FeasibilityResults
               feasibility={spec.feasibility}
               onContinue={handleStartRefinement}
+              autoAdvance={
+                // Vibe It: always auto-advance
+                controlMode === 'vibe_it' ||
+                // Fix It: auto-advance if score >= 80 (high confidence)
+                (controlMode === 'fix_it' && spec.feasibility.overallScore >= 80)
+                // Design It: never auto-advance (require explicit click)
+              }
             />
           )}
 

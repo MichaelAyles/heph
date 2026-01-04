@@ -5,11 +5,14 @@
 
 import { create } from 'zustand'
 
+export type ControlMode = 'vibe_it' | 'fix_it' | 'design_it'
+
 export interface AuthUser {
   id: string
   username: string
   displayName: string | null
   isAdmin: boolean
+  controlMode: ControlMode
 }
 
 interface AuthState {
@@ -21,6 +24,7 @@ interface AuthState {
   checkAuth: () => Promise<void>
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => Promise<void>
+  updateControlMode: (mode: ControlMode) => Promise<{ success: boolean; error?: string }>
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -73,6 +77,29 @@ export const useAuthStore = create<AuthState>((set) => ({
       console.error('Logout failed:', error)
     } finally {
       set({ user: null, isAuthenticated: false })
+    }
+  },
+
+  updateControlMode: async (mode: ControlMode) => {
+    try {
+      const res = await fetch('/api/users/me/mode', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ controlMode: mode }),
+      })
+
+      if (res.ok) {
+        set((state) => ({
+          user: state.user ? { ...state.user, controlMode: mode } : null,
+        }))
+        return { success: true }
+      }
+
+      const data = await res.json()
+      return { success: false, error: data.error || 'Failed to update mode' }
+    } catch (error) {
+      console.error('Update control mode failed:', error)
+      return { success: false, error: 'Network error' }
     }
   },
 }))

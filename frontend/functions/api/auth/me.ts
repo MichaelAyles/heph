@@ -20,13 +20,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // Find valid session and user
     const result = await env.DB.prepare(
-      `SELECT u.id, u.username, u.display_name, u.is_admin
+      `SELECT u.id, u.username, u.display_name, u.is_admin, u.control_mode
        FROM sessions s
        JOIN users u ON s.user_id = u.id
        WHERE s.id = ? AND s.expires_at > datetime('now')`
     )
       .bind(sessionId)
-      .first<{ id: string; username: string; display_name: string | null; is_admin: number }>()
+      .first<{ id: string; username: string; display_name: string | null; is_admin: number; control_mode: string | null }>()
 
     if (!result) {
       // Session expired or invalid - clear cookie
@@ -45,6 +45,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         username: result.username,
         displayName: result.display_name,
         isAdmin: result.is_admin === 1,
+        controlMode: result.control_mode || 'fix_it',
       },
     })
   } catch (error) {

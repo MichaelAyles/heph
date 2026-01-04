@@ -1,7 +1,13 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, FolderOpen, PlusCircle, Settings, Layers, LogOut, User, ScrollText } from 'lucide-react'
+import { Home, FolderOpen, PlusCircle, Settings, Layers, LogOut, User, ScrollText, Zap, Shield, Pencil } from 'lucide-react'
 import { clsx } from 'clsx'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, type ControlMode } from '@/stores/auth'
+
+const MODE_CONFIG: Record<ControlMode, { icon: typeof Zap; label: string; color: string }> = {
+  vibe_it: { icon: Zap, label: 'Vibe It', color: 'text-emerald-400' },
+  fix_it: { icon: Shield, label: 'Fix It', color: 'text-copper' },
+  design_it: { icon: Pencil, label: 'Design It', color: 'text-blue-400' },
+}
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
@@ -85,6 +91,26 @@ export function Layout() {
             <User className="w-4 h-4 text-steel-dim" strokeWidth={1.5} />
             <span className="text-steel truncate">{user?.displayName || user?.username}</span>
           </div>
+
+          {/* Control Mode Indicator */}
+          {user?.controlMode && (
+            <Link
+              to="/settings"
+              className="flex items-center gap-2 px-2 py-1.5 bg-surface-800 hover:bg-surface-700 rounded transition-colors"
+              title="Click to change control mode"
+            >
+              {(() => {
+                const mode = MODE_CONFIG[user.controlMode]
+                const ModeIcon = mode.icon
+                return (
+                  <>
+                    <ModeIcon className={clsx('w-4 h-4', mode.color)} strokeWidth={1.5} />
+                    <span className={clsx('text-xs font-medium', mode.color)}>{mode.label}</span>
+                  </>
+                )
+              })()}
+            </Link>
+          )}
 
           <div className="flex items-center justify-between">
             <p className="text-xs text-steel-dim font-mono">

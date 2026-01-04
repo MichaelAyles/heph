@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, Cpu, Check, Loader2, AlertCircle, Play, Image, BarChart3 } from 'lucide-react'
+import { Save, Cpu, Check, Loader2, AlertCircle, Play, Image, BarChart3, Zap, Shield, Pencil } from 'lucide-react'
 import { clsx } from 'clsx'
 import { llm } from '@/services/llm'
+import { useAuthStore, type ControlMode } from '@/stores/auth'
 
 type LLMProvider = 'openrouter' | 'gemini'
 
@@ -71,6 +72,7 @@ function formatNumber(num: number): string {
 
 export function SettingsPage() {
   const queryClient = useQueryClient()
+  const { user, updateControlMode } = useAuthStore()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['settings'],
@@ -93,6 +95,7 @@ export function SettingsPage() {
 
   const [provider, setProvider] = useState<LLMProvider>('openrouter')
   const [saved, setSaved] = useState(false)
+  const [modeUpdating, setModeUpdating] = useState(false)
 
   // Test state
   const [textTestLoading, setTextTestLoading] = useState(false)
@@ -112,6 +115,12 @@ export function SettingsPage() {
 
   const handleSave = () => {
     mutation.mutate({ llmProvider: provider })
+  }
+
+  const handleModeChange = async (mode: ControlMode) => {
+    setModeUpdating(true)
+    await updateControlMode(mode)
+    setModeUpdating(false)
   }
 
   const handleTestText = async () => {
@@ -449,6 +458,43 @@ export function SettingsPage() {
               />
             </div>
           </section>
+
+          {/* Control Mode */}
+          <section>
+            <h2 className="text-sm font-mono text-steel-dim mb-2 flex items-center gap-2 tracking-wide">
+              <Zap className="w-4 h-4 text-copper" strokeWidth={1.5} />
+              CONTROL MODE
+            </h2>
+            <p className="text-sm text-steel-dim mb-4">
+              Choose how much control you want over the design process.
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              <ControlModeCard
+                icon={Zap}
+                name="Vibe It"
+                description="Full automation. AI makes decisions and proceeds automatically."
+                selected={user?.controlMode === 'vibe_it'}
+                onClick={() => handleModeChange('vibe_it')}
+                disabled={modeUpdating}
+              />
+              <ControlModeCard
+                icon={Shield}
+                name="Fix It"
+                description="Balanced. AI proceeds but pauses on errors or low confidence."
+                selected={user?.controlMode === 'fix_it'}
+                onClick={() => handleModeChange('fix_it')}
+                disabled={modeUpdating}
+              />
+              <ControlModeCard
+                icon={Pencil}
+                name="Design It"
+                description="Full control. Approve every decision before AI proceeds."
+                selected={user?.controlMode === 'design_it'}
+                onClick={() => handleModeChange('design_it')}
+                disabled={modeUpdating}
+              />
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -488,6 +534,51 @@ function ProviderCard({
         </div>
       </div>
       <p className="text-sm text-steel-dim">{description}</p>
+    </button>
+  )
+}
+
+function ControlModeCard({
+  icon: Icon,
+  name,
+  description,
+  selected,
+  onClick,
+  disabled,
+}: {
+  icon: typeof Zap
+  name: string
+  description: string
+  selected: boolean
+  onClick: () => void
+  disabled: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={clsx(
+        'p-4 border text-left transition-all',
+        selected
+          ? 'bg-copper/10 border-copper'
+          : 'bg-surface-800 border-surface-600 hover:border-surface-500',
+        disabled && 'opacity-50 cursor-not-allowed'
+      )}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <Icon
+          className={clsx('w-5 h-5', selected ? 'text-copper' : 'text-steel-dim')}
+          strokeWidth={1.5}
+        />
+        <span className="font-semibold text-steel">{name}</span>
+      </div>
+      <p className="text-xs text-steel-dim">{description}</p>
+      {selected && (
+        <div className="mt-3 flex items-center gap-1 text-xs text-copper">
+          <Check className="w-3 h-3" strokeWidth={2} />
+          Active
+        </div>
+      )}
     </button>
   )
 }

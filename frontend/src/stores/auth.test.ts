@@ -47,6 +47,8 @@ describe('auth store', () => {
         id: 'user-123',
         username: 'testuser',
         displayName: 'Test User',
+        isAdmin: false,
+        controlMode: 'fix_it',
       }
 
       mockFetch.mockResolvedValueOnce({
@@ -103,6 +105,8 @@ describe('auth store', () => {
         id: 'user-123',
         username: 'testuser',
         displayName: 'Test User',
+        isAdmin: false,
+        controlMode: 'fix_it',
       }
 
       mockFetch.mockResolvedValueOnce({
@@ -161,7 +165,7 @@ describe('auth store', () => {
     it('should call /api/auth/login with correct parameters', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ user: { id: '1', username: 'test', displayName: null } }),
+        json: () => Promise.resolve({ user: { id: '1', username: 'test', displayName: null, isAdmin: false, controlMode: 'fix_it' } }),
       })
 
       await useAuthStore.getState().login('testuser', 'mypassword')
@@ -189,7 +193,7 @@ describe('auth store', () => {
     beforeEach(() => {
       // Set authenticated state
       useAuthStore.setState({
-        user: { id: '123', username: 'test', displayName: 'Test' },
+        user: { id: '123', username: 'test', displayName: 'Test', isAdmin: false, controlMode: 'fix_it' },
         isAuthenticated: true,
         isLoading: false,
       })
@@ -231,6 +235,8 @@ describe('auth store', () => {
         id: 'user-123',
         username: 'testuser',
         displayName: null,
+        isAdmin: false,
+        controlMode: 'fix_it',
       }
 
       mockFetch.mockResolvedValueOnce({
@@ -249,6 +255,8 @@ describe('auth store', () => {
         id: 'user-123',
         username: 'testuser',
         displayName: 'Test User',
+        isAdmin: false,
+        controlMode: 'fix_it',
       }
 
       mockFetch.mockResolvedValueOnce({
@@ -260,6 +268,70 @@ describe('auth store', () => {
 
       const state = useAuthStore.getState()
       expect(state.user?.displayName).toBe('Test User')
+    })
+  })
+
+  describe('updateControlMode', () => {
+    beforeEach(() => {
+      // Set authenticated state
+      useAuthStore.setState({
+        user: { id: '123', username: 'test', displayName: 'Test', isAdmin: false, controlMode: 'fix_it' },
+        isAuthenticated: true,
+        isLoading: false,
+      })
+    })
+
+    it('should update control mode on success', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, controlMode: 'vibe_it' }),
+      })
+
+      const result = await useAuthStore.getState().updateControlMode('vibe_it')
+
+      expect(result.success).toBe(true)
+      const state = useAuthStore.getState()
+      expect(state.user?.controlMode).toBe('vibe_it')
+    })
+
+    it('should return error on failure', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({ error: 'Invalid mode' }),
+      })
+
+      const result = await useAuthStore.getState().updateControlMode('vibe_it')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Invalid mode')
+      // Mode should not have changed
+      const state = useAuthStore.getState()
+      expect(state.user?.controlMode).toBe('fix_it')
+    })
+
+    it('should handle network errors', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'))
+
+      const result = await useAuthStore.getState().updateControlMode('vibe_it')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Network error')
+      expect(console.error).toHaveBeenCalled()
+    })
+
+    it('should call /api/users/me/mode with correct parameters', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, controlMode: 'design_it' }),
+      })
+
+      await useAuthStore.getState().updateControlMode('design_it')
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/users/me/mode', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ controlMode: 'design_it' }),
+      })
     })
   })
 })
