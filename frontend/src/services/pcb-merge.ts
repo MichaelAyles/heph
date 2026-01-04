@@ -182,15 +182,22 @@ export async function mergeBlockSchematics(
     }
   }
 
+  // Create paper with size A4
+  const paper = new Paper()
+  paper.size = 'A4'
+
+  // Create title block
+  const titleBlock = new TitleBlock({
+    title: projectName,
+    company: 'PHAESTUS Generated',
+  })
+
   // Create merged schematic
   const mergedSchematic = new KicadSch({
     version: 20240101,
     generator: 'phaestus',
-    titleBlock: new TitleBlock({
-      title: projectName,
-      company: 'PHAESTUS Generated',
-    }),
-    paper: new Paper({ size: 'A4' }),
+    titleBlock,
+    paper,
     properties: [new Property({ key: 'Sheetfile', value: `${projectName}.kicad_sch` })],
     symbols: [],
     wires: [],
