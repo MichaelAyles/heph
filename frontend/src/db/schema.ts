@@ -53,6 +53,22 @@ export type ProjectStatus =
 // PROJECT SPEC - New Pipeline
 // =============================================================================
 
+export type StageStatus = 'pending' | 'in_progress' | 'complete' | 'error'
+
+export interface StageState {
+  status: StageStatus
+  completedAt?: string
+  error?: string
+}
+
+export interface ProjectStages {
+  spec: StageState
+  pcb: StageState
+  enclosure: StageState
+  firmware: StageState
+  export: StageState
+}
+
 export interface ProjectSpec {
   // Original user input
   description: string
@@ -70,6 +86,90 @@ export interface ProjectSpec {
 
   // Step 5: Final locked spec
   finalSpec: FinalSpec | null
+
+  // Pipeline stage tracking
+  stages?: ProjectStages
+
+  // PCB artifacts
+  pcb?: PCBArtifacts
+
+  // Enclosure artifacts
+  enclosure?: EnclosureArtifacts
+
+  // Firmware artifacts
+  firmware?: FirmwareArtifacts
+}
+
+// =============================================================================
+// PCB ARTIFACTS
+// =============================================================================
+
+export interface PCBArtifacts {
+  // Selected blocks with grid positions
+  placedBlocks: PlacedBlock[]
+  // Merged schematic URL (R2)
+  schematicUrl?: string
+  // Merged PCB layout URL (R2)
+  pcbLayoutUrl?: string
+  // Board dimensions
+  boardSize?: { width: number; height: number; unit: 'mm' }
+  // Net list for firmware mapping
+  netList?: NetAssignment[]
+}
+
+export interface PlacedBlock {
+  blockId: string
+  blockSlug: string
+  gridX: number
+  gridY: number
+  rotation: 0 | 90 | 180 | 270
+}
+
+export interface NetAssignment {
+  net: string
+  globalNet: string
+  gpio?: string
+}
+
+// =============================================================================
+// ENCLOSURE ARTIFACTS
+// =============================================================================
+
+export interface EnclosureArtifacts {
+  // OpenSCAD source code
+  openScadCode?: string
+  // Generated STL URL (R2)
+  stlUrl?: string
+  // User feedback iterations
+  iterations: EnclosureIteration[]
+}
+
+export interface EnclosureIteration {
+  feedback: string
+  openScadCode: string
+  stlUrl?: string
+  timestamp: string
+}
+
+// =============================================================================
+// FIRMWARE ARTIFACTS
+// =============================================================================
+
+export interface FirmwareArtifacts {
+  // Source files
+  files: FirmwareFile[]
+  // Compiled binary URL (R2)
+  binaryUrl?: string
+  // Build log
+  buildLog?: string
+  // Build status
+  buildStatus?: 'pending' | 'building' | 'success' | 'failed'
+}
+
+export interface FirmwareFile {
+  path: string
+  content: string
+  language: 'cpp' | 'c' | 'h' | 'json'
 }
 
 export interface FeasibilityAnalysis {
