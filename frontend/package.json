@@ -25,14 +25,19 @@
     "deploy": "pnpm build && wrangler pages deploy dist --project-name=phaestus"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "@tanstack/react-query": "^5.90.16",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "kicadts": "^0.0.23",
     "lucide-react": "^0.562.0",
+    "openscad-wasm": "^0.0.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.11.0",
+    "three": "^0.182.0",
     "zod": "^4.3.4",
     "zustand": "^5.0.9"
   },
@@ -45,6 +50,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.182.0",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.0.16",
     "eslint": "^9.39.1",
