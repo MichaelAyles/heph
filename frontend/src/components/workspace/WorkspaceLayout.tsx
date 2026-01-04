@@ -10,7 +10,8 @@ import type { Project } from '@/db/schema'
 async function fetchProject(id: string): Promise<Project> {
   const res = await fetch(`/api/projects/${id}`)
   if (!res.ok) throw new Error('Failed to fetch project')
-  return res.json()
+  const data = await res.json()
+  return data.project
 }
 
 export function WorkspaceLayout() {
