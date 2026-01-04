@@ -1,18 +1,18 @@
 import { useState, useMemo } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
-import { Cpu, ArrowRight, Play, Loader2, CheckCircle2, XCircle, Grid3X3, Eye } from 'lucide-react'
+import { Cpu, ArrowRight, Loader2, CheckCircle2, XCircle, Grid3X3, Eye } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { BlockSelector } from '@/components/pcb/BlockSelector'
-import type { PcbBlock, PlacedBlock, ProjectSpec } from '@/db/schema'
+import type { PcbBlock, PlacedBlock } from '@/db/schema'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
 
 export function PCBStageView() {
-  const { project, isLoading } = useWorkspaceContext()
+  const { project } = useWorkspaceContext()
   const queryClient = useQueryClient()
-  const [currentStep, setCurrentStep] = useState<PCBStep>('select_blocks')
+  const [currentStep] = useState<PCBStep>('select_blocks')
   const [selectedBlocks, setSelectedBlocks] = useState<PlacedBlock[]>([])
   const [previewBlockSlug, setPreviewBlockSlug] = useState<string | null>(null)
 
