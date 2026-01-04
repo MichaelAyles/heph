@@ -289,3 +289,39 @@ Image generation dominates costs at ~2000x the price of text completions:
 - `gemini-2.5-flash-image`: $0.002/image
 
 Consider caching images aggressively and batching requests.
+
+## Workspace Pipeline Implementation Status
+
+### Completed Phases
+
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 1 | Workspace UI Architecture | Complete |
+| 2 | User Control Modes (Vibe It, Fix It, Design It) | Complete |
+| 3 | PCB Stage Foundation (KiCanvas, Block Selector) | Complete |
+| 4 | PCB Block Merging (kicadts integration) | Complete |
+| 5 | Enclosure Generation (OpenSCAD + R3F) | Complete |
+
+### Remaining Phases
+
+| Phase | Feature | Notes |
+|-------|---------|-------|
+| 6 | Firmware Compile Server | Requires Fly.io + Docker + ESP-IDF setup |
+| 7 | Firmware Frontend | Monaco editor + file tree + compile output |
+| 8 | Multi-Agent Orchestration | Agent interfaces and context manager |
+| 9 | Export & Polish | Gerber generation, BOM export, PDF spec |
+
+### New Files Added
+
+```
+frontend/src/
+├── components/
+│   ├── workspace/         # Workspace layout components
+│   ├── pcb/               # BlockSelector, KiCanvasViewer
+│   └── enclosure/         # STLViewer
+├── pages/workspace/       # Stage views (PCB, Enclosure, Firmware, Export)
+├── services/pcb-merge.ts  # kicadts-based schematic merging
+├── lib/openscadRenderer.ts # OpenSCAD WASM wrapper
+├── prompts/enclosure.ts   # OpenSCAD generation prompt
+└── stores/workspace.ts    # Workspace UI state
+```
