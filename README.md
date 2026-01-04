@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="branding/logo.png" alt="PHAESTUS" width="120" />
+  <img src="frontend/publuc/logo.png" alt="PHAESTUS" width="120" />
 </p>
 
 <h1 align="center">PHAESTUS</h1>

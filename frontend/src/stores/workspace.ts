@@ -32,7 +32,7 @@ interface WorkspaceState {
   getStageStatus: (stage: WorkspaceStage, spec: ProjectSpec | null) => StageStatus
 }
 
-export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
+export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   activeStage: 'spec',
 
   splitPanePositions: {

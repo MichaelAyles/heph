@@ -1032,9 +1032,13 @@ export function SpecStageView() {
 
   const handleFinalizeComplete = (finalSpec: FinalSpec) => {
     // Update spec stage status to complete
+    const defaultStage = { status: 'pending' as const }
     const updatedStages = {
-      ...(spec?.stages || {}),
       spec: { status: 'complete' as const, completedAt: new Date().toISOString() },
+      pcb: spec?.stages?.pcb || defaultStage,
+      enclosure: spec?.stages?.enclosure || defaultStage,
+      firmware: spec?.stages?.firmware || defaultStage,
+      export: spec?.stages?.export || defaultStage,
     }
 
     updateMutation.mutate({
