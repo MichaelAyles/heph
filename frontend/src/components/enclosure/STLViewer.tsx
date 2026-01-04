@@ -80,7 +80,10 @@ function STLDataModel({ data, color, onLoad }: STLDataModelProps) {
 
   useEffect(() => {
     const loader = new STLLoader()
-    const geom = loader.parse(data.buffer)
+    // Create a regular ArrayBuffer copy to avoid SharedArrayBuffer issues
+    const buffer = new ArrayBuffer(data.byteLength)
+    new Uint8Array(buffer).set(data)
+    const geom = loader.parse(buffer)
 
     // Center the geometry
     geom.computeBoundingBox()
@@ -133,17 +136,6 @@ function LoadingFallback() {
   )
 }
 
-function ErrorBoundaryFallback({ error }: { error: Error }) {
-  return (
-    <Html center>
-      <div className="flex flex-col items-center gap-2 text-red-400 max-w-xs text-center">
-        <span className="text-sm">Failed to load model</span>
-        <span className="text-xs text-red-500">{error.message}</span>
-      </div>
-    </Html>
-  )
-}
-
 export function STLViewer({
   src,
   data,
@@ -156,7 +148,6 @@ export function STLViewer({
 }: STLViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [rotating, setRotating] = useState(autoRotate)
-  const [loadError, setLoadError] = useState<Error | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const toggleFullscreen = () => {
@@ -177,10 +168,9 @@ export function STLViewer({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
-  const handleError = (error: Error) => {
-    setLoadError(error)
-    onError?.(error)
-  }
+  // Future: Could use error boundary to capture STL loading errors
+  // and call onError?.(error) to propagate them
+  void onError // Acknowledge the prop
 
   if (!src && !data) {
     return (
@@ -232,9 +222,7 @@ export function STLViewer({
 
         <Suspense fallback={<LoadingFallback />}>
           <Center>
-            {loadError ? (
-              <ErrorBoundaryFallback error={loadError} />
-            ) : src ? (
+            {src ? (
               <STLModel url={src} color={color} onLoad={onLoad} />
             ) : data ? (
               <STLDataModel data={data} color={color} onLoad={onLoad} />

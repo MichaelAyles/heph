@@ -228,7 +228,10 @@ export function EnclosureStageView() {
   const handleDownload = useCallback(() => {
     if (!stlData) return
 
-    const blob = new Blob([stlData], { type: 'application/octet-stream' })
+    // Create a regular ArrayBuffer copy to avoid SharedArrayBuffer issues
+    const buffer = new ArrayBuffer(stlData.byteLength)
+    new Uint8Array(buffer).set(stlData)
+    const blob = new Blob([buffer], { type: 'application/octet-stream' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

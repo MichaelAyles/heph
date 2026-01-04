@@ -40,10 +40,13 @@ async function loadOpenSCAD(): Promise<OpenSCADModule> {
 
   loadPromise = (async () => {
     // Dynamic import to enable code splitting
-    const OpenSCAD = await import('openscad-wasm')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const OpenSCAD = (await import('openscad-wasm')) as any
 
     // Initialize with noInitialRun to prevent auto-execution
-    const instance = await OpenSCAD.default({
+    // The module exports a factory function directly
+    const factory = OpenSCAD.default || OpenSCAD
+    const instance = await factory({
       noInitialRun: true,
       print: (text: string) => console.log('[OpenSCAD]', text),
       printErr: (text: string) => console.error('[OpenSCAD Error]', text),
@@ -119,7 +122,10 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
  * Create a Blob URL from STL data for use in viewers
  */
 export function createSTLBlobUrl(stlData: Uint8Array): string {
-  const blob = new Blob([stlData], { type: 'application/octet-stream' })
+  // Create a new ArrayBuffer copy to avoid SharedArrayBuffer issues
+  const buffer = new ArrayBuffer(stlData.byteLength)
+  new Uint8Array(buffer).set(stlData)
+  const blob = new Blob([buffer], { type: 'application/octet-stream' })
   return URL.createObjectURL(blob)
 }
 
