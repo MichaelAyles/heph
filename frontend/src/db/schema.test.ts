@@ -202,6 +202,9 @@ describe('schema transform functions', () => {
         components: JSON.stringify([{ ref: 'U1', value: 'ESP32-C6', package: 'QFN' }]),
         is_validated: 1,
         is_active: 1,
+        edges: null,
+        files: null,
+        net_mappings: null,
       }
 
       const result = blockFromRow(row)
@@ -220,6 +223,9 @@ describe('schema transform functions', () => {
         power: { currentMaxMa: 150 },
         components: [{ ref: 'U1', value: 'ESP32-C6', package: 'QFN' }],
         isValidated: true,
+        edges: undefined,
+        files: undefined,
+        netMappings: undefined,
       })
     })
 
@@ -239,6 +245,9 @@ describe('schema transform functions', () => {
         components: null,
         is_validated: 0,
         is_active: 1,
+        edges: null,
+        files: null,
+        net_mappings: null,
       }
 
       const result = blockFromRow(row)
@@ -262,6 +271,9 @@ describe('schema transform functions', () => {
         components: null,
         is_validated: 1,
         is_active: 1,
+        edges: null,
+        files: null,
+        net_mappings: null,
       }
 
       const result = blockFromRow(row)
@@ -285,6 +297,9 @@ describe('schema transform functions', () => {
         components: null,
         is_validated: 1,
         is_active: 1,
+        edges: null,
+        files: null,
+        net_mappings: null,
       }
 
       const result = blockFromRow(row)
@@ -308,6 +323,9 @@ describe('schema transform functions', () => {
         components: null,
         is_validated: 1,
         is_active: 1,
+        edges: null,
+        files: null,
+        net_mappings: null,
       }
 
       const row2: PcbBlockRow = {
@@ -325,6 +343,9 @@ describe('schema transform functions', () => {
         components: null,
         is_validated: 0,
         is_active: 1,
+        edges: null,
+        files: null,
+        net_mappings: null,
       }
 
       expect(blockFromRow(row1).isValidated).toBe(true)
@@ -350,6 +371,9 @@ describe('schema transform functions', () => {
           components: null,
           is_validated: 1,
           is_active: 1,
+          edges: null,
+          files: null,
+          net_mappings: null,
         }
 
         const result = blockFromRow(row)
@@ -373,11 +397,46 @@ describe('schema transform functions', () => {
         components: null,
         is_validated: 1,
         is_active: 1,
+        edges: null,
+        files: null,
+        net_mappings: null,
       }
 
       const result = blockFromRow(row)
 
       expect(result.description).toBe('')
+    })
+
+    it('should parse edges, files, and netMappings when present', () => {
+      const edges = { north: [], south: [], east: [], west: [] }
+      const files = { schematic: 'test.kicad_sch', pcb: 'test.kicad_pcb' }
+      const netMappings = { GND: { globalNet: 'GND', padRefs: ['U1.1'] } }
+
+      const row: PcbBlockRow = {
+        id: 'block-123',
+        slug: 'test',
+        name: 'Test',
+        category: 'mcu',
+        description: null,
+        width_units: 1,
+        height_units: 1,
+        taps: '[]',
+        i2c_addresses: null,
+        spi_cs: null,
+        power: null,
+        components: null,
+        is_validated: 1,
+        is_active: 1,
+        edges: JSON.stringify(edges),
+        files: JSON.stringify(files),
+        net_mappings: JSON.stringify(netMappings),
+      }
+
+      const result = blockFromRow(row)
+
+      expect(result.edges).toEqual(edges)
+      expect(result.files).toEqual(files)
+      expect(result.netMappings).toEqual(netMappings)
     })
   })
 

@@ -54,6 +54,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     power: row.power ? JSON.parse(row.power as string) : { currentMaxMa: 0 },
     components: row.components ? JSON.parse(row.components as string) : [],
     isValidated: row.is_validated === 1,
+    // New fields for PCB merging
+    edges: row.edges ? JSON.parse(row.edges as string) : undefined,
+    files: row.files ? JSON.parse(row.files as string) : undefined,
+    netMappings: row.net_mappings ? JSON.parse(row.net_mappings as string) : undefined,
   }))
 
   return Response.json({ blocks, total, limit, offset })

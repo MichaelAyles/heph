@@ -262,6 +262,10 @@ export interface PcbBlock {
   power: { currentMaxMa: number }
   components: BlockComponent[]
   isValidated: boolean
+  // New fields for PCB merging
+  edges?: BlockEdges
+  files?: BlockFiles
+  netMappings?: Record<string, NetMapping>
 }
 
 export type BlockCategory = 'mcu' | 'power' | 'sensor' | 'output' | 'connector' | 'utility'
@@ -275,6 +279,34 @@ export interface BlockComponent {
   value: string
   package: string
   note?: string
+}
+
+// Edge connection definitions for block merging
+export interface EdgeConnection {
+  net: string
+  offsetMm: number
+  layer: 'F.Cu' | 'B.Cu' | 'In1.Cu' | 'In2.Cu'
+}
+
+export interface BlockEdges {
+  north: EdgeConnection[]
+  south: EdgeConnection[]
+  east: EdgeConnection[]
+  west: EdgeConnection[]
+}
+
+// File references in R2 storage
+export interface BlockFiles {
+  schematic: string  // e.g., "mcu-esp32c6.kicad_sch"
+  pcb: string        // e.g., "mcu-esp32c6.kicad_pcb"
+  stepModel?: string // e.g., "mcu-esp32c6.step"
+  thumbnail?: string // e.g., "mcu-esp32c6.png"
+}
+
+// Net mapping for schematic merge
+export interface NetMapping {
+  globalNet: string
+  padRefs: string[]
 }
 
 // =============================================================================
@@ -356,6 +388,10 @@ export interface PcbBlockRow {
   components: string | null // JSON string
   is_validated: number // 0 or 1
   is_active: number
+  // New fields for PCB merging
+  edges: string | null // JSON string
+  files: string | null // JSON string
+  net_mappings: string | null // JSON string
 }
 
 export interface ConversationRow {
@@ -426,6 +462,10 @@ export function blockFromRow(row: PcbBlockRow): PcbBlock {
     power: row.power ? JSON.parse(row.power) : { currentMaxMa: 0 },
     components: row.components ? JSON.parse(row.components) : [],
     isValidated: row.is_validated === 1,
+    // New fields for PCB merging
+    edges: row.edges ? JSON.parse(row.edges) : undefined,
+    files: row.files ? JSON.parse(row.files) : undefined,
+    netMappings: row.net_mappings ? JSON.parse(row.net_mappings) : undefined,
   }
 }
 
