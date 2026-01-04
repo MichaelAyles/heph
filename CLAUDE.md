@@ -8,16 +8,25 @@ PHAESTUS is an AI-powered hardware design platform that transforms natural langu
 
 **Stack**: React 19 + TypeScript, Cloudflare Pages Functions, D1 (SQLite), R2 storage, Tailwind CSS 4, Zustand, TanStack Query
 
+### Design Philosophy
+
+**Module-Based Hardware Design**: AI selects from pre-validated circuit blocks rather than generating novel circuits. This gives ~100% success rate vs ~70% for AI-generated circuits, with tractable validation via interface type-checking.
+
+**Deterministic Grid Layout**: 12.7mm grid with pre-routed bus interfaces eliminates autorouting failures and enables predictable board dimensions with parametric enclosures.
+
 ## Deployment
 
 **Live**: https://phaestus.app
 
-**IMPORTANT**: Deployments require manual wrangler invocation:
+**CI/CD**: Deployments happen automatically via GitHub Actions on push to `main`. The workflow:
+1. Runs tests (`pnpm test:run`)
+2. Builds (`pnpm build`)
+3. Deploys to Cloudflare Pages (from `frontend/` directory to pick up `wrangler.toml` and `functions/`)
+
+**Manual deployment** (if needed):
 ```bash
 cd frontend && pnpm build && pnpm exec wrangler pages deploy dist --project-name=phaestus
 ```
-
-The `pnpm deploy` script may fail due to PATH issues - use the explicit command above.
 
 **Cloudflare Resources**:
 - D1 Database: `phaestus`
@@ -104,29 +113,34 @@ frontend/
 │   ├── services/llm.ts        # LLM client (chat + stream)
 │   ├── stores/auth.ts         # Zustand auth state
 │   └── db/schema.ts           # Types + row transforms
-├── functions/api/
-│   ├── _middleware.ts         # Auth (session cookie validation)
-│   ├── auth/                  # login, logout, me
-│   ├── llm/
-│   │   ├── chat.ts            # Non-streaming (OpenRouter + Gemini)
-│   │   ├── stream.ts          # SSE streaming
-│   │   ├── image.ts           # Image generation
-│   │   └── pricing.ts         # Cost calculations
-│   ├── projects/              # CRUD
-│   └── admin/logs.ts          # Debug logs (admin only)
-└── migrations/                # 6 SQL migrations
+├── functions/
+│   ├── api/
+│   │   ├── _middleware.ts     # Auth (session cookie validation + session extension)
+│   │   ├── auth/              # login (bcrypt), logout, me
+│   │   ├── llm/
+│   │   │   ├── chat.ts        # Non-streaming (OpenRouter + Gemini)
+│   │   │   ├── stream.ts      # SSE streaming with token estimation
+│   │   │   ├── image.ts       # Image generation with 60s timeout
+│   │   │   └── pricing.ts     # Cost calculations
+│   │   ├── projects/          # CRUD
+│   │   ├── settings/usage.ts  # Usage statistics endpoint
+│   │   └── admin/logs.ts      # Debug logs (admin only)
+│   └── lib/
+│       ├── gemini.ts          # Shared Gemini format conversion
+│       └── logger.ts          # Debug logging utility
+└── migrations/                # SQL migrations
 ```
 
 ### Database Schema
 
 Key tables in D1:
 
-- **users**: id, username, password_hash (PLAINTEXT - known issue), is_admin
-- **sessions**: id, user_id, expires_at (7-day expiry)
+- **users**: id, username, password_hash (bcrypt, auto-upgraded from plaintext on login), is_admin
+- **sessions**: id, user_id, expires_at (7-day sliding expiry, extended on activity)
 - **projects**: id, user_id, name, status, spec (JSON ProjectSpec)
 - **pcb_blocks**: 21 pre-seeded circuit modules
 - **llm_requests**: Usage tracking with cost_usd
-- **debug_logs**: Admin logging
+- **debug_logs**: Admin logging (category, level, request_id for correlation)
 
 ### LLM Integration
 
@@ -143,6 +157,14 @@ All requests proxy through `/api/llm/*`:
 - Session cookies, 7-day expiry, HttpOnly
 - Default user: `mike`/`mike` (admin)
 - Public routes: `/api/auth/*`, `/api/blocks`, `/api/images`
+
+## Development Workflow
+
+Two servers running in dev:
+- **Vite (5173)** - Frontend with hot reload, proxies `/api/*` to wrangler
+- **Wrangler Pages (8788)** - API functions with D1/R2 bindings
+
+Use `pnpm dev:full` to start both together.
 
 ## Common Issues & Patterns
 
@@ -190,6 +212,38 @@ Each step component receives `onComplete` callback. Pattern:
 3. Parent updates mutation, which invalidates query
 4. Query refetch triggers re-render with new step
 
+### Blueprint Regeneration with Feedback
+
+Users can click a blueprint to enter detail view, provide feedback, and regenerate just that image:
+```typescript
+const newPrompt = `${originalPrompt} User feedback: ${feedback}`
+const newUrl = await generateImage(newPrompt)
+// Update just the one blueprint in the array
+```
+
+### Debug Logging
+
+Use the logger utility for admin-visible logs:
+```typescript
+import { createLogger } from '../lib/logger'
+
+const logger = createLogger(env, user, requestId)
+await logger.llm('Chat completed', { model, tokens, latencyMs })
+await logger.error('llm', 'API failed', { error: errorText })
+```
+
+Categories: `general`, `api`, `auth`, `llm`, `project`, `image`, `db`, `middleware`
+Levels: `debug`, `info`, `warn`, `error`
+
+Logs are stored in D1 for admin users and viewable via `GET /api/admin/logs`.
+
+### Guardrails
+
+- **Max refinement rounds**: 5 question/answer cycles, then proceeds to blueprints
+- **Input length limit**: 2000 characters on description (~500 tokens)
+- **Image timeout**: 60 seconds per image generation
+- **LLM retry**: 3 attempts with exponential backoff (1s, 2s), 4xx errors fail immediately
+
 ## Testing
 
 Vitest with 90%+ coverage target on:
@@ -204,12 +258,12 @@ API handlers excluded (need miniflare mocking).
 
 ## Known Technical Debt
 
-1. **Plaintext passwords** - `migrations/0003` stores passwords as plaintext
+1. ~~**Plaintext passwords**~~ - FIXED: bcrypt with auto-upgrade on login
 2. **SpecPage size** - 1073 lines, 5 nested components, should be split
 3. **Regex JSON parsing** - Fragile, should use schema validation (Zod)
-4. **Streaming token counts** - Not tracked, logged as 0
-5. **No retry logic** - LLM failures not retried
-6. **Duplication** - chat.ts and stream.ts duplicate Gemini format conversion
+4. ~~**Streaming token counts**~~ - FIXED: Estimated at ~4 chars/token
+5. ~~**No retry logic**~~ - FIXED: Exponential backoff (3 attempts, 1s/2s delays), 4xx errors fail immediately
+6. ~~**Duplication**~~ - FIXED: Shared `functions/lib/gemini.ts` utility
 
 ## Quick Reference
 
@@ -223,3 +277,15 @@ API handlers excluded (need miniflare mocking).
 | Image generation | `functions/api/llm/image.ts` |
 | Auth middleware | `functions/api/_middleware.ts` |
 | Project CRUD | `functions/api/projects/` |
+| Gemini format util | `functions/lib/gemini.ts` |
+| Logger utility | `functions/lib/logger.ts` |
+| Pricing calculations | `functions/api/llm/pricing.ts` |
+| Admin logs API | `functions/api/admin/logs.ts` |
+
+## Cost Insights
+
+Image generation dominates costs at ~2000x the price of text completions:
+- `gemini-3-flash-preview`: ~$0.000001/request
+- `gemini-2.5-flash-image`: $0.002/image
+
+Consider caching images aggressively and batching requests.
