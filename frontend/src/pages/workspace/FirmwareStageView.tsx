@@ -27,6 +27,8 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
+import { OrchestratorTrigger } from '@/components/workspace/OrchestratorTrigger'
+import type { ProjectSpec } from '@/db/schema'
 import { llm } from '@/services/llm'
 import {
   FIRMWARE_SYSTEM_PROMPT,
@@ -206,7 +208,12 @@ function buildFileTree(files: FirmwareProject['files']): FileNode[] {
       } else {
         let folder = current.find((n) => n.name === part && n.type === 'folder')
         if (!folder) {
-          folder = { name: part, path: parts.slice(0, i + 1).join('/'), type: 'folder', children: [] }
+          folder = {
+            name: part,
+            path: parts.slice(0, i + 1).join('/'),
+            type: 'folder',
+            children: [],
+          }
           current.push(folder)
         }
         current = folder.children!
@@ -226,7 +233,14 @@ interface FileTreeItemProps {
   onToggleFolder: (path: string) => void
 }
 
-function FileTreeItem({ node, depth, selectedPath, expandedFolders, onSelect, onToggleFolder }: FileTreeItemProps) {
+function FileTreeItem({
+  node,
+  depth,
+  selectedPath,
+  expandedFolders,
+  onSelect,
+  onToggleFolder,
+}: FileTreeItemProps) {
   const isExpanded = expandedFolders.has(node.path)
   const isSelected = selectedPath === node.path
 
@@ -269,7 +283,9 @@ function FileTreeItem({ node, depth, selectedPath, expandedFolders, onSelect, on
       onClick={() => onSelect(node)}
       className={clsx(
         'w-full flex items-center gap-1.5 px-2 py-1 text-sm text-left rounded transition-colors',
-        isSelected ? 'bg-copper/20 text-copper' : 'text-steel-dim hover:text-steel hover:bg-surface-800'
+        isSelected
+          ? 'bg-copper/20 text-copper'
+          : 'text-steel-dim hover:text-steel hover:bg-surface-800'
       )}
       style={{ paddingLeft: `${20 + depth * 12}px` }}
     >
@@ -305,6 +321,26 @@ export function FirmwareStageView() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const enclosureComplete = project?.spec?.stages?.enclosure?.status === 'complete'
+  const existingFirmware = project?.spec?.firmware
+  const spec = project?.spec
+
+  // Handler for orchestrator spec updates
+  const handleOrchestratorSpecUpdate = useCallback(
+    async (specUpdate: Partial<ProjectSpec>) => {
+      if (!project?.id) return
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spec: { ...spec, ...specUpdate },
+        }),
+      })
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+      }
+    },
+    [project?.id, spec, queryClient]
+  )
 
   // Load saved firmware from project spec
   useEffect(() => {
@@ -321,7 +357,9 @@ export function FirmwareStageView() {
   // Select first file when tree changes
   useEffect(() => {
     if (!selectedFile && fileTree.length > 0) {
-      const firstFile = flattenFiles(fileTree).find((f) => f.path.endsWith('.cpp') || f.path.endsWith('.h'))
+      const firstFile = flattenFiles(fileTree).find(
+        (f) => f.path.endsWith('.cpp') || f.path.endsWith('.h')
+      )
       if (firstFile) {
         const node = findNode(fileTree, firstFile.path)
         if (node) {
@@ -343,14 +381,17 @@ export function FirmwareStageView() {
     return null
   }
 
-  const handleSelectFile = useCallback((node: FileNode) => {
-    // Save current file first
-    if (selectedFile && editorContent !== selectedFile.content) {
-      updateFileContent(selectedFile.path, editorContent)
-    }
-    setSelectedFile(node)
-    setEditorContent(node.content || '')
-  }, [selectedFile, editorContent])
+  const handleSelectFile = useCallback(
+    (node: FileNode) => {
+      // Save current file first
+      if (selectedFile && editorContent !== selectedFile.content) {
+        updateFileContent(selectedFile.path, editorContent)
+      }
+      setSelectedFile(node)
+      setEditorContent(node.content || '')
+    },
+    [selectedFile, editorContent]
+  )
 
   const handleToggleFolder = useCallback((path: string) => {
     setExpandedFolders((prev) => {
@@ -390,7 +431,15 @@ export function FirmwareStageView() {
   // Save firmware to project
   const saveMutation = useMutation({
     mutationFn: async (files: FirmwareProject['files']) => {
-      const spec = project?.spec || { description: '', feasibility: null, openQuestions: [], decisions: [], blueprints: [], selectedBlueprint: null, finalSpec: null }
+      const spec = project?.spec || {
+        description: '',
+        feasibility: null,
+        openQuestions: [],
+        decisions: [],
+        blueprints: [],
+        selectedBlueprint: null,
+        finalSpec: null,
+      }
 
       // Convert files to match FirmwareFile schema (cpp | c | h | json)
       const firmwareFiles = files.map((f) => ({
@@ -401,7 +450,11 @@ export function FirmwareStageView() {
 
       // Update firmware artifacts
       spec.firmware = {
-        files: firmwareFiles as { path: string; content: string; language: 'cpp' | 'c' | 'h' | 'json' }[],
+        files: firmwareFiles as {
+          path: string
+          content: string
+          language: 'cpp' | 'c' | 'h' | 'json'
+        }[],
         buildStatus: 'pending',
       }
 
@@ -492,7 +545,11 @@ export function FirmwareStageView() {
       const currentFiles: FirmwareProject['files'] = flattenFiles(fileTree).map((f) => ({
         path: f.path,
         content: f.content,
-        language: (f.path.endsWith('.h') ? 'h' : f.path.endsWith('.ini') ? 'ini' : 'cpp') as 'cpp' | 'h' | 'ini' | 'json',
+        language: (f.path.endsWith('.h') ? 'h' : f.path.endsWith('.ini') ? 'ini' : 'cpp') as
+          | 'cpp'
+          | 'h'
+          | 'ini'
+          | 'json',
       }))
 
       const input = buildFirmwareInputFromSpec(
@@ -505,7 +562,10 @@ export function FirmwareStageView() {
       const response = await llm.chat({
         messages: [
           { role: 'system', content: FIRMWARE_SYSTEM_PROMPT },
-          { role: 'user', content: buildFirmwareModificationPrompt(currentFiles, chatInput, input) },
+          {
+            role: 'user',
+            content: buildFirmwareModificationPrompt(currentFiles, chatInput, input),
+          },
         ],
         temperature: 0.3,
         projectId: project.id,
@@ -544,7 +604,11 @@ export function FirmwareStageView() {
       const allFiles: FirmwareProject['files'] = flattenFiles(updatedTree).map((f) => ({
         path: f.path,
         content: f.content,
-        language: (f.path.endsWith('.h') ? 'h' : f.path.endsWith('.ini') ? 'ini' : 'cpp') as 'cpp' | 'h' | 'ini' | 'json',
+        language: (f.path.endsWith('.h') ? 'h' : f.path.endsWith('.ini') ? 'ini' : 'cpp') as
+          | 'cpp'
+          | 'h'
+          | 'ini'
+          | 'json',
       }))
       await saveMutation.mutateAsync(allFiles)
 
@@ -647,8 +711,8 @@ Upload this .bin file back to PHAESTUS for distribution.
           </div>
           <h2 className="text-xl font-semibold text-steel mb-2">Firmware Development</h2>
           <p className="text-steel-dim mb-4">
-            Complete the enclosure stage first. Firmware will be generated based on your hardware configuration and pin
-            assignments.
+            Complete the enclosure stage first. Firmware will be generated based on your hardware
+            configuration and pin assignments.
           </p>
           <div className="flex items-center justify-center gap-2 text-sm text-surface-500">
             <span>Generate Enclosure</span>
@@ -667,7 +731,9 @@ Upload this .bin file back to PHAESTUS for distribution.
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-steel mb-0.5">Firmware Development</h2>
-            <p className="text-steel-dim text-sm">Edit, download, and compile firmware for your ESP32-C6</p>
+            <p className="text-steel-dim text-sm">
+              Edit, download, and compile firmware for your ESP32-C6
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {uploadedBinary && (
@@ -713,6 +779,13 @@ Upload this .bin file back to PHAESTUS for distribution.
           <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
             <X className="w-4 h-4 flex-shrink-0" />
             {generationError}
+          </div>
+        )}
+
+        {/* Orchestrator Trigger - Show when no firmware generated yet */}
+        {!existingFirmware?.files?.length && project && (
+          <div className="mt-4">
+            <OrchestratorTrigger project={project} onSpecUpdate={handleOrchestratorSpecUpdate} />
           </div>
         )}
 

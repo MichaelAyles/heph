@@ -15,8 +15,15 @@ import {
 import { clsx } from 'clsx'
 import Editor from '@monaco-editor/react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
+import { OrchestratorTrigger } from '@/components/workspace/OrchestratorTrigger'
+import type { ProjectSpec } from '@/db/schema'
 import { STLViewer } from '@/components/enclosure/STLViewer'
-import { renderOpenSCAD, createSTLBlobUrl, revokeSTLBlobUrl, preloadOpenSCAD } from '@/lib/openscadRenderer'
+import {
+  renderOpenSCAD,
+  createSTLBlobUrl,
+  revokeSTLBlobUrl,
+  preloadOpenSCAD,
+} from '@/lib/openscadRenderer'
 import {
   buildEnclosurePrompt,
   buildEnclosureInputFromSpec,
@@ -46,6 +53,24 @@ export function EnclosureStageView() {
   const pcbArtifacts = spec?.pcb
   const finalSpec = spec?.finalSpec
   const existingEnclosure = spec?.enclosure
+
+  // Handler for orchestrator spec updates
+  const handleOrchestratorSpecUpdate = useCallback(
+    async (specUpdate: Partial<ProjectSpec>) => {
+      if (!project?.id) return
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spec: { ...spec, ...specUpdate },
+        }),
+      })
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+      }
+    },
+    [project?.id, spec, queryClient]
+  )
 
   // Preload OpenSCAD WASM when entering this stage
   useEffect(() => {
@@ -282,7 +307,9 @@ export function EnclosureStageView() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-steel mb-1">Enclosure Design</h2>
-            <p className="text-steel-dim text-sm">AI-generated parametric enclosure with 3D preview</p>
+            <p className="text-steel-dim text-sm">
+              AI-generated parametric enclosure with 3D preview
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {/* Step indicators */}
@@ -300,10 +327,22 @@ export function EnclosureStageView() {
               complete={currentStep === 'preview'}
             />
             <ArrowRight className="w-4 h-4 text-surface-600" />
-            <StepIndicator step={3} label="Preview" active={currentStep === 'preview'} complete={false} />
+            <StepIndicator
+              step={3}
+              label="Preview"
+              active={currentStep === 'preview'}
+              complete={false}
+            />
           </div>
         </div>
       </div>
+
+      {/* Orchestrator Trigger - Show when no enclosure generated yet */}
+      {currentStep === 'generate' && !existingEnclosure?.openScadCode && project && (
+        <div className="px-6 py-4 border-b border-surface-700">
+          <OrchestratorTrigger project={project} onSpecUpdate={handleOrchestratorSpecUpdate} />
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
@@ -316,8 +355,8 @@ export function EnclosureStageView() {
               <h3 className="text-lg font-semibold text-steel mb-2">Generate Enclosure</h3>
               <p className="text-steel-dim mb-6">
                 The AI will generate a parametric OpenSCAD enclosure based on your PCB dimensions (
-                {pcbArtifacts?.boardSize?.width ?? 50}mm x {pcbArtifacts?.boardSize?.height ?? 40}mm) and
-                component placement.
+                {pcbArtifacts?.boardSize?.width ?? 50}mm x {pcbArtifacts?.boardSize?.height ?? 40}
+                mm) and component placement.
               </p>
 
               {!wasmLoaded && (
