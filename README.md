@@ -25,13 +25,10 @@ PHAESTUS transforms natural language specifications into manufacturable hardware
 **Current Capabilities**:
 - KiCad schematics with auto-selected circuit blocks
 - 3D-printable enclosures (OpenSCAD → STL)
-- ESP32 firmware scaffolding with AI generation
-- Bill of Materials with sourcing
-
-**Coming Soon**:
-- Gerber export for PCB manufacturing
-- Firmware compilation server
-- PDF spec sheet generation
+- ESP32 firmware with Monaco editor and AI generation
+- Bill of Materials export (CSV)
+- Multi-agent orchestration for autonomous design
+- Complete project export (spec, BOM, enclosure, firmware)
 
 ## Live Demo
 
@@ -121,9 +118,10 @@ Secrets are managed via `wrangler pages secret put <NAME>`.
 - Input validation and length limits (2000 char max)
 - Cost tracking for all LLM requests
 
-**Known Issues** (see CLAUDE.md for details):
-- JSON parsing needs Zod validation
+**Known Issues** (see CLAUDE.md for full list):
+- JSON parsing should use Zod validation
 - Rate limiting needed on auth endpoints
+- Memory management in orchestrator conversation history
 
 ## License
 
