@@ -59,7 +59,7 @@ export function EnclosureStageView() {
     async (specUpdate: Partial<ProjectSpec>) => {
       if (!project?.id) return
       const res = await fetch(`/api/projects/${project.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spec: { ...spec, ...specUpdate },
@@ -100,7 +100,7 @@ export function EnclosureStageView() {
   const saveEnclosureMutation = useMutation({
     mutationFn: async (data: { openScadCode: string; stlUrl?: string }) => {
       const res = await fetch(`/api/projects/${project?.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spec: {

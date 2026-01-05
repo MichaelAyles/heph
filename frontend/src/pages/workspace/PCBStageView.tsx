@@ -35,7 +35,7 @@ export function PCBStageView() {
   const savePCBMutation = useMutation({
     mutationFn: async (pcbData: { placedBlocks: PlacedBlock[] }) => {
       const res = await fetch(`/api/projects/${project?.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spec: {
@@ -106,7 +106,7 @@ export function PCBStageView() {
   const handleOrchestratorSpecUpdate = useCallback(
     async (specUpdate: Partial<ProjectSpec>) => {
       const res = await fetch(`/api/projects/${project?.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spec: {

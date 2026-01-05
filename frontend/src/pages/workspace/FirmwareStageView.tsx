@@ -329,7 +329,7 @@ export function FirmwareStageView() {
     async (specUpdate: Partial<ProjectSpec>) => {
       if (!project?.id) return
       const res = await fetch(`/api/projects/${project.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spec: { ...spec, ...specUpdate },
