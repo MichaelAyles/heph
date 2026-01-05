@@ -22,12 +22,16 @@ PHAESTUS transforms natural language specifications into manufacturable hardware
 4. **Selection** - Pick your favorite design direction
 5. **Finalization** - Generates locked spec with detailed BOM
 
-Outputs:
-- KiCad schematics and PCB layouts
-- Gerber files for manufacturing
-- 3D-printable enclosures (OpenSCAD/STL)
-- Firmware scaffolding (ESP32/STM32)
+**Current Capabilities**:
+- KiCad schematics with auto-selected circuit blocks
+- 3D-printable enclosures (OpenSCAD → STL)
+- ESP32 firmware scaffolding with AI generation
 - Bill of Materials with sourcing
+
+**Coming Soon**:
+- Gerber export for PCB manufacturing
+- Firmware compilation server
+- PDF spec sheet generation
 
 ## Live Demo
 
@@ -62,7 +66,7 @@ Open http://localhost:8788
 | **Database** | Cloudflare D1 (SQLite) |
 | **Storage** | Cloudflare R2 |
 | **LLM** | OpenRouter (Gemini 3.0 Flash) |
-| **Testing** | Vitest (96%+ coverage) |
+| **Testing** | Vitest (525+ tests, 70% coverage) |
 
 ## Architecture
 
@@ -112,10 +116,14 @@ Secrets are managed via `wrangler pages secret put <NAME>`.
 ## Security
 
 - Bcrypt password hashing (auto-migrates from plaintext)
-- Session-based auth with sliding expiry
-- LLM retry logic with exponential backoff
-- Input validation and length limits
+- Session-based auth with 7-day sliding expiry
+- LLM retry logic with exponential backoff (3 attempts)
+- Input validation and length limits (2000 char max)
 - Cost tracking for all LLM requests
+
+**Known Issues** (see CLAUDE.md for details):
+- JSON parsing needs Zod validation
+- Rate limiting needed on auth endpoints
 
 ## License
 

@@ -60,7 +60,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const provider = (settings?.llm_provider as string) || 'openrouter'
     // Priority: request body > env var > database > hardcoded fallback
-    const model = body.model || env.TEXT_MODEL_SLUG || (settings?.default_model as string) || 'google/gemini-2.0-flash-001'
+    const model =
+      body.model ||
+      env.TEXT_MODEL_SLUG ||
+      (settings?.default_model as string) ||
+      'google/gemini-2.0-flash-001'
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 4096
 

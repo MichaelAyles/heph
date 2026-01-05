@@ -246,24 +246,52 @@ Logs are stored in D1 for admin users and viewable via `GET /api/admin/logs`.
 
 ## Testing
 
-Vitest with 90%+ coverage target on:
-- `src/prompts/*.ts` - Prompt template builders
-- `src/db/schema.ts` - Row transforms
-- `src/services/llm.ts` - LLM client
-- `src/stores/auth.ts` - Auth state
-- `functions/lib/logger.ts` - Debug logger
-- `functions/api/llm/pricing.ts` - Cost calculations
+Vitest with 525+ tests, ~70% coverage. Target 90%+ on core modules.
 
-API handlers excluded (need miniflare mocking).
+**Fully Tested (90%+)**:
+- `src/prompts/*.ts` - All prompt template builders (96.51%)
+- `src/db/schema.ts` - Row transforms (100%)
+- `src/stores/auth.ts` - Auth state (100%)
+- `src/stores/workspace.ts` - Workspace state (100%)
+- `functions/lib/*.ts` - Logger, Gemini, JSON utilities (93.51%)
+- `functions/api/llm/pricing.ts` - Cost calculations (100%)
+
+**Partially Tested**:
+- `src/services/llm.ts` - LLM client (82%)
+- `src/services/orchestrator.ts` - Multi-agent orchestration (49%)
+- `src/services/pcb-merge.ts` - KiCad block merging (tested)
+
+**Not Tested**:
+- `src/lib/openscadRenderer.ts` - WASM wrapper (0%)
+- API handlers - Need miniflare mocking
 
 ## Known Technical Debt
 
-1. ~~**Plaintext passwords**~~ - FIXED: bcrypt with auto-upgrade on login
-2. **SpecPage size** - 1073 lines, 5 nested components, should be split
-3. **Regex JSON parsing** - Fragile, should use schema validation (Zod)
-4. ~~**Streaming token counts**~~ - FIXED: Estimated at ~4 chars/token
-5. ~~**No retry logic**~~ - FIXED: Exponential backoff (3 attempts, 1s/2s delays), 4xx errors fail immediately
-6. ~~**Duplication**~~ - FIXED: Shared `functions/lib/gemini.ts` utility
+### Fixed Issues
+- ~~**Plaintext passwords**~~ - FIXED: bcrypt with auto-upgrade on login
+- ~~**Streaming token counts**~~ - FIXED: Estimated at ~4 chars/token
+- ~~**No retry logic**~~ - FIXED: Exponential backoff (3 attempts, 1s/2s delays), 4xx errors fail immediately
+- ~~**Duplication**~~ - FIXED: Shared `functions/lib/gemini.ts` utility
+
+### Critical (Address Immediately)
+1. **JSON Parsing Fragility** - Regex `/\{[\s\S]*\}/` is too greedy; use Zod validation instead
+2. **Memory Leak in Orchestrator** - `conversationHistory` grows unbounded (up to 100 iterations)
+3. **API Key Exposure** - Error responses in `image.ts` can leak upstream API errors
+4. **Session ID Regex** - Cookie parsing at `_middleware.ts:36` doesn't validate UUID format
+
+### High Priority
+5. **SpecPage size** - 1073 lines, 5 nested components, should be split
+6. **Race Conditions** - State updates in SpecPage can race with async mutations
+7. **Missing Input Validation** - Description length not enforced server-side (2000 char limit)
+8. **No Rate Limiting** - Login endpoint vulnerable to brute force
+9. **Type Unsafety** - Non-null assertions (`!`) without runtime checks throughout
+
+### Medium Priority
+10. **Missing Error Boundary** - No React Error Boundary wrapper in App.tsx
+11. **No Request Size Limits** - Large JSON payloads can exhaust memory
+12. **Incomplete I2C Validation** - Regex-based firmware validation misses variable-stored addresses
+13. **Missing Pagination Bounds** - Large offset values can cause expensive queries
+14. **Session Cleanup** - No cron/job to delete expired sessions from D1
 
 ## Quick Reference
 
@@ -294,34 +322,43 @@ Consider caching images aggressively and batching requests.
 
 ### Completed Phases
 
-| Phase | Feature | Status |
-|-------|---------|--------|
-| 1 | Workspace UI Architecture | Complete |
-| 2 | User Control Modes (Vibe It, Fix It, Design It) | Complete |
-| 3 | PCB Stage Foundation (KiCanvas, Block Selector) | Complete |
-| 4 | PCB Block Merging (kicadts integration) | Complete |
-| 5 | Enclosure Generation (OpenSCAD + R3F) | Complete |
+| Phase | Feature | Status | Notes |
+|-------|---------|--------|-------|
+| 1 | Workspace UI Architecture | ✅ Complete | Split pane layout, stage navigation |
+| 2 | User Control Modes | ✅ Complete | Vibe It, Fix It, Design It modes |
+| 3 | PCB Stage Foundation | ✅ Complete | KiCanvas viewer, Block Selector |
+| 4 | PCB Block Merging | ✅ Complete | kicadts integration for schematic merging |
+| 5 | Enclosure Generation | ✅ Complete | OpenSCAD WASM + React Three Fiber STL viewer |
+| 6 | Firmware Generation | ✅ Complete | AI-generated ESP32 firmware scaffolding |
 
 ### Remaining Phases
 
 | Phase | Feature | Notes |
 |-------|---------|-------|
-| 6 | Firmware Compile Server | Requires Fly.io + Docker + ESP-IDF setup |
 | 7 | Firmware Frontend | Monaco editor + file tree + compile output |
-| 8 | Multi-Agent Orchestration | Agent interfaces and context manager |
-| 9 | Export & Polish | Gerber generation, BOM export, PDF spec |
+| 8 | Multi-Agent Orchestration | Agent interfaces, context manager, validation loops |
+| 9 | Export & Polish | Gerber generation, BOM export, PDF spec sheets |
 
-### New Files Added
+### Workspace-Related Files
 
 ```
 frontend/src/
 ├── components/
-│   ├── workspace/         # Workspace layout components
-│   ├── pcb/               # BlockSelector, KiCanvasViewer
-│   └── enclosure/         # STLViewer
-├── pages/workspace/       # Stage views (PCB, Enclosure, Firmware, Export)
-├── services/pcb-merge.ts  # kicadts-based schematic merging
+│   ├── workspace/          # WorkspaceLayout, StageTabs, SplitPane
+│   ├── pcb/                # BlockSelector, KiCanvasViewer
+│   └── enclosure/          # STLViewer (React Three Fiber)
+├── pages/workspace/        # Stage views (PCB, Enclosure, Firmware, Export)
+├── services/
+│   ├── pcb-merge.ts        # kicadts-based schematic merging
+│   └── orchestrator.ts     # Multi-agent tool orchestration (914 lines)
 ├── lib/openscadRenderer.ts # OpenSCAD WASM wrapper
-├── prompts/enclosure.ts   # OpenSCAD generation prompt
-└── stores/workspace.ts    # Workspace UI state
+├── prompts/
+│   ├── enclosure.ts        # OpenSCAD generation prompt
+│   ├── firmware.ts         # ESP32 firmware prompt
+│   ├── orchestrator.ts     # Agent tool definitions
+│   ├── validation.ts       # Cross-stage validation rules
+│   └── block-selection.ts  # PCB block auto-selection
+└── stores/
+    ├── workspace.ts        # Workspace UI state (stages, split panes)
+    └── orchestrator.ts     # Orchestration state management
 ```

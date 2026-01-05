@@ -19,7 +19,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    const body = await context.request.json() as { controlMode?: string }
+    const body = (await context.request.json()) as { controlMode?: string }
     const { controlMode } = body
 
     if (!controlMode || !VALID_MODES.includes(controlMode as ControlMode)) {

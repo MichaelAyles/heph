@@ -17,8 +17,8 @@ export function HomePage() {
           </h1>
 
           <p className="text-lg text-steel-dim mb-8 max-w-2xl mx-auto leading-relaxed">
-            PHAESTUS transforms specifications into manufacturable hardware.
-            Schematics. PCBs. Enclosures. Firmware. Complete.
+            PHAESTUS transforms specifications into manufacturable hardware. Schematics. PCBs.
+            Enclosures. Firmware. Complete.
           </p>
 
           <div className="flex items-center justify-center gap-4">

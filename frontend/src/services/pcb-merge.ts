@@ -90,9 +90,7 @@ function transformSymbolPosition(
 /**
  * Build the global net list from all blocks
  */
-function buildGlobalNetList(
-  blocks: PcbBlock[]
-): Map<string, { id: number; name: string }> {
+function buildGlobalNetList(blocks: PcbBlock[]): Map<string, { id: number; name: string }> {
   const nets = new Map<string, { id: number; name: string }>()
   let netId = 1
 
@@ -364,7 +362,11 @@ export function suggestBlocksForSpec(
     const inputType = input.type.toLowerCase()
     let sensorBlock: PcbBlock | undefined
 
-    if (inputType.includes('temperature') || inputType.includes('humidity') || inputType.includes('pressure')) {
+    if (
+      inputType.includes('temperature') ||
+      inputType.includes('humidity') ||
+      inputType.includes('pressure')
+    ) {
       sensorBlock = availableBlocks.find((b) => b.slug === 'sensor-bme280')
     } else if (inputType.includes('motion') || inputType.includes('pir')) {
       sensorBlock = availableBlocks.find((b) => b.slug === 'sensor-pir')
@@ -390,9 +392,17 @@ export function suggestBlocksForSpec(
     const outputType = output.type.toLowerCase()
     let outputBlock: PcbBlock | undefined
 
-    if (outputType.includes('led') || outputType.includes('neopixel') || outputType.includes('ws2812')) {
+    if (
+      outputType.includes('led') ||
+      outputType.includes('neopixel') ||
+      outputType.includes('ws2812')
+    ) {
       outputBlock = availableBlocks.find((b) => b.slug === 'output-led-ws2812')
-    } else if (outputType.includes('buzzer') || outputType.includes('sound') || outputType.includes('beep')) {
+    } else if (
+      outputType.includes('buzzer') ||
+      outputType.includes('sound') ||
+      outputType.includes('beep')
+    ) {
       outputBlock = availableBlocks.find((b) => b.slug === 'output-buzzer')
     } else if (outputType.includes('relay')) {
       outputBlock = availableBlocks.find((b) => b.slug === 'output-relay')

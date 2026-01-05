@@ -17,10 +17,10 @@ pnpm dev:full
 
 ## Development Modes
 
-| Command | Port | Description |
-|---------|------|-------------|
-| `pnpm dev` | 5173 | Frontend only (Vite HMR, no API) |
-| `pnpm dev:full` | 8788 | Full stack with D1/R2 bindings |
+| Command         | Port | Description                      |
+| --------------- | ---- | -------------------------------- |
+| `pnpm dev`      | 5173 | Frontend only (Vite HMR, no API) |
+| `pnpm dev:full` | 8788 | Full stack with D1/R2 bindings   |
 
 Use `dev:full` when working with API endpoints or database.
 
@@ -83,16 +83,19 @@ pnpm db:reset          # Reset and re-run all migrations
 ## API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/login` - Login with username/password
 - `POST /api/auth/logout` - Clear session
 - `GET /api/auth/me` - Get current user
 
 ### LLM
+
 - `POST /api/llm/chat` - Non-streaming chat completion
 - `POST /api/llm/stream` - Streaming chat completion
 - `POST /api/llm/image` - Image generation
 
 ### Projects
+
 - `GET /api/projects` - List user's projects
 - `POST /api/projects` - Create project
 - `GET /api/projects/:id` - Get project
@@ -100,6 +103,7 @@ pnpm db:reset          # Reset and re-run all migrations
 - `DELETE /api/projects/:id` - Delete project
 
 ### Admin (requires admin user)
+
 - `GET /api/admin/logs` - View debug logs
 - `DELETE /api/admin/logs` - Delete old logs
 
@@ -122,6 +126,7 @@ await logger.api('Endpoint hit', { path })
 ```
 
 View logs via API:
+
 ```bash
 # Get recent errors
 curl /api/admin/logs?level=error&limit=50

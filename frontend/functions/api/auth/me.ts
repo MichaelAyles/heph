@@ -26,7 +26,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
        WHERE s.id = ? AND s.expires_at > datetime('now')`
     )
       .bind(sessionId)
-      .first<{ id: string; username: string; display_name: string | null; is_admin: number; control_mode: string | null }>()
+      .first<{
+        id: string
+        username: string
+        display_name: string | null
+        is_admin: number
+        control_mode: string | null
+      }>()
 
     if (!result) {
       // Session expired or invalid - clear cookie

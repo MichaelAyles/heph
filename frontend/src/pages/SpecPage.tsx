@@ -19,7 +19,14 @@ import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '@/prompts/fea
 import { REFINEMENT_SYSTEM_PROMPT, buildRefinementPrompt } from '@/prompts/refinement'
 import { buildBlueprintPrompts } from '@/prompts/blueprint'
 import { FINAL_SPEC_SYSTEM_PROMPT, buildFinalSpecPrompt } from '@/prompts/finalSpec'
-import type { Project, ProjectSpec, FeasibilityAnalysis, Decision, OpenQuestion, FinalSpec } from '@/db/schema'
+import type {
+  Project,
+  ProjectSpec,
+  FeasibilityAnalysis,
+  Decision,
+  OpenQuestion,
+  FinalSpec,
+} from '@/db/schema'
 
 // =============================================================================
 // API Functions
@@ -162,7 +169,10 @@ function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilitySte
         const result = JSON.parse(jsonMatch[0])
 
         if (!result.manufacturable) {
-          onReject(result.rejectionReason || 'Project is not manufacturable', result.suggestedRevisions)
+          onReject(
+            result.rejectionReason || 'Project is not manufacturable',
+            result.suggestedRevisions
+          )
           return
         }
 
@@ -250,7 +260,9 @@ function FeasibilityResults({ feasibility, onContinue }: FeasibilityResultsProps
               className={clsx(
                 'text-xl font-bold',
                 feasibility.overallScore >= 80 && 'text-emerald-400',
-                feasibility.overallScore >= 60 && feasibility.overallScore < 80 && 'text-yellow-400',
+                feasibility.overallScore >= 60 &&
+                  feasibility.overallScore < 80 &&
+                  'text-yellow-400',
                 feasibility.overallScore < 60 && 'text-red-400'
               )}
             >
@@ -267,7 +279,11 @@ function FeasibilityResults({ feasibility, onContinue }: FeasibilityResultsProps
                 <span className="text-xs text-steel-dim">{data.confidence}%</span>
               </div>
               <p className="text-sm text-copper mb-1">
-                {'type' in data ? data.type : 'level' in data ? data.level : data.options?.join(', ')}
+                {'type' in data
+                  ? data.type
+                  : 'level' in data
+                    ? data.level
+                    : data.options?.join(', ')}
               </p>
               <p className="text-xs text-steel-dim">{data.notes}</p>
             </div>
@@ -319,7 +335,9 @@ function RejectionDisplay({ reason, suggestedRevisions, onAcceptRevision }: Reje
 
   const handleRequestFeature = () => {
     const subject = encodeURIComponent('Component Request - PHAESTUS')
-    const body = encodeURIComponent(`Hi,\n\nI'd like to request support for a component that isn't currently available.\n\nRejection reason:\n${reason}\n\nThank you!`)
+    const body = encodeURIComponent(
+      `Hi,\n\nI'd like to request support for a component that isn't currently available.\n\nRejection reason:\n${reason}\n\nThank you!`
+    )
     window.open(`mailto:contact@phaestus.app?subject=${subject}&body=${body}`, '_blank')
   }
 
@@ -341,7 +359,9 @@ function RejectionDisplay({ reason, suggestedRevisions, onAcceptRevision }: Reje
               ))}
             </ul>
             <div className="bg-surface-900 border border-surface-700 p-3 mb-4">
-              <span className="text-xs text-steel-dim font-mono block mb-1">REVISED SPECIFICATION</span>
+              <span className="text-xs text-steel-dim font-mono block mb-1">
+                REVISED SPECIFICATION
+              </span>
               <p className="text-steel text-sm">{suggestedRevisions.revisedDescription}</p>
             </div>
             {onAcceptRevision && (
@@ -397,53 +417,56 @@ function RefinementStep({ project, spec, onDecisions, onComplete }: RefinementSt
   const MAX_REFINEMENT_ROUNDS = 5
 
   // Check if we need more questions after answering
-  const checkForMoreQuestions = useCallback(async (currentDecisions: Decision[]) => {
-    if (!spec.feasibility) return
+  const checkForMoreQuestions = useCallback(
+    async (currentDecisions: Decision[]) => {
+      if (!spec.feasibility) return
 
-    // Force completion after max rounds (roughly 2 questions per round)
-    if (currentDecisions.length >= MAX_REFINEMENT_ROUNDS * 2) {
-      onComplete()
-      return
-    }
-
-    setIsChecking(true)
-
-    try {
-      const response = await llm.chat({
-        messages: [
-          { role: 'system', content: REFINEMENT_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: buildRefinementPrompt(spec.description, spec.feasibility, currentDecisions),
-          },
-        ],
-        temperature: 0.3,
-        projectId: project.id,
-      })
-
-      const fullContent = response.content
-      const jsonMatch = fullContent.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
+      // Force completion after max rounds (roughly 2 questions per round)
+      if (currentDecisions.length >= MAX_REFINEMENT_ROUNDS * 2) {
         onComplete()
         return
       }
 
-      const result = JSON.parse(jsonMatch[0])
+      setIsChecking(true)
 
-      if (result.complete) {
-        onComplete()
-      } else if (result.additionalQuestions?.length > 0) {
-        setPendingQuestions(result.additionalQuestions)
-      } else {
-        onComplete()
+      try {
+        const response = await llm.chat({
+          messages: [
+            { role: 'system', content: REFINEMENT_SYSTEM_PROMPT },
+            {
+              role: 'user',
+              content: buildRefinementPrompt(spec.description, spec.feasibility, currentDecisions),
+            },
+          ],
+          temperature: 0.3,
+          projectId: project.id,
+        })
+
+        const fullContent = response.content
+        const jsonMatch = fullContent.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) {
+          onComplete()
+          return
+        }
+
+        const result = JSON.parse(jsonMatch[0])
+
+        if (result.complete) {
+          onComplete()
+        } else if (result.additionalQuestions?.length > 0) {
+          setPendingQuestions(result.additionalQuestions)
+        } else {
+          onComplete()
+        }
+      } catch (err) {
+        console.error('Failed to parse refinement response', err)
+        onComplete() // Proceed anyway
+      } finally {
+        setIsChecking(false)
       }
-    } catch (err) {
-      console.error('Failed to parse refinement response', err)
-      onComplete() // Proceed anyway
-    } finally {
-      setIsChecking(false)
-    }
-  }, [project.id, spec.feasibility, spec.description, onComplete])
+    },
+    [project.id, spec.feasibility, spec.description, onComplete]
+  )
 
   const handleAnswer = (questionId: string, _question: string, answer: string) => {
     setSelectedAnswers((prev) => ({ ...prev, [questionId]: answer }))
@@ -506,7 +529,7 @@ function RefinementStep({ project, spec, onDecisions, onComplete }: RefinementSt
     if (pendingQuestions.length === 0 && !isChecking) {
       checkForMoreQuestions(allDecisions)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (isChecking) {
@@ -544,11 +567,17 @@ function RefinementStep({ project, spec, onDecisions, onComplete }: RefinementSt
           <span className="font-mono">REFINEMENT</span>
           <span className="text-copper">Round {currentRound}</span>
           {allDecisions.length > 0 && (
-            <span className="text-steel-dim">• {allDecisions.length} decision{allDecisions.length !== 1 ? 's' : ''} made</span>
+            <span className="text-steel-dim">
+              • {allDecisions.length} decision{allDecisions.length !== 1 ? 's' : ''} made
+            </span>
           )}
         </div>
         <div className="text-xs text-steel-dim">
-          {remainingRounds > 1 ? `~${remainingRounds} rounds remaining` : remainingRounds === 1 ? 'Final round' : 'Almost done'}
+          {remainingRounds > 1
+            ? `~${remainingRounds} rounds remaining`
+            : remainingRounds === 1
+              ? 'Final round'
+              : 'Almost done'}
         </div>
       </div>
 
@@ -624,15 +653,18 @@ const IMAGE_TIMEOUT_MS = 60000 // 60 seconds per image
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(message)), ms)
-    ),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
   ])
 }
 
 function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepProps) {
   const [generating, setGenerating] = useState<boolean[]>([true, true, true, true])
-  const [blueprints, setBlueprints] = useState<({ url: string; prompt: string } | null)[]>([null, null, null, null])
+  const [blueprints, setBlueprints] = useState<({ url: string; prompt: string } | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ])
   const [errors, setErrors] = useState<string[]>([])
   const [hasStarted, setHasStarted] = useState(false)
   const [hasCompleted, setHasCompleted] = useState(false)
@@ -650,11 +682,7 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
 
     // Generate all 4 images in parallel with timeout
     prompts.forEach((prompt, index) => {
-      withTimeout(
-        generateImage(prompt),
-        IMAGE_TIMEOUT_MS,
-        'Image generation timed out after 60s'
-      )
+      withTimeout(generateImage(prompt), IMAGE_TIMEOUT_MS, 'Image generation timed out after 60s')
         .then((url) => {
           setBlueprints((prev) => {
             const updated = [...prev]
@@ -683,7 +711,9 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
     if (hasCompleted) return
 
     const allDone = generating.every((g) => !g)
-    const validBlueprints = blueprints.filter((b): b is { url: string; prompt: string } => b !== null)
+    const validBlueprints = blueprints.filter(
+      (b): b is { url: string; prompt: string } => b !== null
+    )
 
     if (allDone && validBlueprints.length > 0) {
       setHasCompleted(true)
@@ -697,9 +727,7 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-copper mb-4">
         <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
-        <span className="text-sm font-mono">
-          GENERATING BLUEPRINTS... ({4 - activeCount}/4)
-        </span>
+        <span className="text-sm font-mono">GENERATING BLUEPRINTS... ({4 - activeCount}/4)</span>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -960,7 +988,11 @@ export function SpecPage() {
   const queryClient = useQueryClient()
   const [suggestedRevisions, setSuggestedRevisions] = useState<SuggestedRevisions | undefined>()
 
-  const { data: project, isLoading, error } = useQuery({
+  const {
+    data: project,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['project', id],
     queryFn: () => fetchProject(id!),
     enabled: !!id,
@@ -978,14 +1010,21 @@ export function SpecPage() {
   let currentStep = 0
   if (spec?.feasibility && project?.status !== 'rejected') currentStep = 1
   // Step 2 if we're generating OR if we have decisions and no open questions
-  if (project?.status === 'generating' || project?.status === 'selecting' ||
-      ((spec?.decisions?.length ?? 0) > 0 && (spec?.openQuestions?.length ?? 0) === 0)) currentStep = 2
+  if (
+    project?.status === 'generating' ||
+    project?.status === 'selecting' ||
+    ((spec?.decisions?.length ?? 0) > 0 && (spec?.openQuestions?.length ?? 0) === 0)
+  )
+    currentStep = 2
   if ((spec?.blueprints?.length ?? 0) > 0) currentStep = 3
   if (spec?.selectedBlueprint !== null && spec?.selectedBlueprint !== undefined) currentStep = 4
   if (spec?.finalSpec?.locked) currentStep = 5
 
   // Handlers
-  const handleFeasibilityComplete = (feasibility: FeasibilityAnalysis, questions: OpenQuestion[]) => {
+  const handleFeasibilityComplete = (
+    feasibility: FeasibilityAnalysis,
+    questions: OpenQuestion[]
+  ) => {
     // Keep status as 'analyzing' - will change to 'refining' when user clicks Continue
     updateMutation.mutate({
       spec: { ...spec!, feasibility, openQuestions: questions },
@@ -1000,7 +1039,14 @@ export function SpecPage() {
     setSuggestedRevisions(revisions)
     updateMutation.mutate({
       status: 'rejected',
-      spec: { ...spec!, feasibility: { ...spec!.feasibility!, rejectionReason: reason, manufacturable: false } as FeasibilityAnalysis },
+      spec: {
+        ...spec!,
+        feasibility: {
+          ...spec!.feasibility!,
+          rejectionReason: reason,
+          manufacturable: false,
+        } as FeasibilityAnalysis,
+      },
     })
   }
 
@@ -1023,7 +1069,7 @@ export function SpecPage() {
 
   const handleDecisions = (decisions: Decision[]) => {
     // Get the question IDs that have been answered
-    const answeredIds = new Set(decisions.map(d => d.questionId))
+    const answeredIds = new Set(decisions.map((d) => d.questionId))
     const newQuestions = (spec?.openQuestions || []).filter((q) => !answeredIds.has(q.id))
 
     updateMutation.mutate({
@@ -1093,7 +1139,9 @@ export function SpecPage() {
       <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700">
         <div className="flex items-center gap-4">
           <h1 className="text-base font-semibold text-steel tracking-tight">SPECIFICATION</h1>
-          <span className="font-mono text-xs text-steel-dim">{project.name || id?.slice(0, 8)}</span>
+          <span className="font-mono text-xs text-steel-dim">
+            {project.name || id?.slice(0, 8)}
+          </span>
         </div>
         {spec.finalSpec?.locked && (
           <div className="flex items-center gap-1 text-emerald-400 text-sm">
@@ -1127,12 +1175,15 @@ export function SpecPage() {
           )}
 
           {/* Show feasibility results before refinement */}
-          {currentStep >= 1 && spec.feasibility && project.status === 'analyzing' && currentStep < 2 && (
-            <FeasibilityResults
-              feasibility={spec.feasibility}
-              onContinue={handleStartRefinement}
-            />
-          )}
+          {currentStep >= 1 &&
+            spec.feasibility &&
+            project.status === 'analyzing' &&
+            currentStep < 2 && (
+              <FeasibilityResults
+                feasibility={spec.feasibility}
+                onContinue={handleStartRefinement}
+              />
+            )}
 
           {/* Step 1: Refinement */}
           {currentStep === 1 && project.status !== 'analyzing' && (
@@ -1146,11 +1197,7 @@ export function SpecPage() {
 
           {/* Step 2: Blueprint Generation */}
           {currentStep === 2 && (
-            <BlueprintStep
-              project={project}
-              spec={spec}
-              onComplete={handleBlueprintsComplete}
-            />
+            <BlueprintStep project={project} spec={spec} onComplete={handleBlueprintsComplete} />
           )}
 
           {/* Step 3: Blueprint Selection */}
@@ -1164,11 +1211,7 @@ export function SpecPage() {
 
           {/* Step 4: Finalization */}
           {currentStep === 4 && (
-            <FinalizationStep
-              project={project}
-              spec={spec}
-              onComplete={handleFinalizeComplete}
-            />
+            <FinalizationStep project={project} spec={spec} onComplete={handleFinalizeComplete} />
           )}
         </div>
       </div>

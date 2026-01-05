@@ -56,13 +56,15 @@ export function buildRefinementPrompt(
   feasibility: object,
   decisions: { question: string; answer: string }[]
 ): string {
-  const decisionsText = decisions.length > 0
-    ? `\n\nUser Decisions Made (${decisions.length} total):\n${decisions.map(d => `- ${d.question}: ${d.answer}`).join('\n')}`
-    : ''
+  const decisionsText =
+    decisions.length > 0
+      ? `\n\nUser Decisions Made (${decisions.length} total):\n${decisions.map((d) => `- ${d.question}: ${d.answer}`).join('\n')}`
+      : ''
 
-  const completeHint = decisions.length >= 3
-    ? '\n\nNOTE: User has answered 3+ questions. Unless something CRITICAL is missing, return complete:true.'
-    : ''
+  const completeHint =
+    decisions.length >= 3
+      ? '\n\nNOTE: User has answered 3+ questions. Unless something CRITICAL is missing, return complete:true.'
+      : ''
 
   return `Project Description:
 "${description}"

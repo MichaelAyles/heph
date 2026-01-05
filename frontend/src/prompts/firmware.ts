@@ -397,7 +397,11 @@ export function buildFirmwareInputFromSpec(
     for (const output of finalSpec.outputs) {
       const outType = output.type.toLowerCase()
 
-      if (outType.includes('temperature') || outType.includes('humidity') || outType.includes('bme')) {
+      if (
+        outType.includes('temperature') ||
+        outType.includes('humidity') ||
+        outType.includes('bme')
+      ) {
         sensors.push({
           type: 'Environmental',
           model: 'BME280',
@@ -545,7 +549,8 @@ export function buildFirmwareInputFromSpec(
     power: {
       source: finalSpec?.power?.source || 'USB-C',
       batteryMonitoring: finalSpec?.power?.source?.toLowerCase().includes('battery') || false,
-      deepSleepEnabled: finalSpec?.features?.some((f) => f.toLowerCase().includes('sleep')) || false,
+      deepSleepEnabled:
+        finalSpec?.features?.some((f) => f.toLowerCase().includes('sleep')) || false,
     },
     features: finalSpec?.features || [],
     sensors,

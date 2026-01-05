@@ -179,7 +179,8 @@ export function LandingPage() {
           </div>
 
           <h1 className="text-5xl md:text-6xl font-bold text-steel mb-6 leading-tight tracking-tight">
-            From Description to<br />
+            From Description to
+            <br />
             <span className="text-copper">Manufacturable Hardware</span>
           </h1>
 
@@ -300,14 +301,16 @@ export function LandingPage() {
           </p>
 
           <div className="flex flex-wrap justify-center gap-4">
-            {['React', 'TypeScript', 'Cloudflare', 'D1 SQLite', 'R2 Storage', 'Gemini 3.0'].map((tech) => (
-              <span
-                key={tech}
-                className="px-4 py-2 bg-surface-800 border border-surface-600 text-steel-dim font-mono text-sm"
-              >
-                {tech}
-              </span>
-            ))}
+            {['React', 'TypeScript', 'Cloudflare', 'D1 SQLite', 'R2 Storage', 'Gemini 3.0'].map(
+              (tech) => (
+                <span
+                  key={tech}
+                  className="px-4 py-2 bg-surface-800 border border-surface-600 text-steel-dim font-mono text-sm"
+                >
+                  {tech}
+                </span>
+              )
+            )}
           </div>
         </div>
       </section>

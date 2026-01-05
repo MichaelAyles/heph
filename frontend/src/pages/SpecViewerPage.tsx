@@ -1,16 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Loader2,
-  Lock,
-  Cpu,
-  Battery,
-  Wifi,
-  Box,
-  DollarSign,
-  ArrowLeft,
-  Ruler,
-} from 'lucide-react'
+import { Loader2, Lock, Cpu, Battery, Wifi, Box, DollarSign, ArrowLeft, Ruler } from 'lucide-react'
 import type { Project, ProjectSpec, FinalSpec } from '@/db/schema'
 
 async function fetchProject(id: string): Promise<Project> {
@@ -42,7 +32,11 @@ export function SpecViewerPage() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const { data: project, isLoading, error } = useQuery({
+  const {
+    data: project,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['project', id],
     queryFn: () => fetchProject(id!),
     enabled: !!id,
@@ -140,7 +134,8 @@ export function SpecViewerPage() {
                   <span className="text-sm text-steel-dim block mb-1">Enclosure</span>
                   <span className="text-steel">{finalSpec.enclosure.style}</span>
                   <span className="text-steel-dim text-sm block">
-                    {finalSpec.enclosure.width} × {finalSpec.enclosure.height} × {finalSpec.enclosure.depth} mm
+                    {finalSpec.enclosure.width} × {finalSpec.enclosure.height} ×{' '}
+                    {finalSpec.enclosure.depth} mm
                   </span>
                 </div>
               </div>
@@ -193,9 +188,7 @@ export function SpecViewerPage() {
                     {finalSpec.inputs.map((input, i) => (
                       <li key={i} className="text-steel text-sm">
                         • {input.type} ×{input.count}
-                        {input.notes && (
-                          <span className="text-steel-dim"> — {input.notes}</span>
-                        )}
+                        {input.notes && <span className="text-steel-dim"> — {input.notes}</span>}
                       </li>
                     ))}
                   </ul>
@@ -206,9 +199,7 @@ export function SpecViewerPage() {
                     {finalSpec.outputs.map((output, i) => (
                       <li key={i} className="text-steel text-sm">
                         • {output.type} ×{output.count}
-                        {output.notes && (
-                          <span className="text-steel-dim"> — {output.notes}</span>
-                        )}
+                        {output.notes && <span className="text-steel-dim"> — {output.notes}</span>}
                       </li>
                     ))}
                   </ul>
@@ -247,9 +238,7 @@ export function SpecViewerPage() {
                   <td colSpan={3} className="pt-4 text-steel">
                     Estimated Total
                   </td>
-                  <td className="pt-4 text-right font-mono text-copper">
-                    ${totalBOM.toFixed(2)}
-                  </td>
+                  <td className="pt-4 text-right font-mono text-copper">${totalBOM.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>

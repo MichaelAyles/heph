@@ -200,7 +200,11 @@ describe('llm service', () => {
     })
 
     it('should call onToken for each token received', async () => {
-      const chunks = ['data: {"token":"Hello"}\n', 'data: {"token":" world"}\n', 'data: {"done":true}\n']
+      const chunks = [
+        'data: {"token":"Hello"}\n',
+        'data: {"token":" world"}\n',
+        'data: {"done":true}\n',
+      ]
 
       let chunkIndex = 0
       const mockReader = {

@@ -80,7 +80,7 @@ export function buildFinalSpecPrompt(
   decisions: { question: string; answer: string }[],
   selectedBlueprintPrompt: string
 ): string {
-  const decisionsText = decisions.map(d => `- ${d.question}: ${d.answer}`).join('\n')
+  const decisionsText = decisions.map((d) => `- ${d.question}: ${d.answer}`).join('\n')
 
   return `Generate a complete product specification for this device.
 

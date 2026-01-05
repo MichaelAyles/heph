@@ -11,7 +11,7 @@ import {
   ArrowRight,
   PlusCircle,
   Trash2,
-  Wrench
+  Wrench,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -137,9 +137,7 @@ export function ProjectsPage() {
       <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700">
         <div className="flex items-center gap-4">
           <h1 className="text-base font-semibold text-steel tracking-tight">PROJECTS</h1>
-          <span className="text-xs text-steel-dim font-mono">
-            {data?.total || 0} total
-          </span>
+          <span className="text-xs text-steel-dim font-mono">{data?.total || 0} total</span>
         </div>
         <Link
           to="/new"
@@ -156,7 +154,9 @@ export function ProjectsPage() {
           <div className="flex flex-col items-center justify-center h-full text-center">
             <FolderOpen className="w-16 h-16 text-surface-600 mb-4" strokeWidth={1} />
             <h2 className="text-xl font-semibold text-steel mb-2">No projects yet</h2>
-            <p className="text-steel-dim mb-6">Create your first hardware project to get started.</p>
+            <p className="text-steel-dim mb-6">
+              Create your first hardware project to get started.
+            </p>
             <Link
               to="/new"
               className="inline-flex items-center gap-2 px-6 py-3 bg-copper-gradient text-ash font-semibold"
@@ -171,7 +171,9 @@ export function ProjectsPage() {
               <div key={project.id} className="relative">
                 {deleteConfirm === project.id ? (
                   <div className="bg-red-500/10 border border-red-500/30 p-4">
-                    <p className="text-steel mb-3">Delete "{project.name || 'Untitled Project'}"?</p>
+                    <p className="text-steel mb-3">
+                      Delete "{project.name || 'Untitled Project'}"?
+                    </p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleConfirmDelete(project.id)}
@@ -199,13 +201,16 @@ export function ProjectsPage() {
                           <h3 className="text-base font-semibold text-steel truncate">
                             {project.name || 'Untitled Project'}
                           </h3>
-                          <div className={clsx(
-                            'flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono',
-                            project.status === 'complete' && 'bg-emerald-500/10 text-emerald-400',
-                            project.status === 'rejected' && 'bg-red-500/10 text-red-400',
-                            project.status === 'error' && 'bg-red-500/10 text-red-400',
-                            !['complete', 'rejected', 'error'].includes(project.status) && 'bg-copper/10 text-copper'
-                          )}>
+                          <div
+                            className={clsx(
+                              'flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono',
+                              project.status === 'complete' && 'bg-emerald-500/10 text-emerald-400',
+                              project.status === 'rejected' && 'bg-red-500/10 text-red-400',
+                              project.status === 'error' && 'bg-red-500/10 text-red-400',
+                              !['complete', 'rejected', 'error'].includes(project.status) &&
+                                'bg-copper/10 text-copper'
+                            )}
+                          >
                             {getStatusIcon(project.status)}
                             {getStatusLabel(project.status)}
                           </div>

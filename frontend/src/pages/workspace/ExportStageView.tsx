@@ -5,7 +5,18 @@
  */
 
 import { useState } from 'react'
-import { Download, FileText, Cpu, Box, Code, Package, ArrowRight, Loader2, Check, ExternalLink } from 'lucide-react'
+import {
+  Download,
+  FileText,
+  Cpu,
+  Box,
+  Code,
+  Package,
+  ArrowRight,
+  Loader2,
+  Check,
+  ExternalLink,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import JSZip from 'jszip'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
@@ -39,7 +50,9 @@ export function ExportStageView() {
 ${project.description || 'No description provided'}
 
 ## Final Specification
-${spec.finalSpec ? `
+${
+  spec.finalSpec
+    ? `
 ### ${spec.finalSpec.name}
 ${spec.finalSpec.summary}
 
@@ -73,7 +86,9 @@ ${spec.finalSpec.power.batteryLife ? `- Battery Life: ${spec.finalSpec.power.bat
 ${spec.finalSpec.estimatedBOM.map((b) => `| ${b.item} | ${b.quantity} | $${b.unitCost.toFixed(2)} |`).join('\n')}
 
 **Total Estimated Cost:** $${spec.finalSpec.estimatedBOM.reduce((sum, b) => sum + b.quantity * b.unitCost, 0).toFixed(2)}
-` : 'Final specification not yet generated'}
+`
+    : 'Final specification not yet generated'
+}
 
 ## Decisions Made
 ${spec.decisions.map((d) => `- **${d.question}**: ${d.answer}`).join('\n') || 'No decisions recorded'}
@@ -138,7 +153,10 @@ Edit the parameters at the top of the .scad file to adjust:
     )
 
     const blob = await zip.generateAsync({ type: 'blob' })
-    downloadBlob(blob, `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-enclosure.zip`)
+    downloadBlob(
+      blob,
+      `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-enclosure.zip`
+    )
   }
 
   // Download firmware source
@@ -190,7 +208,10 @@ After building, find the binary at:
     )
 
     const blob = await zip.generateAsync({ type: 'blob' })
-    downloadBlob(blob, `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-firmware.zip`)
+    downloadBlob(
+      blob,
+      `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-firmware.zip`
+    )
   }
 
   // Download complete package
@@ -343,8 +364,8 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
           </div>
           <h2 className="text-xl font-semibold text-steel mb-2">Export & Manufacture</h2>
           <p className="text-steel-dim mb-4">
-            Complete all stages to export your design files. You'll be able to download Gerbers, STL files, firmware
-            binaries, and BOM.
+            Complete all stages to export your design files. You'll be able to download Gerbers, STL
+            files, firmware binaries, and BOM.
           </p>
           <div className="flex items-center justify-center gap-2 text-sm text-surface-500">
             <span>Complete All Stages</span>

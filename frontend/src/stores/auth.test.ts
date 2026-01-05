@@ -165,7 +165,16 @@ describe('auth store', () => {
     it('should call /api/auth/login with correct parameters', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ user: { id: '1', username: 'test', displayName: null, isAdmin: false, controlMode: 'fix_it' } }),
+        json: () =>
+          Promise.resolve({
+            user: {
+              id: '1',
+              username: 'test',
+              displayName: null,
+              isAdmin: false,
+              controlMode: 'fix_it',
+            },
+          }),
       })
 
       await useAuthStore.getState().login('testuser', 'mypassword')
@@ -193,7 +202,13 @@ describe('auth store', () => {
     beforeEach(() => {
       // Set authenticated state
       useAuthStore.setState({
-        user: { id: '123', username: 'test', displayName: 'Test', isAdmin: false, controlMode: 'fix_it' },
+        user: {
+          id: '123',
+          username: 'test',
+          displayName: 'Test',
+          isAdmin: false,
+          controlMode: 'fix_it',
+        },
         isAuthenticated: true,
         isLoading: false,
       })
@@ -275,7 +290,13 @@ describe('auth store', () => {
     beforeEach(() => {
       // Set authenticated state
       useAuthStore.setState({
-        user: { id: '123', username: 'test', displayName: 'Test', isAdmin: false, controlMode: 'fix_it' },
+        user: {
+          id: '123',
+          username: 'test',
+          displayName: 'Test',
+          isAdmin: false,
+          controlMode: 'fix_it',
+        },
         isAuthenticated: true,
         isLoading: false,
       })

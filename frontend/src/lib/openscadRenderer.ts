@@ -77,11 +77,7 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
     // Run OpenSCAD with arguments
     // --enable=manifold for faster rendering
     // -o output.stl for STL output
-    const exitCode = module.callMain([
-      '-o', outputFile,
-      '--enable=manifold',
-      inputFile,
-    ])
+    const exitCode = module.callMain(['-o', outputFile, '--enable=manifold', inputFile])
 
     if (exitCode !== 0) {
       return {

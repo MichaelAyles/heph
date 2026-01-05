@@ -26,9 +26,7 @@ export function WorkspaceHeader({ project, isLoading }: WorkspaceHeaderProps) {
       </Link>
 
       <div className="flex-1 min-w-0">
-        <h1 className="text-lg font-semibold text-steel truncate">
-          {project?.name || 'Project'}
-        </h1>
+        <h1 className="text-lg font-semibold text-steel truncate">{project?.name || 'Project'}</h1>
       </div>
 
       {project && (

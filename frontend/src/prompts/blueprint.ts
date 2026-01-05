@@ -21,19 +21,21 @@ export function buildBlueprintPrompts(
   }
 ): string[] {
   // Find form factor decision if made
-  const formFactorDecision = decisions.find(d =>
-    d.question.toLowerCase().includes('enclosure') ||
-    d.question.toLowerCase().includes('form factor') ||
-    d.question.toLowerCase().includes('housing') ||
-    d.question.toLowerCase().includes('mount')
+  const formFactorDecision = decisions.find(
+    (d) =>
+      d.question.toLowerCase().includes('enclosure') ||
+      d.question.toLowerCase().includes('form factor') ||
+      d.question.toLowerCase().includes('housing') ||
+      d.question.toLowerCase().includes('mount')
   )
   const formFactor = formFactorDecision?.answer
 
   // Find display decision if made
-  const displayDecision = decisions.find(d =>
-    d.question.toLowerCase().includes('display') ||
-    d.question.toLowerCase().includes('screen') ||
-    d.question.toLowerCase().includes('lcd')
+  const displayDecision = decisions.find(
+    (d) =>
+      d.question.toLowerCase().includes('display') ||
+      d.question.toLowerCase().includes('screen') ||
+      d.question.toLowerCase().includes('lcd')
   )
   const displayType = displayDecision?.answer
 
@@ -47,31 +49,42 @@ export function buildBlueprintPrompts(
 
   // Add visible outputs (LEDs, screens, etc.)
   const outputs = feasibility.outputs?.items || []
-  outputs.forEach(o => {
+  outputs.forEach((o) => {
     const lower = o.toLowerCase()
-    if (lower.includes('led') || lower.includes('display') || lower.includes('screen') || lower.includes('button')) {
+    if (
+      lower.includes('led') ||
+      lower.includes('display') ||
+      lower.includes('screen') ||
+      lower.includes('button')
+    ) {
       visualElements.push(lower)
     }
   })
 
   // Add visible inputs (buttons, sensors with probes, etc.)
   const inputs = feasibility.inputs?.items || []
-  inputs.forEach(i => {
+  inputs.forEach((i) => {
     const lower = i.toLowerCase()
-    if (lower.includes('button') || lower.includes('probe') || lower.includes('moisture') || lower.includes('switch')) {
+    if (
+      lower.includes('button') ||
+      lower.includes('probe') ||
+      lower.includes('moisture') ||
+      lower.includes('switch')
+    ) {
       visualElements.push(lower)
     }
   })
 
   // Add USB/charging port if battery powered
   const powerOptions = feasibility.power?.options || []
-  if (powerOptions.some(p => p.toLowerCase().includes('usb') || p.toLowerCase().includes('battery'))) {
+  if (
+    powerOptions.some((p) => p.toLowerCase().includes('usb') || p.toLowerCase().includes('battery'))
+  ) {
     visualElements.push('USB-C charging port')
   }
 
-  const visualFeatures = visualElements.length > 0
-    ? `Visible features: ${[...new Set(visualElements)].join(', ')}.`
-    : ''
+  const visualFeatures =
+    visualElements.length > 0 ? `Visible features: ${[...new Set(visualElements)].join(', ')}.` : ''
 
   // Build the core product description - this is the MOST important part
   const productCore = description
@@ -106,10 +119,13 @@ export function buildSingleBlueprintPrompt(
   const featureList = features.join(', ')
 
   const styleDescriptions = {
-    minimal: 'Clean minimal design with smooth matte finish, white background, soft studio lighting',
+    minimal:
+      'Clean minimal design with smooth matte finish, white background, soft studio lighting',
     rounded: 'Rounded corners, friendly approachable design, subtle gradient background',
-    industrial: 'Industrial design with visible mounting points, robust construction, neutral gray background',
-    sleek: 'Sleek modern design with thin profile and premium finish, dark background with subtle lighting',
+    industrial:
+      'Industrial design with visible mounting points, robust construction, neutral gray background',
+    sleek:
+      'Sleek modern design with thin profile and premium finish, dark background with subtle lighting',
   }
 
   return `Simple 3D product render of an electronic device: ${description}. ${styleDescriptions[style]}. Features: ${featureList}. Product mockup style. No text or labels.`

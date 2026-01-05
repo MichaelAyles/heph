@@ -58,12 +58,7 @@ function STLModel({ url, color, onLoad }: STLModelProps) {
 
   return (
     <mesh ref={meshRef} geometry={geometry}>
-      <meshStandardMaterial
-        color={color}
-        metalness={0.3}
-        roughness={0.5}
-        flatShading={false}
-      />
+      <meshStandardMaterial color={color} metalness={0.3} roughness={0.5} flatShading={false} />
     </mesh>
   )
 }
@@ -102,12 +97,7 @@ function STLDataModel({ data, color, onLoad }: STLDataModelProps) {
 
   return (
     <mesh ref={meshRef} geometry={geometry}>
-      <meshStandardMaterial
-        color={color}
-        metalness={0.3}
-        roughness={0.5}
-        flatShading={false}
-      />
+      <meshStandardMaterial color={color} metalness={0.3} roughness={0.5} flatShading={false} />
     </mesh>
   )
 }
@@ -230,9 +220,7 @@ export function STLViewer({
           </Center>
         </Suspense>
 
-        {showGrid && (
-          <gridHelper args={[200, 20, '#444444', '#333333']} position={[0, -50, 0]} />
-        )}
+        {showGrid && <gridHelper args={[200, 20, '#444444', '#333333']} position={[0, -50, 0]} />}
 
         <OrbitControls
           enablePan={true}

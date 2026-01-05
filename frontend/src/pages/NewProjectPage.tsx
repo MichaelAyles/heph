@@ -117,10 +117,12 @@ export function NewProjectPage() {
                 )}
                 disabled={isCreating}
               />
-              <div className={clsx(
-                "absolute bottom-3 right-3 text-xs font-mono",
-                description.length >= MAX_DESCRIPTION_LENGTH ? 'text-red-400' : 'text-steel-dim'
-              )}>
+              <div
+                className={clsx(
+                  'absolute bottom-3 right-3 text-xs font-mono',
+                  description.length >= MAX_DESCRIPTION_LENGTH ? 'text-red-400' : 'text-steel-dim'
+                )}
+              >
                 {description.length}/{MAX_DESCRIPTION_LENGTH}
               </div>
             </div>

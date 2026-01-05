@@ -13,9 +13,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, params } = context
   const slug = params.slug as string
 
-  const row = await env.DB.prepare(
-    'SELECT * FROM pcb_blocks WHERE slug = ? AND is_active = 1'
-  )
+  const row = await env.DB.prepare('SELECT * FROM pcb_blocks WHERE slug = ? AND is_active = 1')
     .bind(slug)
     .first()
 

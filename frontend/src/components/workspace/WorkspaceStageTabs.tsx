@@ -63,17 +63,11 @@ export function WorkspaceStageTabs({ spec, canNavigateTo }: WorkspaceStageTabsPr
 function StageStatusIndicator({ status }: { status: StageStatus }) {
   switch (status) {
     case 'complete':
-      return (
-        <Check className="w-3.5 h-3.5 text-green-400" strokeWidth={2} />
-      )
+      return <Check className="w-3.5 h-3.5 text-green-400" strokeWidth={2} />
     case 'in_progress':
-      return (
-        <Loader2 className="w-3.5 h-3.5 text-copper animate-spin" strokeWidth={2} />
-      )
+      return <Loader2 className="w-3.5 h-3.5 text-copper animate-spin" strokeWidth={2} />
     case 'error':
-      return (
-        <AlertCircle className="w-3.5 h-3.5 text-red-400" strokeWidth={2} />
-      )
+      return <AlertCircle className="w-3.5 h-3.5 text-red-400" strokeWidth={2} />
     default:
       return null
   }

@@ -58,9 +58,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // Validate block exists in database
-    const block = await env.DB.prepare('SELECT * FROM pcb_blocks WHERE slug = ?')
-      .bind(slug)
-      .first()
+    const block = await env.DB.prepare('SELECT * FROM pcb_blocks WHERE slug = ?').bind(slug).first()
 
     if (!block) {
       return Response.json({ error: `Block "${slug}" not found in database` }, { status: 404 })

@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, Cpu, Check, Loader2, AlertCircle, Play, Image, BarChart3, Zap, Shield, Pencil } from 'lucide-react'
+import {
+  Save,
+  Cpu,
+  Check,
+  Loader2,
+  AlertCircle,
+  Play,
+  Image,
+  BarChart3,
+  Zap,
+  Shield,
+  Pencil,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import { llm } from '@/services/llm'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
@@ -130,9 +142,7 @@ export function SettingsPage() {
 
     try {
       const response = await llm.chat({
-        messages: [
-          { role: 'user', content: 'Say exactly "Hello World" and nothing else.' },
-        ],
+        messages: [{ role: 'user', content: 'Say exactly "Hello World" and nothing else.' }],
         temperature: 0,
       })
       setTextTestResult(response.content)

@@ -31,7 +31,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'openai/gpt-4-turbo': { promptPer1M: 10.0, completionPer1M: 30.0 },
 
   // Default fallback (estimate)
-  'default': { promptPer1M: 0.5, completionPer1M: 1.5 },
+  default: { promptPer1M: 0.5, completionPer1M: 1.5 },
 }
 
 /**

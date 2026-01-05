@@ -9,29 +9,29 @@
   --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
 
   /* Phaestus Brand Colors */
-  --color-copper: #C47A4A;
-  --color-copper-burnt: #A9653E;
-  --color-copper-light: #D4956A;
-  --color-copper-glow: #E8A878;
+  --color-copper: #c47a4a;
+  --color-copper-burnt: #a9653e;
+  --color-copper-light: #d4956a;
+  --color-copper-glow: #e8a878;
 
   /* Surface Colors */
-  --color-iron: #1F242B;
+  --color-iron: #1f242b;
   --color-ash: #121417;
-  --color-steel: #F2F2F2;
-  --color-steel-dim: #A0A0A0;
+  --color-steel: #f2f2f2;
+  --color-steel-dim: #a0a0a0;
 
   /* Semantic mappings for Tailwind */
-  --color-brand-400: #D4956A;
-  --color-brand-500: #C47A4A;
-  --color-brand-600: #A9653E;
-  --color-brand-700: #8B5233;
+  --color-brand-400: #d4956a;
+  --color-brand-500: #c47a4a;
+  --color-brand-600: #a9653e;
+  --color-brand-700: #8b5233;
 
   /* Dark theme surface colors */
   --color-surface-950: #121417;
-  --color-surface-900: #1F242B;
-  --color-surface-800: #282D35;
-  --color-surface-700: #353B45;
-  --color-surface-600: #454C58;
+  --color-surface-900: #1f242b;
+  --color-surface-800: #282d35;
+  --color-surface-700: #353b45;
+  --color-surface-600: #454c58;
 }
 
 html {
@@ -40,7 +40,9 @@ html {
 
 body {
   @apply bg-surface-950 text-steel min-h-screen;
-  font-feature-settings: 'kern' 1, 'liga' 1;
+  font-feature-settings:
+    'kern' 1,
+    'liga' 1;
 }
 
 #root {
@@ -53,11 +55,21 @@ body {
 }
 
 /* Override for specific elements that need subtle corners */
-.rounded-sm { border-radius: 2px !important; }
-.rounded { border-radius: 4px !important; }
-.rounded-lg { border-radius: 4px !important; }
-.rounded-xl { border-radius: 4px !important; }
-.rounded-full { border-radius: 9999px !important; }
+.rounded-sm {
+  border-radius: 2px !important;
+}
+.rounded {
+  border-radius: 4px !important;
+}
+.rounded-lg {
+  border-radius: 4px !important;
+}
+.rounded-xl {
+  border-radius: 4px !important;
+}
+.rounded-full {
+  border-radius: 9999px !important;
+}
 
 /* Copper accent borders */
 .border-copper {
@@ -72,9 +84,13 @@ body {
 
 /* Copper gradient matching P logo - heat radiates from top-right */
 .bg-copper-gradient {
-  background: radial-gradient(ellipse at top right, var(--color-copper-light) 0%, var(--color-copper-burnt) 70%);
+  background: radial-gradient(
+    ellipse at top right,
+    var(--color-copper-light) 0%,
+    var(--color-copper-burnt) 70%
+  );
 }
 
 .bg-copper-gradient:hover {
-  background: radial-gradient(ellipse at top right, var(--color-copper) 0%, #8B5233 70%);
+  background: radial-gradient(ellipse at top right, var(--color-copper) 0%, #8b5233 70%);
 }

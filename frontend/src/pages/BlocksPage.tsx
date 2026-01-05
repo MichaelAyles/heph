@@ -99,7 +99,9 @@ export function BlocksPage() {
               Failed to load blocks.
             </div>
           ) : blocks.length === 0 ? (
-            <div className="text-center text-steel-dim py-12 font-mono text-sm">No blocks found.</div>
+            <div className="text-center text-steel-dim py-12 font-mono text-sm">
+              No blocks found.
+            </div>
           ) : (
             <div className="grid grid-cols-3 gap-4">
               {blocks.map((block) => (

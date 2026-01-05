@@ -27,7 +27,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'SELECT id, username, password_hash, display_name, is_admin FROM users WHERE username = ?'
     )
       .bind(username.toLowerCase())
-      .first<{ id: string; username: string; password_hash: string; display_name: string | null; is_admin: number }>()
+      .first<{
+        id: string
+        username: string
+        password_hash: string
+        display_name: string | null
+        is_admin: number
+      }>()
 
     if (!user) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 })

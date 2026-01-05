@@ -1,5 +1,18 @@
 import { Outlet, Link, useLocation, useParams } from 'react-router-dom'
-import { Home, FolderOpen, PlusCircle, Settings, Layers, LogOut, User, ScrollText, Zap, Shield, Pencil, Wrench } from 'lucide-react'
+import {
+  Home,
+  FolderOpen,
+  PlusCircle,
+  Settings,
+  Layers,
+  LogOut,
+  User,
+  ScrollText,
+  Zap,
+  Shield,
+  Pencil,
+  Wrench,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
 
@@ -17,9 +30,7 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
-const adminNavigation = [
-  { name: 'Logs', href: '/admin/logs', icon: ScrollText },
-]
+const adminNavigation = [{ name: 'Logs', href: '/admin/logs', icon: ScrollText }]
 
 export function Layout() {
   const location = useLocation()
@@ -35,7 +46,10 @@ export function Layout() {
       {/* Sidebar */}
       <aside className="w-64 bg-surface-900 border-r border-surface-700 flex flex-col">
         {/* Logo */}
-        <Link to="/" className="h-16 flex items-center gap-3 px-5 border-b border-surface-700 hover:bg-surface-800 transition-colors">
+        <Link
+          to="/"
+          className="h-16 flex items-center gap-3 px-5 border-b border-surface-700 hover:bg-surface-800 transition-colors"
+        >
           <img src="/logo.png" alt="Phaestus" className="h-8 w-auto object-contain" />
           <span className="text-xl font-semibold tracking-tight text-steel">PHAESTUS</span>
         </Link>
@@ -65,13 +79,16 @@ export function Layout() {
           {projectId && (
             <>
               <div className="pt-4 pb-2">
-                <span className="px-3 text-xs font-mono text-steel-dim tracking-wide">CURRENT PROJECT</span>
+                <span className="px-3 text-xs font-mono text-steel-dim tracking-wide">
+                  CURRENT PROJECT
+                </span>
               </div>
               <Link
                 to={`/project/${projectId}/spec`}
                 className={clsx(
                   'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors',
-                  location.pathname.startsWith(`/project/${projectId}`) && !location.pathname.endsWith('/view')
+                  location.pathname.startsWith(`/project/${projectId}`) &&
+                    !location.pathname.endsWith('/view')
                     ? 'bg-copper/10 text-copper border-l-2 border-copper'
                     : 'text-steel-dim hover:text-steel hover:bg-surface-800'
                 )}
@@ -139,9 +156,7 @@ export function Layout() {
           )}
 
           <div className="flex items-center justify-between">
-            <p className="text-xs text-steel-dim font-mono">
-              Gemini 3.0 Flash
-            </p>
+            <p className="text-xs text-steel-dim font-mono">Gemini 3.0 Flash</p>
             <button
               onClick={logout}
               className="p-1.5 text-steel-dim hover:text-steel hover:bg-surface-800 transition-colors"

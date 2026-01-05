@@ -4,7 +4,10 @@ import { Search, Cpu, Battery, Radio, Lightbulb, Cable, Wrench, Plus, Loader2 } 
 import { clsx } from 'clsx'
 import type { BlockCategory, PcbBlock } from '@/db/schema'
 
-const CATEGORY_ICONS: Record<BlockCategory | 'all', React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
+const CATEGORY_ICONS: Record<
+  BlockCategory | 'all',
+  React.ComponentType<{ className?: string; strokeWidth?: number }>
+> = {
   all: Cpu,
   mcu: Cpu,
   power: Battery,
@@ -149,14 +152,21 @@ export function BlockSelector({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={clsx('text-sm font-medium truncate', isSelected ? 'text-copper' : 'text-steel')}>
+                      <span
+                        className={clsx(
+                          'text-sm font-medium truncate',
+                          isSelected ? 'text-copper' : 'text-steel'
+                        )}
+                      >
                         {block.name}
                       </span>
                       <span className="text-xs text-steel-dim font-mono">
                         {block.widthUnits}x{block.heightUnits}
                       </span>
                     </div>
-                    <p className="text-xs text-steel-dim line-clamp-2 mt-0.5">{block.description}</p>
+                    <p className="text-xs text-steel-dim line-clamp-2 mt-0.5">
+                      {block.description}
+                    </p>
                   </div>
                   {!isSelected && canAddMore && !disabled && (
                     <Plus className="w-4 h-4 text-steel-dim mt-1" strokeWidth={1.5} />

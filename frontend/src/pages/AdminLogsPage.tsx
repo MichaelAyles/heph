@@ -25,7 +25,17 @@ interface LogsResponse {
 }
 
 const LEVELS = ['all', 'debug', 'info', 'warn', 'error'] as const
-const CATEGORIES = ['all', 'general', 'api', 'auth', 'llm', 'project', 'image', 'db', 'middleware'] as const
+const CATEGORIES = [
+  'all',
+  'general',
+  'api',
+  'auth',
+  'llm',
+  'project',
+  'image',
+  'db',
+  'middleware',
+] as const
 
 async function fetchLogs(params: {
   level?: string
@@ -112,7 +122,9 @@ export function AdminLogsPage() {
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" strokeWidth={1.5} />
-          <p className="text-red-400">{error instanceof Error ? error.message : 'Failed to load logs'}</p>
+          <p className="text-red-400">
+            {error instanceof Error ? error.message : 'Failed to load logs'}
+          </p>
         </div>
       </div>
     )
@@ -128,9 +140,7 @@ export function AdminLogsPage() {
       <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700">
         <div className="flex items-center gap-4">
           <h1 className="text-base font-semibold text-steel tracking-tight">ADMIN LOGS</h1>
-          <span className="text-xs text-steel-dim font-mono">
-            {pagination.total} total
-          </span>
+          <span className="text-xs text-steel-dim font-mono">{pagination.total} total</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -138,7 +148,10 @@ export function AdminLogsPage() {
             disabled={isFetching}
             className="flex items-center gap-2 px-3 py-1.5 text-sm text-steel-dim hover:text-steel hover:bg-surface-700 transition-colors"
           >
-            <RefreshCw className={clsx('w-4 h-4', isFetching && 'animate-spin')} strokeWidth={1.5} />
+            <RefreshCw
+              className={clsx('w-4 h-4', isFetching && 'animate-spin')}
+              strokeWidth={1.5}
+            />
             Refresh
           </button>
           <button
@@ -159,7 +172,10 @@ export function AdminLogsPage() {
             {LEVELS.map((l) => (
               <button
                 key={l}
-                onClick={() => { setLevel(l); setPage(0) }}
+                onClick={() => {
+                  setLevel(l)
+                  setPage(0)
+                }}
                 className={clsx(
                   'px-2 py-1 text-xs font-mono transition-colors',
                   level === l
@@ -178,7 +194,10 @@ export function AdminLogsPage() {
             {CATEGORIES.map((c) => (
               <button
                 key={c}
-                onClick={() => { setCategory(c); setPage(0) }}
+                onClick={() => {
+                  setCategory(c)
+                  setPage(0)
+                }}
                 className={clsx(
                   'px-2 py-1 text-xs font-mono transition-colors',
                   category === c
@@ -216,13 +235,16 @@ export function AdminLogsPage() {
                   {formatDate(log.created_at)}
                 </td>
                 <td className="px-4 py-2">
-                  <span className={clsx('px-2 py-0.5 text-xs font-mono uppercase', getLevelColor(log.level))}>
+                  <span
+                    className={clsx(
+                      'px-2 py-0.5 text-xs font-mono uppercase',
+                      getLevelColor(log.level)
+                    )}
+                  >
                     {log.level}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-xs text-steel-dim font-mono">
-                  {log.category}
-                </td>
+                <td className="px-4 py-2 text-xs text-steel-dim font-mono">{log.category}</td>
                 <td className="px-4 py-2 text-steel">
                   <div className="truncate max-w-xl">{log.message}</div>
                   {expandedLog === log.id && log.metadata && (

@@ -61,7 +61,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     console.error('Get project error:', error)
-    return Response.json({ error: 'Failed to get project', details: String(error) }, { status: 500 })
+    return Response.json(
+      { error: 'Failed to get project', details: String(error) },
+      { status: 500 }
+    )
   }
 }
 
@@ -89,7 +92,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       hasStatus: body.status,
       hasSpec: body.spec !== undefined,
       specKeys: body.spec ? Object.keys(body.spec) : null,
-      hasFeasibility: body.spec && 'feasibility' in body.spec ? body.spec.feasibility !== null : null,
+      hasFeasibility:
+        body.spec && 'feasibility' in body.spec ? body.spec.feasibility !== null : null,
     })
 
     const updates: string[] = []
@@ -145,9 +149,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     })
 
     // Fetch updated project
-    const row = await env.DB.prepare('SELECT * FROM projects WHERE id = ?')
-      .bind(projectId)
-      .first()
+    const row = await env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(projectId).first()
 
     return Response.json({
       project: {

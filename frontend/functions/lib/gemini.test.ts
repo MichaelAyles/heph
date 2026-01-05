@@ -7,18 +7,14 @@ describe('gemini utilities', () => {
       const messages = [{ role: 'user' as const, content: 'Hello' }]
       const result = convertToGeminiFormat(messages)
 
-      expect(result).toEqual([
-        { role: 'user', parts: [{ text: 'Hello' }] },
-      ])
+      expect(result).toEqual([{ role: 'user', parts: [{ text: 'Hello' }] }])
     })
 
     it('should convert assistant messages to model role', () => {
       const messages = [{ role: 'assistant' as const, content: 'Hi there!' }]
       const result = convertToGeminiFormat(messages)
 
-      expect(result).toEqual([
-        { role: 'model', parts: [{ text: 'Hi there!' }] },
-      ])
+      expect(result).toEqual([{ role: 'model', parts: [{ text: 'Hi there!' }] }])
     })
 
     it('should convert system messages to user+model pair', () => {

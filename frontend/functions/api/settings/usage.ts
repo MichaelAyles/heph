@@ -27,7 +27,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const user = data.user as User
 
   // Get current user's usage by model
-  const userUsage = await env.DB.prepare(`
+  const userUsage = await env.DB.prepare(
+    `
     SELECT
       model,
       COUNT(*) as request_count,
@@ -37,12 +38,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     WHERE user_id = ? AND status = 'success'
     GROUP BY model
     ORDER BY total_cost DESC
-  `)
+  `
+  )
     .bind(user.id)
     .all()
 
   // Get all users' usage by model (all time)
-  const allUsage = await env.DB.prepare(`
+  const allUsage = await env.DB.prepare(
+    `
     SELECT
       model,
       COUNT(*) as request_count,
@@ -52,28 +55,33 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     WHERE status = 'success'
     GROUP BY model
     ORDER BY total_cost DESC
-  `).all()
+  `
+  ).all()
 
   // Get totals
-  const userTotals = await env.DB.prepare(`
+  const userTotals = await env.DB.prepare(
+    `
     SELECT
       COUNT(*) as request_count,
       SUM(total_tokens) as total_tokens,
       SUM(cost_usd) as total_cost
     FROM llm_requests
     WHERE user_id = ? AND status = 'success'
-  `)
+  `
+  )
     .bind(user.id)
     .first()
 
-  const allTotals = await env.DB.prepare(`
+  const allTotals = await env.DB.prepare(
+    `
     SELECT
       COUNT(*) as request_count,
       SUM(total_tokens) as total_tokens,
       SUM(cost_usd) as total_cost
     FROM llm_requests
     WHERE status = 'success'
-  `).first()
+  `
+  ).first()
 
   const formatUsage = (rows: unknown[]): UsageStats[] =>
     rows.map((row: unknown) => {

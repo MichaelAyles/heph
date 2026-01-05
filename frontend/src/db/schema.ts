@@ -40,14 +40,14 @@ export interface Project {
 }
 
 export type ProjectStatus =
-  | 'draft'        // Just created
-  | 'analyzing'    // Running feasibility
-  | 'rejected'     // Failed feasibility
-  | 'refining'     // User answering questions
-  | 'generating'   // Creating blueprint images
-  | 'selecting'    // User picking blueprint
-  | 'finalizing'   // Generating final spec
-  | 'complete'     // Spec locked
+  | 'draft' // Just created
+  | 'analyzing' // Running feasibility
+  | 'rejected' // Failed feasibility
+  | 'refining' // User answering questions
+  | 'generating' // Creating blueprint images
+  | 'selecting' // User picking blueprint
+  | 'finalizing' // Generating final spec
+  | 'complete' // Spec locked
 
 // =============================================================================
 // PROJECT SPEC - New Pipeline
@@ -297,8 +297,8 @@ export interface BlockEdges {
 
 // File references in R2 storage
 export interface BlockFiles {
-  schematic: string  // e.g., "mcu-esp32c6.kicad_sch"
-  pcb: string        // e.g., "mcu-esp32c6.kicad_pcb"
+  schematic: string // e.g., "mcu-esp32c6.kicad_sch"
+  pcb: string // e.g., "mcu-esp32c6.kicad_pcb"
   stepModel?: string // e.g., "mcu-esp32c6.step"
   thumbnail?: string // e.g., "mcu-esp32c6.png"
 }
