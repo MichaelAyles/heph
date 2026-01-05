@@ -274,7 +274,7 @@ Vitest with 525+ tests, ~70% coverage. Target 90%+ on core modules.
 - ~~**Duplication**~~ - FIXED: Shared `functions/lib/gemini.ts` utility
 
 ### Critical (Address Immediately)
-1. **JSON Parsing Fragility** - Regex `/\{[\s\S]*\}/` is too greedy; use Zod validation instead
+1. ~~**JSON Parsing Fragility**~~ - FIXED: Zod validation utilities in `functions/lib/json.ts` (see below)
 2. **Memory Leak in Orchestrator** - `conversationHistory` grows unbounded (up to 100 iterations)
 3. **API Key Exposure** - Error responses in `image.ts` can leak upstream API errors
 4. **Session ID Regex** - Cookie parsing at `_middleware.ts:36` doesn't validate UUID format
@@ -293,6 +293,30 @@ Vitest with 525+ tests, ~70% coverage. Target 90%+ on core modules.
 13. **Missing Pagination Bounds** - Large offset values can cause expensive queries
 14. **Session Cleanup** - No cron/job to delete expired sessions from D1
 
+## Zod JSON Validation
+
+Safe JSON parsing with schema validation is available in `functions/lib/json.ts`:
+
+```typescript
+import { extractAndValidateJson } from '@/../functions/lib/json'
+import { FeasibilityResponseSchema } from '@/schemas/llm-responses'
+
+// Parse and validate LLM response in one step
+const result = extractAndValidateJson(response.content, FeasibilityResponseSchema)
+if (!result.success) {
+  console.error('Parse error:', result.error) // Detailed validation errors
+  return
+}
+const data = result.data // Fully typed!
+```
+
+**Available functions:**
+- `extractAndValidateJson<T>(content, schema)` - Extract JSON from LLM responses with validation
+- `safeJsonParseWithSchema<T>(json, schema)` - Parse pure JSON with validation
+- `extractJsonFromContent<T>(content)` - Legacy extraction without validation (deprecated)
+
+**Pre-built schemas:** See `src/schemas/llm-responses.ts` for common response types.
+
 ## Quick Reference
 
 | What | Where |
@@ -307,6 +331,8 @@ Vitest with 525+ tests, ~70% coverage. Target 90%+ on core modules.
 | Project CRUD | `functions/api/projects/` |
 | Gemini format util | `functions/lib/gemini.ts` |
 | Logger utility | `functions/lib/logger.ts` |
+| JSON validation | `functions/lib/json.ts` |
+| LLM response schemas | `src/schemas/llm-responses.ts` |
 | Pricing calculations | `functions/api/llm/pricing.ts` |
 | Admin logs API | `functions/api/admin/logs.ts` |
 
