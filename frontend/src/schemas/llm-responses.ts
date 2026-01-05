@@ -172,7 +172,7 @@ export const BlockSelectionResponseSchema = z.object({
     z.object({
       blockId: z.string(),
       quantity: z.number().optional(),
-      config: z.record(z.unknown()).optional(),
+      config: z.record(z.string(), z.unknown()).optional(),
       notes: z.string().optional(),
     })
   ),
