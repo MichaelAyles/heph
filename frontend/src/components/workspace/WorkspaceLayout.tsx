@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { WorkspaceHeader } from './WorkspaceHeader'
 import { WorkspaceStageTabs } from './WorkspaceStageTabs'
+import { OrchestratorPanel } from './OrchestratorPanel'
 import { useWorkspaceStore, type WorkspaceStage } from '@/stores/workspace'
 import type { Project } from '@/db/schema'
 
@@ -73,13 +74,11 @@ export function WorkspaceLayout() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <WorkspaceHeader project={project || null} isLoading={isLoading} />
-      <WorkspaceStageTabs
-        spec={project?.spec || null}
-        canNavigateTo={canNavigateTo}
-      />
+      <WorkspaceStageTabs spec={project?.spec || null} canNavigateTo={canNavigateTo} />
       <div className="flex-1 min-h-0 overflow-auto">
         <Outlet context={{ project, isLoading }} />
       </div>
+      <OrchestratorPanel />
     </div>
   )
 }

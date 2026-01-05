@@ -5,8 +5,10 @@
  */
 
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant' | 'system' | 'tool'
   content: string
+  toolCalls?: ToolCall[]
+  toolCallId?: string
 }
 
 export interface ChatOptions {
@@ -33,6 +35,61 @@ export interface StreamCallbacks {
   onError: (error: Error) => void
 }
 
+// =============================================================================
+// TOOL CALLING TYPES
+// =============================================================================
+
+export interface ToolParameter {
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array'
+  description: string
+  enum?: string[]
+  items?: { type: string }
+  properties?: Record<string, ToolParameter>
+  required?: string[]
+}
+
+export interface ToolDefinition {
+  name: string
+  description: string
+  parameters: {
+    type: 'object'
+    properties: Record<string, ToolParameter>
+    required?: string[]
+  }
+}
+
+export interface ToolCall {
+  id: string
+  name: string
+  arguments: Record<string, unknown>
+}
+
+export interface ToolChatOptions {
+  messages: ChatMessage[]
+  tools?: ToolDefinition[]
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  projectId?: string
+  thinking?: {
+    type: 'enabled' | 'disabled'
+    budgetTokens?: number
+  }
+}
+
+export interface ToolChatResponse {
+  content: string
+  model: string
+  toolCalls?: ToolCall[]
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+  thinking?: string
+  finishReason: 'stop' | 'tool_calls' | 'length' | 'error'
+}
+
 const MAX_RETRIES = 3
 const INITIAL_DELAY_MS = 1000
 
@@ -54,8 +111,12 @@ async function withRetry<T>(
       lastError = error instanceof Error ? error : new Error(String(error))
 
       // Don't retry on 4xx errors (client errors)
-      if (lastError.message.includes('400') || lastError.message.includes('401') ||
-          lastError.message.includes('403') || lastError.message.includes('404')) {
+      if (
+        lastError.message.includes('400') ||
+        lastError.message.includes('401') ||
+        lastError.message.includes('403') ||
+        lastError.message.includes('404')
+      ) {
         throw lastError
       }
 
@@ -84,6 +145,26 @@ class LLMService {
       if (!response.ok) {
         const error = await response.json()
         throw new Error(error.error || `LLM request failed (${response.status})`)
+      }
+
+      return response.json()
+    })
+  }
+
+  /**
+   * Send a chat request with tool calling support
+   */
+  async chatWithTools(options: ToolChatOptions): Promise<ToolChatResponse> {
+    return withRetry(async () => {
+      const response = await fetch('/api/llm/tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || `Tool chat request failed (${response.status})`)
       }
 
       return response.json()
