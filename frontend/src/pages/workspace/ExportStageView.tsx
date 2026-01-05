@@ -16,6 +16,7 @@ import {
   Loader2,
   Check,
   ExternalLink,
+  Table,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import JSZip from 'jszip'
@@ -159,6 +160,35 @@ Edit the parameters at the top of the .scad file to adjust:
     )
   }
 
+  // Download BOM as CSV
+  const downloadBOM = async () => {
+    if (!project?.spec?.finalSpec?.estimatedBOM) return
+
+    const bom = project.spec.finalSpec.estimatedBOM
+    const headers = ['Item', 'Quantity', 'Unit Cost ($)', 'Total Cost ($)', 'Supplier', 'Part Number']
+
+    const rows = bom.map((b) => [
+      b.item,
+      b.quantity.toString(),
+      b.unitCost.toFixed(2),
+      (b.quantity * b.unitCost).toFixed(2),
+      '', // Supplier - placeholder for user to fill
+      '', // Part number - placeholder for user to fill
+    ])
+
+    // Add total row
+    const totalCost = bom.reduce((sum, b) => sum + b.quantity * b.unitCost, 0)
+    rows.push(['', '', 'TOTAL', totalCost.toFixed(2), '', ''])
+
+    const csv = [
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+    ].join('\n')
+
+    const blob = new Blob([csv], { type: 'text/csv' })
+    downloadBlob(blob, `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-bom.csv`)
+  }
+
   // Download firmware source
   const downloadFirmware = async () => {
     if (!project?.spec?.firmware?.files) return
@@ -228,6 +258,27 @@ After building, find the binary at:
     // Add spec as JSON
     zip.file(`${projectSlug}-spec.json`, JSON.stringify(project.spec, null, 2))
 
+    // Add BOM as CSV if available
+    if (project.spec.finalSpec?.estimatedBOM?.length) {
+      const bom = project.spec.finalSpec.estimatedBOM
+      const headers = ['Item', 'Quantity', 'Unit Cost ($)', 'Total Cost ($)', 'Supplier', 'Part Number']
+      const rows = bom.map((b) => [
+        b.item,
+        b.quantity.toString(),
+        b.unitCost.toFixed(2),
+        (b.quantity * b.unitCost).toFixed(2),
+        '',
+        '',
+      ])
+      const totalCost = bom.reduce((sum, b) => sum + b.quantity * b.unitCost, 0)
+      rows.push(['', '', 'TOTAL', totalCost.toFixed(2), '', ''])
+      const csv = [
+        headers.join(','),
+        ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+      ].join('\n')
+      zip.file(`${projectSlug}-bom.csv`, csv)
+    }
+
     // Add enclosure if available
     if (project.spec.enclosure?.openScadCode) {
       zip.file('enclosure/enclosure.scad', project.spec.enclosure.openScadCode)
@@ -250,6 +301,7 @@ ${project.description || ''}
 ## Contents
 - \`${projectSlug}-spec.md\` - Human-readable specification
 - \`${projectSlug}-spec.json\` - Machine-readable specification
+- \`${projectSlug}-bom.csv\` - Bill of materials for sourcing
 - \`enclosure/\` - OpenSCAD enclosure files
 - \`firmware/\` - ESP32-C6 firmware source
 
@@ -386,6 +438,15 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
       filename: 'spec.md',
       ready: !!project?.spec?.finalSpec,
       onDownload: downloadSpec,
+    },
+    {
+      id: 'bom',
+      icon: Table,
+      title: 'Bill of Materials',
+      description: 'Component list as CSV for sourcing',
+      filename: 'bom.csv',
+      ready: (project?.spec?.finalSpec?.estimatedBOM?.length ?? 0) > 0,
+      onDownload: downloadBOM,
     },
     {
       id: 'enclosure',

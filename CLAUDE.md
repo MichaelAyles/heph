@@ -330,14 +330,17 @@ Consider caching images aggressively and batching requests.
 | 4 | PCB Block Merging | ✅ Complete | kicadts integration for schematic merging |
 | 5 | Enclosure Generation | ✅ Complete | OpenSCAD WASM + React Three Fiber STL viewer |
 | 6 | Firmware Generation | ✅ Complete | AI-generated ESP32 firmware scaffolding |
+| 7 | Firmware Frontend | ✅ Complete | Monaco editor + file tree + chat modifications |
+| 8 | Multi-Agent Orchestration | ✅ Complete | 1720 lines across orchestrator, tools, validation |
+| 9 | Export & Download | ✅ Complete | Spec MD/JSON, BOM CSV, enclosure ZIP, firmware ZIP |
 
-### Remaining Phases
+### Future Enhancements
 
-| Phase | Feature | Notes |
-|-------|---------|-------|
-| 7 | Firmware Frontend | Monaco editor + file tree + compile output |
-| 8 | Multi-Agent Orchestration | Agent interfaces, context manager, validation loops |
-| 9 | Export & Polish | Gerber generation, BOM export, PDF spec sheets |
+| Feature | Notes |
+|---------|-------|
+| Compile Server | Fly.io + Docker + ESP-IDF for browser-based compilation |
+| Gerber Export | PCB manufacturing files (requires complete schematic merging) |
+| PDF Spec Sheets | Formatted PDF generation (requires PDF library) |
 
 ### Workspace-Related Files
 
