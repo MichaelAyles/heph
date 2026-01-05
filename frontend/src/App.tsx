@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { Layout } from '@/components/Layout'
@@ -12,6 +12,8 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { BlocksPage } from '@/pages/BlocksPage'
 import { AdminLogsPage } from '@/pages/AdminLogsPage'
 import { LandingPage } from '@/pages/LandingPage'
+import { GalleryPage } from '@/pages/GalleryPage'
+import { GalleryDetailPage } from '@/pages/GalleryDetailPage'
 import {
   SpecStageView,
   PCBStageView,
@@ -58,16 +60,30 @@ function AuthenticatedApp() {
 
 function AppContent() {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore()
+  const location = useLocation()
 
   useEffect(() => {
     checkAuth()
   }, [checkAuth])
 
-  if (isLoading) {
+  // Public routes that don't require authentication
+  const isPublicRoute = location.pathname.startsWith('/gallery')
+
+  if (isLoading && !isPublicRoute) {
     return (
       <div className="min-h-screen bg-ash flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-copper animate-spin" strokeWidth={1.5} />
       </div>
+    )
+  }
+
+  // Handle public routes (gallery) regardless of auth state
+  if (isPublicRoute) {
+    return (
+      <Routes>
+        <Route path="/gallery" element={<GalleryPage />} />
+        <Route path="/gallery/:id" element={<GalleryDetailPage />} />
+      </Routes>
     )
   }
 

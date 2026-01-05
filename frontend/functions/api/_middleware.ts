@@ -7,7 +7,14 @@ import type { Env } from '../env'
 import { createLogger } from '../lib/logger'
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/blocks', '/api/images']
+const PUBLIC_ROUTES = [
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/me',
+  '/api/blocks',
+  '/api/images',
+  '/api/gallery',
+]
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { env } = context
