@@ -40,6 +40,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Validate session ID format (32 hex chars - UUID without dashes)
+  if (!/^[a-f0-9]{32}$/i.test(sessionId)) {
+    return Response.json({ error: 'Invalid session' }, { status: 401 })
+  }
+
   // Validate session and get user with admin status
   const result = await env.DB.prepare(
     `SELECT u.id, u.username, u.display_name, u.is_admin

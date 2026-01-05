@@ -26,8 +26,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   if (search) {
-    baseQuery += ' AND (name LIKE ? OR description LIKE ?)'
-    params.push(`%${search}%`, `%${search}%`)
+    // Escape LIKE special characters to prevent injection
+    const escapedSearch = search.replace(/[%_\\]/g, '\\$&')
+    baseQuery += " AND (name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')"
+    params.push(`%${escapedSearch}%`, `%${escapedSearch}%`)
   }
 
   // Get total count
@@ -38,7 +40,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   // Get paginated results
   const query = `SELECT * ${baseQuery} ORDER BY category, name LIMIT ? OFFSET ?`
-  const result = await env.DB.prepare(query).bind(...params, limit, offset).all()
+  const result = await env.DB.prepare(query)
+    .bind(...params, limit, offset)
+    .all()
 
   const blocks = result.results.map((row) => ({
     id: row.id,

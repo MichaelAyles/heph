@@ -56,7 +56,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Use the configured image model from .dev.vars
     const model = body.model || env.IMAGE_MODEL_SLUG
     if (!model) {
-      return Response.json({ error: 'IMAGE_MODEL_SLUG not configured in .dev.vars' }, { status: 500 })
+      return Response.json(
+        { error: 'IMAGE_MODEL_SLUG not configured in .dev.vars' },
+        { status: 500 }
+      )
     }
 
     // Use chat completions with image generation request
@@ -93,12 +96,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         .bind(id, user.id, model, Date.now() - startTime, errorText)
         .run()
 
-      return Response.json({
-        error: 'Image generation failed',
-        details: errorText,
-        status: response.status,
-        model
-      }, { status: 502 })
+      // Don't expose error details to client (may contain API keys or sensitive info)
+      return Response.json(
+        { error: 'Image generation failed' },
+        { status: 502 }
+      )
     }
 
     const result = await response.json()
@@ -144,12 +146,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // If no image found, return the raw response for debugging
     if (!imageUrl) {
-      return Response.json({
-        error: 'No image in response',
-        rawResponse: rawResponse || JSON.stringify(result).slice(0, 500),
-        model,
-        latencyMs,
-      }, { status: 200 })
+      return Response.json(
+        {
+          error: 'No image in response',
+          rawResponse: rawResponse || JSON.stringify(result).slice(0, 500),
+          model,
+          latencyMs,
+        },
+        { status: 200 }
+      )
     }
 
     // If we have a base64 image, upload to R2 storage
@@ -161,7 +166,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         if (matches) {
           const mimeType = matches[1]
           const base64Data = matches[2]
-          const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+          const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0))
 
           // Generate unique filename
           const imageId = crypto.randomUUID().replace(/-/g, '')

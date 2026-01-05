@@ -16,6 +16,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return new Response('Not found', { status: 404 })
   }
 
+  // Prevent path traversal attacks
+  if (key.includes('..') || key.includes('\\')) {
+    return new Response('Invalid path', { status: 400 })
+  }
+
   try {
     const object = await env.STORAGE.get(key)
 

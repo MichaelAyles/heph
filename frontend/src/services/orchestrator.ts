@@ -212,6 +212,9 @@ export class HardwareOrchestrator {
   private async runIteration(): Promise<void> {
     this.updateState({ currentAction: 'Thinking...' })
 
+    // Trim history to prevent unbounded growth
+    this.trimConversationHistory()
+
     try {
       // Call LLM with tools
       const response = await llm.chatWithTools({
@@ -852,6 +855,32 @@ export class HardwareOrchestrator {
   // ===========================================================================
   // HELPER METHODS
   // ===========================================================================
+
+  /**
+   * Trim conversation history to prevent unbounded growth.
+   * Keeps the system message and most recent messages.
+   */
+  private trimConversationHistory(): void {
+    const MAX_MESSAGES = 40 // Keep recent context
+    const TRIM_TO = 20 // Trim down to this many when over max
+
+    if (this.conversationHistory.length <= MAX_MESSAGES) {
+      return
+    }
+
+    // Always keep the system message (first message)
+    const systemMessage = this.conversationHistory[0]
+    const recentMessages = this.conversationHistory.slice(-TRIM_TO)
+
+    // Create a summary of trimmed history
+    const trimmedCount = this.conversationHistory.length - TRIM_TO - 1
+    const summaryMessage: ChatMessage = {
+      role: 'user',
+      content: `[Previous ${trimmedCount} messages trimmed. Current stage: ${this.state.currentStage}. Iteration: ${this.state.iterationCount}. Continue from where we left off.]`,
+    }
+
+    this.conversationHistory = [systemMessage, summaryMessage, ...recentMessages]
+  }
 
   private isComplete(): boolean {
     return this.currentSpec?.stages?.export?.status === 'complete'

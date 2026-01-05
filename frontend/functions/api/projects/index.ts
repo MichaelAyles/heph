@@ -41,7 +41,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?'
   params.push(limit, offset)
 
-  const result = await env.DB.prepare(query).bind(...params).all()
+  const result = await env.DB.prepare(query)
+    .bind(...params)
+    .all()
 
   // Get total count
   let countQuery = 'SELECT COUNT(*) as count FROM projects WHERE user_id = ?'
@@ -50,7 +52,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     countQuery += ' AND status = ?'
     countParams.push(status)
   }
-  const countResult = await env.DB.prepare(countQuery).bind(...countParams).first()
+  const countResult = await env.DB.prepare(countQuery)
+    .bind(...countParams)
+    .first()
 
   const projects = result.results.map((row) => ({
     id: row.id,
@@ -82,6 +86,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
     if (!description?.trim()) {
       return Response.json({ error: 'Description is required' }, { status: 400 })
+    }
+    // Enforce input limits to prevent DoS and ensure reasonable LLM token usage
+    if (name.length > 100) {
+      return Response.json({ error: 'Name must be 100 characters or less' }, { status: 400 })
+    }
+    if (description.length > 2000) {
+      return Response.json({ error: 'Description must be 2000 characters or less' }, { status: 400 })
     }
 
     const id = crypto.randomUUID().replace(/-/g, '')

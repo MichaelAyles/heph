@@ -59,7 +59,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const provider = (settings?.llm_provider as string) || 'openrouter'
     // Priority: request body > env var > database > hardcoded fallback
-    const model = body.model || env.TEXT_MODEL_SLUG || (settings?.default_model as string) || 'google/gemini-2.0-flash-001'
+    const model =
+      body.model ||
+      env.TEXT_MODEL_SLUG ||
+      (settings?.default_model as string) ||
+      'google/gemini-2.0-flash-001'
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 4096
 
@@ -125,7 +129,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const { readable, writable } = new TransformStream()
 
     // Process the stream in the background
-    processStream(upstreamResponse.body!, writable, provider, env, user.id, projectId, model)
+    // Pass messages for token estimation
+    processStream(upstreamResponse.body!, writable, provider, env, user.id, projectId, model, messages)
 
     return new Response(readable, {
       headers: {
@@ -147,7 +152,8 @@ async function processStream(
   env: Env,
   userId: string,
   projectId: string | undefined,
-  model: string
+  model: string,
+  messages: ChatMessage[]
 ) {
   const reader = input.getReader()
   const writer = output.getWriter()
@@ -200,7 +206,17 @@ async function processStream(
     const latencyMs = Date.now() - startTime
     const estimatedCompletionTokens = Math.ceil(fullContent.length / 4)
     const estimatedPromptTokens = Math.ceil(JSON.stringify(messages).length / 4)
-    await logLlmRequest(env, userId, projectId, model, estimatedPromptTokens, estimatedCompletionTokens, latencyMs, 'success', null)
+    await logLlmRequest(
+      env,
+      userId,
+      projectId,
+      model,
+      estimatedPromptTokens,
+      estimatedCompletionTokens,
+      latencyMs,
+      'success',
+      null
+    )
   } catch (error) {
     console.error('Stream processing error:', error)
     await writer.write(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`))
