@@ -29,9 +29,18 @@ import {
   buildEnclosureInputFromSpec,
   buildEnclosureRegenerationPrompt,
 } from '@/prompts/enclosure'
+import {
+  OPENSCAD_VALIDATION_PROMPT,
+  buildValidationPrompt,
+  buildFixPrompt,
+  parseValidationResponse,
+  type ValidationIssue,
+} from '@/prompts/enclosure-validation'
 import { llm } from '@/services/llm'
 
 type EnclosureStep = 'generate' | 'edit' | 'preview'
+
+const MAX_VALIDATION_ITERATIONS = 3
 
 export function EnclosureStageView() {
   const { project } = useWorkspaceContext()
@@ -47,6 +56,11 @@ export function EnclosureStageView() {
   const [isRendering, setIsRendering] = useState(false)
   const [renderError, setRenderError] = useState<string | null>(null)
   const [wasmLoaded, setWasmLoaded] = useState(false)
+
+  // Validation state
+  const [validationStatus, setValidationStatus] = useState<string | null>(null)
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
+  const [validationIteration, setValidationIteration] = useState(0)
 
   const spec = project?.spec
   const pcbComplete = spec?.stages?.pcb?.status === 'complete'
@@ -134,12 +148,78 @@ export function EnclosureStageView() {
     },
   })
 
-  // Generate OpenSCAD code using LLM
+  // Helper to extract code from LLM response
+  const extractCode = (content: string): string => {
+    const codeMatch = content.match(/```(?:openscad)?\n([\s\S]*?)```/)
+    return codeMatch ? codeMatch[1].trim() : content.trim()
+  }
+
+  // Validate OpenSCAD code and return issues
+  const validateCode = useCallback(
+    async (code: string): Promise<ValidationIssue[]> => {
+      const pcbWidth = pcbArtifacts?.boardSize?.width ?? 50
+      const pcbHeight = pcbArtifacts?.boardSize?.height ?? 40
+
+      // Check for components
+      const hasOled = finalSpec?.outputs?.some((o) =>
+        o.type.toLowerCase().includes('oled') || o.type.toLowerCase().includes('display')
+      ) ?? false
+      const hasUsb = true // Always has USB-C
+      const hasButtons = finalSpec?.inputs?.some((i) =>
+        i.type.toLowerCase().includes('button')
+      ) ?? false
+
+      const validationPrompt = buildValidationPrompt(code, {
+        pcbWidth,
+        pcbHeight,
+        hasOled,
+        hasUsb,
+        hasButtons,
+      })
+
+      const response = await llm.chat({
+        messages: [
+          { role: 'system', content: OPENSCAD_VALIDATION_PROMPT },
+          { role: 'user', content: validationPrompt },
+        ],
+        temperature: 0.3,
+        projectId: project?.id,
+      })
+
+      const result = parseValidationResponse(response.content)
+      return result.issues
+    },
+    [pcbArtifacts, finalSpec, project?.id]
+  )
+
+  // Fix code based on validation issues
+  const fixCode = useCallback(
+    async (code: string, issues: ValidationIssue[]): Promise<string> => {
+      const pcbWidth = pcbArtifacts?.boardSize?.width ?? 50
+      const pcbHeight = pcbArtifacts?.boardSize?.height ?? 40
+
+      const fixPrompt = buildFixPrompt(code, issues, { pcbWidth, pcbHeight })
+
+      const response = await llm.chat({
+        messages: [{ role: 'user', content: fixPrompt }],
+        temperature: 0.5,
+        projectId: project?.id,
+      })
+
+      return extractCode(response.content)
+    },
+    [pcbArtifacts, project?.id]
+  )
+
+  // Generate OpenSCAD code using LLM with validation loop
   const handleGenerate = useCallback(async () => {
     if (!project || !pcbArtifacts) return
 
     setIsGenerating(true)
     setRenderError(null)
+    setValidationStatus(null)
+    setValidationIssues([])
+    setValidationIteration(0)
 
     try {
       const input = buildEnclosureInputFromSpec(
@@ -149,6 +229,8 @@ export function EnclosureStageView() {
         finalSpec || undefined
       )
 
+      // Step 1: Generate initial code
+      setValidationStatus('Generating enclosure design...')
       const prompt = buildEnclosurePrompt(input)
 
       const response = await llm.chat({
@@ -157,32 +239,58 @@ export function EnclosureStageView() {
         projectId: project.id,
       })
 
-      // Extract OpenSCAD code from response
-      let code = response.content
+      let code = extractCode(response.content)
 
-      // If wrapped in markdown code block, extract it
-      const codeMatch = code.match(/```(?:openscad)?\n([\s\S]*?)```/)
-      if (codeMatch) {
-        code = codeMatch[1]
+      // Step 2: Validation loop
+      for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
+        setValidationIteration(iteration)
+        setValidationStatus(`Validating design (iteration ${iteration}/${MAX_VALIDATION_ITERATIONS})...`)
+
+        const issues = await validateCode(code)
+        const criticalIssues = issues.filter((i) => i.severity === 'critical')
+        const warningIssues = issues.filter((i) => i.severity === 'warning')
+
+        setValidationIssues(issues)
+
+        // If no critical issues, we're done
+        if (criticalIssues.length === 0) {
+          if (warningIssues.length > 0 && iteration < MAX_VALIDATION_ITERATIONS) {
+            // Try to fix warnings on the last iteration
+            setValidationStatus(`Fixing ${warningIssues.length} warnings...`)
+            code = await fixCode(code, warningIssues)
+          }
+          break
+        }
+
+        // Fix critical issues
+        setValidationStatus(`Fixing ${criticalIssues.length} critical issues...`)
+        code = await fixCode(code, criticalIssues)
       }
 
-      setOpenScadCode(code.trim())
+      setValidationStatus('Generation complete!')
+      setOpenScadCode(code)
       setCurrentStep('edit')
-      saveEnclosureMutation.mutate({ openScadCode: code.trim() })
+      saveEnclosureMutation.mutate({ openScadCode: code })
+
+      // Clear status after a moment
+      setTimeout(() => setValidationStatus(null), 3000)
     } catch (error) {
       console.error('Failed to generate enclosure:', error)
       setRenderError(error instanceof Error ? error.message : 'Failed to generate enclosure')
     } finally {
       setIsGenerating(false)
     }
-  }, [project, spec, pcbArtifacts, finalSpec, saveEnclosureMutation])
+  }, [project, spec, pcbArtifacts, finalSpec, saveEnclosureMutation, validateCode, fixCode])
 
-  // Regenerate with feedback
+  // Regenerate with feedback (includes validation loop)
   const handleRegenerate = useCallback(async () => {
     if (!project || !pcbArtifacts || !feedback.trim()) return
 
     setIsGenerating(true)
     setRenderError(null)
+    setValidationStatus(null)
+    setValidationIssues([])
+    setValidationIteration(0)
 
     try {
       const input = buildEnclosureInputFromSpec(
@@ -192,6 +300,8 @@ export function EnclosureStageView() {
         finalSpec || undefined
       )
 
+      // Step 1: Regenerate with feedback
+      setValidationStatus('Regenerating with feedback...')
       const prompt = buildEnclosureRegenerationPrompt(openScadCode, feedback, input)
 
       const response = await llm.chat({
@@ -200,22 +310,47 @@ export function EnclosureStageView() {
         projectId: project.id,
       })
 
-      let code = response.content
-      const codeMatch = code.match(/```(?:openscad)?\n([\s\S]*?)```/)
-      if (codeMatch) {
-        code = codeMatch[1]
+      let code = extractCode(response.content)
+
+      // Step 2: Validation loop
+      for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
+        setValidationIteration(iteration)
+        setValidationStatus(`Validating regenerated design (iteration ${iteration}/${MAX_VALIDATION_ITERATIONS})...`)
+
+        const issues = await validateCode(code)
+        const criticalIssues = issues.filter((i) => i.severity === 'critical')
+        const warningIssues = issues.filter((i) => i.severity === 'warning')
+
+        setValidationIssues(issues)
+
+        // If no critical issues, we're done
+        if (criticalIssues.length === 0) {
+          if (warningIssues.length > 0 && iteration < MAX_VALIDATION_ITERATIONS) {
+            setValidationStatus(`Fixing ${warningIssues.length} warnings...`)
+            code = await fixCode(code, warningIssues)
+          }
+          break
+        }
+
+        // Fix critical issues
+        setValidationStatus(`Fixing ${criticalIssues.length} critical issues...`)
+        code = await fixCode(code, criticalIssues)
       }
 
-      setOpenScadCode(code.trim())
+      setValidationStatus('Regeneration complete!')
+      setOpenScadCode(code)
       setFeedback('')
-      saveEnclosureMutation.mutate({ openScadCode: code.trim() })
+      saveEnclosureMutation.mutate({ openScadCode: code })
+
+      // Clear status after a moment
+      setTimeout(() => setValidationStatus(null), 3000)
     } catch (error) {
       console.error('Failed to regenerate enclosure:', error)
       setRenderError(error instanceof Error ? error.message : 'Failed to regenerate')
     } finally {
       setIsGenerating(false)
     }
-  }, [project, spec, pcbArtifacts, finalSpec, openScadCode, feedback, saveEnclosureMutation])
+  }, [project, spec, pcbArtifacts, finalSpec, openScadCode, feedback, saveEnclosureMutation, validateCode, fixCode])
 
   // Render OpenSCAD to STL
   const handleRender = useCallback(async () => {
@@ -348,7 +483,7 @@ export function EnclosureStageView() {
       <div className="flex-1 flex min-h-0">
         {currentStep === 'generate' ? (
           <div className="flex-1 flex items-center justify-center p-8">
-            <div className="text-center max-w-md">
+            <div className="text-center max-w-lg">
               <div className="w-16 h-16 rounded-full bg-copper/10 flex items-center justify-center mx-auto mb-4">
                 <Wand2 className="w-8 h-8 text-copper" strokeWidth={1.5} />
               </div>
@@ -364,6 +499,54 @@ export function EnclosureStageView() {
                   <Loader2 className="w-3 h-3 inline-block animate-spin mr-1" />
                   Loading OpenSCAD engine...
                 </p>
+              )}
+
+              {/* Validation Status During Generation */}
+              {isGenerating && validationStatus && (
+                <div className="mb-6 p-4 bg-surface-800 rounded-lg border border-surface-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Loader2 className="w-4 h-4 text-copper animate-spin" />
+                    <span className="text-sm text-steel font-medium">{validationStatus}</span>
+                  </div>
+                  {validationIteration > 0 && (
+                    <div className="flex gap-1 justify-center mt-2">
+                      {Array.from({ length: MAX_VALIDATION_ITERATIONS }).map((_, i) => (
+                        <div
+                          key={i}
+                          className={clsx(
+                            'w-2 h-2 rounded-full transition-colors',
+                            i < validationIteration ? 'bg-copper' : 'bg-surface-600'
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {validationIssues.length > 0 && (
+                    <div className="mt-3 text-left text-xs space-y-1 max-h-32 overflow-y-auto">
+                      {validationIssues.slice(0, 5).map((issue, i) => (
+                        <div
+                          key={i}
+                          className={clsx(
+                            'flex items-start gap-2 p-2 rounded',
+                            issue.severity === 'critical' && 'bg-red-500/10 text-red-400',
+                            issue.severity === 'warning' && 'bg-yellow-500/10 text-yellow-400',
+                            issue.severity === 'suggestion' && 'bg-blue-500/10 text-blue-400'
+                          )}
+                        >
+                          <span className="uppercase font-semibold shrink-0">
+                            {issue.severity.slice(0, 4)}
+                          </span>
+                          <span className="text-steel-dim">{issue.description}</span>
+                        </div>
+                      ))}
+                      {validationIssues.length > 5 && (
+                        <p className="text-surface-500">
+                          +{validationIssues.length - 5} more issues
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
 
               <button
@@ -489,6 +672,18 @@ export function EnclosureStageView() {
                     Regenerate
                   </button>
                 </div>
+                {/* Validation status during regeneration */}
+                {isGenerating && validationStatus && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-steel-dim">
+                    <Loader2 className="w-3 h-3 animate-spin text-copper" />
+                    <span>{validationStatus}</span>
+                    {validationIteration > 0 && (
+                      <span className="text-surface-500">
+                        (iteration {validationIteration}/{MAX_VALIDATION_ITERATIONS})
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
