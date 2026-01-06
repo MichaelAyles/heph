@@ -69,7 +69,7 @@ export function BlockSelector({
   const canAddMore = selectedBlocks.length < maxBlocks
 
   return (
-    <div className={clsx('flex flex-col h-full', className)}>
+    <div className={clsx('flex flex-col h-full min-h-0 overflow-hidden', className)}>
       {/* Search */}
       <div className="p-3 border-b border-surface-700">
         <div className="relative">

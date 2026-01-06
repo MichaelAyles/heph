@@ -161,9 +161,9 @@ export function PCBStageView() {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left sidebar: Block selector */}
-        <aside className="w-80 border-r border-surface-700 flex flex-col min-h-0">
+        <aside className="w-80 border-r border-surface-700 flex flex-col min-h-0 overflow-hidden">
           <BlockSelector
             selectedBlocks={selectedBlocks}
             onSelectBlock={handleSelectBlock}
