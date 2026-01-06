@@ -28,6 +28,13 @@ interface RenderResult {
   error?: string
 }
 
+// Warnings to suppress (expected in WASM environment)
+const SUPPRESSED_WARNINGS = [
+  'Could not initialize localization',
+  'Fontconfig error',
+  "Can't get font",
+]
+
 /**
  * Load the OpenSCAD WASM module
  * This is lazy-loaded to avoid blocking initial page load
@@ -42,13 +49,37 @@ async function loadOpenSCAD(): Promise<OpenSCADInstance> {
   }
 
   loadPromise = (async () => {
-    // Dynamic import to enable code splitting
-    // The package exports createOpenSCAD as a named export
-    const { createOpenSCAD } = await import('openscad-wasm')
-    const instance = await createOpenSCAD()
+    // Temporarily suppress known WASM warnings during initialization
+    const originalConsoleLog = console.log
+    const originalConsoleError = console.error
 
-    openscadInstance = instance
-    return openscadInstance
+    const filterWarning = (args: unknown[]) => {
+      const msg = args.join(' ')
+      return SUPPRESSED_WARNINGS.some((w) => msg.includes(w))
+    }
+
+    console.log = (...args) => {
+      if (!filterWarning(args)) originalConsoleLog(...args)
+    }
+    console.error = (...args) => {
+      if (!filterWarning(args)) originalConsoleError(...args)
+    }
+
+    try {
+      // Dynamic import to enable code splitting
+      // The package exports createOpenSCAD as a named export
+      const { createOpenSCAD } = await import('openscad-wasm')
+      const instance = await createOpenSCAD()
+
+      openscadInstance = instance
+      return openscadInstance
+    } finally {
+      // Restore console after a short delay to catch startup warnings
+      setTimeout(() => {
+        console.log = originalConsoleLog
+        console.error = originalConsoleError
+      }, 1000)
+    }
   })()
 
   return loadPromise
@@ -59,6 +90,22 @@ async function loadOpenSCAD(): Promise<OpenSCADInstance> {
  */
 export async function renderOpenSCAD(code: string): Promise<RenderResult> {
   const logs: string[] = []
+
+  // Suppress known WASM warnings during rendering
+  const originalConsoleLog = console.log
+  const originalConsoleError = console.error
+
+  const filterWarning = (args: unknown[]) => {
+    const msg = args.join(' ')
+    return SUPPRESSED_WARNINGS.some((w) => msg.includes(w))
+  }
+
+  console.log = (...args) => {
+    if (!filterWarning(args)) originalConsoleLog(...args)
+  }
+  console.error = (...args) => {
+    if (!filterWarning(args)) originalConsoleError(...args)
+  }
 
   try {
     const instance = await loadOpenSCAD()
@@ -82,6 +129,10 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
     }
+  } finally {
+    // Restore console
+    console.log = originalConsoleLog
+    console.error = originalConsoleError
   }
 }
 

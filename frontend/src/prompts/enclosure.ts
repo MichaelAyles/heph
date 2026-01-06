@@ -70,6 +70,7 @@ export const ENCLOSURE_SYSTEM_PROMPT = `You are PHAESTUS, an expert parametric C
 - Comment each major section
 - Use difference() for cutouts, union() for assembly
 - Apply hull() for smooth transitions between shapes
+- **NEVER use text() function** - fonts are not available in WebAssembly environments
 
 ## Standard Cutout Templates
 
@@ -274,7 +275,7 @@ ${comp.notes ? `- Notes: ${comp.notes}` : ''}
 3. Create appropriately sized cutouts for all listed components
 4. Design for easy 3D printing (no supports if possible)
 5. Include snap-fit or screw assembly mechanism
-6. Add the project name as embossed text on the top surface
+6. Do NOT use text() function - fonts are unavailable in WebAssembly
 
 Generate the complete OpenSCAD code now.`
 
