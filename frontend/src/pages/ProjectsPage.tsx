@@ -5,21 +5,41 @@ import {
   Loader2,
   AlertCircle,
   FolderOpen,
-  Clock,
   CheckCircle2,
   XCircle,
   ArrowRight,
   PlusCircle,
   Trash2,
   Wrench,
+  FileText,
+  Cpu,
+  Box,
+  Code,
+  Package,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+
+interface StageStatus {
+  status: 'pending' | 'in_progress' | 'complete'
+  completedAt?: string
+}
+
+interface ProjectSpec {
+  stages?: {
+    spec?: StageStatus
+    pcb?: StageStatus
+    enclosure?: StageStatus
+    firmware?: StageStatus
+    export?: StageStatus
+  }
+}
 
 interface Project {
   id: string
   name: string
   description: string
   status: string
+  spec?: ProjectSpec
   createdAt: string
   updatedAt: string
 }
@@ -42,31 +62,125 @@ async function deleteProject(id: string): Promise<void> {
   if (!response.ok) throw new Error('Failed to delete project')
 }
 
-function getStatusIcon(status: string) {
-  switch (status) {
-    case 'complete':
-      return <CheckCircle2 className="w-4 h-4 text-emerald-400" strokeWidth={1.5} />
-    case 'error':
-    case 'rejected':
-      return <XCircle className="w-4 h-4 text-red-400" strokeWidth={1.5} />
-    default:
-      return <Clock className="w-4 h-4 text-copper" strokeWidth={1.5} />
-  }
-}
+const STAGES = [
+  { key: 'spec', label: 'Spec', icon: FileText },
+  { key: 'pcb', label: 'PCB', icon: Cpu },
+  { key: 'enclosure', label: 'Enclosure', icon: Box },
+  { key: 'firmware', label: 'Firmware', icon: Code },
+  { key: 'export', label: 'Export', icon: Package },
+] as const
 
-function getStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    draft: 'Draft',
-    analyzing: 'Analyzing',
-    refining: 'Refining',
-    generating: 'Generating',
-    selecting: 'Selecting',
-    finalizing: 'Finalizing',
-    complete: 'Complete',
-    rejected: 'Rejected',
-    error: 'Error',
+function StageProgressIndicator({ project }: { project: Project }) {
+  const stages = project.spec?.stages
+
+  // Determine stage status based on project status and stage data
+  const getStageState = (stageKey: string): 'complete' | 'current' | 'pending' => {
+    const stageStatus = stages?.[stageKey as keyof typeof stages]?.status
+
+    if (stageStatus === 'complete') return 'complete'
+    if (stageStatus === 'in_progress') return 'current'
+
+    // For spec stage, check project status
+    if (stageKey === 'spec') {
+      if (project.status === 'complete') return 'complete'
+      if (['analyzing', 'refining', 'generating', 'selecting', 'finalizing'].includes(project.status)) {
+        return 'current'
+      }
+      if (project.status === 'draft') return 'current'
+    }
+
+    return 'pending'
   }
-  return labels[status] || status
+
+  // Find the current active stage for display
+  const getCurrentStageLabel = (): string => {
+    if (project.status === 'rejected') return 'Rejected'
+    if (project.status === 'error') return 'Error'
+
+    for (const stage of STAGES) {
+      const state = getStageState(stage.key)
+      if (state === 'current') {
+        // Add more detail for spec stage
+        if (stage.key === 'spec') {
+          const specLabels: Record<string, string> = {
+            draft: 'Starting',
+            analyzing: 'Analyzing',
+            refining: 'Refining',
+            generating: 'Generating',
+            selecting: 'Selecting',
+            finalizing: 'Finalizing',
+          }
+          return specLabels[project.status] || stage.label
+        }
+        return stage.label
+      }
+    }
+
+    // All complete
+    return 'Complete'
+  }
+
+  const isRejected = project.status === 'rejected'
+  const isError = project.status === 'error'
+
+  return (
+    <div className="flex items-center gap-1">
+      {STAGES.map((stage, index) => {
+        const state = getStageState(stage.key)
+        const Icon = stage.icon
+
+        return (
+          <div key={stage.key} className="flex items-center">
+            <div
+              className={clsx(
+                'w-6 h-6 rounded-full flex items-center justify-center transition-colors',
+                state === 'complete' && 'bg-emerald-500/20',
+                state === 'current' && !isRejected && !isError && 'bg-copper/20',
+                state === 'current' && isRejected && 'bg-red-500/20',
+                state === 'current' && isError && 'bg-red-500/20',
+                state === 'pending' && 'bg-surface-700'
+              )}
+              title={stage.label}
+            >
+              {state === 'complete' ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" strokeWidth={2} />
+              ) : state === 'current' && (isRejected || isError) ? (
+                <XCircle className="w-3.5 h-3.5 text-red-400" strokeWidth={2} />
+              ) : (
+                <Icon
+                  className={clsx(
+                    'w-3.5 h-3.5',
+                    state === 'current' && 'text-copper',
+                    state === 'pending' && 'text-surface-500'
+                  )}
+                  strokeWidth={1.5}
+                />
+              )}
+            </div>
+            {index < STAGES.length - 1 && (
+              <div
+                className={clsx(
+                  'w-2 h-0.5 mx-0.5',
+                  state === 'complete' ? 'bg-emerald-500/40' : 'bg-surface-700'
+                )}
+              />
+            )}
+          </div>
+        )
+      })}
+      <span
+        className={clsx(
+          'ml-2 text-xs font-medium',
+          isRejected && 'text-red-400',
+          isError && 'text-red-400',
+          !isRejected && !isError && getCurrentStageLabel() === 'Complete' && 'text-emerald-400',
+          !isRejected && !isError && getCurrentStageLabel() !== 'Complete' && 'text-copper'
+        )}
+      >
+        {getCurrentStageLabel()}
+      </span>
+    </div>
+  )
 }
 
 function getProjectLink(project: Project): string {
@@ -201,19 +315,9 @@ export function ProjectsPage() {
                           <h3 className="text-base font-semibold text-steel truncate">
                             {project.name || 'Untitled Project'}
                           </h3>
-                          <div
-                            className={clsx(
-                              'flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono',
-                              project.status === 'complete' && 'bg-emerald-500/10 text-emerald-400',
-                              project.status === 'rejected' && 'bg-red-500/10 text-red-400',
-                              project.status === 'error' && 'bg-red-500/10 text-red-400',
-                              !['complete', 'rejected', 'error'].includes(project.status) &&
-                                'bg-copper/10 text-copper'
-                            )}
-                          >
-                            {getStatusIcon(project.status)}
-                            {getStatusLabel(project.status)}
-                          </div>
+                        </div>
+                        <div className="mb-2">
+                          <StageProgressIndicator project={project} />
                         </div>
                         <p className="text-sm text-steel-dim line-clamp-2 mb-2">
                           {project.description}
