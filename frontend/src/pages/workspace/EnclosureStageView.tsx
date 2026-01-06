@@ -398,9 +398,9 @@ export function EnclosureStageView() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 grid grid-cols-2 gap-4 p-4 min-h-0">
+          <div className="flex-1 grid grid-cols-2 gap-4 p-4 min-h-0 overflow-hidden">
             {/* Left: OpenSCAD Editor */}
-            <div className="bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0">
+            <div className="bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
               <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-steel">OpenSCAD Code</h3>
                 <div className="flex items-center gap-2">
@@ -493,7 +493,7 @@ export function EnclosureStageView() {
             </div>
 
             {/* Right: 3D Preview */}
-            <div className="bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0">
+            <div className="bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
               <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-steel">3D Preview</h3>
                 {stlData && (
