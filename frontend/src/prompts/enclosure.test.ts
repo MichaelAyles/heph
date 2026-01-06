@@ -162,7 +162,7 @@ describe('buildEnclosurePrompt', () => {
     expect(prompt).toContain('Create appropriately sized cutouts')
     expect(prompt).toContain('3D printing')
     expect(prompt).toContain('snap-fit or screw assembly')
-    expect(prompt).toContain('embossed text')
+    expect(prompt).toContain('Do NOT use text() function')
   })
 
   it('handles all enclosure types', () => {
