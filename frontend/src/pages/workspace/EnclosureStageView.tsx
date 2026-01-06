@@ -15,7 +15,6 @@ import {
 import { clsx } from 'clsx'
 import Editor from '@monaco-editor/react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
-import { OrchestratorTrigger } from '@/components/workspace/OrchestratorTrigger'
 import type { ProjectSpec } from '@/db/schema'
 import { STLViewer } from '@/components/enclosure/STLViewer'
 import {
@@ -67,24 +66,6 @@ export function EnclosureStageView() {
   const pcbArtifacts = spec?.pcb
   const finalSpec = spec?.finalSpec
   const existingEnclosure = spec?.enclosure
-
-  // Handler for orchestrator spec updates
-  const handleOrchestratorSpecUpdate = useCallback(
-    async (specUpdate: Partial<ProjectSpec>) => {
-      if (!project?.id) return
-      const res = await fetch(`/api/projects/${project.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spec: { ...spec, ...specUpdate },
-        }),
-      })
-      if (res.ok) {
-        queryClient.invalidateQueries({ queryKey: ['project', project.id] })
-      }
-    },
-    [project?.id, spec, queryClient]
-  )
 
   // Preload OpenSCAD WASM when entering this stage
   useEffect(() => {
@@ -471,13 +452,6 @@ export function EnclosureStageView() {
           </div>
         </div>
       </div>
-
-      {/* Orchestrator Trigger - Show when no enclosure generated yet */}
-      {currentStep === 'generate' && !existingEnclosure?.openScadCode && project && (
-        <div className="px-6 py-4 border-b border-surface-700">
-          <OrchestratorTrigger project={project} onSpecUpdate={handleOrchestratorSpecUpdate} />
-        </div>
-      )}
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">

@@ -1,12 +1,11 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { Cpu, ArrowRight, Loader2, CheckCircle2, XCircle, Grid3X3, Eye } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
-import { OrchestratorTrigger } from '@/components/workspace/OrchestratorTrigger'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { BlockSelector } from '@/components/pcb/BlockSelector'
-import type { PcbBlock, PlacedBlock, ProjectSpec } from '@/db/schema'
+import type { PcbBlock, PlacedBlock } from '@/db/schema'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
 
@@ -102,25 +101,6 @@ export function PCBStageView() {
     setPreviewBlockSlug(blockSlug)
   }
 
-  // Handler for orchestrator spec updates
-  const handleOrchestratorSpecUpdate = useCallback(
-    async (specUpdate: Partial<ProjectSpec>) => {
-      const res = await fetch(`/api/projects/${project?.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spec: {
-            ...spec,
-            ...specUpdate,
-          },
-        }),
-      })
-      if (!res.ok) throw new Error('Failed to update spec')
-      queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
-    },
-    [project?.id, spec, queryClient]
-  )
-
   if (!specComplete) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -179,13 +159,6 @@ export function PCBStageView() {
           </div>
         </div>
       </div>
-
-      {/* Orchestrator Trigger - Show for autonomous block selection */}
-      {selectedBlocks.length === 0 && !hasExistingPCB && project && (
-        <div className="px-6 py-4 border-b border-surface-700">
-          <OrchestratorTrigger project={project} onSpecUpdate={handleOrchestratorSpecUpdate} />
-        </div>
-      )}
 
       {/* Main content area */}
       <div className="flex-1 flex min-h-0">

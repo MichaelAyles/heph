@@ -16,7 +16,6 @@ import {
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { useAuthStore } from '@/stores/auth'
-import { OrchestratorTrigger } from '@/components/workspace/OrchestratorTrigger'
 import { llm } from '@/services/llm'
 import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '@/prompts/feasibility'
 import { REFINEMENT_SYSTEM_PROMPT, buildRefinementPrompt } from '@/prompts/refinement'
@@ -1078,16 +1077,6 @@ export function SpecStageView() {
     updateMutation.mutate({ status: 'generating' })
   }, [updateMutation])
 
-  // Handler for orchestrator spec updates
-  const handleOrchestratorSpecUpdate = useCallback(
-    async (specUpdate: Partial<ProjectSpec>) => {
-      await updateMutation.mutateAsync({
-        spec: { ...spec!, ...specUpdate },
-      })
-    },
-    [spec, updateMutation]
-  )
-
   const handleBlueprintsComplete = (blueprints: { url: string; prompt: string }[]) => {
     updateMutation.mutate({
       status: 'selecting',
@@ -1172,13 +1161,6 @@ export function SpecStageView() {
       <div className="flex-1 p-8 overflow-auto">
         <div className="max-w-3xl mx-auto">
           <StepIndicator currentStep={currentStep} status={project.status} />
-
-          {/* Orchestrator Trigger - Show in Vibe It / Fix It mode */}
-          {currentStep === 0 && project.status !== 'rejected' && (
-            <div className="mb-6">
-              <OrchestratorTrigger project={project} onSpecUpdate={handleOrchestratorSpecUpdate} />
-            </div>
-          )}
 
           {/* Step 0: Feasibility */}
           {currentStep === 0 && project.status !== 'rejected' && (

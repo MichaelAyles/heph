@@ -1,12 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { Outlet, useParams, useLocation, Navigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { WorkspaceHeader } from './WorkspaceHeader'
 import { WorkspaceStageTabs } from './WorkspaceStageTabs'
-import { OrchestratorPanel } from './OrchestratorPanel'
+import { OrchestratorSidebar } from './OrchestratorSidebar'
 import { useWorkspaceStore, type WorkspaceStage } from '@/stores/workspace'
-import type { Project } from '@/db/schema'
+import type { Project, ProjectSpec } from '@/db/schema'
 
 async function fetchProject(id: string): Promise<Project> {
   const res = await fetch(`/api/projects/${id}`)
@@ -18,7 +18,8 @@ async function fetchProject(id: string): Promise<Project> {
 export function WorkspaceLayout() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
-  const { setActiveStage, canNavigateTo } = useWorkspaceStore()
+  const queryClient = useQueryClient()
+  const { setActiveStage, canNavigateTo, isSidebarCollapsed, toggleSidebar } = useWorkspaceStore()
 
   const {
     data: project,
@@ -35,6 +36,24 @@ export function WorkspaceLayout() {
       return status && activeStatuses.includes(status) ? 2000 : false
     },
   })
+
+  // Handler for orchestrator spec updates
+  const handleOrchestratorSpecUpdate = useCallback(
+    async (specUpdate: Partial<ProjectSpec>) => {
+      if (!id) return
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spec: { ...project?.spec, ...specUpdate },
+        }),
+      })
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ['project', id] })
+      }
+    },
+    [id, project?.spec, queryClient]
+  )
 
   // Extract current stage from path
   const pathSegments = location.pathname.split('/')
@@ -75,10 +94,19 @@ export function WorkspaceLayout() {
     <div className="flex-1 flex flex-col min-h-0">
       <WorkspaceHeader project={project || null} isLoading={isLoading} />
       <WorkspaceStageTabs spec={project?.spec || null} canNavigateTo={canNavigateTo} />
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <Outlet context={{ project, isLoading }} />
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <Outlet context={{ project, isLoading }} />
+        </div>
+        {/* AI Assistant Sidebar */}
+        <OrchestratorSidebar
+          project={project || null}
+          onSpecUpdate={handleOrchestratorSpecUpdate}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
+        />
       </div>
-      <OrchestratorPanel />
     </div>
   )
 }

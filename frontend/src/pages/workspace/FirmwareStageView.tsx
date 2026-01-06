@@ -27,7 +27,6 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
-import { OrchestratorTrigger } from '@/components/workspace/OrchestratorTrigger'
 import type { ProjectSpec } from '@/db/schema'
 import { llm } from '@/services/llm'
 import {
@@ -323,24 +322,6 @@ export function FirmwareStageView() {
   const enclosureComplete = project?.spec?.stages?.enclosure?.status === 'complete'
   const existingFirmware = project?.spec?.firmware
   const spec = project?.spec
-
-  // Handler for orchestrator spec updates
-  const handleOrchestratorSpecUpdate = useCallback(
-    async (specUpdate: Partial<ProjectSpec>) => {
-      if (!project?.id) return
-      const res = await fetch(`/api/projects/${project.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spec: { ...spec, ...specUpdate },
-        }),
-      })
-      if (res.ok) {
-        queryClient.invalidateQueries({ queryKey: ['project', project.id] })
-      }
-    },
-    [project?.id, spec, queryClient]
-  )
 
   // Load saved firmware from project spec
   useEffect(() => {
@@ -779,13 +760,6 @@ Upload this .bin file back to PHAESTUS for distribution.
           <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
             <X className="w-4 h-4 flex-shrink-0" />
             {generationError}
-          </div>
-        )}
-
-        {/* Orchestrator Trigger - Show when no firmware generated yet */}
-        {!existingFirmware?.files?.length && project && (
-          <div className="mt-4">
-            <OrchestratorTrigger project={project} onSpecUpdate={handleOrchestratorSpecUpdate} />
           </div>
         )}
 

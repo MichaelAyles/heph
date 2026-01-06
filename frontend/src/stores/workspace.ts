@@ -25,9 +25,14 @@ interface WorkspaceState {
   // Split pane positions per stage (percentage)
   splitPanePositions: Record<WorkspaceStage, number>
 
+  // Sidebar state
+  isSidebarCollapsed: boolean
+
   // Actions
   setActiveStage: (stage: WorkspaceStage) => void
   setSplitPanePosition: (stage: WorkspaceStage, position: number) => void
+  toggleSidebar: () => void
+  setSidebarCollapsed: (collapsed: boolean) => void
   canNavigateTo: (stage: WorkspaceStage, spec: ProjectSpec | null) => boolean
   getStageStatus: (stage: WorkspaceStage, spec: ProjectSpec | null) => StageStatus
 }
@@ -43,6 +48,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     export: 50,
   },
 
+  isSidebarCollapsed: false,
+
   setActiveStage: (stage) => set({ activeStage: stage }),
 
   setSplitPanePosition: (stage, position) =>
@@ -52,6 +59,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         [stage]: position,
       },
     })),
+
+  toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+
+  setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
 
   canNavigateTo: (stage, spec) => {
     if (!spec) return stage === 'spec'
