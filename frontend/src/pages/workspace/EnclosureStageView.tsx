@@ -15,7 +15,6 @@ import {
 import { clsx } from 'clsx'
 import Editor from '@monaco-editor/react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
-import type { ProjectSpec } from '@/db/schema'
 import { STLViewer } from '@/components/enclosure/STLViewer'
 import {
   renderOpenSCAD,

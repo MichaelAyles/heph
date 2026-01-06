@@ -13,7 +13,6 @@ import {
   XCircle,
   RefreshCw,
   ChevronRight,
-  ChevronLeft,
   Play,
   Pause,
   RotateCcw,
@@ -21,7 +20,6 @@ import {
   Brain,
   MessageSquare,
   Zap,
-  Send,
   PanelRightClose,
   PanelRightOpen,
 } from 'lucide-react'
@@ -61,7 +59,6 @@ export function OrchestratorSidebar({
   const { user } = useAuthStore()
   const {
     status,
-    mode,
     currentStage,
     currentAction,
     history,
@@ -75,7 +72,6 @@ export function OrchestratorSidebar({
   } = useOrchestratorStore()
 
   const historyEndRef = useRef<HTMLDivElement>(null)
-  const [userInput, setUserInput] = useState('')
 
   const controlMode = user?.controlMode || 'fix_it'
   const spec = project?.spec as ProjectSpec | null
@@ -138,12 +134,6 @@ export function OrchestratorSidebar({
       blocks,
       onSpecUpdate
     )
-  }
-
-  const handleSend = () => {
-    // For future: implement user input during orchestration
-    if (!userInput.trim()) return
-    setUserInput('')
   }
 
   // Collapsed view - just a toggle button

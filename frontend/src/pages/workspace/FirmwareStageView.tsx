@@ -27,7 +27,6 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
-import type { ProjectSpec } from '@/db/schema'
 import { llm } from '@/services/llm'
 import {
   FIRMWARE_SYSTEM_PROMPT,
@@ -320,8 +319,6 @@ export function FirmwareStageView() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const enclosureComplete = project?.spec?.stages?.enclosure?.status === 'complete'
-  const existingFirmware = project?.spec?.firmware
-  const spec = project?.spec
 
   // Load saved firmware from project spec
   useEffect(() => {
