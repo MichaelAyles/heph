@@ -38,21 +38,34 @@ export function WorkspaceLayout() {
   })
 
   // Handler for orchestrator spec updates
+  // Fetches fresh data before merging to avoid race conditions
   const handleOrchestratorSpecUpdate = useCallback(
     async (specUpdate: Partial<ProjectSpec>) => {
       if (!id) return
+
+      // Fetch current project to get fresh spec (avoid stale cache issues)
+      const getRes = await fetch(`/api/projects/${id}`)
+      if (!getRes.ok) {
+        console.error('Failed to fetch project for spec update')
+        return
+      }
+      const { project: freshProject } = await getRes.json()
+
+      // Merge with fresh spec
+      const mergedSpec = { ...freshProject?.spec, ...specUpdate }
+
       const res = await fetch(`/api/projects/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spec: { ...project?.spec, ...specUpdate },
-        }),
+        body: JSON.stringify({ spec: mergedSpec }),
       })
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ['project', id] })
+      } else {
+        console.error('Failed to update spec:', await res.text())
       }
     },
-    [id, project?.spec, queryClient]
+    [id, queryClient]
   )
 
   // Extract current stage from path
