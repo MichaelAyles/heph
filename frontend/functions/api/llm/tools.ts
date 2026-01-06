@@ -486,6 +486,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         error
       )
 
+      // Log full conversation on error too
+      await logConversation(
+        env,
+        user.id,
+        projectId,
+        requestId,
+        messages,
+        null,
+        undefined,
+        model,
+        temperature,
+        maxTokens,
+        0,
+        0,
+        Date.now() - startTime,
+        'error',
+        error
+      )
+
       return Response.json({ error: 'LLM API error', details: error }, { status: 502 })
     }
 
@@ -531,6 +550,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       user.id,
       projectId,
       model,
+      usage?.promptTokens || 0,
+      usage?.completionTokens || 0,
+      latencyMs,
+      'success',
+      null
+    )
+
+    // Log full conversation
+    await logConversation(
+      env,
+      user.id,
+      projectId,
+      requestId,
+      messages,
+      parsed.content,
+      parsed.toolCalls,
+      model,
+      temperature,
+      maxTokens,
       usage?.promptTokens || 0,
       usage?.completionTokens || 0,
       latencyMs,
@@ -598,4 +636,56 @@ async function logLlmRequest(
       errorMessage
     )
     .run()
+}
+
+async function logConversation(
+  env: Env,
+  userId: string,
+  projectId: string | undefined,
+  requestId: string,
+  messagesIn: ChatMessage[],
+  messageOut: string | null,
+  toolCalls: ToolCall[] | undefined,
+  model: string,
+  temperature: number,
+  maxTokens: number,
+  promptTokens: number,
+  completionTokens: number,
+  latencyMs: number,
+  status: string,
+  errorMessage: string | null
+) {
+  try {
+    const id = crypto.randomUUID().replace(/-/g, '')
+    // Include tool calls in the output for debugging
+    const outputContent = toolCalls
+      ? JSON.stringify({ content: messageOut, toolCalls })
+      : messageOut
+
+    await env.DB.prepare(
+      `
+      INSERT INTO llm_conversations (id, project_id, user_id, request_id, messages_in, message_out, model, temperature, max_tokens, prompt_tokens, completion_tokens, latency_ms, status, error_message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `
+    )
+      .bind(
+        id,
+        projectId || null,
+        userId,
+        requestId,
+        JSON.stringify(messagesIn),
+        outputContent,
+        model,
+        temperature,
+        maxTokens,
+        promptTokens,
+        completionTokens,
+        latencyMs,
+        status,
+        errorMessage
+      )
+      .run()
+  } catch (err) {
+    console.error('Failed to log conversation:', err)
+  }
 }

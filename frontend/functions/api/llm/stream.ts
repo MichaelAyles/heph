@@ -217,6 +217,21 @@ async function processStream(
       'success',
       null
     )
+
+    // Log full conversation
+    await logConversation(
+      env,
+      userId,
+      projectId,
+      messages,
+      fullContent,
+      model,
+      estimatedPromptTokens,
+      estimatedCompletionTokens,
+      latencyMs,
+      'success',
+      null
+    )
   } catch (error) {
     console.error('Stream processing error:', error)
     await writer.write(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`))
@@ -259,4 +274,47 @@ async function logLlmRequest(
       errorMessage
     )
     .run()
+}
+
+async function logConversation(
+  env: Env,
+  userId: string,
+  projectId: string | undefined,
+  messagesIn: ChatMessage[],
+  messageOut: string | null,
+  model: string,
+  promptTokens: number,
+  completionTokens: number,
+  latencyMs: number,
+  status: string,
+  errorMessage: string | null
+) {
+  try {
+    const id = crypto.randomUUID().replace(/-/g, '')
+    await env.DB.prepare(
+      `
+      INSERT INTO llm_conversations (id, project_id, user_id, request_id, messages_in, message_out, model, temperature, max_tokens, prompt_tokens, completion_tokens, latency_ms, status, error_message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `
+    )
+      .bind(
+        id,
+        projectId || null,
+        userId,
+        null, // No request_id in streaming context
+        JSON.stringify(messagesIn),
+        messageOut,
+        model,
+        null, // Temperature not tracked here
+        null, // Max tokens not tracked here
+        promptTokens,
+        completionTokens,
+        latencyMs,
+        status,
+        errorMessage
+      )
+      .run()
+  } catch (err) {
+    console.error('Failed to log conversation:', err)
+  }
 }
