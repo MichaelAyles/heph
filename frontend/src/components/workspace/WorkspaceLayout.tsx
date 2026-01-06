@@ -1,11 +1,12 @@
-import { useEffect, useCallback } from 'react'
-import { Outlet, useParams, useLocation, Navigate } from 'react-router-dom'
+import { useEffect, useCallback, useRef } from 'react'
+import { Outlet, useParams, useLocation, Navigate, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { WorkspaceHeader } from './WorkspaceHeader'
 import { WorkspaceStageTabs } from './WorkspaceStageTabs'
 import { OrchestratorSidebar } from './OrchestratorSidebar'
 import { useWorkspaceStore, type WorkspaceStage } from '@/stores/workspace'
+import { useOrchestratorStore } from '@/stores/orchestrator'
 import type { Project, ProjectSpec } from '@/db/schema'
 
 async function fetchProject(id: string): Promise<Project> {
@@ -18,8 +19,14 @@ async function fetchProject(id: string): Promise<Project> {
 export function WorkspaceLayout() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { setActiveStage, canNavigateTo, isSidebarCollapsed, toggleSidebar } = useWorkspaceStore()
+
+  // Orchestrator state for auto-navigation
+  const orchestratorStatus = useOrchestratorStore((s) => s.status)
+  const orchestratorStage = useOrchestratorStore((s) => s.currentStage)
+  const prevStageRef = useRef(orchestratorStage)
 
   const {
     data: project,
@@ -29,11 +36,11 @@ export function WorkspaceLayout() {
     queryKey: ['project', id],
     queryFn: () => fetchProject(id!),
     enabled: !!id,
-    refetchInterval: (query) => {
-      // Refetch every 2s while project is in an active state
-      const status = query.state.data?.status
-      const activeStatuses = ['analyzing', 'refining', 'generating', 'finalizing']
-      return status && activeStatuses.includes(status) ? 2000 : false
+    refetchInterval: () => {
+      // Refetch every 1s while orchestrator is running for live updates
+      const isOrchestratorActive = ['running', 'validating', 'fixing'].includes(orchestratorStatus)
+      if (isOrchestratorActive) return 1000
+      return false
     },
   })
 
@@ -78,6 +85,18 @@ export function WorkspaceLayout() {
       setActiveStage(currentStage)
     }
   }, [currentStage, setActiveStage])
+
+  // Auto-navigate when orchestrator advances to a new stage (visual feedback)
+  useEffect(() => {
+    const isRunning = orchestratorStatus === 'running' || orchestratorStatus === 'validating'
+    const stageChanged = orchestratorStage !== prevStageRef.current
+
+    if (isRunning && stageChanged && id) {
+      // Navigate to the new stage
+      navigate(`/project/${id}/${orchestratorStage}`)
+      prevStageRef.current = orchestratorStage
+    }
+  }, [orchestratorStatus, orchestratorStage, id, navigate])
 
   // Redirect /project/:id to /project/:id/spec
   if (location.pathname === `/project/${id}`) {
