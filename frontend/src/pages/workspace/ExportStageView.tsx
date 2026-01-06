@@ -449,6 +449,15 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
       onDownload: downloadBOM,
     },
     {
+      id: 'gerbers',
+      icon: Cpu,
+      title: 'Gerber Files',
+      description: 'PCB manufacturing files (Coming soon)',
+      filename: 'gerbers.zip',
+      ready: false, // Not yet implemented
+      onDownload: async () => {}, // Placeholder
+    },
+    {
       id: 'enclosure',
       icon: Box,
       title: 'Enclosure Files',
