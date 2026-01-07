@@ -95,16 +95,16 @@ export function buildBlueprintPrompts(
   // Generate 4 variations with product description as the focus (Style A: adjective-heavy)
   const styleA = [
     // Variation 1: Minimal, clean
-    `3D product render: ${productCore}. A small consumer electronics device${formHint}. Clean minimal design, smooth white plastic shell, rounded edges. ${visualFeatures} White background, soft studio lighting. No text.`,
+    `3D product render: ${productCore}. A small consumer electronics device${formHint}. Clean minimal design, smooth solid white plastic shell, rounded edges, completely opaque enclosure. ${visualFeatures} White background, soft studio lighting. No text, no transparent parts, no clear windows.`,
 
     // Variation 2: Compact, friendly
-    `3D product render: ${productCore}. Compact handheld gadget${formHint}. Friendly rounded design, matte finish, subtle color accents. ${visualFeatures} Gradient background, product photography style. No text.`,
+    `3D product render: ${productCore}. Compact handheld gadget${formHint}. Friendly rounded design, solid matte finish, subtle color accents, opaque plastic housing. ${visualFeatures} Gradient background, product photography style. No text, no transparent elements.`,
 
     // Variation 3: Rugged, outdoor
-    `3D product render: ${productCore}. Durable outdoor device${formHint}. Rugged construction, weather-resistant look, dark enclosure with grip texture. ${visualFeatures} Gray background, technical product shot. No text.`,
+    `3D product render: ${productCore}. Durable outdoor device${formHint}. Rugged construction, weather-resistant look, solid dark enclosure with grip texture. ${visualFeatures} Gray background, technical product shot. No text, no clear panels.`,
 
     // Variation 4: Premium, modern
-    `3D product render: ${productCore}. Premium smart device${formHint}. Sleek modern design, thin profile, brushed aluminum accents. ${visualFeatures} Dark background, dramatic lighting. No text.`,
+    `3D product render: ${productCore}. Premium smart device${formHint}. Sleek modern design, thin profile, solid brushed aluminum accents. ${visualFeatures} Dark background, dramatic lighting. No text, no transparent windows.`,
   ]
 
   // Style B: Structured professional photography style
@@ -137,10 +137,10 @@ export function buildBlueprintPrompts(
 Style: Professional product photography, clean white background, soft studio lighting
 Form factor: ${formFactorDesc}
 Features: ${visualElements.length > 0 ? [...new Set(visualElements)].join(', ') : 'clean interface, minimal controls'}
-Materials: Modern consumer electronics aesthetic, matte plastic or metal finish
+Materials: Modern consumer electronics aesthetic, solid opaque matte plastic or metal finish, no transparent or clear parts
 View: 3/4 perspective showing the device's main interface and form
 
-High quality, photorealistic product render, no text or labels`
+High quality, photorealistic product render, no text or labels, no clear windows or transparent panels`
 
   // Style B: 4 variations with simple suffix
   const styleB = [
