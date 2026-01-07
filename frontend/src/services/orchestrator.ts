@@ -1280,25 +1280,33 @@ ${filesContent}
         }
 
       case 'generate_enclosure': {
-        // Extract key dimensions from OpenSCAD for decision-making
-        const code = typeof r.openScadCode === 'string' ? r.openScadCode : ''
+        // FULL OpenSCAD code passed to orchestrator - it needs to see the code
+        // to understand review feedback and make informed decisions
+        // With 1M context window, ~2-5K tokens for OpenSCAD is fine
+        const code = typeof r.openScadCode === 'string' ? r.openScadCode : (r.code as string) || ''
         const dimensions = this.extractEnclosureDimensions(code)
+        const features = this.extractEnclosureFeatures(code)
         return {
           success: true,
+          code, // FULL CODE - orchestrator sees everything for decision-making
           codeLength: code.length || (r.codeLength ?? 0),
-          dimensions, // Key measurements for validation reasoning
-          // Full OpenSCAD code stored in spec.enclosure.openScadCode
+          dimensions,
+          features,
+          isRevision: r.isRevision,
         }
       }
 
       case 'generate_firmware': {
-        // Include file list for decision-making (names only, not content)
+        // FULL files passed to orchestrator - it needs to see the code
+        // to understand review feedback and make informed decisions
+        // With 1M context window, ~3-8K tokens for firmware is fine
         const files = Array.isArray(r.files) ? r.files : []
         return {
           success: true,
+          files, // FULL FILES - orchestrator sees all code for decision-making
           fileCount: files.length || (r.fileCount ?? 0),
           fileNames: files.map((f: { path?: string }) => f.path).filter(Boolean),
-          // Full file contents stored in spec.firmware.files
+          isRevision: r.isRevision,
         }
       }
 
@@ -1317,6 +1325,21 @@ ${filesContent}
           success: true,
           stage: r.stage,
           status: 'complete',
+        }
+
+      case 'review_enclosure':
+      case 'review_firmware':
+        // CRITICAL: Review results must pass through UNCOMPRESSED
+        // The orchestrator needs to see ALL issues to pass meaningful feedback
+        // for the generate → review → decide workflow
+        return result
+
+      case 'accept_and_render':
+        // Accept results should include what was accepted
+        return {
+          success: r.success ?? true,
+          stage: r.stage,
+          message: r.message,
         }
 
       case 'report_progress':
