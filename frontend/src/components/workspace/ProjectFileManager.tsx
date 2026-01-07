@@ -23,6 +23,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import Markdown from 'react-markdown'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { STLViewer } from '@/components/enclosure/STLViewer'
 import type { ProjectSpec } from '@/db/schema'
@@ -393,23 +394,12 @@ function formatConversationsAsMarkdown(conversations: Conversation[]): string {
           ? msg.content
           : msg.content.map((c) => c.text || '').join('\n')
 
-      // Truncate very long system prompts
-      const displayContent =
-        msg.role === 'system' && content.length > 500
-          ? content.slice(0, 500) + '\n\n*[System prompt truncated...]*'
-          : content
-
-      md += `${roleLabel}:\n\n${displayContent}\n\n`
+      md += `${roleLabel}:\n\n${content}\n\n`
     }
 
     // Add response
     if (conv.messageOut) {
-      // Truncate very long responses for readability
-      const responseContent =
-        conv.messageOut.length > 2000
-          ? conv.messageOut.slice(0, 2000) + '\n\n*[Response truncated...]*'
-          : conv.messageOut
-      md += `**Assistant**:\n\n${responseContent}\n\n`
+      md += `**Assistant**:\n\n${conv.messageOut}\n\n`
     }
 
     // Add token stats if available
@@ -628,11 +618,11 @@ function FilePreview({ node }: { node: ProjectFileNode }) {
     )
   }
 
-  // Code/Text preview
-  if (node.content) {
+  // Markdown preview
+  if (node.previewType === 'markdown' && node.content) {
     return (
-      <div className="flex-1 flex flex-col bg-surface-900">
-        <div className="px-4 py-2 border-b border-surface-700 flex items-center justify-between">
+      <div className="flex-1 flex flex-col bg-surface-900 min-h-0">
+        <div className="px-4 py-2 border-b border-surface-700 flex items-center justify-between shrink-0">
           <span className="text-sm text-steel">{node.name}</span>
           <div className="flex items-center gap-2">
             <button
@@ -651,7 +641,39 @@ function FilePreview({ node }: { node: ProjectFileNode }) {
             </button>
           </div>
         </div>
-        <pre className="flex-1 overflow-auto p-4 text-sm text-steel font-mono">
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <article className="p-6 prose prose-invert prose-sm max-w-none prose-headings:text-steel prose-p:text-steel-dim prose-strong:text-steel prose-code:text-copper prose-code:bg-surface-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-surface-800 prose-pre:border prose-pre:border-surface-700 prose-a:text-copper prose-a:no-underline hover:prose-a:underline prose-hr:border-surface-700 prose-table:text-steel-dim prose-th:text-steel prose-td:border-surface-700 prose-th:border-surface-700">
+            <Markdown>{node.content}</Markdown>
+          </article>
+        </div>
+      </div>
+    )
+  }
+
+  // Code/Text preview
+  if (node.content) {
+    return (
+      <div className="flex-1 flex flex-col bg-surface-900 min-h-0">
+        <div className="px-4 py-2 border-b border-surface-700 flex items-center justify-between shrink-0">
+          <span className="text-sm text-steel">{node.name}</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopy}
+              className="text-xs text-steel-dim hover:text-steel flex items-center gap-1"
+            >
+              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+            <button
+              onClick={handleDownload}
+              className="text-xs text-steel-dim hover:text-steel flex items-center gap-1"
+            >
+              <Download className="w-3 h-3" />
+              Download
+            </button>
+          </div>
+        </div>
+        <pre className="flex-1 overflow-y-auto min-h-0 p-4 text-sm text-steel font-mono whitespace-pre-wrap break-words">
           <code>{node.content}</code>
         </pre>
       </div>
