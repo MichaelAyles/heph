@@ -878,6 +878,45 @@ export class HardwareOrchestrator {
   // ===========================================================================
 
   /**
+   * Extract key dimensions from OpenSCAD code for decision-making.
+   * Returns structured dimensions that the orchestrator can reason about.
+   */
+  private extractEnclosureDimensions(code: string): Record<string, number | string> | null {
+    if (!code) return null
+
+    const dimensions: Record<string, number | string> = {}
+
+    // Extract common dimension variables
+    const patterns = [
+      { name: 'case_w', regex: /case_w\s*=\s*([\d.]+)/ },
+      { name: 'case_h', regex: /case_h\s*=\s*([\d.]+)/ },
+      { name: 'case_d', regex: /case_d\s*=\s*([\d.]+)/ },
+      { name: 'wall', regex: /wall(?:_thickness)?\s*=\s*([\d.]+)/ },
+      { name: 'pcb_w', regex: /pcb_w\s*=\s*([\d.]+)/ },
+      { name: 'pcb_h', regex: /pcb_h\s*=\s*([\d.]+)/ },
+      { name: 'corner_radius', regex: /corner_radius\s*=\s*([\d.]+)/ },
+    ]
+
+    for (const { name, regex } of patterns) {
+      const match = code.match(regex)
+      if (match) {
+        dimensions[name] = parseFloat(match[1])
+      }
+    }
+
+    // Count features
+    const buttonHoles = (code.match(/button_hole|btn_.*_pos/g) || []).length
+    const usbCutout = code.includes('usb') ? 1 : 0
+    const ledHoles = (code.match(/led_hole|led_pos/g) || []).length
+
+    if (buttonHoles) dimensions.buttonHoles = buttonHoles
+    if (usbCutout) dimensions.hasUsbCutout = 'yes'
+    if (ledHoles) dimensions.ledHoles = ledHoles
+
+    return Object.keys(dimensions).length > 0 ? dimensions : null
+  }
+
+  /**
    * Compress tool results for conversation history.
    * Full artifacts are stored in currentSpec; history only gets summaries.
    * This reduces token usage by ~80% for large results.
@@ -929,19 +968,28 @@ export class HardwareOrchestrator {
           // Full blocks stored in spec.pcb.placedBlocks
         }
 
-      case 'generate_enclosure':
+      case 'generate_enclosure': {
+        // Extract key dimensions from OpenSCAD for decision-making
+        const code = typeof r.openScadCode === 'string' ? r.openScadCode : ''
+        const dimensions = this.extractEnclosureDimensions(code)
         return {
           success: true,
-          codeLength: typeof r.openScadCode === 'string' ? r.openScadCode.length : (r.codeLength ?? 0),
+          codeLength: code.length || (r.codeLength ?? 0),
+          dimensions, // Key measurements for validation reasoning
           // Full OpenSCAD code stored in spec.enclosure.openScadCode
         }
+      }
 
-      case 'generate_firmware':
+      case 'generate_firmware': {
+        // Include file list for decision-making (names only, not content)
+        const files = Array.isArray(r.files) ? r.files : []
         return {
           success: true,
-          fileCount: Array.isArray(r.files) ? r.files.length : (r.fileCount ?? 0),
-          // Full files stored in spec.firmware.files
+          fileCount: files.length || (r.fileCount ?? 0),
+          fileNames: files.map((f: { path?: string }) => f.path).filter(Boolean),
+          // Full file contents stored in spec.firmware.files
         }
+      }
 
       case 'validate_cross_stage':
         // Validation reports are already reasonably sized
