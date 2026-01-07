@@ -60,7 +60,7 @@ export interface ToolParameter {
   type: 'string' | 'number' | 'boolean' | 'object' | 'array'
   description: string
   enum?: string[]
-  items?: { type: string }
+  items?: { type: string; properties?: Record<string, ToolParameter>; required?: string[] }
   properties?: Record<string, ToolParameter>
   required?: string[]
 }

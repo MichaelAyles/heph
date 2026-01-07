@@ -107,6 +107,8 @@ export interface ProjectSpec {
 export interface PCBArtifacts {
   // Selected blocks with grid positions
   placedBlocks: PlacedBlock[]
+  // Inline KiCad schematic content (for local preview)
+  schematicData?: string
   // Merged schematic URL (R2)
   schematicUrl?: string
   // Merged PCB layout URL (R2)
@@ -115,6 +117,8 @@ export interface PCBArtifacts {
   boardSize?: { width: number; height: number; unit: 'mm' }
   // Net list for firmware mapping
   netList?: NetAssignment[]
+  // Timestamp of last merge
+  mergedAt?: string
 }
 
 export interface PlacedBlock {

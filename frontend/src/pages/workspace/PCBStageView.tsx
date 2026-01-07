@@ -1,27 +1,39 @@
-import { useState, useMemo } from 'react'
-import { useQueryClient, useMutation } from '@tanstack/react-query'
-import { Cpu, ArrowRight, Loader2, CheckCircle2, XCircle, Grid3X3, Eye } from 'lucide-react'
+import { useState, useMemo, useCallback } from 'react'
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
+import { Cpu, ArrowRight, Loader2, CheckCircle2, XCircle, Grid3X3, Eye, Wand2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { BlockSelector } from '@/components/pcb/BlockSelector'
-import type { PcbBlock, PlacedBlock } from '@/db/schema'
+import { mergeBlockSchematics } from '@/services/pcb-merge'
+import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '@/db/schema'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
 
 export function PCBStageView() {
   const { project } = useWorkspaceContext()
   const queryClient = useQueryClient()
-  const [currentStep] = useState<PCBStep>('select_blocks')
+  const [currentStep, setCurrentStep] = useState<PCBStep>('select_blocks')
   const [selectedBlocks, setSelectedBlocks] = useState<PlacedBlock[]>([])
   const [previewBlockSlug, setPreviewBlockSlug] = useState<string | null>(null)
+  const [isMerging, setIsMerging] = useState(false)
+  const [mergeError, setMergeError] = useState<string | null>(null)
 
   const specComplete = project?.status === 'complete'
   const spec = project?.spec
 
   // Get existing PCB data from spec
   const pcbArtifacts = spec?.pcb
-  const hasExistingPCB = !!pcbArtifacts?.schematicUrl
+
+  // Fetch all available blocks for merging
+  const { data: blocksData } = useQuery({
+    queryKey: ['blocks'],
+    queryFn: async () => {
+      const res = await fetch('/api/blocks')
+      if (!res.ok) throw new Error('Failed to fetch blocks')
+      return res.json() as Promise<{ blocks: PcbBlock[] }>
+    },
+  })
 
   // Initialize selected blocks from spec if available
   useMemo(() => {
@@ -32,7 +44,7 @@ export function PCBStageView() {
 
   // Mutation to save PCB data
   const savePCBMutation = useMutation({
-    mutationFn: async (pcbData: { placedBlocks: PlacedBlock[] }) => {
+    mutationFn: async (pcbData: Partial<PCBArtifacts> & { placedBlocks: PlacedBlock[] }) => {
       const res = await fetch(`/api/projects/${project?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -41,11 +53,11 @@ export function PCBStageView() {
             ...spec,
             pcb: {
               ...spec?.pcb,
-              placedBlocks: pcbData.placedBlocks,
+              ...pcbData,
             },
             stages: {
               ...spec?.stages,
-              pcb: { status: 'in_progress' },
+              pcb: { status: pcbData.schematicData ? 'complete' : 'in_progress' },
             },
           },
         }),
@@ -100,6 +112,62 @@ export function PCBStageView() {
   const handlePreviewBlock = (blockSlug: string) => {
     setPreviewBlockSlug(blockSlug)
   }
+
+  // Handle schematic merge - the critical integration!
+  const handleMergeSchematic = useCallback(async () => {
+    if (selectedBlocks.length === 0) return
+    if (!blocksData?.blocks) return
+    if (!project?.name) return
+
+    setIsMerging(true)
+    setMergeError(null)
+    setCurrentStep('generating')
+
+    try {
+      // Filter to get only the blocks that are selected
+      const selectedBlockData = blocksData.blocks.filter((b) =>
+        selectedBlocks.some((sb) => sb.blockId === b.id)
+      )
+
+      // Call the merge function
+      const mergeResult = await mergeBlockSchematics(
+        selectedBlocks,
+        selectedBlockData,
+        project.name
+      )
+
+      // Transform netList to match schema type
+      const transformedNetList: NetAssignment[] = mergeResult.netList.map((n) => ({
+        net: n.localNet, // Map localNet to net
+        globalNet: n.globalNet,
+        gpio: n.gpio,
+      }))
+
+      // Save merged schematic data to the project
+      await savePCBMutation.mutateAsync({
+        placedBlocks: selectedBlocks,
+        schematicData: mergeResult.schematic,
+        boardSize: { ...mergeResult.boardSize, unit: 'mm' as const },
+        netList: transformedNetList,
+        mergedAt: new Date().toISOString(),
+      })
+
+      setCurrentStep('preview')
+    } catch (error) {
+      console.error('Merge failed:', error)
+      setMergeError(error instanceof Error ? error.message : 'Failed to merge schematics')
+      setCurrentStep('select_blocks')
+    } finally {
+      setIsMerging(false)
+    }
+  }, [selectedBlocks, blocksData?.blocks, project?.name, savePCBMutation])
+
+  // Update currentStep based on existing data
+  useMemo(() => {
+    if (pcbArtifacts?.schematicData && currentStep === 'select_blocks') {
+      setCurrentStep('preview')
+    }
+  }, [pcbArtifacts?.schematicData])
 
   if (!specComplete) {
     return (
@@ -178,17 +246,36 @@ export function PCBStageView() {
           {/* Schematic viewer */}
           <div className="flex-1 bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0">
             <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-steel">
-                {previewBlockSlug ? `Preview: ${previewBlockSlug}` : 'Schematic'}
-              </h3>
-              {previewBlockSlug && (
-                <button
-                  onClick={() => setPreviewBlockSlug(null)}
-                  className="text-xs text-copper hover:text-copper-light"
-                >
-                  Clear Preview
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-medium text-steel">
+                  {previewBlockSlug ? `Preview: ${previewBlockSlug}` : 'Schematic'}
+                </h3>
+                {pcbArtifacts?.boardSize && !previewBlockSlug && (
+                  <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded">
+                    {pcbArtifacts.boardSize.width} × {pcbArtifacts.boardSize.height} mm
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {previewBlockSlug && (
+                  <button
+                    onClick={() => setPreviewBlockSlug(null)}
+                    className="text-xs text-copper hover:text-copper-light"
+                  >
+                    Clear Preview
+                  </button>
+                )}
+                {pcbArtifacts?.schematicData && !previewBlockSlug && (
+                  <button
+                    onClick={handleMergeSchematic}
+                    disabled={isMerging}
+                    className="text-xs text-steel-dim hover:text-steel flex items-center gap-1"
+                  >
+                    <Wand2 className="w-3 h-3" />
+                    Regenerate
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex-1 min-h-0">
               {previewBlockSlug ? (
@@ -198,7 +285,14 @@ export function PCBStageView() {
                   controls="basic"
                   className="w-full h-full"
                 />
-              ) : hasExistingPCB && pcbArtifacts?.schematicUrl ? (
+              ) : pcbArtifacts?.schematicData ? (
+                <KiCanvasViewer
+                  src={`data:text/plain;base64,${btoa(pcbArtifacts.schematicData)}`}
+                  type="schematic"
+                  controls="basic"
+                  className="w-full h-full"
+                />
+              ) : pcbArtifacts?.schematicUrl ? (
                 <KiCanvasViewer
                   src={pcbArtifacts.schematicUrl}
                   type="schematic"
@@ -210,11 +304,40 @@ export function PCBStageView() {
                   <div className="text-center">
                     <Grid3X3 className="w-12 h-12 text-surface-600 mx-auto mb-3" strokeWidth={1} />
                     <p className="text-steel-dim text-sm mb-2">
-                      Select blocks to build your schematic
+                      {selectedBlocks.length > 0
+                        ? 'Ready to generate merged schematic'
+                        : 'Select blocks to build your schematic'}
                     </p>
-                    <p className="text-xs text-surface-500">
+                    <p className="text-xs text-surface-500 mb-4">
                       {selectedBlocks.length} block{selectedBlocks.length !== 1 ? 's' : ''} selected
                     </p>
+                    {selectedBlocks.length > 0 && (
+                      <button
+                        onClick={handleMergeSchematic}
+                        disabled={isMerging || !blocksData?.blocks}
+                        className={clsx(
+                          'inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
+                          isMerging
+                            ? 'bg-surface-700 text-steel-dim cursor-wait'
+                            : 'bg-copper text-surface-900 hover:bg-copper-light'
+                        )}
+                      >
+                        {isMerging ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-4 h-4" />
+                            Generate Schematic
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {mergeError && (
+                      <p className="text-red-400 text-xs mt-2">{mergeError}</p>
+                    )}
                   </div>
                 </div>
               )}

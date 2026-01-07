@@ -501,16 +501,6 @@ export function EnclosureStageView() {
     }
   }, [openScadCode, stlBlobUrl])
 
-  // Render with visual validation (compares to blueprint)
-  const handleRenderWithValidation = useCallback(async () => {
-    await handleRender()
-    // Visual validation will be triggered after render completes
-    // We need to wait for STL viewer to mount and render
-    setTimeout(() => {
-      performVisualValidation()
-    }, 1000)
-  }, [handleRender, performVisualValidation])
-
   // Download STL file
   const handleDownload = useCallback(() => {
     if (!stlData) return
