@@ -29,7 +29,7 @@ import {
   buildFirmwareInputFromSpec,
   FIRMWARE_SYSTEM_PROMPT,
 } from '@/prompts/firmware'
-import type { ProjectSpec, FinalSpec, PlacedBlock, PcbBlock } from '@/db/schema'
+import type { ProjectSpec, FinalSpec, PlacedBlock, PcbBlock, FirmwareFile } from '@/db/schema'
 
 // =============================================================================
 // TYPES
@@ -770,18 +770,28 @@ export class HardwareOrchestrator {
 
     // Parse firmware files from JSON response
     const jsonMatch = response.content.match(/\{[\s\S]*\}/)
-    let files: Array<{ path: string; content: string; language: string }> = []
+    let files: FirmwareFile[] = []
+
+    const validLanguages = ['cpp', 'c', 'h', 'json'] as const
+    const toFirmwareFile = (f: { path: string; content: string; language?: string }): FirmwareFile => ({
+      path: f.path,
+      content: f.content,
+      language: validLanguages.includes(f.language as (typeof validLanguages)[number])
+        ? (f.language as FirmwareFile['language'])
+        : 'cpp',
+    })
 
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[0])
-        files = parsed.files || []
+        const rawFiles = parsed.files || []
+        files = rawFiles.map(toFirmwareFile)
       } catch {
         // If JSON parse fails, create a single main.cpp file
-        files = [{ path: 'src/main.cpp', content: response.content, language: 'cpp' as const }]
+        files = [{ path: 'src/main.cpp', content: response.content, language: 'cpp' }]
       }
     } else {
-      files = [{ path: 'src/main.cpp', content: response.content, language: 'cpp' as const }]
+      files = [{ path: 'src/main.cpp', content: response.content, language: 'cpp' }]
     }
 
     if (this.currentSpec) {
