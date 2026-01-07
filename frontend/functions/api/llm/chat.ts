@@ -19,9 +19,26 @@ interface User {
   isAdmin?: boolean
 }
 
+// =============================================================================
+// MESSAGE CONTENT TYPES (for vision/multimodal support)
+// =============================================================================
+
+interface ImageContent {
+  type: 'image'
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+  data: string // base64 encoded
+}
+
+interface TextContent {
+  type: 'text'
+  text: string
+}
+
+type MessageContent = string | (TextContent | ImageContent)[]
+
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
-  content: string
+  content: MessageContent
 }
 
 interface ChatRequest {
@@ -30,6 +47,56 @@ interface ChatRequest {
   temperature?: number
   maxTokens?: number
   projectId?: string
+}
+
+// OpenAI/OpenRouter content format for vision
+interface OpenAITextContent {
+  type: 'text'
+  text: string
+}
+
+interface OpenAIImageContent {
+  type: 'image_url'
+  image_url: {
+    url: string
+  }
+}
+
+type OpenAIContent = string | (OpenAITextContent | OpenAIImageContent)[]
+
+interface OpenAIMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: OpenAIContent
+}
+
+/**
+ * Convert our internal message format to OpenAI/OpenRouter format
+ * OpenRouter expects base64 images as data URLs
+ */
+function convertToOpenRouterFormat(messages: ChatMessage[]): OpenAIMessage[] {
+  return messages.map((msg) => {
+    if (typeof msg.content === 'string') {
+      return { role: msg.role, content: msg.content }
+    }
+
+    // Convert multipart content
+    const content: (OpenAITextContent | OpenAIImageContent)[] = msg.content.map((part) => {
+      if (part.type === 'image') {
+        return {
+          type: 'image_url' as const,
+          image_url: {
+            url: `data:${part.mimeType};base64,${part.data}`,
+          },
+        }
+      }
+      return {
+        type: 'text' as const,
+        text: part.text,
+      }
+    })
+
+    return { role: msg.role, content }
+  })
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -77,6 +144,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
       }
 
+      // Convert messages to OpenRouter format (handles multipart/vision content)
+      const openRouterMessages = convertToOpenRouterFormat(messages)
+
       response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -87,7 +157,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         },
         body: JSON.stringify({
           model,
-          messages,
+          messages: openRouterMessages,
           temperature,
           max_tokens: maxTokens,
         }),

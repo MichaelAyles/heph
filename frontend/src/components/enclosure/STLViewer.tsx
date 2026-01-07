@@ -3,15 +3,24 @@
  *
  * Uses React Three Fiber to display STL models with orbit controls.
  * Supports both URL-based and inline data loading.
+ * Exposes a ref for taking screenshots of the rendered model.
  */
 
-import { Suspense, useRef, useEffect, useState } from 'react'
+import { Suspense, useRef, useEffect, useState, useImperativeHandle, forwardRef, useCallback } from 'react'
 import { Canvas, useThree, useLoader, useFrame } from '@react-three/fiber'
 import { OrbitControls, Center, Html, PerspectiveCamera } from '@react-three/drei'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import * as THREE from 'three'
 import { Loader2, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
 import { clsx } from 'clsx'
+
+/**
+ * Ref interface for STLViewer component
+ * Allows parent components to take screenshots of the rendered model
+ */
+export interface STLViewerRef {
+  takeScreenshot: () => Promise<string | null>
+}
 
 interface STLViewerProps {
   /** URL to the STL file */
@@ -126,19 +135,70 @@ function LoadingFallback() {
   )
 }
 
-export function STLViewer({
-  src,
-  data,
-  className,
-  color = '#888888',
-  showGrid = true,
-  autoRotate = false,
-  onLoad,
-  onError,
-}: STLViewerProps) {
+/**
+ * Helper component to capture the WebGL renderer for screenshots
+ */
+function ScreenshotHelper({ onReady }: { onReady: (gl: THREE.WebGLRenderer) => void }) {
+  const { gl } = useThree()
+
+  useEffect(() => {
+    onReady(gl)
+  }, [gl, onReady])
+
+  return null
+}
+
+export const STLViewer = forwardRef<STLViewerRef, STLViewerProps>(function STLViewer(
+  {
+    src,
+    data,
+    className,
+    color = '#888888',
+    showGrid = true,
+    autoRotate = false,
+    onLoad,
+    onError,
+  },
+  ref
+) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [rotating, setRotating] = useState(autoRotate)
   const containerRef = useRef<HTMLDivElement>(null)
+  const glRef = useRef<THREE.WebGLRenderer | null>(null)
+
+  // Handle WebGL renderer ready
+  const handleGLReady = useCallback((gl: THREE.WebGLRenderer) => {
+    glRef.current = gl
+  }, [])
+
+  // Expose screenshot method via ref
+  useImperativeHandle(
+    ref,
+    () => ({
+      takeScreenshot: async (): Promise<string | null> => {
+        const gl = glRef.current
+        if (!gl) {
+          console.warn('WebGL renderer not ready for screenshot')
+          return null
+        }
+
+        try {
+          // Force a render to ensure we capture the current state
+          // The renderer should already be rendering, but this ensures fresh content
+          const canvas = gl.domElement
+
+          // Get the data URL and extract base64
+          const dataUrl = canvas.toDataURL('image/png')
+          const base64 = dataUrl.split(',')[1]
+          return base64
+        } catch (error) {
+          console.error('Failed to take screenshot:', error)
+          return null
+        }
+      },
+    }),
+    []
+  )
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return
@@ -204,7 +264,8 @@ export function STLViewer({
         </button>
       </div>
 
-      <Canvas>
+      <Canvas gl={{ preserveDrawingBuffer: true }}>
+        <ScreenshotHelper onReady={handleGLReady} />
         <PerspectiveCamera makeDefault position={[100, 100, 100]} fov={50} />
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} intensity={1} />
@@ -238,6 +299,6 @@ export function STLViewer({
       </div>
     </div>
   )
-}
+})
 
 export default STLViewer

@@ -1,8 +1,9 @@
 /**
- * OpenSCAD Enclosure Validation Prompt
+ * OpenSCAD Enclosure Validation Prompts
  *
- * Used to analyze generated OpenSCAD code for common issues
- * and suggest fixes before rendering.
+ * Two validation modes:
+ * 1. Code validation: Analyzes OpenSCAD code for common issues
+ * 2. Visual validation: Compares rendered enclosure to blueprint image
  */
 
 export interface ValidationIssue {
@@ -194,6 +195,138 @@ export function parseValidationResponse(response: string): ValidationResult {
       isValid: true,
       issues: [],
       summary: 'Validation parsing failed',
+    }
+  }
+}
+
+// =============================================================================
+// VISUAL VALIDATION (compares rendered enclosure to blueprint)
+// =============================================================================
+
+/**
+ * Visual validation result comparing rendered enclosure to blueprint
+ */
+export interface VisualValidationResult {
+  overallScore: number
+  scores: {
+    formFactor: number
+    featurePlacement: number
+    visualStyle: number
+    assembly: number
+  }
+  matches: boolean
+  issues: VisualValidationIssue[]
+  fixInstructions: string
+}
+
+export interface VisualValidationIssue {
+  category: 'formFactor' | 'featurePlacement' | 'visualStyle' | 'assembly'
+  description: string
+}
+
+/**
+ * System prompt for visual comparison between blueprint and rendered enclosure
+ */
+export const VISUAL_COMPARISON_PROMPT = `You are comparing a generated 3D enclosure render against the original product blueprint.
+
+Image 1: The original product blueprint (design intent)
+Image 2: The generated enclosure render (current result)
+
+Analyze these aspects:
+
+1. **Form Factor Match** (0-100)
+   - Does the overall shape match? (rounded vs angular, tall vs flat, compact vs spread out)
+   - Are proportions correct? (aspect ratio, height-to-width ratio)
+   - Does the silhouette resemble the blueprint?
+
+2. **Feature Placement** (0-100)
+   - Are buttons, displays, ports in approximately the right locations?
+   - Do aperture positions match the blueprint?
+   - Are features on the correct sides/faces?
+
+3. **Visual Style** (0-100)
+   - Does the aesthetic match? (industrial, sleek, rounded, minimal, etc.)
+   - Are surface details appropriate? (smooth, textured, chamfered edges)
+   - Does it capture the design intent?
+
+4. **Assembly Feasibility** (0-100)
+   - Can this be 3D printed without excessive supports?
+   - Can it be assembled around the PCB?
+   - Are snap-fits or screw points accessible?
+
+Respond with JSON:
+\`\`\`json
+{
+  "overallScore": 0-100,
+  "scores": {
+    "formFactor": 0-100,
+    "featurePlacement": 0-100,
+    "visualStyle": 0-100,
+    "assembly": 0-100
+  },
+  "matches": true if overallScore >= 70,
+  "issues": [
+    { "category": "formFactor|featurePlacement|visualStyle|assembly", "description": "specific issue" }
+  ],
+  "fixInstructions": "Specific OpenSCAD code changes to fix the most critical issue. Be concrete about what to modify."
+}
+\`\`\`
+
+Be specific about issues - reference exact features that don't match.
+The fixInstructions should be actionable OpenSCAD modifications.`
+
+/**
+ * Parse visual validation response from LLM
+ */
+export function parseVisualValidationResponse(response: string): VisualValidationResult {
+  try {
+    const jsonMatch = response.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      return {
+        overallScore: 50,
+        scores: { formFactor: 50, featurePlacement: 50, visualStyle: 50, assembly: 50 },
+        matches: false,
+        issues: [],
+        fixInstructions: 'Could not parse validation response',
+      }
+    }
+
+    const parsed = JSON.parse(jsonMatch[0])
+
+    // Ensure all required fields exist with defaults
+    const result: VisualValidationResult = {
+      overallScore: typeof parsed.overallScore === 'number' ? parsed.overallScore : 50,
+      scores: {
+        formFactor: typeof parsed.scores?.formFactor === 'number' ? parsed.scores.formFactor : 50,
+        featurePlacement:
+          typeof parsed.scores?.featurePlacement === 'number' ? parsed.scores.featurePlacement : 50,
+        visualStyle: typeof parsed.scores?.visualStyle === 'number' ? parsed.scores.visualStyle : 50,
+        assembly: typeof parsed.scores?.assembly === 'number' ? parsed.scores.assembly : 50,
+      },
+      matches: typeof parsed.matches === 'boolean' ? parsed.matches : parsed.overallScore >= 70,
+      issues: Array.isArray(parsed.issues)
+        ? parsed.issues.filter(
+            (i: unknown) =>
+              typeof i === 'object' &&
+              i !== null &&
+              typeof (i as Record<string, unknown>).category === 'string' &&
+              typeof (i as Record<string, unknown>).description === 'string'
+          )
+        : [],
+      fixInstructions:
+        typeof parsed.fixInstructions === 'string'
+          ? parsed.fixInstructions
+          : 'No specific fix instructions provided',
+    }
+
+    return result
+  } catch {
+    return {
+      overallScore: 50,
+      scores: { formFactor: 50, featurePlacement: 50, visualStyle: 50, assembly: 50 },
+      matches: false,
+      issues: [],
+      fixInstructions: 'Validation parsing failed',
     }
   }
 }

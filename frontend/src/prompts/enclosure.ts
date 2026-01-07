@@ -2,8 +2,202 @@
  * Enclosure Generation Prompt
  *
  * Generates parametric OpenSCAD code for enclosures based on PCB dimensions,
- * component placement, and user style preferences.
+ * component placement, user style preferences, and blueprint images.
+ *
+ * Supports two modes:
+ * 1. Text-only: Uses structured specifications (original)
+ * 2. Vision-enabled: Uses blueprint image for design intent (preferred)
  */
+
+// =============================================================================
+// VISION-ENABLED PROMPTS
+// =============================================================================
+
+/**
+ * System prompt for vision-enabled enclosure generation
+ * This prompt instructs the LLM to analyze the blueprint image for design intent
+ */
+export const ENCLOSURE_VISION_SYSTEM_PROMPT = `You are PHAESTUS, an expert mechanical engineer designing 3D-printable enclosures.
+
+You will receive:
+1. A product blueprint image showing the desired design
+2. A list of features that need apertures (buttons, displays, ports, LEDs)
+3. PCB dimensions for internal cavity sizing
+
+Your job is to generate OpenSCAD code that:
+- **Matches the form factor and proportions** visible in the blueprint image
+- **Places apertures where they appear** in the blueprint (not hardcoded positions)
+- **Captures the aesthetic style** (rounded, angular, industrial, sleek, etc.)
+- Creates a printable, assemblable two-part enclosure
+
+## CRITICAL: Study the Blueprint Image
+
+The blueprint shows WHERE features should be located:
+- If buttons are on the top-right in the image, put apertures on the top-right
+- If the device is tall and narrow, make the enclosure tall and narrow
+- If corners are heavily rounded, use large corner radii
+- If there's a prominent display, make sure the display window is correctly positioned
+
+## OpenSCAD Best Practices
+
+- Use \`$fn = 32;\` for smooth curves
+- Define all dimensions as variables at the top
+- Use modules for reusable parts
+- Use difference() for cutouts, union() for assembly
+- Apply hull() for smooth transitions
+- **NEVER use text() function** - fonts unavailable in WebAssembly
+- Ensure cutouts extend fully through walls (add 1mm to cutout depth)
+- Add 0.3mm tolerance for PCB slots and snap-fits
+
+## Output Format
+
+Generate COMPLETE, VALID OpenSCAD code that:
+1. Defines all parameters as variables at the top
+2. Creates the main enclosure body matching the blueprint style
+3. Adds PCB mounting features (screw bosses or edge rails)
+4. Creates cutouts for all specified components at positions matching the blueprint
+5. Splits into top/bottom shells for assembly
+6. Includes assembly preview
+
+Respond with ONLY the OpenSCAD code. No explanatory text.`
+
+/**
+ * Feature specification for enclosure apertures
+ */
+export interface EnclosureFeature {
+  type: string
+  count: number
+  width: number
+  height: number
+  notes?: string
+}
+
+/**
+ * Build feature list from final spec for enclosure generation
+ */
+export function buildFeatureList(finalSpec: {
+  inputs?: { type: string; count: number }[]
+  outputs?: { type: string; count: number }[]
+  power?: { source: string }
+}): EnclosureFeature[] {
+  const features: EnclosureFeature[] = []
+
+  // Always add USB-C (for power/programming)
+  features.push({
+    type: 'USB-C port',
+    count: 1,
+    width: 9,
+    height: 3.2,
+    notes: 'Usually on back or bottom edge',
+  })
+
+  // Add from inputs
+  if (finalSpec.inputs) {
+    for (const input of finalSpec.inputs) {
+      const inputType = input.type.toLowerCase()
+      if (inputType.includes('button')) {
+        features.push({
+          type: 'Button',
+          count: input.count,
+          width: 6,
+          height: 6,
+          notes: 'Tactile button with cap',
+        })
+      }
+      if (inputType.includes('encoder') || inputType.includes('rotary')) {
+        features.push({
+          type: 'Rotary encoder',
+          count: input.count,
+          width: 12,
+          height: 12,
+          notes: 'Round aperture for encoder shaft and knob',
+        })
+      }
+    }
+  }
+
+  // Add from outputs
+  if (finalSpec.outputs) {
+    for (const output of finalSpec.outputs) {
+      const outputType = output.type.toLowerCase()
+      if (outputType.includes('oled') || outputType.includes('display')) {
+        features.push({
+          type: 'OLED display window',
+          count: 1,
+          width: 27,
+          height: 15,
+          notes: 'Clear window for 0.96" OLED active area',
+        })
+      }
+      if (outputType.includes('lcd')) {
+        features.push({
+          type: 'LCD display window',
+          count: 1,
+          width: 40,
+          height: 30,
+          notes: 'Larger window for LCD panel',
+        })
+      }
+      if (outputType.includes('led') && !outputType.includes('oled')) {
+        features.push({
+          type: 'LED window',
+          count: output.count,
+          width: 5,
+          height: 5,
+          notes: 'Small circular or square aperture for status LEDs',
+        })
+      }
+      if (outputType.includes('buzzer') || outputType.includes('speaker')) {
+        features.push({
+          type: 'Sound vent',
+          count: 1,
+          width: 10,
+          height: 10,
+          notes: 'Grid of small holes for sound to escape',
+        })
+      }
+    }
+  }
+
+  return features
+}
+
+/**
+ * Build the user prompt for vision-enabled enclosure generation
+ */
+export function buildVisionEnclosurePrompt(input: {
+  pcbWidth: number
+  pcbHeight: number
+  wallThickness: number
+  features: EnclosureFeature[]
+}): string {
+  const featureList = input.features
+    .map((f) => `- ${f.type}: ${f.width}x${f.height}mm (${f.count}x)${f.notes ? ` - ${f.notes}` : ''}`)
+    .join('\n')
+
+  return `Based on the product blueprint image above, design an enclosure with:
+
+## Internal Dimensions
+- PCB: ${input.pcbWidth}mm x ${input.pcbHeight}mm x 1.6mm
+- Add 2mm clearance on each side
+- Wall thickness: ${input.wallThickness}mm
+
+## Required Apertures (position based on blueprint image)
+${featureList}
+
+## Instructions
+1. **Study the blueprint image** to determine feature positions and overall shape
+2. Match the aesthetic style visible in the image (rounded/angular/industrial/sleek)
+3. Place apertures where they appear in the image, not hardcoded positions
+4. Generate complete OpenSCAD code with top and bottom shells
+5. Include screw bosses or snap-fit features for assembly
+
+Output ONLY valid OpenSCAD code in a code block.`
+}
+
+// =============================================================================
+// ORIGINAL TEXT-ONLY PROMPTS (kept for fallback)
+// =============================================================================
 
 export interface EnclosureInput {
   // PCB dimensions from the PCB stage

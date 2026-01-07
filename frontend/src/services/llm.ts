@@ -4,9 +4,26 @@
  * All LLM requests go through /api/llm/* to keep API keys server-side
  */
 
+// =============================================================================
+// MESSAGE CONTENT TYPES (for vision/multimodal support)
+// =============================================================================
+
+export interface ImageContent {
+  type: 'image'
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+  data: string // base64 encoded
+}
+
+export interface TextContent {
+  type: 'text'
+  text: string
+}
+
+export type MessageContent = string | (TextContent | ImageContent)[]
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string
+  content: MessageContent
   toolCalls?: ToolCall[]
   toolCallId?: string
 }
@@ -245,3 +262,48 @@ class LLMService {
 
 // Singleton instance
 export const llm = new LLMService()
+
+// =============================================================================
+// IMAGE UTILITIES
+// =============================================================================
+
+/**
+ * Fetch an image from a URL and convert it to base64
+ * @param url - The URL of the image to fetch
+ * @returns Promise resolving to base64-encoded image data (without data URI prefix)
+ */
+export async function fetchImageAsBase64(url: string): Promise<string> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`)
+  }
+  const blob = await response.blob()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result as string
+      // Remove the data URI prefix (e.g., "data:image/png;base64,")
+      const base64 = result.split(',')[1]
+      resolve(base64)
+    }
+    reader.onerror = () => reject(new Error('Failed to read image as base64'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+/**
+ * Get the MIME type from a URL or default to png
+ */
+export function getMimeTypeFromUrl(url: string): 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' {
+  const lowercaseUrl = url.toLowerCase()
+  if (lowercaseUrl.includes('.jpg') || lowercaseUrl.includes('.jpeg')) {
+    return 'image/jpeg'
+  }
+  if (lowercaseUrl.includes('.webp')) {
+    return 'image/webp'
+  }
+  if (lowercaseUrl.includes('.gif')) {
+    return 'image/gif'
+  }
+  return 'image/png'
+}

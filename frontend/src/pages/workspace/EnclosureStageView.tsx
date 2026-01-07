@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import {
   Box,
@@ -26,15 +26,24 @@ import {
   buildEnclosurePrompt,
   buildEnclosureInputFromSpec,
   buildEnclosureRegenerationPrompt,
+  ENCLOSURE_VISION_SYSTEM_PROMPT,
+  buildVisionEnclosurePrompt,
+  buildFeatureList,
 } from '@/prompts/enclosure'
 import {
   OPENSCAD_VALIDATION_PROMPT,
   buildValidationPrompt,
   buildFixPrompt,
   parseValidationResponse,
+  VISUAL_COMPARISON_PROMPT,
+  parseVisualValidationResponse,
   type ValidationIssue,
+  type VisualValidationResult,
 } from '@/prompts/enclosure-validation'
-import { llm } from '@/services/llm'
+import { llm, fetchImageAsBase64, getMimeTypeFromUrl } from '@/services/llm'
+import type { ImageContent, TextContent } from '@/services/llm'
+import { EnclosureComparison } from '@/components/enclosure/EnclosureComparison'
+import type { STLViewerRef } from '@/components/enclosure/STLViewer'
 
 type EnclosureStep = 'generate' | 'edit' | 'preview'
 
@@ -59,6 +68,15 @@ export function EnclosureStageView() {
   const [validationStatus, setValidationStatus] = useState<string | null>(null)
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
   const [validationIteration, setValidationIteration] = useState(0)
+
+  // Visual validation state
+  const [showComparison, setShowComparison] = useState(false)
+  const [renderScreenshot, setRenderScreenshot] = useState<string | null>(null)
+  const [visualValidationResult, setVisualValidationResult] = useState<VisualValidationResult | null>(null)
+  const [isVisualValidating, setIsVisualValidating] = useState(false)
+
+  // STL Viewer ref for screenshots
+  const stlViewerRef = useRef<STLViewerRef>(null)
 
   const spec = project?.spec
   const pcbComplete = spec?.stages?.pcb?.status === 'complete'
@@ -202,24 +220,70 @@ export function EnclosureStageView() {
     setValidationIteration(0)
 
     try {
-      const input = buildEnclosureInputFromSpec(
-        project.name,
-        spec?.description || '',
-        pcbArtifacts,
-        finalSpec || undefined
-      )
+      // Check if we have a blueprint image to use for vision-enabled generation
+      const blueprintIndex = spec?.selectedBlueprint ?? 0
+      const blueprintUrl = spec?.blueprints?.[blueprintIndex]?.url
+      const hasBlueprint = !!blueprintUrl
 
-      // Step 1: Generate initial code
-      setValidationStatus('Generating enclosure design...')
-      const prompt = buildEnclosurePrompt(input)
+      let code: string
 
-      const response = await llm.chat({
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        projectId: project.id,
-      })
+      if (hasBlueprint) {
+        // Vision-enabled generation: send blueprint image with prompt
+        setValidationStatus('Analyzing blueprint image...')
 
-      let code = extractCode(response.content)
+        const blueprintBase64 = await fetchImageAsBase64(blueprintUrl)
+        const mimeType = getMimeTypeFromUrl(blueprintUrl)
+
+        // Build feature list from spec
+        const features = buildFeatureList(finalSpec || {})
+        const pcbWidth = pcbArtifacts.boardSize?.width ?? 50
+        const pcbHeight = pcbArtifacts.boardSize?.height ?? 40
+
+        const visionPrompt = buildVisionEnclosurePrompt({
+          pcbWidth,
+          pcbHeight,
+          wallThickness: 2,
+          features,
+        })
+
+        setValidationStatus('Generating enclosure from blueprint...')
+
+        const response = await llm.chat({
+          messages: [
+            { role: 'system', content: ENCLOSURE_VISION_SYSTEM_PROMPT },
+            {
+              role: 'user',
+              content: [
+                { type: 'image', mimeType, data: blueprintBase64 } as ImageContent,
+                { type: 'text', text: visionPrompt } as TextContent,
+              ],
+            },
+          ],
+          temperature: 0.7,
+          projectId: project.id,
+        })
+
+        code = extractCode(typeof response.content === 'string' ? response.content : '')
+      } else {
+        // Fallback: text-only generation
+        const input = buildEnclosureInputFromSpec(
+          project.name,
+          spec?.description || '',
+          pcbArtifacts,
+          finalSpec || undefined
+        )
+
+        setValidationStatus('Generating enclosure design...')
+        const prompt = buildEnclosurePrompt(input)
+
+        const response = await llm.chat({
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          projectId: project.id,
+        })
+
+        code = extractCode(typeof response.content === 'string' ? response.content : '')
+      }
 
       // Step 2: Validation loop
       for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
@@ -332,6 +396,79 @@ export function EnclosureStageView() {
     }
   }, [project, spec, pcbArtifacts, finalSpec, openScadCode, feedback, saveEnclosureMutation, validateCode, fixCode])
 
+  // Perform visual validation by comparing render to blueprint
+  const performVisualValidation = useCallback(async () => {
+    const blueprintIndex = spec?.selectedBlueprint ?? 0
+    const blueprintUrl = spec?.blueprints?.[blueprintIndex]?.url
+
+    if (!blueprintUrl || !stlViewerRef.current) {
+      console.warn('Cannot perform visual validation: missing blueprint or viewer ref')
+      return
+    }
+
+    setIsVisualValidating(true)
+    setVisualValidationResult(null)
+
+    try {
+      // Wait a moment for the render to settle
+      await new Promise((r) => setTimeout(r, 500))
+
+      // Take screenshot of the rendered model
+      const renderBase64 = await stlViewerRef.current.takeScreenshot()
+      if (!renderBase64) {
+        throw new Error('Failed to capture render screenshot')
+      }
+      setRenderScreenshot(renderBase64)
+
+      // Fetch blueprint as base64
+      const blueprintBase64 = await fetchImageAsBase64(blueprintUrl)
+      const blueprintMimeType = getMimeTypeFromUrl(blueprintUrl)
+
+      // Send both images to LLM for comparison
+      const response = await llm.chat({
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', mimeType: blueprintMimeType, data: blueprintBase64 } as ImageContent,
+              { type: 'image', mimeType: 'image/png', data: renderBase64 } as ImageContent,
+              { type: 'text', text: VISUAL_COMPARISON_PROMPT } as TextContent,
+            ],
+          },
+        ],
+        projectId: project?.id,
+      })
+
+      const result = parseVisualValidationResponse(
+        typeof response.content === 'string' ? response.content : ''
+      )
+      setVisualValidationResult(result)
+      setShowComparison(true)
+    } catch (error) {
+      console.error('Visual validation failed:', error)
+      setRenderError(error instanceof Error ? error.message : 'Visual validation failed')
+    } finally {
+      setIsVisualValidating(false)
+    }
+  }, [spec, project?.id])
+
+  // Handle accepting the current design
+  const handleAcceptDesign = useCallback(() => {
+    setShowComparison(false)
+    setVisualValidationResult(null)
+    // Design is already saved, just close comparison
+  }, [])
+
+  // Handle regenerating with visual validation feedback
+  const handleRegenerateFromComparison = useCallback(
+    (feedbackFromValidation: string) => {
+      setShowComparison(false)
+      setFeedback(feedbackFromValidation)
+      // User can then click "Regenerate" with the pre-filled feedback
+    },
+    []
+  )
+
   // Render OpenSCAD to STL
   const handleRender = useCallback(async () => {
     if (!openScadCode) return
@@ -363,6 +500,16 @@ export function EnclosureStageView() {
       setIsRendering(false)
     }
   }, [openScadCode, stlBlobUrl])
+
+  // Render with visual validation (compares to blueprint)
+  const handleRenderWithValidation = useCallback(async () => {
+    await handleRender()
+    // Visual validation will be triggered after render completes
+    // We need to wait for STL viewer to mount and render
+    setTimeout(() => {
+      performVisualValidation()
+    }, 1000)
+  }, [handleRender, performVisualValidation])
 
   // Download STL file
   const handleDownload = useCallback(() => {
@@ -664,19 +811,37 @@ export function EnclosureStageView() {
             <div className="bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
               <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-steel">3D Preview</h3>
-                {stlData && (
-                  <button
-                    onClick={handleDownload}
-                    className="text-xs text-copper hover:text-copper-light flex items-center gap-1"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Download STL
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {stlData && spec?.blueprints?.[spec?.selectedBlueprint ?? 0]?.url && (
+                    <button
+                      onClick={performVisualValidation}
+                      disabled={isVisualValidating}
+                      className="text-xs text-steel hover:text-copper flex items-center gap-1"
+                      title="Compare render to blueprint"
+                    >
+                      {isVisualValidating ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      Compare
+                    </button>
+                  )}
+                  {stlData && (
+                    <button
+                      onClick={handleDownload}
+                      className="text-xs text-copper hover:text-copper-light flex items-center gap-1"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download STL
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex-1 min-h-0">
                 {stlBlobUrl || stlData ? (
                   <STLViewer
+                    ref={stlViewerRef}
                     src={stlBlobUrl || undefined}
                     data={stlData || undefined}
                     className="w-full h-full"
@@ -701,6 +866,31 @@ export function EnclosureStageView() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Comparison Modal */}
+        {showComparison && spec?.blueprints?.[spec?.selectedBlueprint ?? 0]?.url && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+            <div className="bg-surface-900 rounded-xl border border-surface-700 p-6 max-w-4xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-steel">Blueprint Comparison</h3>
+                <button
+                  onClick={() => setShowComparison(false)}
+                  className="text-steel-dim hover:text-steel"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              <EnclosureComparison
+                blueprintUrl={spec.blueprints[spec.selectedBlueprint ?? 0].url}
+                renderBase64={renderScreenshot}
+                validationResult={visualValidationResult}
+                isValidating={isVisualValidating}
+                onAccept={handleAcceptDesign}
+                onRegenerate={handleRegenerateFromComparison}
+              />
             </div>
           </div>
         )}
