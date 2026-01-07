@@ -11,24 +11,49 @@ import type { ToolDefinition } from '@/services/llm'
 // SYSTEM PROMPT V2 - OPTIMIZED (~200 tokens vs ~850 tokens)
 // =============================================================================
 
-export const ORCHESTRATOR_SYSTEM_PROMPT = `You are PHAESTUS, an autonomous hardware design agent. Transform hardware descriptions into manufacturable designs.
+export const ORCHESTRATOR_SYSTEM_PROMPT = `You are PHAESTUS, the central orchestrator for hardware design.
 
-## Process
-1. analyze_feasibility → answer questions → generate_blueprints → select_blueprint → finalize_spec
-2. select_pcb_blocks → validate
-3. generate_enclosure → validate
-4. generate_firmware → validate
-5. mark_stage_complete('export')
+## Your Role
+You are the BRAIN. Specialists execute tasks and return FULL results to you. You make ALL decisions.
 
-## Rules
-- Validate after each stage with validate_cross_stage
-- Fix issues before proceeding (fix_stage_issue)
-- Call report_progress after major steps
-- In VIBE IT mode: make sensible defaults, minimize user interaction
-- In FIX IT mode: ask user on major decisions only
-- In DESIGN IT mode: present options at each step
+## Workflow
 
-IMPORTANT: After each tool result, immediately call the next tool. Do NOT wait for prompts.`
+### Spec Stage
+1. analyze_feasibility → answer_questions_auto → generate_blueprints → select_blueprint → finalize_spec
+2. mark_stage_complete('spec')
+
+### PCB Stage
+1. select_pcb_blocks → validate_cross_stage
+2. mark_stage_complete('pcb')
+
+### Enclosure Stage (Generate → Review → Decide)
+1. generate_enclosure(style) → Returns full OpenSCAD code to you
+2. review_enclosure() → Analyst returns score + issues + verdict
+3. YOU DECIDE based on review:
+   - verdict="accept" AND score>=85 → accept_and_render('enclosure') → next stage
+   - verdict="revise" OR score<85 → generate_enclosure(style, feedback) → back to step 2
+   - Max 3 attempts, then ask user
+4. mark_stage_complete('enclosure')
+
+### Firmware Stage (Generate → Review → Decide)
+1. generate_firmware() → Returns full code files to you
+2. review_firmware() → Analyst returns score + issues + verdict
+3. YOU DECIDE based on review (same logic as enclosure)
+4. mark_stage_complete('firmware')
+
+### Export Stage
+1. mark_stage_complete('export')
+
+## Critical Rules
+- You see ALL specialist outputs - use them to make informed decisions
+- Always review before accepting (enclosure, firmware)
+- Pass specific feedback when requesting revisions
+- After each tool result, immediately call the next tool
+
+## Decision Making
+- VIBE IT mode: Make sensible defaults, minimize user interaction
+- FIX IT mode: Ask user on major decisions only
+- DESIGN IT mode: Present options at each step`
 
 // Legacy prompt (kept for reference, ~850 tokens)
 export const ORCHESTRATOR_SYSTEM_PROMPT_LEGACY = `You are PHAESTUS, an autonomous hardware design orchestrator. Your mission is to transform a user's natural language hardware description into a complete, manufacturable design package.
@@ -210,7 +235,7 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
   {
     name: 'generate_enclosure',
     description:
-      'Generate OpenSCAD parametric enclosure code based on PCB dimensions and components.',
+      'Task enclosure specialist to generate OpenSCAD code. Returns FULL code + dimensions to orchestrator.',
     parameters: {
       type: 'object',
       properties: {
@@ -227,14 +252,28 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
           type: 'number',
           description: 'Corner radius in mm for rounded styles (default: 3)',
         },
+        feedback: {
+          type: 'string',
+          description: 'Feedback from previous review to address in this revision',
+        },
       },
       required: ['style'],
     },
   },
   {
+    name: 'review_enclosure',
+    description:
+      'Task analyst specialist to review the generated enclosure against spec. Returns score, issues, and verdict.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
     name: 'generate_firmware',
     description:
-      'Generate ESP32-C6 PlatformIO firmware based on PCB configuration and spec requirements.',
+      'Task firmware specialist to generate ESP32-C6 code. Returns FULL files to orchestrator.',
     parameters: {
       type: 'object',
       properties: {
@@ -254,8 +293,38 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
           type: 'boolean',
           description: 'Enable deep sleep for battery optimization',
         },
+        feedback: {
+          type: 'string',
+          description: 'Feedback from previous review to address in this revision',
+        },
       },
       required: [],
+    },
+  },
+  {
+    name: 'review_firmware',
+    description:
+      'Task analyst specialist to review the generated firmware against spec and PCB. Returns score, issues, and verdict.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'accept_and_render',
+    description:
+      'Accept the current artifact after successful review, trigger render/preview for user, and proceed.',
+    parameters: {
+      type: 'object',
+      properties: {
+        stage: {
+          type: 'string',
+          description: 'The stage to accept',
+          enum: ['enclosure', 'firmware'],
+        },
+      },
+      required: ['stage'],
     },
   },
   {

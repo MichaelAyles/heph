@@ -23,6 +23,7 @@ import {
   buildEnclosureInputFromSpec,
   ENCLOSURE_SYSTEM_PROMPT,
 } from '@/prompts/enclosure'
+import { ENCLOSURE_REVIEW_PROMPT, FIRMWARE_REVIEW_PROMPT } from '@/prompts/review'
 import {
   buildFirmwarePrompt,
   buildFirmwareInputFromSpec,
@@ -337,8 +338,13 @@ export class HardwareOrchestrator {
           result = await this.executeGenerateEnclosure(
             args.style as string,
             args.wall_thickness as number | undefined,
-            args.corner_radius as number | undefined
+            args.corner_radius as number | undefined,
+            args.feedback as string | undefined
           )
+          break
+
+        case 'review_enclosure':
+          result = await this.executeReviewEnclosure()
           break
 
         case 'generate_firmware':
@@ -346,8 +352,17 @@ export class HardwareOrchestrator {
             args.enable_wifi as boolean | undefined,
             args.enable_ble as boolean | undefined,
             args.enable_ota as boolean | undefined,
-            args.enable_deep_sleep as boolean | undefined
+            args.enable_deep_sleep as boolean | undefined,
+            args.feedback as string | undefined
           )
+          break
+
+        case 'review_firmware':
+          result = await this.executeReviewFirmware()
+          break
+
+        case 'accept_and_render':
+          result = await this.executeAcceptAndRender(args.stage as string)
           break
 
         case 'validate_cross_stage':
@@ -646,7 +661,8 @@ export class HardwareOrchestrator {
   private async executeGenerateEnclosure(
     style: string,
     wallThickness?: number,
-    cornerRadius?: number
+    cornerRadius?: number,
+    feedback?: string
   ): Promise<unknown> {
     if (!this.currentSpec?.finalSpec || !this.currentSpec?.pcb) {
       return { error: 'Spec and PCB must be complete before enclosure generation' }
@@ -666,10 +682,16 @@ export class HardwareOrchestrator {
     if (wallThickness) input.style.wallThickness = wallThickness
     if (cornerRadius) input.style.cornerRadius = cornerRadius
 
+    // Build prompt, including feedback if this is a revision
+    let userPrompt = buildEnclosurePrompt(input)
+    if (feedback) {
+      userPrompt += `\n\n## PREVIOUS REVIEW FEEDBACK - Address these issues:\n${feedback}`
+    }
+
     const response = await llm.chat({
       messages: [
         { role: 'system', content: ENCLOSURE_SYSTEM_PROMPT },
-        { role: 'user', content: buildEnclosurePrompt(input) },
+        { role: 'user', content: userPrompt },
       ],
       temperature: 0.3,
       maxTokens: 4096,
@@ -691,14 +713,27 @@ export class HardwareOrchestrator {
       await this.callbacks.onSpecUpdate({ enclosure: this.currentSpec.enclosure })
     }
 
-    return { success: true, codeLength: openScadCode.length }
+    // Return FULL code to orchestrator - it needs this to reason about the design
+    // With 1M context window, this is useful, not wasteful (~2-5K tokens)
+    const dimensions = this.extractEnclosureDimensions(openScadCode)
+    const features = this.extractEnclosureFeatures(openScadCode)
+
+    return {
+      success: true,
+      code: openScadCode, // FULL CODE - orchestrator sees everything
+      codeLength: openScadCode.length,
+      dimensions,
+      features,
+      isRevision: !!feedback,
+    }
   }
 
   private async executeGenerateFirmware(
     enableWifi?: boolean,
     enableBle?: boolean,
     enableOta?: boolean,
-    enableDeepSleep?: boolean
+    enableDeepSleep?: boolean,
+    feedback?: string
   ): Promise<unknown> {
     if (!this.currentSpec?.finalSpec || !this.currentSpec?.pcb) {
       return { error: 'Spec and PCB must be complete before firmware generation' }
@@ -717,10 +752,16 @@ export class HardwareOrchestrator {
     if (enableOta !== undefined) input.preferences.useOTA = enableOta
     if (enableDeepSleep !== undefined) input.power.deepSleepEnabled = enableDeepSleep
 
+    // Build prompt, including feedback if this is a revision
+    let userPrompt = buildFirmwarePrompt(input)
+    if (feedback) {
+      userPrompt += `\n\n## PREVIOUS REVIEW FEEDBACK - Address these issues:\n${feedback}`
+    }
+
     const response = await llm.chat({
       messages: [
         { role: 'system', content: FIRMWARE_SYSTEM_PROMPT },
-        { role: 'user', content: buildFirmwarePrompt(input) },
+        { role: 'user', content: userPrompt },
       ],
       temperature: 0.3,
       maxTokens: 8192,
@@ -729,7 +770,7 @@ export class HardwareOrchestrator {
 
     // Parse firmware files from JSON response
     const jsonMatch = response.content.match(/\{[\s\S]*\}/)
-    let files = []
+    let files: Array<{ path: string; content: string; language: string }> = []
 
     if (jsonMatch) {
       try {
@@ -751,7 +792,187 @@ export class HardwareOrchestrator {
       await this.callbacks.onSpecUpdate({ firmware: this.currentSpec.firmware })
     }
 
-    return { success: true, fileCount: files.length }
+    // Return FULL files to orchestrator - it needs to see the code
+    // With 1M context window, this is useful (~3-8K tokens)
+    return {
+      success: true,
+      files, // FULL FILES - orchestrator sees all code
+      fileCount: files.length,
+      fileNames: files.map((f) => f.path),
+      isRevision: !!feedback,
+    }
+  }
+
+  // ===========================================================================
+  // REVIEW TOOLS - Analyst specialists review generated artifacts
+  // ===========================================================================
+
+  private async executeReviewEnclosure(): Promise<unknown> {
+    const code = this.currentSpec?.enclosure?.openScadCode
+    if (!code) {
+      return { error: 'No enclosure code to review' }
+    }
+
+    const spec = this.currentSpec?.finalSpec
+    if (!spec) {
+      return { error: 'No specification to review against' }
+    }
+
+    // Build context for the analyst
+    const reviewContext = `## Project Specification
+Name: ${spec.name}
+Summary: ${spec.summary}
+
+## Components
+${JSON.stringify(spec.components, null, 2)}
+
+## PCB Dimensions
+${JSON.stringify(this.currentSpec?.pcb?.boardSize || {}, null, 2)}
+
+## OpenSCAD Code to Review
+\`\`\`openscad
+${code}
+\`\`\`
+`
+
+    const response = await llm.chat({
+      messages: [
+        { role: 'system', content: ENCLOSURE_REVIEW_PROMPT },
+        { role: 'user', content: reviewContext },
+      ],
+      temperature: 0.2, // Lower temp for more consistent analysis
+      maxTokens: 2048,
+      projectId: this.projectId,
+    })
+
+    // Parse the review response
+    try {
+      const jsonMatch = response.content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const review = JSON.parse(jsonMatch[0])
+        return {
+          success: true,
+          score: review.score || 0,
+          verdict: review.verdict || 'revise',
+          issues: review.issues || [],
+          positives: review.positives || [],
+          summary: review.summary || 'Review completed',
+        }
+      }
+    } catch {
+      // If JSON parse fails, try to extract key info
+    }
+
+    return {
+      success: true,
+      score: 70,
+      verdict: 'revise',
+      issues: [{ severity: 'warning', description: 'Could not parse review response' }],
+      summary: response.content.slice(0, 200),
+    }
+  }
+
+  private async executeReviewFirmware(): Promise<unknown> {
+    const files = this.currentSpec?.firmware?.files
+    if (!files || files.length === 0) {
+      return { error: 'No firmware code to review' }
+    }
+
+    const spec = this.currentSpec?.finalSpec
+    if (!spec) {
+      return { error: 'No specification to review against' }
+    }
+
+    // Build context for the analyst
+    const filesContent = files
+      .map((f) => `### ${f.path}\n\`\`\`${f.language || 'cpp'}\n${f.content}\n\`\`\``)
+      .join('\n\n')
+
+    const reviewContext = `## Project Specification
+Name: ${spec.name}
+Summary: ${spec.summary}
+
+## Components
+${JSON.stringify(spec.components, null, 2)}
+
+## PCB Pin Assignments
+${JSON.stringify(this.currentSpec?.pcb?.netList || {}, null, 2)}
+
+## Firmware Files to Review
+${filesContent}
+`
+
+    const response = await llm.chat({
+      messages: [
+        { role: 'system', content: FIRMWARE_REVIEW_PROMPT },
+        { role: 'user', content: reviewContext },
+      ],
+      temperature: 0.2,
+      maxTokens: 2048,
+      projectId: this.projectId,
+    })
+
+    // Parse the review response
+    try {
+      const jsonMatch = response.content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const review = JSON.parse(jsonMatch[0])
+        return {
+          success: true,
+          score: review.score || 0,
+          verdict: review.verdict || 'revise',
+          issues: review.issues || [],
+          positives: review.positives || [],
+          missingFeatures: review.missingFeatures || [],
+          summary: review.summary || 'Review completed',
+        }
+      }
+    } catch {
+      // If JSON parse fails, try to extract key info
+    }
+
+    return {
+      success: true,
+      score: 70,
+      verdict: 'revise',
+      issues: [{ severity: 'warning', description: 'Could not parse review response' }],
+      summary: response.content.slice(0, 200),
+    }
+  }
+
+  private async executeAcceptAndRender(stage: string): Promise<unknown> {
+    if (stage === 'enclosure') {
+      // Trigger STL render for user preview
+      this.addHistoryItem({
+        type: 'progress',
+        stage: 'enclosure',
+        action: 'Enclosure accepted - rendering STL preview for user',
+      })
+
+      // The actual render happens in the frontend via OpenSCAD WASM
+      // We just signal that it's ready
+      return {
+        success: true,
+        stage: 'enclosure',
+        message: 'Enclosure accepted. STL render triggered for user preview.',
+        nextStep: 'mark_stage_complete("enclosure")',
+      }
+    } else if (stage === 'firmware') {
+      this.addHistoryItem({
+        type: 'progress',
+        stage: 'firmware',
+        action: 'Firmware accepted - ready for user review',
+      })
+
+      return {
+        success: true,
+        stage: 'firmware',
+        message: 'Firmware accepted. Code ready for user review.',
+        nextStep: 'mark_stage_complete("firmware")',
+      }
+    }
+
+    return { error: `Unknown stage for accept_and_render: ${stage}` }
   }
 
   private async executeValidation(checkType: string): Promise<unknown> {
@@ -914,6 +1135,68 @@ export class HardwareOrchestrator {
     if (ledHoles) dimensions.ledHoles = ledHoles
 
     return Object.keys(dimensions).length > 0 ? dimensions : null
+  }
+
+  /**
+   * Extract feature information from OpenSCAD code.
+   * Identifies cutouts, mounting points, and design features.
+   */
+  private extractEnclosureFeatures(code: string): Record<string, unknown> | null {
+    if (!code) return null
+
+    const features: Record<string, unknown> = {}
+
+    // Count button cutouts
+    const buttonMatches = code.match(/button|btn/gi)
+    if (buttonMatches) {
+      features.buttonCount = buttonMatches.length
+    }
+
+    // Check for USB cutout
+    if (/usb|type.?c/i.test(code)) {
+      features.hasUsbCutout = true
+    }
+
+    // Check for LED holes/light pipes
+    const ledMatches = code.match(/led|light.?pipe/gi)
+    if (ledMatches) {
+      features.ledCount = ledMatches.length
+    }
+
+    // Check for mounting holes/screw bosses
+    const mountMatches = code.match(/mount|screw|boss/gi)
+    if (mountMatches) {
+      features.hasMountingHoles = true
+      features.mountingCount = mountMatches.length
+    }
+
+    // Check for sensor openings
+    if (/sensor|pir|vent|opening/i.test(code)) {
+      features.hasSensorOpenings = true
+    }
+
+    // Check for lid/base design
+    if (/lid|base|top|bottom/i.test(code)) {
+      features.hasLidDesign = true
+    }
+
+    // Check for snap fits or other assembly features
+    if (/snap|clip|latch|hinge/i.test(code)) {
+      features.hasSnapFits = true
+    }
+
+    // Identify enclosure style
+    if (/rounded|fillet|chamfer/i.test(code)) {
+      features.style = 'rounded'
+    } else if (/wall.?mount/i.test(code)) {
+      features.style = 'wall_mount'
+    } else if (/handheld|ergonomic/i.test(code)) {
+      features.style = 'handheld'
+    } else {
+      features.style = 'box'
+    }
+
+    return Object.keys(features).length > 0 ? features : null
   }
 
   /**
