@@ -21,6 +21,7 @@ import {
 import { clsx } from 'clsx'
 import JSZip from 'jszip'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
+import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
 
 interface ExportItem {
   id: string
@@ -486,12 +487,26 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
     },
   ]
 
+  const spec = project?.spec
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-auto p-6">
       <div className="mb-6 flex-shrink-0">
         <h2 className="text-xl font-semibold text-steel mb-1">Export & Manufacture</h2>
         <p className="text-steel-dim text-sm">Download design files to manufacture your hardware</p>
       </div>
+
+      {/* Previous stage summary - show firmware completion */}
+      {spec?.stages?.firmware?.status === 'complete' && spec?.firmware && (
+        <div className="mb-6 max-w-2xl">
+          <StageCompletionSummary
+            stage="firmware"
+            spec={spec}
+            projectId={project?.id || ''}
+            isExpanded={false}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
         {exportItems.map((item) => {

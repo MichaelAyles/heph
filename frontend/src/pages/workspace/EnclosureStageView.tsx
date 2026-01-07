@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useQueryClient, useMutation } from '@tanstack/react-query'
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import {
   Box,
   ArrowRight,
@@ -16,6 +16,8 @@ import { clsx } from 'clsx'
 import Editor from '@monaco-editor/react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { STLViewer } from '@/components/enclosure/STLViewer'
+import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
+import type { PcbBlock } from '@/db/schema'
 import {
   renderOpenSCAD,
   createSTLBlobUrl,
@@ -83,6 +85,17 @@ export function EnclosureStageView() {
   const pcbArtifacts = spec?.pcb
   const finalSpec = spec?.finalSpec
   const existingEnclosure = spec?.enclosure
+
+  // Fetch blocks for the PCB summary display
+  const { data: blocksData } = useQuery({
+    queryKey: ['blocks'],
+    queryFn: async () => {
+      const res = await fetch('/api/blocks')
+      if (!res.ok) throw new Error('Failed to fetch blocks')
+      return res.json() as Promise<{ blocks: PcbBlock[] }>
+    },
+    enabled: pcbComplete,
+  })
 
   // Preload OpenSCAD WASM when entering this stage
   useEffect(() => {
@@ -588,6 +601,19 @@ export function EnclosureStageView() {
           </div>
         </div>
       </div>
+
+      {/* Previous stage summary - show PCB completion */}
+      {spec?.stages?.pcb?.status === 'complete' && spec?.pcb && (
+        <div className="px-4 pt-4">
+          <StageCompletionSummary
+            stage="pcb"
+            spec={spec}
+            projectId={project?.id || ''}
+            blocks={blocksData?.blocks}
+            isExpanded={false}
+          />
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">

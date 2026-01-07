@@ -6,6 +6,7 @@ import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { BlockSelector } from '@/components/pcb/BlockSelector'
 import { PCB3DViewer } from '@/components/pcb/PCB3DViewer'
+import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
 import { mergeBlockSchematics } from '@/services/pcb-merge'
 import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '@/db/schema'
 
@@ -230,6 +231,18 @@ export function PCBStageView() {
           </div>
         </div>
       </div>
+
+      {/* Previous stage summary - collapsed by default after initial view */}
+      {spec?.stages?.spec?.status === 'complete' && spec?.finalSpec && (
+        <div className="px-4 pt-4">
+          <StageCompletionSummary
+            stage="spec"
+            spec={spec}
+            projectId={project?.id || ''}
+            isExpanded={false}
+          />
+        </div>
+      )}
 
       {/* Main content area */}
       <div className="flex-1 flex min-h-0 overflow-hidden">

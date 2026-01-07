@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
+import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
 import { llm } from '@/services/llm'
 import {
   FIRMWARE_SYSTEM_PROMPT,
@@ -318,7 +319,8 @@ export function FirmwareStageView() {
   const [uploadedBinary, setUploadedBinary] = useState<{ name: string; size: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const enclosureComplete = project?.spec?.stages?.enclosure?.status === 'complete'
+  const spec = project?.spec
+  const enclosureComplete = spec?.stages?.enclosure?.status === 'complete'
 
   // Load saved firmware from project spec
   useEffect(() => {
@@ -786,6 +788,18 @@ Upload this .bin file back to PHAESTUS for distribution.
           </div>
         )}
       </div>
+
+      {/* Previous stage summary - show enclosure completion */}
+      {spec?.stages?.enclosure?.status === 'complete' && spec?.enclosure && (
+        <div className="px-4 pt-4 flex-none">
+          <StageCompletionSummary
+            stage="enclosure"
+            spec={spec}
+            projectId={project?.id || ''}
+            isExpanded={false}
+          />
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
