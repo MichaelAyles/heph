@@ -611,6 +611,7 @@ export function EnclosureStageView() {
             projectId={project?.id || ''}
             blocks={blocksData?.blocks}
             isExpanded={false}
+            currentStage="enclosure"
           />
         </div>
       )}

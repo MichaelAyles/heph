@@ -797,6 +797,7 @@ Upload this .bin file back to PHAESTUS for distribution.
             spec={spec}
             projectId={project?.id || ''}
             isExpanded={false}
+            currentStage="firmware"
           />
         </div>
       )}

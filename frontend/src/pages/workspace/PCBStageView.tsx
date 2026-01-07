@@ -240,6 +240,7 @@ export function PCBStageView() {
             spec={spec}
             projectId={project?.id || ''}
             isExpanded={false}
+            currentStage="pcb"
           />
         </div>
       )}

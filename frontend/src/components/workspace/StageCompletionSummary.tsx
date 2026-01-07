@@ -30,6 +30,8 @@ interface StageCompletionSummaryProps {
   blocks?: PcbBlock[]
   isExpanded?: boolean
   onToggle?: (expanded: boolean) => void
+  /** The stage the user is currently viewing - hides "continue" button if already there */
+  currentStage?: WorkspaceStage
 }
 
 export function StageCompletionSummary({
@@ -39,6 +41,7 @@ export function StageCompletionSummary({
   blocks,
   isExpanded: controlledExpanded,
   onToggle,
+  currentStage,
 }: StageCompletionSummaryProps) {
   const navigate = useNavigate()
   const [internalExpanded, setInternalExpanded] = useState(true)
@@ -81,7 +84,7 @@ export function StageCompletionSummary({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {nextStage && (
+          {nextStage && nextStage !== currentStage && (
             <button
               onClick={(e) => {
                 e.stopPropagation()

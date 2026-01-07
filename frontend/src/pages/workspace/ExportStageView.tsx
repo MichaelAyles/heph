@@ -703,6 +703,7 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
             spec={spec}
             projectId={project?.id || ''}
             isExpanded={false}
+            currentStage="export"
           />
         </div>
       )}
