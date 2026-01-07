@@ -778,10 +778,10 @@ export class HardwareOrchestrator {
         files = parsed.files || []
       } catch {
         // If JSON parse fails, create a single main.cpp file
-        files = [{ path: 'src/main.cpp', content: response.content, language: 'cpp' }]
+        files = [{ path: 'src/main.cpp', content: response.content, language: 'cpp' as const }]
       }
     } else {
-      files = [{ path: 'src/main.cpp', content: response.content, language: 'cpp' }]
+      files = [{ path: 'src/main.cpp', content: response.content, language: 'cpp' as const }]
     }
 
     if (this.currentSpec) {
@@ -823,8 +823,17 @@ export class HardwareOrchestrator {
 Name: ${spec.name}
 Summary: ${spec.summary}
 
-## Components
-${JSON.stringify(spec.components, null, 2)}
+## Inputs
+${JSON.stringify(spec.inputs, null, 2)}
+
+## Outputs
+${JSON.stringify(spec.outputs, null, 2)}
+
+## Power
+${JSON.stringify(spec.power, null, 2)}
+
+## Enclosure Requirements
+${JSON.stringify(spec.enclosure, null, 2)}
 
 ## PCB Dimensions
 ${JSON.stringify(this.currentSpec?.pcb?.boardSize || {}, null, 2)}
@@ -892,8 +901,17 @@ ${code}
 Name: ${spec.name}
 Summary: ${spec.summary}
 
-## Components
-${JSON.stringify(spec.components, null, 2)}
+## Inputs
+${JSON.stringify(spec.inputs, null, 2)}
+
+## Outputs
+${JSON.stringify(spec.outputs, null, 2)}
+
+## Power
+${JSON.stringify(spec.power, null, 2)}
+
+## Communication
+${JSON.stringify(spec.communication, null, 2)}
 
 ## PCB Pin Assignments
 ${JSON.stringify(this.currentSpec?.pcb?.netList || {}, null, 2)}
