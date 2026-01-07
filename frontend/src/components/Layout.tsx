@@ -42,9 +42,9 @@ export function Layout() {
   const projectId = params.id || projectIdFromPath
 
   return (
-    <div className="min-h-screen flex">
+    <div className="h-screen flex overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-surface-900 border-r border-surface-700 flex flex-col">
+      <aside className="w-64 bg-surface-900 border-r border-surface-700 flex flex-col flex-shrink-0">
         {/* Logo */}
         <Link
           to="/"
@@ -55,7 +55,7 @@ export function Layout() {
         </Link>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href
             return (
@@ -128,7 +128,7 @@ export function Layout() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-surface-700 space-y-3">
+        <div className="p-4 border-t border-surface-700 space-y-3 flex-shrink-0">
           {/* User */}
           <div className="flex items-center gap-2 text-sm">
             <User className="w-4 h-4 text-steel-dim" strokeWidth={1.5} />
@@ -169,7 +169,7 @@ export function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-h-screen bg-ash">
+      <main className="flex-1 flex flex-col min-h-0 bg-ash overflow-hidden">
         <Outlet />
       </main>
     </div>

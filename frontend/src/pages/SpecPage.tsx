@@ -1167,8 +1167,8 @@ export function SpecPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col">
-      <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700 flex-shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-base font-semibold text-steel tracking-tight">SPECIFICATION</h1>
           <span className="font-mono text-xs text-steel-dim">
@@ -1183,8 +1183,8 @@ export function SpecPage() {
         )}
       </header>
 
-      <div className="flex-1 p-8 overflow-auto">
-        <div className="max-w-3xl mx-auto">
+      <div className="flex-1 min-h-0 p-8 overflow-auto">
+        <div className="max-w-4xl mx-auto">
           <StepIndicator currentStep={currentStep} status={project.status} />
 
           {/* Step 0: Feasibility */}
