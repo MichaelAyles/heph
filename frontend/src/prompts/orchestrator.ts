@@ -159,8 +159,25 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
       properties: {
         blocks: {
           type: 'array',
-          description: 'Array of block placements',
-          items: { type: 'object' },
+          description: 'Array of block placements on the grid',
+          items: {
+            type: 'object',
+            properties: {
+              blockSlug: {
+                type: 'string',
+                description: 'The slug identifier of the block (e.g., "esp32-c6-module", "lipo-charger")',
+              },
+              gridX: {
+                type: 'number',
+                description: 'X position on the grid (0-based)',
+              },
+              gridY: {
+                type: 'number',
+                description: 'Y position on the grid (0-based)',
+              },
+            },
+            required: ['blockSlug', 'gridX', 'gridY'],
+          },
         },
         reasoning: {
           type: 'string',

@@ -570,20 +570,25 @@ export class HardwareOrchestrator {
   }
 
   private async executeSelectBlocks(
-    blocks: Array<{ blockSlug: string; gridX: number; gridY: number }>,
+    blocks: Array<{ blockSlug?: string; block_slug?: string; gridX?: number; grid_x?: number; gridY?: number; grid_y?: number }>,
     reasoning: string
   ): Promise<unknown> {
     let placedBlocks: PlacedBlock[]
 
     if (blocks && blocks.length > 0) {
-      // Use provided blocks
-      placedBlocks = blocks.map((b) => ({
-        blockId: b.blockSlug,
-        blockSlug: b.blockSlug,
-        gridX: b.gridX,
-        gridY: b.gridY,
-        rotation: 0 as const,
-      }))
+      // Use provided blocks - handle both camelCase and snake_case from LLM
+      placedBlocks = blocks.map((b) => {
+        const slug = b.blockSlug || b.block_slug || ''
+        const x = b.gridX ?? b.grid_x ?? 0
+        const y = b.gridY ?? b.grid_y ?? 0
+        return {
+          blockId: slug,
+          blockSlug: slug,
+          gridX: x,
+          gridY: y,
+          rotation: 0 as const,
+        }
+      })
     } else if (this.currentSpec?.finalSpec) {
       // Auto-select blocks
       const selection = autoSelectBlocks(this.currentSpec.finalSpec, this.availableBlocks)
