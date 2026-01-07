@@ -1235,7 +1235,7 @@ export function SpecPage() {
           {/* Step 3: Blueprint Selection */}
           {currentStep === 3 && (
             <SelectionStep
-              blueprints={spec.blueprints}
+              blueprints={spec.blueprints.filter((bp): bp is { url: string; prompt: string } => bp !== null)}
               onSelect={handleBlueprintSelect}
               onRegenerate={handleBlueprintRegenerate}
             />
