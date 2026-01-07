@@ -194,6 +194,17 @@ export class HardwareOrchestrator {
         currentAction: 'Initializing orchestrator...',
       })
 
+      // Build stage completion status for the init prompt
+      const stageStatus = this.currentSpec?.stages
+        ? {
+            spec: this.currentSpec.stages.spec?.status === 'complete',
+            pcb: this.currentSpec.stages.pcb?.status === 'complete',
+            enclosure: this.currentSpec.stages.enclosure?.status === 'complete',
+            firmware: this.currentSpec.stages.firmware?.status === 'complete',
+            export: this.currentSpec.stages.export?.status === 'complete',
+          }
+        : undefined
+
       // Initialize conversation
       this.conversationHistory = [
         {
@@ -202,7 +213,7 @@ export class HardwareOrchestrator {
         },
         {
           role: 'user',
-          content: buildOrchestratorInitPrompt(description, this.mode),
+          content: buildOrchestratorInitPrompt(description, this.mode, stageStatus),
         },
       ]
     }

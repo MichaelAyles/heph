@@ -61,7 +61,19 @@ generate_firmware(feedback="Fix issues: 1) Missing deep sleep. 2) Wrong pin for 
 ## Decision Making
 - VIBE IT mode: Make sensible defaults, minimize user interaction
 - FIX IT mode: Ask user on major decisions only
-- DESIGN IT mode: Present options at each step`
+- DESIGN IT mode: Present options at each step
+
+## Answering Questions
+You can answer questions about the project at any time, even after all stages are complete.
+When the user asks a question (not a command), respond conversationally without calling tools.
+
+## Breaking Changes Warning
+When the user requests changes to an earlier stage while later stages are complete, WARN them:
+- Spec changes → may break PCB, Enclosure, and Firmware
+- PCB changes → may break Enclosure (dimensions) and Firmware (pins)
+- Enclosure changes → may break Firmware (button positions)
+
+Example warning: "Changing the PCB will invalidate your enclosure (wrong dimensions) and firmware (wrong pins). I'll need to regenerate those stages. Proceed?"`
 
 // Legacy prompt (kept for reference, ~850 tokens)
 export const ORCHESTRATOR_SYSTEM_PROMPT_LEGACY = `You are PHAESTUS, an autonomous hardware design orchestrator. Your mission is to transform a user's natural language hardware description into a complete, manufacturable design package.
@@ -472,12 +484,21 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
 // HELPER FUNCTIONS
 // =============================================================================
 
+interface StageCompletionStatus {
+  spec: boolean
+  pcb: boolean
+  enclosure: boolean
+  firmware: boolean
+  export: boolean
+}
+
 /**
  * Build the initial orchestrator prompt for a new project
  */
 export function buildOrchestratorInitPrompt(
   description: string,
-  mode: 'vibe_it' | 'fix_it' | 'design_it'
+  mode: 'vibe_it' | 'fix_it' | 'design_it',
+  stageStatus?: StageCompletionStatus
 ): string {
   const modeInstructions = {
     vibe_it: `You are in VIBE IT mode. Make all decisions autonomously using sensible defaults. Do not ask for user input unless absolutely necessary. Aim for a complete design in one autonomous session.`,
@@ -485,7 +506,32 @@ export function buildOrchestratorInitPrompt(
     design_it: `You are in DESIGN IT mode. Guide the user through each decision point. Present options and wait for user input before proceeding with significant choices.`,
   }
 
-  return `${modeInstructions[mode]}
+  // Build stage status info if provided
+  let stageInfo = ''
+  if (stageStatus) {
+    const completed = Object.entries(stageStatus)
+      .filter(([, done]) => done)
+      .map(([stage]) => stage)
+    if (completed.length > 0) {
+      stageInfo = `\n\nCompleted stages: ${completed.join(', ')}${completed.length === 5 ? ' (all complete)' : ''}`
+      if (completed.length === 5) {
+        stageInfo += '\nThe user may ask questions or request changes. Remember to warn about breaking changes if they modify an earlier stage.'
+      }
+    }
+  }
+
+  // If all stages are complete, use a different prompt
+  const allComplete = stageStatus && Object.values(stageStatus).every(Boolean)
+  if (allComplete) {
+    return `${modeInstructions[mode]}${stageInfo}
+
+User's hardware description:
+"${description}"
+
+The project is complete. The user can ask questions about the design or request changes. If they request changes to an earlier stage, warn them about which later stages will need to be regenerated.`
+  }
+
+  return `${modeInstructions[mode]}${stageInfo}
 
 User's hardware description:
 "${description}"

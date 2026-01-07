@@ -90,17 +90,11 @@ export function OrchestratorSidebar({
     ? history
     : history.filter((item) => item.type !== 'thinking')
 
-  // Check if project is eligible for orchestration
-  // Include all spec stage statuses so users can get AI help during spec design
-  const isEligible =
-    project &&
-    (project.status === 'draft' ||
-      project.status === 'analyzing' ||
-      project.status === 'refining' ||
-      project.status === 'generating' ||
-      project.status === 'selecting' ||
-      project.status === 'finalizing' ||
-      (project.status === 'complete' && !spec?.stages?.export?.completedAt))
+  // Always allow chat if there's a project - users can ask questions anytime
+  const isEligible = !!project
+
+  // Check if project is fully complete (all stages done)
+  const isFullyComplete = spec?.stages?.export?.status === 'complete'
 
   const isRunning = status === 'running'
   const isIdle = status === 'idle'
@@ -300,10 +294,14 @@ export function OrchestratorSidebar({
             </div>
 
             <h3 className="text-lg font-semibold text-steel mb-2">PHAESTUS AI</h3>
-            <p className="text-sm text-steel-dim mb-4">{config.description}</p>
+            <p className="text-sm text-steel-dim mb-4">
+              {isFullyComplete
+                ? 'Ask questions or request changes'
+                : config.description}
+            </p>
 
             {/* Progress info */}
-            {progressInfo && (
+            {progressInfo && !isFullyComplete && (
               <div className="mb-4 text-xs text-steel-dim">
                 {progressInfo.current ? (
                   <span>
@@ -317,6 +315,12 @@ export function OrchestratorSidebar({
                     )}
                   </span>
                 ) : null}
+              </div>
+            )}
+
+            {isFullyComplete && (
+              <div className="mb-4 text-xs text-emerald-400/70">
+                All stages complete
               </div>
             )}
 
@@ -336,6 +340,11 @@ export function OrchestratorSidebar({
                   <>
                     <Play className="w-4 h-4" />
                     Continue Design
+                  </>
+                ) : isFullyComplete ? (
+                  <>
+                    <MessageSquare className="w-4 h-4" />
+                    Ask Question
                   </>
                 ) : (
                   <>
