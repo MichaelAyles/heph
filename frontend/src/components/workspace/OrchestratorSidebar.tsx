@@ -13,6 +13,7 @@ import {
   XCircle,
   RefreshCw,
   ChevronRight,
+  ChevronDown,
   Play,
   Pause,
   RotateCcw,
@@ -22,6 +23,7 @@ import {
   Zap,
   PanelRightClose,
   PanelRightOpen,
+  Check,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useOrchestratorStore } from '@/stores/orchestrator'
@@ -103,6 +105,64 @@ export function OrchestratorSidebar({
   const isRunning = status === 'running'
   const isIdle = status === 'idle'
   const canStart = isIdle && isEligible && controlMode !== 'design_it'
+
+  // Check if there's saved state to resume from
+  const savedState = spec?.orchestratorState
+  const canResume =
+    isIdle &&
+    savedState &&
+    (savedState.status === 'paused' || savedState.status === 'running') &&
+    savedState.conversationHistory?.length > 0
+
+  // Determine current progress for display
+  const getProgressInfo = () => {
+    if (!spec?.stages) return null
+    const stages = ['spec', 'pcb', 'enclosure', 'firmware', 'export'] as const
+    for (let i = stages.length - 1; i >= 0; i--) {
+      const stage = spec.stages[stages[i]]
+      if (stage?.status === 'complete') {
+        return { lastComplete: stages[i], next: stages[i + 1] || null }
+      }
+      if (stage?.status === 'in_progress') {
+        return { current: stages[i], lastComplete: i > 0 ? stages[i - 1] : null }
+      }
+    }
+    return null
+  }
+  const progressInfo = getProgressInfo()
+
+  // State for manual stage completion dropdown
+  const [showStageMenu, setShowStageMenu] = useState(false)
+
+  // Get stages that can be manually marked complete
+  const getIncompleteStages = () => {
+    if (!spec?.stages) return []
+    const stages = ['spec', 'pcb', 'enclosure', 'firmware', 'export'] as const
+    return stages.filter((s) => spec.stages?.[s]?.status !== 'complete')
+  }
+
+  // Handle marking a stage as complete manually
+  const handleMarkStageComplete = async (stageName: string) => {
+    if (!onSpecUpdate || !spec?.stages) return
+
+    const now = new Date().toISOString()
+    const updatedStages = {
+      spec: spec.stages.spec,
+      pcb: spec.stages.pcb,
+      enclosure: spec.stages.enclosure,
+      firmware: spec.stages.firmware,
+      export: spec.stages.export,
+    }
+
+    // Update the specific stage
+    updatedStages[stageName as keyof typeof updatedStages] = {
+      status: 'complete' as const,
+      completedAt: now,
+    }
+
+    await onSpecUpdate({ stages: updatedStages })
+    setShowStageMenu(false)
+  }
 
   // Mode configuration
   const modeConfig = {
@@ -240,9 +300,27 @@ export function OrchestratorSidebar({
             </div>
 
             <h3 className="text-lg font-semibold text-steel mb-2">PHAESTUS AI</h3>
-            <p className="text-sm text-steel-dim mb-6">{config.description}</p>
+            <p className="text-sm text-steel-dim mb-4">{config.description}</p>
 
-            {canStart ? (
+            {/* Progress info */}
+            {progressInfo && (
+              <div className="mb-4 text-xs text-steel-dim">
+                {progressInfo.current ? (
+                  <span>
+                    Currently on <span className="text-copper font-medium capitalize">{progressInfo.current}</span> stage
+                  </span>
+                ) : progressInfo.lastComplete ? (
+                  <span>
+                    <span className="text-emerald-400 font-medium capitalize">{progressInfo.lastComplete}</span> complete
+                    {progressInfo.next && (
+                      <> → <span className="text-copper font-medium capitalize">{progressInfo.next}</span> next</>
+                    )}
+                  </span>
+                ) : null}
+              </div>
+            )}
+
+            {canStart || canResume ? (
               <button
                 onClick={handleStart}
                 className={clsx(
@@ -254,13 +332,50 @@ export function OrchestratorSidebar({
                     'bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30'
                 )}
               >
-                <Zap className="w-4 h-4" />
-                Start Design
+                {canResume ? (
+                  <>
+                    <Play className="w-4 h-4" />
+                    Continue Design
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    Start Design
+                  </>
+                )}
               </button>
             ) : controlMode === 'design_it' ? (
-              <p className="text-xs text-steel-dim">
-                Manual mode - use the workspace tools directly
-              </p>
+              <div className="text-center">
+                <p className="text-xs text-steel-dim mb-3">
+                  Manual mode - use the workspace tools directly
+                </p>
+                {/* Manual stage completion for Design It mode */}
+                {getIncompleteStages().length > 0 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowStageMenu(!showStageMenu)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm bg-surface-700 text-steel hover:bg-surface-600 rounded-lg transition-colors mx-auto"
+                    >
+                      <Check className="w-4 h-4" />
+                      Mark Stage Complete
+                      <ChevronDown className={clsx('w-3 h-3 transition-transform', showStageMenu && 'rotate-180')} />
+                    </button>
+                    {showStageMenu && (
+                      <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-surface-800 border border-surface-600 rounded-lg shadow-lg py-1 z-10 min-w-[140px]">
+                        {getIncompleteStages().map((stage) => (
+                          <button
+                            key={stage}
+                            onClick={() => handleMarkStageComplete(stage)}
+                            className="w-full px-3 py-1.5 text-left text-sm text-steel hover:bg-surface-700 capitalize"
+                          >
+                            {stage}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : !isEligible ? (
               <p className="text-xs text-steel-dim">Project not eligible for automation</p>
             ) : null}
@@ -333,9 +448,7 @@ export function OrchestratorSidebar({
         ) : status === 'paused' ? (
           <div className="flex gap-2">
             <button
-              onClick={() => {
-                /* Resume would go here */
-              }}
+              onClick={handleStart}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-copper/20 text-copper hover:bg-copper/30 rounded-lg transition-colors"
             >
               <Play className="w-4 h-4" />
@@ -359,10 +472,41 @@ export function OrchestratorSidebar({
             </button>
           </div>
         ) : isIdle ? (
-          <div className="text-xs text-center text-steel-dim">
-            {filteredHistory.length > 0
-              ? `${filteredHistory.length} actions completed`
-              : 'Ready to assist'}
+          <div className="flex items-center justify-between text-xs text-steel-dim">
+            <span>
+              {filteredHistory.length > 0
+                ? `${filteredHistory.length} actions completed`
+                : 'Ready to assist'}
+            </span>
+            {/* Manual stage completion for any mode when idle */}
+            {getIncompleteStages().length > 0 && getIncompleteStages().length < 5 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowStageMenu(!showStageMenu)}
+                  className="flex items-center gap-1 text-steel-dim hover:text-steel transition-colors"
+                  title="Mark a stage as complete"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <ChevronDown className={clsx('w-3 h-3 transition-transform', showStageMenu && 'rotate-180')} />
+                </button>
+                {showStageMenu && (
+                  <div className="absolute bottom-full right-0 mb-1 bg-surface-800 border border-surface-600 rounded-lg shadow-lg py-1 z-10 min-w-[140px]">
+                    <div className="px-3 py-1 text-[10px] text-steel-dim uppercase tracking-wide border-b border-surface-700">
+                      Mark Complete
+                    </div>
+                    {getIncompleteStages().map((stage) => (
+                      <button
+                        key={stage}
+                        onClick={() => handleMarkStageComplete(stage)}
+                        className="w-full px-3 py-1.5 text-left text-sm text-steel hover:bg-surface-700 capitalize"
+                      >
+                        {stage}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : null}
       </div>
