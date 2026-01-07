@@ -44,6 +44,7 @@ export function FilesStageView() {
       <ProjectFileManager
         spec={spec}
         projectName={project?.name ?? 'project'}
+        projectId={project?.id ?? ''}
         className="flex-1"
       />
     </div>

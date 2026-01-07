@@ -5,7 +5,7 @@
  * Organized like a git repository structure.
  */
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   FolderOpen,
   FileText,
@@ -18,11 +18,29 @@ import {
   Eye,
   Copy,
   Check,
+  MessageSquare,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { STLViewer } from '@/components/enclosure/STLViewer'
 import type { ProjectSpec } from '@/db/schema'
+
+interface ConversationMessage {
+  role: string
+  content: string | Array<{ type: string; text?: string }>
+}
+
+interface Conversation {
+  id: string
+  messagesIn: ConversationMessage[]
+  messageOut: string | null
+  model: string | null
+  createdAt: string
+  promptTokens: number | null
+  completionTokens: number | null
+}
 
 /**
  * File node in the virtual file tree
@@ -41,6 +59,7 @@ interface ProjectFileNode {
 interface ProjectFileManagerProps {
   spec: ProjectSpec
   projectName: string
+  projectId: string
   className?: string
 }
 
@@ -342,10 +361,75 @@ function buildProjectTree(spec: ProjectSpec, projectName: string): ProjectFileNo
 }
 
 /**
+ * Format conversations as markdown (grouped by stage)
+ */
+function formatConversationsAsMarkdown(conversations: Conversation[]): string {
+  if (conversations.length === 0) {
+    return '# Conversation History\n\nNo conversations recorded for this project.'
+  }
+
+  let md = `# Conversation History\n\n`
+  md += `*${conversations.length} conversation${conversations.length !== 1 ? 's' : ''} recorded*\n\n`
+
+  // Sort by date (oldest first for readability)
+  const sorted = [...conversations].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+
+  for (const conv of sorted) {
+    const date = new Date(conv.createdAt).toLocaleString()
+    md += `---\n\n## ${date}\n\n`
+
+    if (conv.model) {
+      md += `*Model: ${conv.model}*\n\n`
+    }
+
+    // Format messages
+    for (const msg of conv.messagesIn) {
+      const roleLabel =
+        msg.role === 'system' ? '**System**' : msg.role === 'user' ? '**User**' : '**Assistant**'
+      const content =
+        typeof msg.content === 'string'
+          ? msg.content
+          : msg.content.map((c) => c.text || '').join('\n')
+
+      // Truncate very long system prompts
+      const displayContent =
+        msg.role === 'system' && content.length > 500
+          ? content.slice(0, 500) + '\n\n*[System prompt truncated...]*'
+          : content
+
+      md += `${roleLabel}:\n\n${displayContent}\n\n`
+    }
+
+    // Add response
+    if (conv.messageOut) {
+      // Truncate very long responses for readability
+      const responseContent =
+        conv.messageOut.length > 2000
+          ? conv.messageOut.slice(0, 2000) + '\n\n*[Response truncated...]*'
+          : conv.messageOut
+      md += `**Assistant**:\n\n${responseContent}\n\n`
+    }
+
+    // Add token stats if available
+    if (conv.promptTokens || conv.completionTokens) {
+      md += `*Tokens: ${conv.promptTokens || 0} in, ${conv.completionTokens || 0} out*\n\n`
+    }
+  }
+
+  return md
+}
+
+/**
  * Get icon for file type
  */
 function getFileIcon(node: ProjectFileNode) {
-  if (node.type === 'folder') return FolderOpen
+  if (node.type === 'folder') {
+    // Special icon for chats folder
+    if (node.name === 'chats') return MessageSquare
+    return FolderOpen
+  }
 
   switch (node.previewType) {
     case 'image':
@@ -354,6 +438,10 @@ function getFileIcon(node: ProjectFileNode) {
     case 'kicanvas':
       return Box
     case 'markdown':
+      // Use message icon for chat files
+      if (node.name.endsWith('-chat.md') || node.name === 'all-conversations.md') {
+        return MessageSquare
+      }
       return FileText
     default:
       return FileCode
@@ -447,6 +535,14 @@ function FileTreeItem({
  */
 function FilePreview({ node }: { node: ProjectFileNode }) {
   const [copied, setCopied] = useState(false)
+  const [imageError, setImageError] = useState(false)
+  const [imageLoading, setImageLoading] = useState(true)
+
+  // Reset image state when node changes
+  useEffect(() => {
+    setImageError(false)
+    setImageLoading(true)
+  }, [node.path])
 
   const handleCopy = useCallback(() => {
     if (node.content) {
@@ -471,11 +567,40 @@ function FilePreview({ node }: { node: ProjectFileNode }) {
   if (node.previewType === 'image' && node.r2Url) {
     return (
       <div className="flex-1 flex items-center justify-center bg-surface-900 p-4">
-        <img
-          src={node.r2Url}
-          alt={node.name}
-          className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
-        />
+        {imageLoading && !imageError && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-copper animate-spin" />
+          </div>
+        )}
+        {imageError ? (
+          <div className="text-center text-steel-dim">
+            <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p className="text-sm mb-2">Failed to load image</p>
+            <a
+              href={node.r2Url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-copper hover:text-copper-light underline"
+            >
+              Open in new tab
+            </a>
+          </div>
+        ) : (
+          <img
+            src={node.r2Url}
+            alt={node.name}
+            className={clsx(
+              'max-w-full max-h-full object-contain rounded-lg shadow-lg',
+              imageLoading && 'opacity-0'
+            )}
+            onLoad={() => setImageLoading(false)}
+            onError={() => {
+              setImageError(true)
+              setImageLoading(false)
+            }}
+            crossOrigin="anonymous"
+          />
+        )}
       </div>
     )
   }
@@ -546,13 +671,102 @@ function FilePreview({ node }: { node: ProjectFileNode }) {
 /**
  * Project File Manager Component
  */
-export function ProjectFileManager({ spec, projectName, className }: ProjectFileManagerProps) {
+export function ProjectFileManager({
+  spec,
+  projectName,
+  projectId,
+  className,
+}: ProjectFileManagerProps) {
   const [selectedFile, setSelectedFile] = useState<ProjectFileNode | null>(null)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    new Set(['spec', 'pcb', 'enclosure', 'firmware'])
+    new Set(['spec', 'pcb', 'enclosure', 'firmware', 'chats'])
   )
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [conversationsLoading, setConversationsLoading] = useState(true)
+  const [conversationsError, setConversationsError] = useState<string | null>(null)
 
-  const fileTree = useMemo(() => buildProjectTree(spec, projectName), [spec, projectName])
+  // Fetch conversations for this project
+  useEffect(() => {
+    async function fetchConversations() {
+      if (!projectId) return
+
+      try {
+        setConversationsLoading(true)
+        setConversationsError(null)
+
+        const res = await fetch(`/api/projects/${projectId}/conversations?limit=200`)
+        if (!res.ok) {
+          if (res.status === 403) {
+            setConversationsError('Admin access required')
+          } else {
+            setConversationsError('Failed to load conversations')
+          }
+          return
+        }
+
+        const data = (await res.json()) as { conversations: Conversation[] }
+        setConversations(data.conversations || [])
+      } catch (err) {
+        console.error('Failed to fetch conversations:', err)
+        setConversationsError('Failed to load conversations')
+      } finally {
+        setConversationsLoading(false)
+      }
+    }
+
+    fetchConversations()
+  }, [projectId])
+
+  // Build file tree with conversations
+  const fileTree = useMemo(() => {
+    const tree = buildProjectTree(spec, projectName)
+
+    // Add chats folder
+    const chatsFolder: ProjectFileNode = {
+      name: 'chats',
+      path: 'chats',
+      type: 'folder',
+      children: [],
+    }
+
+    if (conversationsLoading) {
+      chatsFolder.children!.push({
+        name: 'Loading...',
+        path: 'chats/loading',
+        type: 'file',
+        previewType: 'markdown',
+        content: '# Loading Conversations\n\nPlease wait...',
+      })
+    } else if (conversationsError) {
+      chatsFolder.children!.push({
+        name: 'Error',
+        path: 'chats/error',
+        type: 'file',
+        previewType: 'markdown',
+        content: `# Unable to Load Conversations\n\n${conversationsError}\n\nConversation history is only available to admin users.`,
+      })
+    } else if (conversations.length === 0) {
+      chatsFolder.children!.push({
+        name: 'No conversations',
+        path: 'chats/empty',
+        type: 'file',
+        previewType: 'markdown',
+        content: '# No Conversations\n\nNo AI conversations have been recorded for this project yet.',
+      })
+    } else {
+      // Add all conversations as a single markdown file
+      chatsFolder.children!.push({
+        name: 'all-conversations.md',
+        path: 'chats/all-conversations.md',
+        type: 'file',
+        previewType: 'markdown',
+        content: formatConversationsAsMarkdown(conversations),
+      })
+    }
+
+    tree.push(chatsFolder)
+    return tree
+  }, [spec, projectName, conversations, conversationsLoading, conversationsError])
 
   const handleSelectFile = useCallback((node: ProjectFileNode) => {
     setSelectedFile(node)
