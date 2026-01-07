@@ -19,8 +19,9 @@ You are the BRAIN. Specialists execute tasks and return FULL results to you. You
 ## Workflow
 
 ### Spec Stage
-1. analyze_feasibility → answer_questions_auto → generate_blueprints → select_blueprint → finalize_spec
-2. mark_stage_complete('spec')
+1. analyze_feasibility → answer_questions_auto → generate_blueprints → select_blueprint
+2. generate_project_names → select_project_name (pick best or in DESIGN IT mode, let user choose)
+3. finalize_spec → mark_stage_complete('spec')
 
 ### PCB Stage
 1. select_pcb_blocks → validate_cross_stage
@@ -188,9 +189,41 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'generate_project_names',
+    description:
+      'Generate 4 creative name suggestions for the project. Call this after selecting a blueprint.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'select_project_name',
+    description: 'Select or set the project name. Use index 0-3 to pick a generated name, or provide custom name.',
+    parameters: {
+      type: 'object',
+      properties: {
+        index: {
+          type: 'number',
+          description: 'Index of the generated name to select (0-3), or omit to use custom',
+        },
+        customName: {
+          type: 'string',
+          description: 'Custom name if not using a generated option',
+        },
+        reasoning: {
+          type: 'string',
+          description: 'Why this name was chosen',
+        },
+      },
+      required: ['reasoning'],
+    },
+  },
+  {
     name: 'finalize_spec',
     description:
-      'Generate the final locked specification with BOM from the selected blueprint and decisions.',
+      'Generate the final locked specification with BOM. Call after project name is selected.',
     parameters: {
       type: 'object',
       properties: {

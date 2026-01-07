@@ -24,6 +24,7 @@ import {
   ENCLOSURE_SYSTEM_PROMPT,
 } from '@/prompts/enclosure'
 import { ENCLOSURE_REVIEW_PROMPT, FIRMWARE_REVIEW_PROMPT } from '@/prompts/review'
+import { NAMING_SYSTEM_PROMPT, buildNamingPrompt } from '@/prompts/naming'
 import {
   buildFirmwarePrompt,
   buildFirmwareInputFromSpec,
@@ -366,6 +367,18 @@ export class HardwareOrchestrator {
           result = await this.executeSelectBlueprint(args.index as number, args.reasoning as string)
           break
 
+        case 'generate_project_names':
+          result = await this.executeGenerateProjectNames()
+          break
+
+        case 'select_project_name':
+          result = await this.executeSelectProjectName(
+            args.index as number | undefined,
+            args.customName as string | undefined,
+            args.reasoning as string
+          )
+          break
+
         case 'finalize_spec':
           result = await this.executeFinalizeSpec(args.confirm as boolean)
           break
@@ -564,14 +577,96 @@ export class HardwareOrchestrator {
     return { success: true, selectedIndex: index, reasoning }
   }
 
+  // Store generated names for selection
+  private generatedNames: Array<{ name: string; style: string; reasoning: string }> = []
+  private selectedProjectName: string | null = null
+
+  private async executeGenerateProjectNames(): Promise<unknown> {
+    if (!this.currentSpec) {
+      return { error: 'No spec to generate names for' }
+    }
+
+    const feasibility = this.currentSpec.feasibility || {}
+    const decisions = this.currentSpec.decisions || []
+
+    const prompt = buildNamingPrompt(
+      this.currentSpec.description,
+      {
+        primaryFunction: (feasibility as { primaryFunction?: string }).primaryFunction,
+        matchedComponents: (feasibility as { matchedComponents?: string[] }).matchedComponents,
+      },
+      decisions.map((d) => ({ question: d.question, answer: d.answer }))
+    )
+
+    const response = await llm.chat({
+      messages: [
+        { role: 'system', content: NAMING_SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.8, // Higher creativity for names
+      maxTokens: 1024,
+      projectId: this.projectId,
+    })
+
+    // Parse names from response
+    try {
+      const jsonMatch = response.content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        this.generatedNames = parsed.names || []
+      }
+    } catch {
+      // Fallback names if parsing fails
+      this.generatedNames = [
+        { name: 'Project Alpha', style: 'abstract', reasoning: 'Default fallback' },
+        { name: 'DevBoard One', style: 'compound', reasoning: 'Default fallback' },
+        { name: 'Prototype', style: 'punchy', reasoning: 'Default fallback' },
+        { name: 'HardwareKit', style: 'descriptive', reasoning: 'Default fallback' },
+      ]
+    }
+
+    return {
+      success: true,
+      names: this.generatedNames,
+      message: 'Generated 4 name options. Select one or provide a custom name.',
+    }
+  }
+
+  private async executeSelectProjectName(
+    index?: number,
+    customName?: string,
+    reasoning?: string
+  ): Promise<unknown> {
+    if (customName) {
+      this.selectedProjectName = customName
+      return {
+        success: true,
+        selectedName: customName,
+        reasoning: reasoning || 'Custom name provided',
+      }
+    }
+
+    if (index !== undefined && index >= 0 && index < this.generatedNames.length) {
+      this.selectedProjectName = this.generatedNames[index].name
+      return {
+        success: true,
+        selectedName: this.selectedProjectName,
+        reasoning: reasoning || this.generatedNames[index].reasoning,
+      }
+    }
+
+    return { error: 'Must provide either index (0-3) or customName' }
+  }
+
   private async executeFinalizeSpec(confirm: boolean): Promise<unknown> {
     if (!confirm) {
       return { error: 'Confirmation required to finalize spec' }
     }
 
     // Generate final spec from decisions
+    // Use selected name from naming step, or fallback to description
     const finalSpec: FinalSpec = {
-      name: this.currentSpec?.description?.slice(0, 50) || 'Hardware Project',
+      name: this.selectedProjectName || this.currentSpec?.description?.slice(0, 50) || 'Hardware Project',
       summary: this.currentSpec?.description || '',
       pcbSize: { width: 50.8, height: 38.1, unit: 'mm' },
       inputs: [],
