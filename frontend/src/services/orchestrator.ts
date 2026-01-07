@@ -29,7 +29,14 @@ import {
   buildFirmwareInputFromSpec,
   FIRMWARE_SYSTEM_PROMPT,
 } from '@/prompts/firmware'
-import type { ProjectSpec, FinalSpec, PlacedBlock, PcbBlock, FirmwareFile } from '@/db/schema'
+import type {
+  ProjectSpec,
+  FinalSpec,
+  PlacedBlock,
+  PcbBlock,
+  FirmwareFile,
+  PersistedOrchestratorState,
+} from '@/db/schema'
 
 // =============================================================================
 // TYPES
@@ -151,29 +158,62 @@ export class HardwareOrchestrator {
           stages: defaultStages,
         }
 
-    this.updateState({
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      currentAction: 'Initializing orchestrator...',
-    })
+    // Check if we're resuming from a paused state
+    const savedState = existingSpec?.orchestratorState
+    const isResuming =
+      savedState &&
+      (savedState.status === 'paused' || savedState.status === 'running') &&
+      savedState.conversationHistory.length > 0
 
-    // Initialize conversation
-    this.conversationHistory = [
-      {
-        role: 'system',
-        content: ORCHESTRATOR_SYSTEM_PROMPT,
-      },
-      {
+    if (isResuming && savedState) {
+      // Resume from saved state
+      this.conversationHistory = savedState.conversationHistory.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }))
+      this.state.iterationCount = savedState.iteration
+      this.state.currentStage = savedState.currentStage as OrchestratorStage
+
+      this.updateState({
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        currentAction: 'Resuming orchestration...',
+      })
+
+      // Add a resume message to let the LLM know we're continuing
+      this.conversationHistory.push({
         role: 'user',
-        content: buildOrchestratorInitPrompt(description, this.mode),
-      },
-    ]
+        content: `[Resumed from iteration ${savedState.iteration}. Current stage: ${savedState.currentStage}. Continue where you left off.]`,
+      })
+    } else {
+      // Fresh start
+      this.updateState({
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        currentAction: 'Initializing orchestrator...',
+      })
+
+      // Initialize conversation
+      this.conversationHistory = [
+        {
+          role: 'system',
+          content: ORCHESTRATOR_SYSTEM_PROMPT,
+        },
+        {
+          role: 'user',
+          content: buildOrchestratorInitPrompt(description, this.mode),
+        },
+      ]
+    }
 
     try {
       // Main orchestration loop
       while (this.isRunning && !this.isComplete()) {
         this.state.iterationCount++
         await this.runIteration()
+
+        // Persist state after each iteration for resume capability
+        await this.persistState('running')
 
         // Safety check for runaway loops
         if (this.state.iterationCount > 100) {
@@ -187,6 +227,7 @@ export class HardwareOrchestrator {
           completedAt: new Date().toISOString(),
           currentAction: null,
         })
+        await this.persistState('completed')
         this.callbacks.onComplete(this.state)
       }
     } catch (error) {
@@ -195,6 +236,7 @@ export class HardwareOrchestrator {
         error: error instanceof Error ? error.message : String(error),
         currentAction: null,
       })
+      await this.persistState('error')
       this.callbacks.onError(error instanceof Error ? error : new Error(String(error)))
     } finally {
       this.isRunning = false
@@ -202,14 +244,15 @@ export class HardwareOrchestrator {
   }
 
   /**
-   * Stop the orchestrator
+   * Stop the orchestrator and persist state for resume
    */
-  stop(): void {
+  async stop(): Promise<void> {
     this.isRunning = false
     this.updateState({
       status: 'paused',
       currentAction: null,
     })
+    await this.persistState('paused')
   }
 
   /**
@@ -1389,6 +1432,31 @@ ${filesContent}
     }
 
     this.conversationHistory = [systemMessage, summaryMessage, ...recentMessages]
+  }
+
+  /**
+   * Persist orchestrator state for resume capability.
+   * Saves conversation history and iteration count so the user can
+   * pause, reload the page, and resume from where they left off.
+   */
+  private async persistState(
+    status: PersistedOrchestratorState['status']
+  ): Promise<void> {
+    if (!this.currentSpec) return
+
+    const persistedState: PersistedOrchestratorState = {
+      conversationHistory: this.conversationHistory.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      })),
+      iteration: this.state.iterationCount,
+      status,
+      currentStage: this.state.currentStage,
+      updatedAt: new Date().toISOString(),
+    }
+
+    this.currentSpec.orchestratorState = persistedState
+    await this.callbacks.onSpecUpdate({ orchestratorState: persistedState })
   }
 
   private isComplete(): boolean {

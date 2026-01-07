@@ -98,6 +98,29 @@ export interface ProjectSpec {
 
   // Firmware artifacts
   firmware?: FirmwareArtifacts
+
+  // Orchestrator state for resume capability
+  orchestratorState?: PersistedOrchestratorState
+}
+
+// =============================================================================
+// ORCHESTRATOR STATE (for resume capability)
+// =============================================================================
+
+export interface PersistedOrchestratorState {
+  // Conversation history with the LLM
+  conversationHistory: Array<{
+    role: 'system' | 'user' | 'assistant'
+    content: string
+  }>
+  // Current iteration count
+  iteration: number
+  // Whether orchestration is paused or completed
+  status: 'running' | 'paused' | 'completed' | 'error'
+  // Current stage when paused
+  currentStage: string
+  // Last updated timestamp
+  updatedAt: string
 }
 
 // =============================================================================
