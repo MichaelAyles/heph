@@ -14,10 +14,10 @@ describe('blueprint prompt', () => {
       power: { options: ['LiPo battery', 'USB power'] },
     }
 
-    it('should return 4 variations', () => {
+    it('should return 8 variations (4 Style A + 4 Style B)', () => {
       const prompts = buildBlueprintPrompts(basicDescription, basicDecisions, basicFeasibility)
 
-      expect(prompts).toHaveLength(4)
+      expect(prompts).toHaveLength(8)
     })
 
     it('should include description in all prompts', () => {
@@ -49,16 +49,21 @@ describe('blueprint prompt', () => {
     it('should use enclosure decision if provided', () => {
       const prompts = buildBlueprintPrompts(basicDescription, basicDecisions, basicFeasibility)
 
-      prompts.forEach((prompt) => {
-        expect(prompt.toLowerCase()).toContain('compact handheld')
-      })
+      // Style A (0-3): includes raw form factor text
+      for (let i = 0; i < 4; i++) {
+        expect(prompts[i].toLowerCase()).toContain('compact handheld')
+      }
+      // Style B (4-7): maps to structured form factor description
+      for (let i = 4; i < 8; i++) {
+        expect(prompts[i].toLowerCase()).toContain('handheld device')
+      }
     })
 
     it('should work without enclosure decision', () => {
       const prompts = buildBlueprintPrompts(basicDescription, [], basicFeasibility)
 
       // Should still generate valid prompts
-      expect(prompts).toHaveLength(4)
+      expect(prompts).toHaveLength(8)
       prompts.forEach((prompt) => {
         expect(prompt.toLowerCase()).toContain('smart plant monitor')
       })
@@ -73,11 +78,12 @@ describe('blueprint prompt', () => {
       expect(prompts[3].toLowerCase()).toContain('premium')
     })
 
-    it('should include "No text" in all prompts', () => {
+    it('should include "no text" directive in all prompts', () => {
       const prompts = buildBlueprintPrompts(basicDescription, basicDecisions, basicFeasibility)
 
+      // Style A has "No text." and Style B has "no text or labels"
       prompts.forEach((prompt) => {
-        expect(prompt).toContain('No text')
+        expect(prompt.toLowerCase()).toContain('no text')
       })
     })
 
@@ -90,13 +96,13 @@ describe('blueprint prompt', () => {
 
       const prompts = buildBlueprintPrompts(basicDescription, [], emptyFeasibility)
 
-      expect(prompts).toHaveLength(4)
+      expect(prompts).toHaveLength(8)
     })
 
     it('should handle missing feasibility properties', () => {
       const prompts = buildBlueprintPrompts(basicDescription, [], {})
 
-      expect(prompts).toHaveLength(4)
+      expect(prompts).toHaveLength(8)
     })
 
     it('should find form factor question in various phrasings', () => {
@@ -114,9 +120,14 @@ describe('blueprint prompt', () => {
 
       const prompts = buildBlueprintPrompts(basicDescription, decisions, {})
 
-      prompts.forEach((prompt) => {
-        expect(prompt.toLowerCase()).toContain('weatherproof box')
-      })
+      // Style A (0-3) includes raw form factor text
+      for (let i = 0; i < 4; i++) {
+        expect(prompts[i].toLowerCase()).toContain('weatherproof box')
+      }
+      // Style B (4-7) uses default form factor description since "weatherproof box" isn't in the map
+      for (let i = 4; i < 8; i++) {
+        expect(prompts[i].toLowerCase()).toContain('compact consumer electronics device')
+      }
     })
 
     it('should include display decision in visual features', () => {

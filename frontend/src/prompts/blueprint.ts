@@ -92,8 +92,8 @@ export function buildBlueprintPrompts(
   // Form factor hint
   const formHint = formFactor ? `, ${formFactor.toLowerCase()} style` : ''
 
-  // Generate 4 variations with product description as the focus
-  return [
+  // Generate 4 variations with product description as the focus (Style A: adjective-heavy)
+  const styleA = [
     // Variation 1: Minimal, clean
     `3D product render: ${productCore}. A small consumer electronics device${formHint}. Clean minimal design, smooth white plastic shell, rounded edges. ${visualFeatures} White background, soft studio lighting. No text.`,
 
@@ -106,6 +106,52 @@ export function buildBlueprintPrompts(
     // Variation 4: Premium, modern
     `3D product render: ${productCore}. Premium smart device${formHint}. Sleek modern design, thin profile, brushed aluminum accents. ${visualFeatures} Dark background, dramatic lighting. No text.`,
   ]
+
+  // Style B: Structured professional photography style
+  // Map form factor to descriptive text
+  const formFactorMap: Record<string, string> = {
+    handheld: 'handheld device, ergonomic grip, portable size',
+    desktop: 'desktop device, sits on a table or desk',
+    'wall mount': 'wall-mounted unit, flat back, mounting hardware',
+    'wall-mounted': 'wall-mounted unit, flat back, mounting hardware',
+    wearable: 'wearable device, small and lightweight, strap or clip',
+    industrial: 'industrial enclosure, rugged, possibly rack-mounted',
+    portable: 'portable device, compact and lightweight',
+  }
+
+  // Find matching form factor description
+  let formFactorDesc = 'compact consumer electronics device'
+  if (formFactor) {
+    const lowerForm = formFactor.toLowerCase()
+    for (const [key, value] of Object.entries(formFactorMap)) {
+      if (lowerForm.includes(key)) {
+        formFactorDesc = value
+        break
+      }
+    }
+  }
+
+  // Build base prompt for Style B
+  const basePromptB = `Product concept render: ${productCore}
+
+Style: Professional product photography, clean white background, soft studio lighting
+Form factor: ${formFactorDesc}
+Features: ${visualElements.length > 0 ? [...new Set(visualElements)].join(', ') : 'clean interface, minimal controls'}
+Materials: Modern consumer electronics aesthetic, matte plastic or metal finish
+View: 3/4 perspective showing the device's main interface and form
+
+High quality, photorealistic product render, no text or labels`
+
+  // Style B: 4 variations with simple suffix
+  const styleB = [
+    basePromptB,
+    `${basePromptB}\n\nVariation 2: Explore a slightly different design approach.`,
+    `${basePromptB}\n\nVariation 3: Explore a slightly different design approach.`,
+    `${basePromptB}\n\nVariation 4: Explore a slightly different design approach.`,
+  ]
+
+  // Return all 8 prompts: 4 from Style A, then 4 from Style B
+  return [...styleA, ...styleB]
 }
 
 /**
