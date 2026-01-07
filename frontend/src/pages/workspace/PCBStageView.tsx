@@ -1,14 +1,16 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
-import { Cpu, ArrowRight, Loader2, CheckCircle2, XCircle, Grid3X3, Eye, Wand2 } from 'lucide-react'
+import { Cpu, ArrowRight, Loader2, CheckCircle2, XCircle, Grid3X3, Eye, Wand2, Box, FileCode2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { BlockSelector } from '@/components/pcb/BlockSelector'
+import { PCB3DViewer } from '@/components/pcb/PCB3DViewer'
 import { mergeBlockSchematics } from '@/services/pcb-merge'
 import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '@/db/schema'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
+type ViewMode = 'schematic' | '3d'
 
 export function PCBStageView() {
   const { project } = useWorkspaceContext()
@@ -18,6 +20,7 @@ export function PCBStageView() {
   const [previewBlockSlug, setPreviewBlockSlug] = useState<string | null>(null)
   const [isMerging, setIsMerging] = useState(false)
   const [mergeError, setMergeError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>('schematic')
 
   const specComplete = project?.status === 'complete'
   const spec = project?.spec
@@ -248,7 +251,11 @@ export function PCBStageView() {
             <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h3 className="text-sm font-medium text-steel">
-                  {previewBlockSlug ? `Preview: ${previewBlockSlug}` : 'Schematic'}
+                  {previewBlockSlug
+                    ? `Preview: ${previewBlockSlug}`
+                    : viewMode === 'schematic'
+                      ? 'Schematic'
+                      : '3D Preview'}
                 </h3>
                 {pcbArtifacts?.boardSize && !previewBlockSlug && (
                   <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded">
@@ -257,6 +264,37 @@ export function PCBStageView() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {/* View mode toggle */}
+                {selectedBlocks.length > 0 && !previewBlockSlug && (
+                  <div className="flex items-center bg-surface-800 rounded p-0.5">
+                    <button
+                      onClick={() => setViewMode('schematic')}
+                      className={clsx(
+                        'px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors',
+                        viewMode === 'schematic'
+                          ? 'bg-copper text-surface-900'
+                          : 'text-steel-dim hover:text-steel'
+                      )}
+                      title="View schematic"
+                    >
+                      <FileCode2 className="w-3 h-3" />
+                      Schematic
+                    </button>
+                    <button
+                      onClick={() => setViewMode('3d')}
+                      className={clsx(
+                        'px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors',
+                        viewMode === '3d'
+                          ? 'bg-copper text-surface-900'
+                          : 'text-steel-dim hover:text-steel'
+                      )}
+                      title="View 3D preview"
+                    >
+                      <Box className="w-3 h-3" />
+                      3D
+                    </button>
+                  </div>
+                )}
                 {previewBlockSlug && (
                   <button
                     onClick={() => setPreviewBlockSlug(null)}
@@ -265,7 +303,7 @@ export function PCBStageView() {
                     Clear Preview
                   </button>
                 )}
-                {pcbArtifacts?.schematicData && !previewBlockSlug && (
+                {pcbArtifacts?.schematicData && !previewBlockSlug && viewMode === 'schematic' && (
                   <button
                     onClick={handleMergeSchematic}
                     disabled={isMerging}
@@ -283,6 +321,13 @@ export function PCBStageView() {
                   src={`/api/blocks/${previewBlockSlug}/files/${previewBlockSlug}.kicad_sch`}
                   type="schematic"
                   controls="basic"
+                  className="w-full h-full"
+                />
+              ) : viewMode === '3d' && selectedBlocks.length > 0 && blocksData?.blocks ? (
+                <PCB3DViewer
+                  boardSize={pcbArtifacts?.boardSize}
+                  placedBlocks={selectedBlocks}
+                  blocks={blocksData.blocks}
                   className="w-full h-full"
                 />
               ) : pcbArtifacts?.schematicData ? (
