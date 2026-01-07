@@ -1444,11 +1444,16 @@ ${filesContent}
   ): Promise<void> {
     if (!this.currentSpec) return
 
+    // Filter out tool messages (results stored in spec) and stringify content
+    const filteredHistory = this.conversationHistory
+      .filter((msg) => msg.role !== 'tool')
+      .map((msg) => ({
+        role: msg.role as 'system' | 'user' | 'assistant',
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      }))
+
     const persistedState: PersistedOrchestratorState = {
-      conversationHistory: this.conversationHistory.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
+      conversationHistory: filteredHistory,
       iteration: this.state.iterationCount,
       status,
       currentStage: this.state.currentStage,
