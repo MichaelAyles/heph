@@ -94,6 +94,7 @@ export function validateSpecSatisfied(spec: ProjectSpec): ValidationResult {
 
   // Check that required sensors are present
   for (const output of finalSpec.outputs) {
+    if (!output.type) continue
     const outputType = output.type.toLowerCase()
 
     // Map output types to required blocks
@@ -138,7 +139,7 @@ export function validateSpecSatisfied(spec: ProjectSpec): ValidationResult {
   }
 
   // Check power block matches spec
-  const powerSource = finalSpec.power.source.toLowerCase()
+  const powerSource = finalSpec.power?.source?.toLowerCase() ?? ''
   const hasPowerBlock = placedBlocks.some((b) => {
     const slug = b.blockSlug.toLowerCase()
     if (powerSource.includes('usb')) return slug.includes('usb')

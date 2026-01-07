@@ -514,6 +514,7 @@ export class HardwareOrchestrator {
 
     // Extract from decisions
     for (const decision of this.currentSpec?.decisions || []) {
+      if (!decision.question || !decision.answer) continue
       const q = decision.question.toLowerCase()
       const a = decision.answer.toLowerCase()
 
@@ -537,7 +538,8 @@ export class HardwareOrchestrator {
         finalSpec.inputs.push({ type: input, count: 1, notes: '' })
       }
       for (const output of this.currentSpec.feasibility.outputs.items) {
-        if (!finalSpec.outputs.some((o) => o.type.toLowerCase().includes(output.toLowerCase()))) {
+        if (!output) continue
+        if (!finalSpec.outputs.some((o) => o.type?.toLowerCase().includes(output.toLowerCase()))) {
           finalSpec.outputs.push({ type: output, count: 1, notes: '' })
         }
       }
