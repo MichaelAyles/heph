@@ -395,10 +395,11 @@ export class HardwareOrchestrator {
       })
     }
 
-    // Add tool result to conversation
+    // Add COMPRESSED tool result to conversation (full result stored in spec)
+    const compressedResult = this.compressToolResult(name, result)
     this.conversationHistory.push({
       role: 'tool',
-      content: JSON.stringify(result),
+      content: JSON.stringify(compressedResult),
       toolCallId: id,
     })
 
@@ -406,7 +407,7 @@ export class HardwareOrchestrator {
       type: 'tool_result',
       stage: this.state.currentStage,
       action: name,
-      result: typeof result === 'string' ? result : JSON.stringify(result).slice(0, 200),
+      result: typeof result === 'string' ? result : JSON.stringify(compressedResult).slice(0, 200),
     })
   }
 
@@ -877,12 +878,113 @@ export class HardwareOrchestrator {
   // ===========================================================================
 
   /**
+   * Compress tool results for conversation history.
+   * Full artifacts are stored in currentSpec; history only gets summaries.
+   * This reduces token usage by ~80% for large results.
+   */
+  private compressToolResult(toolName: string, result: unknown): unknown {
+    // Handle error results as-is
+    if (result && typeof result === 'object' && 'error' in result) {
+      return result
+    }
+
+    const r = result as Record<string, unknown>
+
+    switch (toolName) {
+      case 'analyze_feasibility':
+        return {
+          success: r.success ?? true,
+          manufacturable: r.manufacturable,
+          score: r.overallScore ?? r.score,
+          openQuestionCount: Array.isArray(r.openQuestions) ? r.openQuestions.length : 0,
+          // Full feasibility stored in spec.feasibility
+        }
+
+      case 'generate_blueprints':
+        return {
+          success: true,
+          blueprintCount: Array.isArray(r.blueprints) ? r.blueprints.length : (r.blueprintCount ?? 4),
+          // Full blueprints stored in spec.blueprints
+        }
+
+      case 'select_blueprint':
+        return {
+          success: true,
+          selectedIndex: r.selectedIndex ?? r.index,
+          reasoning: r.reasoning,
+        }
+
+      case 'finalize_spec':
+        return {
+          success: true,
+          specLocked: true,
+          // Full finalSpec stored in spec.finalSpec
+        }
+
+      case 'select_pcb_blocks':
+        return {
+          success: true,
+          blockCount: Array.isArray(r.placedBlocks) ? r.placedBlocks.length : (r.blockCount ?? 0),
+          reasoning: r.reasoning,
+          // Full blocks stored in spec.pcb.placedBlocks
+        }
+
+      case 'generate_enclosure':
+        return {
+          success: true,
+          codeLength: typeof r.openScadCode === 'string' ? r.openScadCode.length : (r.codeLength ?? 0),
+          // Full OpenSCAD code stored in spec.enclosure.openScadCode
+        }
+
+      case 'generate_firmware':
+        return {
+          success: true,
+          fileCount: Array.isArray(r.files) ? r.files.length : (r.fileCount ?? 0),
+          // Full files stored in spec.firmware.files
+        }
+
+      case 'validate_cross_stage':
+        // Validation reports are already reasonably sized
+        return {
+          valid: r.valid ?? (r.issueCount === 0),
+          issueCount: r.issueCount ?? 0,
+          issues: r.issues ?? [],
+          suggestions: r.suggestions ?? [],
+          report: r.report,
+        }
+
+      case 'mark_stage_complete':
+        return {
+          success: true,
+          stage: r.stage,
+          status: 'complete',
+        }
+
+      case 'report_progress':
+      case 'fix_stage_issue':
+      case 'request_user_input':
+      case 'answer_questions_auto':
+        // These are already small, pass through
+        return result
+
+      default:
+        // Unknown tools: truncate if too large
+        const json = JSON.stringify(result)
+        if (json.length > 500) {
+          return { success: true, truncated: true, preview: json.slice(0, 200) + '...' }
+        }
+        return result
+    }
+  }
+
+  /**
    * Trim conversation history to prevent unbounded growth.
    * Keeps the system message and most recent messages.
+   * OPTIMIZED: More aggressive trimming (15→8 instead of 40→20)
    */
   private trimConversationHistory(): void {
-    const MAX_MESSAGES = 40 // Keep recent context
-    const TRIM_TO = 20 // Trim down to this many when over max
+    const MAX_MESSAGES = 15 // Reduced from 40 for token efficiency
+    const TRIM_TO = 8 // Reduced from 20 - keep system + summary + last 6 exchanges
 
     if (this.conversationHistory.length <= MAX_MESSAGES) {
       return
@@ -892,11 +994,16 @@ export class HardwareOrchestrator {
     const systemMessage = this.conversationHistory[0]
     const recentMessages = this.conversationHistory.slice(-TRIM_TO)
 
-    // Create a summary of trimmed history
+    // Create a concise summary of trimmed history with current state
     const trimmedCount = this.conversationHistory.length - TRIM_TO - 1
+    const completedStages = Object.entries(this.currentSpec?.stages || {})
+      .filter(([, s]) => s?.status === 'complete')
+      .map(([name]) => name)
+      .join(', ')
+
     const summaryMessage: ChatMessage = {
       role: 'user',
-      content: `[Previous ${trimmedCount} messages trimmed. Current stage: ${this.state.currentStage}. Iteration: ${this.state.iterationCount}. Continue from where we left off.]`,
+      content: `[${trimmedCount} messages trimmed. Stage: ${this.state.currentStage}. Completed: ${completedStages || 'none'}. Iteration: ${this.state.iterationCount}. Continue.]`,
     }
 
     this.conversationHistory = [systemMessage, summaryMessage, ...recentMessages]
