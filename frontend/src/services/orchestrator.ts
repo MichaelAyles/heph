@@ -120,22 +120,35 @@ export class HardwareOrchestrator {
 
     this.isRunning = true
     this.availableBlocks = blocks || []
-    this.currentSpec = existingSpec || {
-      description,
-      feasibility: null,
-      openQuestions: [],
-      decisions: [],
-      blueprints: [],
-      selectedBlueprint: null,
-      finalSpec: null,
-      stages: {
-        spec: { status: 'in_progress' },
-        pcb: { status: 'pending' },
-        enclosure: { status: 'pending' },
-        firmware: { status: 'pending' },
-        export: { status: 'pending' },
-      },
+
+    // Default stages structure
+    const defaultStages = {
+      spec: { status: 'in_progress' as const },
+      pcb: { status: 'pending' as const },
+      enclosure: { status: 'pending' as const },
+      firmware: { status: 'pending' as const },
+      export: { status: 'pending' as const },
     }
+
+    // Merge existingSpec with defaults, ensuring stages always exists
+    this.currentSpec = existingSpec
+      ? {
+          ...existingSpec,
+          stages: {
+            ...defaultStages,
+            ...existingSpec.stages,
+          },
+        }
+      : {
+          description,
+          feasibility: null,
+          openQuestions: [],
+          decisions: [],
+          blueprints: [],
+          selectedBlueprint: null,
+          finalSpec: null,
+          stages: defaultStages,
+        }
 
     this.updateState({
       status: 'running',
