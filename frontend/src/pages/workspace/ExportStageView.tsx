@@ -17,11 +17,27 @@ import {
   Check,
   ExternalLink,
   Table,
+  MessageSquare,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import JSZip from 'jszip'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
+
+interface ConversationMessage {
+  role: string
+  content: string | Array<{ type: string; text?: string }>
+}
+
+interface Conversation {
+  id: string
+  messagesIn: ConversationMessage[]
+  messageOut: string | null
+  model: string | null
+  createdAt: string
+  promptTokens: number | null
+  completionTokens: number | null
+}
 
 interface ExportItem {
   id: string
@@ -243,6 +259,180 @@ After building, find the binary at:
       blob,
       `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-firmware.zip`
     )
+  }
+
+  // Download conversations as markdown
+  const downloadConversations = async () => {
+    if (!project?.id) return
+
+    try {
+      // Fetch all conversations for this project
+      const res = await fetch(`/api/projects/${project.id}/conversations?limit=200`)
+      if (!res.ok) {
+        console.error('Failed to fetch conversations - may require admin access')
+        return
+      }
+
+      const { conversations } = (await res.json()) as { conversations: Conversation[] }
+
+      if (conversations.length === 0) {
+        // No conversations to export
+        const blob = new Blob(
+          ['# Conversation History\n\nNo conversations recorded for this project.'],
+          { type: 'text/markdown' }
+        )
+        downloadBlob(
+          blob,
+          `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-conversations.md`
+        )
+        return
+      }
+
+      // Group conversations by stage (inferred from message content)
+      const grouped = groupConversationsByStage(conversations)
+
+      // Create ZIP with separate files per stage
+      const zip = new JSZip()
+
+      for (const [stage, convos] of Object.entries(grouped)) {
+        const content = formatConversationsAsMarkdown(stage, convos)
+        zip.file(`${stage}-chat.md`, content)
+      }
+
+      // Add combined file
+      const allContent = Object.entries(grouped)
+        .map(([stage, convos]) => formatConversationsAsMarkdown(stage, convos))
+        .join('\n\n---\n\n')
+
+      zip.file(
+        'all-conversations.md',
+        `# Complete Conversation History\n\n${allContent}`
+      )
+
+      // Add README
+      zip.file(
+        'README.md',
+        `# Conversation Export
+
+This archive contains the AI conversation history for your project, organized by stage.
+
+## Files
+${Object.keys(grouped)
+  .map((stage) => `- \`${stage}-chat.md\` - ${stage.charAt(0).toUpperCase() + stage.slice(1)} stage conversations`)
+  .join('\n')}
+- \`all-conversations.md\` - Combined view of all conversations
+
+## Usage
+These conversations document the design process and can be used for:
+- Understanding design decisions
+- Reproducing the design process
+- Debugging issues
+- Training documentation
+`
+      )
+
+      const blob = await zip.generateAsync({ type: 'blob' })
+      downloadBlob(
+        blob,
+        `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-conversations.zip`
+      )
+    } catch (error) {
+      console.error('Failed to export conversations:', error)
+    }
+  }
+
+  // Helper: Group conversations by inferred stage
+  function groupConversationsByStage(conversations: Conversation[]): Record<string, Conversation[]> {
+    const grouped: Record<string, Conversation[]> = {
+      spec: [],
+      pcb: [],
+      enclosure: [],
+      firmware: [],
+      other: [],
+    }
+
+    for (const conv of conversations) {
+      // Infer stage from message content
+      const stage = inferStageFromConversation(conv)
+      grouped[stage].push(conv)
+    }
+
+    // Remove empty stages
+    return Object.fromEntries(
+      Object.entries(grouped).filter(([, convos]) => convos.length > 0)
+    )
+  }
+
+  // Helper: Infer which stage a conversation belongs to
+  function inferStageFromConversation(conv: Conversation): string {
+    const allText = [
+      ...conv.messagesIn.map((m) =>
+        typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' ')
+      ),
+      conv.messageOut || '',
+    ]
+      .join(' ')
+      .toLowerCase()
+
+    // Match keywords to stages
+    if (allText.includes('feasibility') || allText.includes('refinement') || allText.includes('blueprint')) {
+      return 'spec'
+    }
+    if (allText.includes('pcb') || allText.includes('schematic') || allText.includes('circuit')) {
+      return 'pcb'
+    }
+    if (allText.includes('enclosure') || allText.includes('openscad') || allText.includes('stl')) {
+      return 'enclosure'
+    }
+    if (allText.includes('firmware') || allText.includes('platformio') || allText.includes('esp32')) {
+      return 'firmware'
+    }
+
+    return 'other'
+  }
+
+  // Helper: Format conversations as markdown
+  function formatConversationsAsMarkdown(stage: string, conversations: Conversation[]): string {
+    const stageLabel = stage.charAt(0).toUpperCase() + stage.slice(1)
+
+    let md = `# ${stageLabel} Stage Conversations\n\n`
+    md += `*${conversations.length} conversation${conversations.length !== 1 ? 's' : ''} recorded*\n\n`
+
+    // Sort by date (oldest first for readability)
+    const sorted = [...conversations].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
+
+    for (const conv of sorted) {
+      const date = new Date(conv.createdAt).toLocaleString()
+      md += `---\n\n## ${date}\n\n`
+
+      if (conv.model) {
+        md += `*Model: ${conv.model}*\n\n`
+      }
+
+      // Format messages
+      for (const msg of conv.messagesIn) {
+        const roleLabel = msg.role === 'system' ? '**System**' : msg.role === 'user' ? '**User**' : '**Assistant**'
+        const content = typeof msg.content === 'string'
+          ? msg.content
+          : msg.content.map((c) => c.text || '').join('\n')
+
+        md += `${roleLabel}:\n\n${content}\n\n`
+      }
+
+      // Add response
+      if (conv.messageOut) {
+        md += `**Assistant**:\n\n${conv.messageOut}\n\n`
+      }
+
+      // Add token stats if available
+      if (conv.promptTokens || conv.completionTokens) {
+        md += `*Tokens: ${conv.promptTokens || 0} in, ${conv.completionTokens || 0} out*\n\n`
+      }
+    }
+
+    return md
   }
 
   // Download complete package
@@ -475,6 +665,15 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
       filename: 'firmware.zip',
       ready: (project?.spec?.firmware?.files?.length ?? 0) > 0,
       onDownload: downloadFirmware,
+    },
+    {
+      id: 'conversations',
+      icon: MessageSquare,
+      title: 'Chat History',
+      description: 'AI conversation logs organized by stage',
+      filename: 'conversations.zip',
+      ready: true, // Admin only, but always show option
+      onDownload: downloadConversations,
     },
     {
       id: 'complete',
