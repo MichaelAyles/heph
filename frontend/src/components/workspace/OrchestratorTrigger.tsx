@@ -60,10 +60,15 @@ export function OrchestratorTrigger({
   const Icon = config.icon
 
   // Check if project is eligible for orchestration
+  // Include all spec stage statuses so users can get AI help during spec design
   const spec = project.spec as ProjectSpec | null
   const isEligible =
     project.status === 'draft' ||
     project.status === 'analyzing' ||
+    project.status === 'refining' ||
+    project.status === 'generating' ||
+    project.status === 'selecting' ||
+    project.status === 'finalizing' ||
     (project.status === 'complete' && !spec?.stages?.export?.completedAt)
 
   // Check visibility conditions

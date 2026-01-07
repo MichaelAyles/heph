@@ -89,10 +89,15 @@ export function OrchestratorSidebar({
     : history.filter((item) => item.type !== 'thinking')
 
   // Check if project is eligible for orchestration
+  // Include all spec stage statuses so users can get AI help during spec design
   const isEligible =
     project &&
     (project.status === 'draft' ||
       project.status === 'analyzing' ||
+      project.status === 'refining' ||
+      project.status === 'generating' ||
+      project.status === 'selecting' ||
+      project.status === 'finalizing' ||
       (project.status === 'complete' && !spec?.stages?.export?.completedAt))
 
   const isRunning = status === 'running'
