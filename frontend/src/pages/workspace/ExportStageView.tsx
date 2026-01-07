@@ -487,8 +487,8 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
   ]
 
   return (
-    <div className="flex-1 p-6">
-      <div className="mb-6">
+    <div className="flex-1 flex flex-col min-h-0 overflow-auto p-6">
+      <div className="mb-6 flex-shrink-0">
         <h2 className="text-xl font-semibold text-steel mb-1">Export & Manufacture</h2>
         <p className="text-steel-dim text-sm">Download design files to manufacture your hardware</p>
       </div>

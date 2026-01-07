@@ -703,9 +703,9 @@ Upload this .bin file back to PHAESTUS for distribution.
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Header */}
-      <div className="flex-none px-6 py-4 border-b border-surface-700 bg-surface-900">
+      <div className="flex-none flex-shrink-0 px-6 py-4 border-b border-surface-700 bg-surface-900">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-steel mb-0.5">Firmware Development</h2>
