@@ -1,5 +1,5 @@
 import { NavLink, useParams } from 'react-router-dom'
-import { FileText, Cpu, Box, Code, Download, Check, AlertCircle, Loader2 } from 'lucide-react'
+import { FileText, Cpu, Box, Code, Download, FolderOpen, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { ProjectSpec, StageStatus } from '@/db/schema'
 import { STAGE_ORDER, STAGE_LABELS, type WorkspaceStage } from '@/stores/workspace'
@@ -15,6 +15,7 @@ const STAGE_ICONS: Record<WorkspaceStage, typeof FileText> = {
   enclosure: Box,
   firmware: Code,
   export: Download,
+  files: FolderOpen,
 }
 
 export function WorkspaceStageTabs({ spec, canNavigateTo }: WorkspaceStageTabsProps) {
@@ -26,7 +27,11 @@ export function WorkspaceStageTabs({ spec, canNavigateTo }: WorkspaceStageTabsPr
         {STAGE_ORDER.map((stage) => {
           const Icon = STAGE_ICONS[stage]
           const canNavigate = canNavigateTo(stage, spec)
-          const status = spec?.stages?.[stage]?.status ?? 'pending'
+          // Files doesn't have a status - it's not a pipeline stage
+          const status =
+            stage === 'files'
+              ? 'pending'
+              : (spec?.stages?.[stage as keyof NonNullable<typeof spec.stages>]?.status ?? 'pending')
 
           return (
             <NavLink
@@ -51,7 +56,8 @@ export function WorkspaceStageTabs({ spec, canNavigateTo }: WorkspaceStageTabsPr
             >
               <Icon className="w-4 h-4" strokeWidth={1.5} />
               {STAGE_LABELS[stage]}
-              <StageStatusIndicator status={status} />
+              {/* Don't show status indicator for files */}
+              {stage !== 'files' && <StageStatusIndicator status={status} />}
             </NavLink>
           )
         })}

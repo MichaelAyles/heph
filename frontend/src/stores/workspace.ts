@@ -6,9 +6,9 @@
 import { create } from 'zustand'
 import type { ProjectSpec, StageStatus } from '@/db/schema'
 
-export type WorkspaceStage = 'spec' | 'pcb' | 'enclosure' | 'firmware' | 'export'
+export type WorkspaceStage = 'spec' | 'pcb' | 'enclosure' | 'firmware' | 'export' | 'files'
 
-export const STAGE_ORDER: WorkspaceStage[] = ['spec', 'pcb', 'enclosure', 'firmware', 'export']
+export const STAGE_ORDER: WorkspaceStage[] = ['spec', 'pcb', 'enclosure', 'firmware', 'export', 'files']
 
 export const STAGE_LABELS: Record<WorkspaceStage, string> = {
   spec: 'Spec',
@@ -16,6 +16,7 @@ export const STAGE_LABELS: Record<WorkspaceStage, string> = {
   enclosure: 'Enclosure',
   firmware: 'Firmware',
   export: 'Export',
+  files: 'Files',
 }
 
 interface WorkspaceState {
@@ -46,6 +47,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     enclosure: 50,
     firmware: 30, // File tree narrower
     export: 50,
+    files: 25, // File tree sidebar
   },
 
   isSidebarCollapsed: false,
@@ -73,11 +75,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     // Can always go to spec
     if (stage === 'spec') return true
 
+    // Files view is always available if there's a spec
+    if (stage === 'files') return true
+
     // Check if previous stage is complete
     const stageIndex = STAGE_ORDER.indexOf(stage)
     for (let i = 0; i < stageIndex; i++) {
       const prevStage = STAGE_ORDER[i]
-      if (stages[prevStage]?.status !== 'complete') {
+      // Skip 'files' as it's not a pipeline stage
+      if (prevStage === 'files') continue
+      if (stages[prevStage as keyof typeof stages]?.status !== 'complete') {
         return false
       }
     }
@@ -87,6 +94,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   getStageStatus: (stage, spec) => {
     if (!spec?.stages) return 'pending'
-    return spec.stages[stage]?.status ?? 'pending'
+    // Files doesn't have a status - it's always available
+    if (stage === 'files') return 'pending'
+    return spec.stages[stage as keyof typeof spec.stages]?.status ?? 'pending'
   },
 }))

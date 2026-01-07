@@ -30,20 +30,20 @@ beforeEach(() => {
 // =============================================================================
 
 describe('STAGE_ORDER', () => {
-  it('contains all 5 stages in correct order', () => {
-    expect(STAGE_ORDER).toEqual(['spec', 'pcb', 'enclosure', 'firmware', 'export'])
+  it('contains all 6 stages in correct order', () => {
+    expect(STAGE_ORDER).toEqual(['spec', 'pcb', 'enclosure', 'firmware', 'export', 'files'])
   })
 
-  it('has 5 stages', () => {
-    expect(STAGE_ORDER.length).toBe(5)
+  it('has 6 stages', () => {
+    expect(STAGE_ORDER.length).toBe(6)
   })
 
   it('starts with spec', () => {
     expect(STAGE_ORDER[0]).toBe('spec')
   })
 
-  it('ends with export', () => {
-    expect(STAGE_ORDER[STAGE_ORDER.length - 1]).toBe('export')
+  it('ends with files', () => {
+    expect(STAGE_ORDER[STAGE_ORDER.length - 1]).toBe('files')
   })
 })
 

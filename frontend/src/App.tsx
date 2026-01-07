@@ -20,6 +20,7 @@ import {
   EnclosureStageView,
   FirmwareStageView,
   ExportStageView,
+  FilesStageView,
 } from '@/pages/workspace'
 import { useAuthStore } from '@/stores/auth'
 
@@ -47,6 +48,7 @@ function AuthenticatedApp() {
           <Route path="enclosure" element={<EnclosureStageView />} />
           <Route path="firmware" element={<FirmwareStageView />} />
           <Route path="export" element={<ExportStageView />} />
+          <Route path="files" element={<FilesStageView />} />
         </Route>
         <Route path="project/:id/view" element={<SpecViewerPage />} />
         <Route path="blocks" element={<BlocksPage />} />
