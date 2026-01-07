@@ -75,12 +75,14 @@ function StageProgressIndicator({ project }: { project: Project }) {
 
   // Determine stage status based on project status and stage data
   const getStageState = (stageKey: string): 'complete' | 'current' | 'pending' => {
-    const stageStatus = stages?.[stageKey as keyof typeof stages]?.status
+    const stageData = stages?.[stageKey as keyof typeof stages]
+    const stageStatus = stageData?.status
 
+    // Check explicit stage status first
     if (stageStatus === 'complete') return 'complete'
     if (stageStatus === 'in_progress') return 'current'
 
-    // For spec stage, check project status
+    // For spec stage, also check project status for backwards compatibility
     if (stageKey === 'spec') {
       if (project.status === 'complete') return 'complete'
       if (['analyzing', 'refining', 'generating', 'selecting', 'finalizing'].includes(project.status)) {
@@ -89,7 +91,38 @@ function StageProgressIndicator({ project }: { project: Project }) {
       if (project.status === 'draft') return 'current'
     }
 
+    // Check if a later stage is in progress or complete - means this stage is complete
+    const stageOrder = ['spec', 'pcb', 'enclosure', 'firmware', 'export']
+    const currentIndex = stageOrder.indexOf(stageKey)
+    for (let i = currentIndex + 1; i < stageOrder.length; i++) {
+      const laterStage = stages?.[stageOrder[i] as keyof typeof stages]
+      if (laterStage?.status === 'complete' || laterStage?.status === 'in_progress') {
+        return 'complete'
+      }
+    }
+
     return 'pending'
+  }
+
+  // Get tooltip text for a stage
+  const getStageTooltip = (stageKey: string, stageLabel: string): string => {
+    const stageData = stages?.[stageKey as keyof typeof stages]
+    const state = getStageState(stageKey)
+
+    const statusLabels = {
+      complete: 'Complete',
+      current: 'In Progress',
+      pending: 'Pending',
+    }
+
+    let tooltip = `${stageLabel}: ${statusLabels[state]}`
+
+    if (stageData?.completedAt) {
+      const date = new Date(stageData.completedAt)
+      tooltip += ` (${date.toLocaleDateString()})`
+    }
+
+    return tooltip
   }
 
   // Find the current active stage for display
@@ -128,19 +161,20 @@ function StageProgressIndicator({ project }: { project: Project }) {
       {STAGES.map((stage, index) => {
         const state = getStageState(stage.key)
         const Icon = stage.icon
+        const tooltip = getStageTooltip(stage.key, stage.label)
 
         return (
           <div key={stage.key} className="flex items-center">
             <div
               className={clsx(
-                'w-6 h-6 rounded-full flex items-center justify-center transition-colors',
+                'w-6 h-6 rounded-full flex items-center justify-center transition-colors cursor-help',
                 state === 'complete' && 'bg-emerald-500/20',
                 state === 'current' && !isRejected && !isError && 'bg-copper/20',
                 state === 'current' && isRejected && 'bg-red-500/20',
                 state === 'current' && isError && 'bg-red-500/20',
                 state === 'pending' && 'bg-surface-700'
               )}
-              title={stage.label}
+              title={tooltip}
             >
               {state === 'complete' ? (
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" strokeWidth={2} />
