@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -35,7 +35,7 @@ cd frontend && pnpm build && pnpm exec wrangler pages deploy dist --project-name
 
 ## Commands
 
-All commands run from `frontend/`:
+All commands run from `frontend/` (monorepo with single package):
 
 ```bash
 # Development
@@ -46,6 +46,7 @@ pnpm dev:full      # Full stack with D1/R2 (port 8788)
 pnpm test          # Watch mode
 pnpm test:run      # Single run
 pnpm test:coverage # With coverage
+pnpm test src/prompts/feasibility.test.ts  # Run single test file
 
 # Build & Deploy
 pnpm build         # TypeScript + Vite build
@@ -62,6 +63,8 @@ pnpm db:migrate        # Run migrations locally
 pnpm db:migrate:remote # Run migrations on production D1
 pnpm db:reset          # Reset local DB and re-run all migrations
 ```
+
+**Path Aliases**: `@/` resolves to `frontend/src/`. For functions, use `@/../functions/` (e.g., `import { extractAndValidateJson } from '@/../functions/lib/json'`).
 
 ## Architecture
 
@@ -95,41 +98,15 @@ The feasibility prompt (`src/prompts/feasibility.ts`) defines what can be built:
 
 When creating example prompts, use ONLY these components or the project will be rejected.
 
-### File Structure
+### Key Directories
 
-```
-frontend/
-├── src/
-│   ├── pages/
-│   │   ├── SpecPage.tsx      # Main pipeline (1073 lines, 5 nested components)
-│   │   ├── NewProjectPage.tsx # Project creation with example prompts
-│   │   ├── ProjectsPage.tsx   # Project list
-│   │   └── SpecViewerPage.tsx # Completed spec display
-│   ├── prompts/               # LLM prompt templates
-│   │   ├── feasibility.ts     # Component matching, scoring
-│   │   ├── refinement.ts      # Iterative Q&A
-│   │   ├── blueprint.ts       # 4 image prompt variations
-│   │   └── finalSpec.ts       # BOM generation
-│   ├── services/llm.ts        # LLM client (chat + stream)
-│   ├── stores/auth.ts         # Zustand auth state
-│   └── db/schema.ts           # Types + row transforms
-├── functions/
-│   ├── api/
-│   │   ├── _middleware.ts     # Auth (session cookie validation + session extension)
-│   │   ├── auth/              # login (bcrypt), logout, me
-│   │   ├── llm/
-│   │   │   ├── chat.ts        # Non-streaming (OpenRouter + Gemini)
-│   │   │   ├── stream.ts      # SSE streaming with token estimation
-│   │   │   ├── image.ts       # Image generation with 60s timeout
-│   │   │   └── pricing.ts     # Cost calculations
-│   │   ├── projects/          # CRUD
-│   │   ├── settings/usage.ts  # Usage statistics endpoint
-│   │   └── admin/logs.ts      # Debug logs (admin only)
-│   └── lib/
-│       ├── gemini.ts          # Shared Gemini format conversion
-│       └── logger.ts          # Debug logging utility
-└── migrations/                # SQL migrations
-```
+- `src/pages/` - Route components (SpecPage.tsx is the main 5-step pipeline)
+- `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure)
+- `src/services/` - LLM client, orchestrator, PCB merging
+- `src/stores/` - Zustand state (auth, workspace, orchestrator)
+- `functions/api/` - Cloudflare Pages Functions (auth, llm, projects, admin)
+- `functions/lib/` - Shared utilities (gemini.ts, logger.ts, json.ts)
+- `migrations/` - D1 SQL migrations
 
 ### Database Schema
 
@@ -344,50 +321,15 @@ Image generation dominates costs at ~2000x the price of text completions:
 
 Consider caching images aggressively and batching requests.
 
-## Workspace Pipeline Implementation Status
+## Workspace Pipeline
 
-### Completed Phases
+Post-spec stages for hardware generation:
 
-| Phase | Feature | Status | Notes |
-|-------|---------|--------|-------|
-| 1 | Workspace UI Architecture | ✅ Complete | Split pane layout, stage navigation |
-| 2 | User Control Modes | ✅ Complete | Vibe It, Fix It, Design It modes |
-| 3 | PCB Stage Foundation | ✅ Complete | KiCanvas viewer, Block Selector |
-| 4 | PCB Block Merging | ✅ Complete | kicadts integration for schematic merging |
-| 5 | Enclosure Generation | ✅ Complete | OpenSCAD WASM + React Three Fiber STL viewer |
-| 6 | Firmware Generation | ✅ Complete | AI-generated ESP32 firmware scaffolding |
-| 7 | Firmware Frontend | ✅ Complete | Monaco editor + file tree + chat modifications |
-| 8 | Multi-Agent Orchestration | ✅ Complete | 1720 lines across orchestrator, tools, validation |
-| 9 | Export & Download | ✅ Complete | Spec MD/JSON, BOM CSV, enclosure ZIP, firmware ZIP |
+| Stage | Key Files | What Happens |
+|-------|-----------|--------------|
+| PCB | `pages/workspace/PCBStageView.tsx`, `services/pcb-merge.ts` | Block selection, KiCad schematic merging |
+| Enclosure | `pages/workspace/EnclosureStageView.tsx`, `lib/openscadRenderer.ts` | OpenSCAD generation, STL preview |
+| Firmware | `pages/workspace/FirmwareStageView.tsx`, `prompts/firmware.ts` | ESP32 code generation, Monaco editor |
+| Export | `pages/workspace/ExportStageView.tsx` | Spec MD/JSON, BOM CSV, ZIP downloads |
 
-### Future Enhancements
-
-| Feature | Notes |
-|---------|-------|
-| Compile Server | Fly.io + Docker + ESP-IDF for browser-based compilation |
-| Gerber Export | PCB manufacturing files (requires complete schematic merging) |
-| PDF Spec Sheets | Formatted PDF generation (requires PDF library) |
-
-### Workspace-Related Files
-
-```
-frontend/src/
-├── components/
-│   ├── workspace/          # WorkspaceLayout, StageTabs, SplitPane
-│   ├── pcb/                # BlockSelector, KiCanvasViewer
-│   └── enclosure/          # STLViewer (React Three Fiber)
-├── pages/workspace/        # Stage views (PCB, Enclosure, Firmware, Export)
-├── services/
-│   ├── pcb-merge.ts        # kicadts-based schematic merging
-│   └── orchestrator.ts     # Multi-agent tool orchestration (914 lines)
-├── lib/openscadRenderer.ts # OpenSCAD WASM wrapper
-├── prompts/
-│   ├── enclosure.ts        # OpenSCAD generation prompt
-│   ├── firmware.ts         # ESP32 firmware prompt
-│   ├── orchestrator.ts     # Agent tool definitions
-│   ├── validation.ts       # Cross-stage validation rules
-│   └── block-selection.ts  # PCB block auto-selection
-└── stores/
-    ├── workspace.ts        # Workspace UI state (stages, split panes)
-    └── orchestrator.ts     # Orchestration state management
-```
+**Orchestrator** (`services/orchestrator.ts`, 1603 lines): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`.
