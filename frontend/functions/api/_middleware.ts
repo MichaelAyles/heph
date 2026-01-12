@@ -1,6 +1,6 @@
 /**
  * API Middleware
- * Handles authentication for protected routes
+ * Handles authentication, rate limiting, and request size limits for protected routes
  */
 
 import type { Env } from '../env'
@@ -16,12 +16,32 @@ const PUBLIC_ROUTES = [
   '/api/gallery',
 ]
 
+// Request size limits (in bytes)
+const MAX_REQUEST_SIZE = 10 * 1024 * 1024 // 10MB general limit
+const MAX_SPEC_SIZE = 5 * 1024 * 1024 // 5MB for spec updates
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { env } = context
   const url = new URL(context.request.url)
   const path = url.pathname
   const method = context.request.method
   const requestId = crypto.randomUUID().replace(/-/g, '')
+
+  // Check request size for POST/PUT/PATCH requests
+  if (['POST', 'PUT', 'PATCH'].includes(method)) {
+    const contentLength = context.request.headers.get('Content-Length')
+    if (contentLength) {
+      const size = parseInt(contentLength, 10)
+      const limit = path.includes('/projects/') ? MAX_SPEC_SIZE : MAX_REQUEST_SIZE
+
+      if (size > limit) {
+        return Response.json(
+          { error: `Request body too large. Maximum size is ${Math.floor(limit / 1024 / 1024)}MB` },
+          { status: 413 }
+        )
+      }
+    }
+  }
 
   // Store request ID for logging
   context.data.requestId = requestId

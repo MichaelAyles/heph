@@ -1,6 +1,6 @@
 /**
  * POST /api/auth/login
- * Password authentication with bcrypt
+ * Password authentication with bcrypt and rate limiting
  */
 
 import bcrypt from 'bcryptjs'
@@ -11,8 +11,82 @@ interface LoginRequest {
   password: string
 }
 
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+const MAX_ATTEMPTS_PER_WINDOW = 5
+const LOCKOUT_DURATION_MS = 30 * 60 * 1000 // 30 minute lockout after max attempts
+
+// In-memory rate limiting (resets on worker restart, but good enough for basic protection)
+// For production, consider using Cloudflare's Rate Limiting or D1
+const loginAttempts = new Map<string, { count: number; firstAttempt: number; lockedUntil?: number }>()
+
+function getClientIdentifier(request: Request): string {
+  // Use CF-Connecting-IP header (set by Cloudflare) or fall back to a hash of user-agent
+  const ip = request.headers.get('CF-Connecting-IP') ||
+             request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
+             'unknown'
+  return ip
+}
+
+function checkRateLimit(clientId: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now()
+  const record = loginAttempts.get(clientId)
+
+  // Check if client is locked out
+  if (record?.lockedUntil && now < record.lockedUntil) {
+    return { allowed: false, retryAfter: Math.ceil((record.lockedUntil - now) / 1000) }
+  }
+
+  // Clean up expired records
+  if (record && now - record.firstAttempt > RATE_LIMIT_WINDOW_MS) {
+    loginAttempts.delete(clientId)
+    return { allowed: true }
+  }
+
+  // Check attempt count
+  if (record && record.count >= MAX_ATTEMPTS_PER_WINDOW) {
+    // Lock the client out
+    record.lockedUntil = now + LOCKOUT_DURATION_MS
+    return { allowed: false, retryAfter: Math.ceil(LOCKOUT_DURATION_MS / 1000) }
+  }
+
+  return { allowed: true }
+}
+
+function recordLoginAttempt(clientId: string, success: boolean): void {
+  const now = Date.now()
+
+  if (success) {
+    // Clear record on successful login
+    loginAttempts.delete(clientId)
+    return
+  }
+
+  const record = loginAttempts.get(clientId)
+  if (record && now - record.firstAttempt < RATE_LIMIT_WINDOW_MS) {
+    record.count++
+  } else {
+    loginAttempts.set(clientId, { count: 1, firstAttempt: now })
+  }
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env } = context
+  const clientId = getClientIdentifier(context.request)
+
+  // Check rate limit before processing
+  const rateLimit = checkRateLimit(clientId)
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { error: 'Too many login attempts. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rateLimit.retryAfter || 1800),
+        }
+      }
+    )
+  }
 
   try {
     const body = (await context.request.json()) as LoginRequest
@@ -36,6 +110,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }>()
 
     if (!user) {
+      recordLoginAttempt(clientId, false)
       return Response.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
@@ -45,8 +120,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       : user.password_hash === password
 
     if (!isValidPassword) {
+      recordLoginAttempt(clientId, false)
       return Response.json({ error: 'Invalid credentials' }, { status: 401 })
     }
+
+    // Successful login - clear rate limit record
+    recordLoginAttempt(clientId, true)
 
     // If password was plaintext, upgrade to bcrypt hash
     if (!user.password_hash.startsWith('$2')) {

@@ -63,7 +63,7 @@ Open http://localhost:8788
 | **Database** | Cloudflare D1 (SQLite) |
 | **Storage** | Cloudflare R2 |
 | **LLM** | OpenRouter (Gemini 3.0 Flash) |
-| **Testing** | Vitest (525+ tests, 70% coverage) |
+| **Testing** | Vitest (648 tests, 70% coverage) |
 
 ## Architecture
 
@@ -114,14 +114,18 @@ Secrets are managed via `wrangler pages secret put <NAME>`.
 
 - Bcrypt password hashing (auto-migrates from plaintext)
 - Session-based auth with 7-day sliding expiry
+- Rate limiting on login (5 attempts/15min, 30min lockout)
+- Request size limits (10MB general, 5MB for specs)
+- React Error Boundary for graceful error recovery
 - LLM retry logic with exponential backoff (3 attempts)
 - Input validation and length limits (2000 char max)
 - Cost tracking for all LLM requests
+- Session cleanup endpoint for maintenance
 
-**Known Issues** (see CLAUDE.md for full list):
-- JSON parsing should use Zod validation
-- Rate limiting needed on auth endpoints
-- Memory management in orchestrator conversation history
+**Known Issues** (see todo.md for full list):
+- Orchestrator.ts complexity (1603 lines, needs module split)
+- Error logging should use logger utility throughout
+- Some LLM response parsing should migrate to Zod validation
 
 ## License
 

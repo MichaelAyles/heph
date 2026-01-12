@@ -70,7 +70,7 @@ pnpm db:reset          # Reset local DB and re-run all migrations
 
 ### The Spec Pipeline (Core Flow)
 
-The app guides users through a 5-step process implemented in `src/pages/SpecPage.tsx` (1073 lines):
+The app guides users through a 5-step process implemented in `src/pages/SpecPage.tsx` (363 lines, orchestration only). Step components are in `src/components/spec-steps/`:
 
 | Step | Status Value | Component | What Happens |
 |------|--------------|-----------|--------------|
@@ -100,7 +100,8 @@ When creating example prompts, use ONLY these components or the project will be 
 
 ### Key Directories
 
-- `src/pages/` - Route components (SpecPage.tsx is the main 5-step pipeline)
+- `src/pages/` - Route components (SpecPage.tsx orchestrates the pipeline)
+- `src/components/spec-steps/` - Individual step components (Feasibility, Refinement, Blueprint, Selection, Finalization)
 - `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure)
 - `src/services/` - LLM client, orchestrator, PCB merging
 - `src/stores/` - Zustand state (auth, workspace, orchestrator)
@@ -152,14 +153,7 @@ The step calculation and render conditions can race with async mutations. Patter
 - `project.status` comes from server (async via mutation + query invalidation)
 - **Fix**: Don't gate renders on `project.status` when `currentStep` already captures the logic
 
-Example fix (line 1043):
-```jsx
-// BAD: Race condition - status lags behind step
-{currentStep === 2 && project.status === 'generating' && <BlueprintStep />}
-
-// GOOD: Step calculation already handles it
-{currentStep === 2 && <BlueprintStep />}
-```
+**NOTE**: Race conditions have been largely resolved by the SpecPage refactor. Step components now receive explicit props and callbacks, reducing tight coupling to server state.
 
 ### LLM Response Handling
 
@@ -223,7 +217,7 @@ Logs are stored in D1 for admin users and viewable via `GET /api/admin/logs`.
 
 ## Testing
 
-Vitest with 525+ tests, ~70% coverage. Target 90%+ on core modules.
+Vitest with 648 tests, ~70% coverage. Target 90%+ on core modules.
 
 **Fully Tested (90%+)**:
 - `src/prompts/*.ts` - All prompt template builders (96.51%)
@@ -249,26 +243,28 @@ Vitest with 525+ tests, ~70% coverage. Target 90%+ on core modules.
 - ~~**Streaming token counts**~~ - FIXED: Estimated at ~4 chars/token
 - ~~**No retry logic**~~ - FIXED: Exponential backoff (3 attempts, 1s/2s delays), 4xx errors fail immediately
 - ~~**Duplication**~~ - FIXED: Shared `functions/lib/gemini.ts` utility
+- ~~**JSON Parsing Fragility**~~ - FIXED: Zod validation utilities in `functions/lib/json.ts` (see below)
+- ~~**Memory Leak in Orchestrator**~~ - FIXED: `trimConversationHistory()` limits to 15 messages
+- ~~**API Key Exposure**~~ - FIXED: Error responses sanitized in `image.ts`
+- ~~**Session ID Regex**~~ - FIXED: UUID format validation in `_middleware.ts`
+- ~~**SpecPage size**~~ - FIXED: Split into 8 components (1253 → 363 lines, 71% reduction)
+- ~~**Missing Input Validation**~~ - FIXED: Server-side length limits enforced
+- ~~**No Rate Limiting**~~ - FIXED: 5 attempts/15min window, 30min lockout on login
+- ~~**Type Unsafety**~~ - FIXED: Added runtime guards in SpecPage handlers
+- ~~**Missing Error Boundary**~~ - FIXED: ErrorBoundary component at app root
+- ~~**No Request Size Limits**~~ - FIXED: 10MB general, 5MB for specs
+- ~~**Session Cleanup**~~ - FIXED: Admin endpoint `/api/admin/cleanup-sessions`
 
-### Critical (Address Immediately)
-1. ~~**JSON Parsing Fragility**~~ - FIXED: Zod validation utilities in `functions/lib/json.ts` (see below)
-2. **Memory Leak in Orchestrator** - `conversationHistory` grows unbounded (up to 100 iterations)
-3. **API Key Exposure** - Error responses in `image.ts` can leak upstream API errors
-4. **Session ID Regex** - Cookie parsing at `_middleware.ts:36` doesn't validate UUID format
+### Remaining Issues
 
-### High Priority
-5. **SpecPage size** - 1073 lines, 5 nested components, should be split
-6. **Race Conditions** - State updates in SpecPage can race with async mutations
-7. **Missing Input Validation** - Description length not enforced server-side (2000 char limit)
-8. **No Rate Limiting** - Login endpoint vulnerable to brute force
-9. **Type Unsafety** - Non-null assertions (`!`) without runtime checks throughout
+#### Medium Priority
+1. **Orchestrator complexity** - `src/services/orchestrator.ts` (1603 lines) needs module split
+2. **Standardize error logging** - Replace console.error with logger utility throughout
+3. **Use extractAndValidateJson** - Migrate remaining JSON parsing in step components
 
-### Medium Priority
-10. **Missing Error Boundary** - No React Error Boundary wrapper in App.tsx
-11. **No Request Size Limits** - Large JSON payloads can exhaust memory
-12. **Incomplete I2C Validation** - Regex-based firmware validation misses variable-stored addresses
-13. **Missing Pagination Bounds** - Large offset values can cause expensive queries
-14. **Session Cleanup** - No cron/job to delete expired sessions from D1
+#### Low Priority
+4. **Incomplete I2C Validation** - Regex-based firmware validation misses variable-stored addresses
+5. **Missing Pagination Bounds** - Large offset values can cause expensive queries
 
 ## Zod JSON Validation
 
@@ -300,11 +296,14 @@ const data = result.data // Fully typed!
 |------|-------|
 | Example prompts | `src/pages/NewProjectPage.tsx` lines 6-13 |
 | Available components | `src/prompts/feasibility.ts` lines 10-45 |
-| Step calculation | `src/pages/SpecPage.tsx` lines 893-901 |
-| Step rendering | `src/pages/SpecPage.tsx` lines 1009-1067 |
+| Step components | `src/components/spec-steps/` |
+| Step orchestration | `src/pages/SpecPage.tsx` |
+| Error boundary | `src/components/ErrorBoundary.tsx` |
 | LLM chat | `functions/api/llm/chat.ts` |
 | Image generation | `functions/api/llm/image.ts` |
 | Auth middleware | `functions/api/_middleware.ts` |
+| Rate limiting | `functions/api/auth/login.ts` |
+| Session cleanup | `functions/api/admin/cleanup-sessions.ts` |
 | Project CRUD | `functions/api/projects/` |
 | Gemini format util | `functions/lib/gemini.ts` |
 | Logger utility | `functions/lib/logger.ts` |
