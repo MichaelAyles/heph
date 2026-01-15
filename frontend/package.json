@@ -16,13 +16,15 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "check": "pnpm typecheck && pnpm lint && pnpm test:run && pnpm build",
+    "precommit": "pnpm check",
     "db:migrate": "wrangler d1 migrations apply phaestus --local",
     "db:migrate:remote": "wrangler d1 migrations apply phaestus --remote",
     "db:reset": "rm -rf .wrangler && pnpm db:migrate && pnpm db:seed:local",
     "db:seed:local": "for f in migrations/*.sql; do sqlite3 .wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite < \"$f\" 2>/dev/null || true; done",
     "db:studio": "wrangler d1 execute phaestus --local --command 'SELECT 1'",
     "pages:dev": "wrangler pages dev dist --d1=DB --r2=STORAGE",
-    "deploy": "pnpm build && wrangler pages deploy dist --project-name=phaestus"
+    "deploy": "pnpm check && wrangler pages deploy dist --project-name=phaestus"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

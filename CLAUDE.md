@@ -50,7 +50,8 @@ pnpm test src/prompts/feasibility.test.ts  # Run single test file
 
 # Build & Deploy
 pnpm build         # TypeScript + Vite build
-# Deploy: see explicit wrangler command above
+pnpm check         # Run all CI checks (typecheck, lint, test, build)
+pnpm deploy        # Check + deploy to Cloudflare Pages
 
 # Code Quality
 pnpm typecheck     # Type checking
