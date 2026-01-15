@@ -14,6 +14,7 @@ import {
   Shield,
   Pencil,
   Wrench,
+  Workflow,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
@@ -35,6 +36,7 @@ const navigation = [
 const adminNavigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'LLMs', href: '/admin/llms', icon: Cpu },
+  { name: 'Orchestrator', href: '/admin/orchestrator', icon: Workflow },
   { name: 'Logs', href: '/admin/logs', icon: ScrollText },
 ]
 
