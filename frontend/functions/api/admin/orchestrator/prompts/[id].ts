@@ -6,7 +6,14 @@
  * Requires admin authentication.
  */
 
-import type { Env, AuthenticatedRequest } from '../../../../types'
+import type { Env } from '../../../../types'
+
+interface User {
+  id: string
+  username: string
+  displayName: string | null
+  isAdmin: boolean
+}
 
 interface OrchestratorPrompt {
   id: string
@@ -33,12 +40,12 @@ interface UpdatePromptBody {
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const request = context.request as AuthenticatedRequest
-  const { env, params } = context
+  const { env, params, data } = context
+  const user = data.user as User
   const promptId = params.id as string
 
   // Check admin access
-  if (!request.user?.isAdmin) {
+  if (!user?.isAdmin) {
     return new Response(JSON.stringify({ error: 'Admin access required' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },
@@ -72,12 +79,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 }
 
 export const onRequestPut: PagesFunction<Env> = async (context) => {
-  const request = context.request as AuthenticatedRequest
-  const { env, params } = context
+  const { env, params, data, request } = context
+  const user = data.user as User
   const promptId = params.id as string
 
   // Check admin access
-  if (!request.user?.isAdmin) {
+  if (!user?.isAdmin) {
     return new Response(JSON.stringify({ error: 'Admin access required' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },
@@ -135,7 +142,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     updates.push('updated_at = ?')
     values.push(new Date().toISOString())
     updates.push('updated_by = ?')
-    values.push(request.user.username)
+    values.push(user.username)
 
     // Add WHERE clause values
     values.push(promptId)

@@ -5,7 +5,14 @@
  * Requires admin authentication.
  */
 
-import type { Env, AuthenticatedRequest } from '../../../types'
+import type { Env } from '../../../types'
+
+interface User {
+  id: string
+  username: string
+  displayName: string | null
+  isAdmin: boolean
+}
 
 interface OrchestratorPrompt {
   id: string
@@ -23,11 +30,11 @@ interface OrchestratorPrompt {
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const request = context.request as AuthenticatedRequest
-  const { env } = context
+  const { env, data } = context
+  const user = data.user as User
 
   // Check admin access
-  if (!request.user?.isAdmin) {
+  if (!user?.isAdmin) {
     return new Response(JSON.stringify({ error: 'Admin access required' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },
@@ -36,7 +43,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     // Get optional stage filter
-    const url = new URL(request.url)
+    const url = new URL(context.request.url)
     const stage = url.searchParams.get('stage')
 
     let query = 'SELECT * FROM orchestrator_prompts'
