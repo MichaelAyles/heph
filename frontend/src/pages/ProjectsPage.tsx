@@ -32,6 +32,9 @@ interface ProjectSpec {
     firmware?: StageStatus
     export?: StageStatus
   }
+  finalSpec?: {
+    name?: string
+  }
 }
 
 interface Project {
