@@ -19,6 +19,22 @@ import {
 import type { ProjectSpec, PcbBlock } from '@/db/schema'
 
 // =============================================================================
+// FEATURE FLAGS
+// =============================================================================
+
+/**
+ * Feature flag to enable LangGraph-based orchestrator.
+ * Set to true to use the new StateGraph implementation.
+ *
+ * NOTE: LangGraph runs server-side on Cloudflare Workers.
+ * When enabled, this will call /api/orchestrator/run instead of
+ * running the marathon agent in the browser.
+ *
+ * Default: false (uses existing marathon agent)
+ */
+export const USE_LANGGRAPH_ORCHESTRATOR = false
+
+// =============================================================================
 // STORE TYPES
 // =============================================================================
 
@@ -75,8 +91,17 @@ export const useOrchestratorStore = create<OrchestratorStoreState>((set, get) =>
   // Start the orchestrator
   startOrchestrator: (projectId, mode, description, existingSpec, blocks, onSpecUpdate) => {
     // Don't start if already running
-    if (get().orchestrator && get().status === 'running') {
+    const currentStatus = get().status
+    if (currentStatus === 'running') {
       return
+    }
+
+    // NOTE: When USE_LANGGRAPH_ORCHESTRATOR is true, this would call
+    // /api/orchestrator/run endpoint. For now, the LangGraph orchestrator
+    // is server-side only and not yet integrated with the frontend.
+    // The flag is reserved for future server-side orchestration.
+    if (USE_LANGGRAPH_ORCHESTRATOR) {
+      console.warn('LangGraph orchestrator is not yet integrated with frontend. Using legacy orchestrator.')
     }
 
     const callbacks: OrchestratorCallbacks = {

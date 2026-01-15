@@ -36,5 +36,15 @@ export {
 // D1 Checkpointer for persistence
 export { D1Checkpointer, createD1Checkpointer, type D1Database } from './checkpointer'
 
-// Graph will be exported once implemented
-// export { createOrchestratorGraph, compileOrchestratorGraph } from './graph'
+// Graph definition and compilation
+export {
+  createOrchestratorGraph,
+  compileWithMemory,
+  compileWithD1,
+  prepareInitialState,
+  runOrchestrator,
+  type OrchestratorInput,
+} from './graph'
+
+// Node exports (for testing and custom graphs)
+export * from './nodes'

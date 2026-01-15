@@ -195,17 +195,19 @@ export class D1Checkpointer extends BaseCheckpointSaver {
       .bind(threadId, checkpointNs, row.checkpoint_id)
       .all<PendingWriteRow>()
 
-    const pendingWrites = writesResult.results.map((w) => ({
-      taskId: w.task_id,
-      channel: w.channel,
-      value: this.serde.loadsTyped(w.type || 'json', w.value),
-    }))
+    const pendingWrites = await Promise.all(
+      writesResult.results.map(async (w) => ({
+        taskId: w.task_id,
+        channel: w.channel,
+        value: await this.serde.loadsTyped(w.type || 'json', w.value),
+      }))
+    )
 
     // Deserialize checkpoint and metadata
-    const checkpoint = this.serde.loadsTyped(
+    const checkpoint = (await this.serde.loadsTyped(
       row.type || 'json',
       row.checkpoint
-    ) as Checkpoint
+    )) as Checkpoint
 
     const metadata = JSON.parse(row.metadata) as CheckpointMetadata
 
@@ -274,10 +276,10 @@ export class D1Checkpointer extends BaseCheckpointSaver {
       .all<CheckpointRow>()
 
     for (const row of result.results) {
-      const checkpoint = this.serde.loadsTyped(
+      const checkpoint = (await this.serde.loadsTyped(
         row.type || 'json',
         row.checkpoint
-      ) as Checkpoint
+      )) as Checkpoint
 
       const metadata = JSON.parse(row.metadata) as CheckpointMetadata
 
@@ -325,7 +327,7 @@ export class D1Checkpointer extends BaseCheckpointSaver {
     const checkpointId = checkpoint.id
 
     // Serialize checkpoint
-    const [type, serializedCheckpoint] = this.serde.dumpsTyped(checkpoint)
+    const [type, serializedCheckpoint] = await this.serde.dumpsTyped(checkpoint)
 
     await this.db
       .prepare(
@@ -377,20 +379,22 @@ export class D1Checkpointer extends BaseCheckpointSaver {
     }
 
     // Batch insert pending writes
-    const statements = writes.map((write, idx) => {
-      const [channel, value] = write
-      const [type, serializedValue] = this.serde.dumpsTyped(value)
+    const statements = await Promise.all(
+      writes.map(async (write, idx) => {
+        const [channel, value] = write
+        const [type, serializedValue] = await this.serde.dumpsTyped(value)
 
-      return this.db
-        .prepare(
-          `INSERT INTO orchestrator_pending_writes
-           (thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, type, value)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
-           DO UPDATE SET channel = excluded.channel, type = excluded.type, value = excluded.value`
-        )
-        .bind(threadId, checkpointNs, checkpointId, taskId, idx, channel, type, serializedValue)
-    })
+        return this.db
+          .prepare(
+            `INSERT INTO orchestrator_pending_writes
+             (thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, type, value)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
+             DO UPDATE SET channel = excluded.channel, type = excluded.type, value = excluded.value`
+          )
+          .bind(threadId, checkpointNs, checkpointId, taskId, idx, channel, type, serializedValue)
+      })
+    )
 
     if (statements.length > 0) {
       await this.db.batch(statements)
