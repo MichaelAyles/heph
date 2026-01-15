@@ -9,3 +9,8 @@ agents.md
 
 # OS
 .DS_Store
+
+# Temp files
+tmpclaude-*
+.playwright-mcp/
+*~*.lck
