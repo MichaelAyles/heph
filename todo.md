@@ -1,30 +1,30 @@
 # PHAESTUS Code Review & Technical Debt
 
-**Last Review**: January 12, 2026
-**Overall Status**: ~95% complete - Production-ready
-**Test Coverage**: ~70% (648 tests)
+**Last Review**: January 15, 2026
+**Overall Status**: Production-ready
+**Test Coverage**: 63% overall (648 tests)
 
 ---
 
 ## Summary
 
-The codebase has been significantly improved in this review session. Core features are implemented and functional:
-- Full 5-step spec pipeline (feasibility - refinement - blueprints - selection - finalization)
+The codebase is mature and production-ready with solid engineering practices:
+- Full 5-step spec pipeline (feasibility → refinement → blueprints → selection → finalization)
 - Multi-stage workspace (PCB, Enclosure, Firmware, Export)
 - Hardware orchestrator with autonomous agent capabilities
-- Comprehensive LLM integration with retry logic and tool calling
+- Comprehensive LLM integration with retry logic, streaming, and tool calling
+- 12 database migrations, WorkOS OAuth, user approval workflow
 - All major API endpoints operational
 
-### Changes Made in This Session
+### Recent Changes (Jan 2025)
 
-| Change | Status | Impact |
+| Change | Commit | Impact |
 |--------|--------|--------|
-| Rate limiting on login | Implemented | Brute force protection (5 attempts/15min, 30min lockout) |
-| React Error Boundary | Implemented | Graceful error recovery at app root |
-| Request size limits | Implemented | 10MB general, 5MB for project specs |
-| Split SpecPage.tsx | Completed | 1253 lines - 363 lines (71% reduction) |
-| Session cleanup endpoint | Implemented | `/api/admin/cleanup-sessions` |
-| Step component tests | Added | 10 new tests for spec-steps |
+| Fix finalSpec type in ProjectsPage | 14f4b74 | Type safety for spec interface |
+| Prefer finalSpec.name in UI display | 9e2da8d | Better name resolution in views |
+| Orchestrator generates real blueprints | e3f442f | No more placeholder images |
+| Validate blueprint URLs | 70bf9c1 | Prevent 404s in SpecStageView |
+| Include spec in projects list API | 7bd4269 | Stage status display works |
 
 ---
 
@@ -44,95 +44,90 @@ The codebase has been significantly improved in this review session. Core featur
 | No rate limiting on login | In-memory rate limiting with lockout |
 | Missing Error Boundary | ErrorBoundary component at app root |
 | No request size limits | Content-Length checks in middleware |
-| SpecPage too large | Split into 8 step components |
+| SpecPage too large | Split into 8 step components (1253 → 362 lines) |
 | Session cleanup missing | Admin endpoint for cleanup |
+| Blueprint placeholder images | Orchestrator now generates real images |
+| Blueprint URL validation | URLs validated before display |
 
 ### Remaining Issues
 
 #### Medium Priority
 | Issue | Location | Risk | Effort |
 |-------|----------|------|--------|
-| Orchestrator complexity | `src/services/orchestrator.ts` (1603 lines) | Testability | 4-6h |
-| Standardize error logging | Various files | Debug difficulty | 2h |
+| Orchestrator complexity | `src/services/orchestrator.ts` (1641 lines) | Testability | 4-6h |
+| Standardize error logging | 68 console.error/warn calls | Debug difficulty | 2h |
 | Use extractAndValidateJson | `spec-steps/*.tsx` | Parse failures | 2h |
 
 #### Low Priority
 | Issue | Location | Risk | Effort |
 |-------|----------|------|--------|
 | Incomplete I2C validation | Firmware validation | Edge case bugs | 2h |
-| Console.error instead of logger | Multiple files | Missing audit trail | 1h |
+| Missing pagination bounds | Projects list endpoint | Expensive queries | 1h |
 
 ---
 
-## Architecture Improvements
+## Architecture
 
-### SpecPage Refactor
+### Key Metrics
 
-The monolithic SpecPage.tsx (1253 lines) was split into focused components:
+| File | Lines | Status |
+|------|-------|--------|
+| `orchestrator.ts` | 1641 | Needs split |
+| `SpecPage.tsx` | 362 | Refactored |
+| `SpecStageView.tsx` | 1495 | Monitor |
+| `FeasibilityStep.tsx` | 103 | Good |
+| `RefinementStep.tsx` | 240 | Good |
+| `BlueprintStep.tsx` | 162 | Good |
+| `SelectionStep.tsx` | 112 | Good |
+| `FinalizationStep.tsx` | 94 | Good |
 
-```
-src/components/spec-steps/
-  index.ts              # Exports
-  types.ts              # Shared types and interfaces
-  StepIndicator.tsx     # Progress indicator
-  FeasibilityStep.tsx   # Step 0: Analyze feasibility
-  FeasibilityResults.tsx # Display feasibility results
-  RejectionDisplay.tsx  # Handle rejected projects
-  RefinementStep.tsx    # Step 1: Q&A refinement
-  BlueprintStep.tsx     # Step 2: Generate images
-  SelectionStep.tsx     # Step 3: Select design
-  FinalizationStep.tsx  # Step 4: Generate final spec
-  spec-steps.test.ts    # Type validation tests
-```
+### API Endpoints (28 total)
 
-The main SpecPage.tsx is now 363 lines (71% reduction) and focuses solely on orchestration.
+| Category | Endpoints |
+|----------|-----------|
+| LLM | chat, image, stream, tools |
+| Projects | list, create, get, update, delete |
+| Auth | login, logout, register, me, WorkOS callback |
+| Admin | logs, users, cleanup-sessions |
+| Blocks | list, get |
+| Gallery | index, get |
 
-### Security Improvements
+### Database (12 migrations)
 
-1. **Rate Limiting** (`functions/api/auth/login.ts`)
-   - 5 attempts per 15-minute window
-   - 30-minute lockout after exceeding limit
-   - Clears on successful login
-   - Uses CF-Connecting-IP for client identification
-
-2. **Request Size Limits** (`functions/api/_middleware.ts`)
-   - 10MB general limit
-   - 5MB limit for project spec updates
-   - Returns 413 for oversized requests
-
-3. **Error Boundary** (`src/components/ErrorBoundary.tsx`)
-   - Catches unhandled React errors
-   - Shows user-friendly error UI
-   - Provides retry, reload, and home navigation
-   - Shows stack trace in development mode
-
-4. **Session Cleanup** (`functions/api/admin/cleanup-sessions.ts`)
-   - `POST` to delete expired sessions
-   - `GET` for session statistics
-   - Admin-only access
+Key tables:
+- `users` - id, username, password_hash, is_admin, control_mode, is_approved
+- `sessions` - id, user_id, expires_at
+- `projects` - id, user_id, name, description, status, spec
+- `pcb_blocks` - 21 pre-seeded hardware modules
+- `llm_requests` - model, tokens, cost_usd, latency_ms
+- `conversations` - project_id, messages
+- `gallery_visibility` - project_id, visibility
 
 ---
 
 ## Test Coverage
 
 ### Current Status
-- **Total tests**: 648 (up from 638)
+- **Total tests**: 648
 - **Test files**: 22
-- **Coverage**: ~70%
+- **Overall coverage**: 63%
 
-### Well-Tested (90%+)
-- `src/prompts/*.ts` - Prompt builders (96.51%)
-- `src/db/schema.ts` - Row transforms (100%)
-- `src/stores/auth.ts` - Auth state (100%)
-- `src/stores/workspace.ts` - Workspace state (100%)
-- `functions/lib/*.ts` - Utilities (93.51%)
-- `functions/api/llm/pricing.ts` - Cost calculations (100%)
-- `src/components/spec-steps/` - Type validation (new)
+### Coverage by Module
 
-### Needs Testing
-- `src/pages/workspace/*.tsx` - Stage views (0%)
-- `src/lib/openscadRenderer.ts` - WASM wrapper (0%)
-- `functions/api/projects/*.ts` - Integration tests
+| Module | Coverage | Status |
+|--------|----------|--------|
+| `src/prompts/*.ts` | 96.51% | Excellent |
+| `src/db/schema.ts` | 100% | Excellent |
+| `src/stores/auth.ts` | 100% | Excellent |
+| `src/stores/workspace.ts` | 100% | Excellent |
+| `functions/lib/*.ts` | 93.51% | Excellent |
+| `functions/api/llm/pricing.ts` | 100% | Excellent |
+| `src/stores/orchestrator.ts` | 83.78% | Good |
+| `src/services/llm.ts` | 61.44% | Needs work |
+| `src/services/pcb-merge.ts` | 46.22% | Needs work |
+| `src/services/orchestrator.ts` | 34.39% | Needs work |
+| `src/lib/openscadRenderer.ts` | 0% | Untested |
+| `functions/api/**/*.ts` | 0% | Needs miniflare |
 
 ---
 
@@ -140,6 +135,8 @@ The main SpecPage.tsx is now 363 lines (71% reduction) and focuses solely on orc
 
 - [x] Bcrypt password hashing
 - [x] HTTP-only session cookies
+- [x] WorkOS OAuth integration
+- [x] User approval workflow
 - [x] Server-side API key protection
 - [x] Input validation (length limits)
 - [x] Session expiration (7-day sliding)
@@ -149,51 +146,31 @@ The main SpecPage.tsx is now 363 lines (71% reduction) and focuses solely on orc
 - [x] Error boundary for graceful degradation
 - [x] Session cleanup capability
 - [ ] CSRF protection (platform-level only)
-- [ ] Audit logging for all sensitive ops
+- [ ] Comprehensive audit logging
 
 ---
 
 ## Remaining Work
 
 ### High Priority
-1. Split Orchestrator.ts into modules (4-6h)
-   - Extract tool handlers
+1. **Split Orchestrator.ts into modules** (4-6h)
+   - Extract tool handlers into separate files
    - Separate state management
    - Improve testability
 
 ### Medium Priority
-2. Standardize error logging (2h)
-   - Replace console.error with logger utility
+2. **Standardize error logging** (2h)
+   - Replace 68 console.error/warn calls with logger utility
    - Add structured logging throughout
 
-3. Use extractAndValidateJson throughout (2h)
+3. **Use extractAndValidateJson throughout** (2h)
    - Replace regex JSON extraction in step components
-   - Add schema validation for LLM responses
+   - Add schema validation for all LLM responses
 
 ### Low Priority
 4. Add workspace stage view tests
-5. Fix incomplete I2C validation
-
----
-
-## Quick Reference
-
-| Metric | Before | After |
-|--------|--------|-------|
-| SpecPage.tsx lines | 1253 | 363 |
-| Total tests | 638 | 648 |
-| Security controls | 6 | 10 |
-| Step components | 0 | 8 |
-
-| File | Lines |
-|------|-------|
-| `orchestrator.ts` | 1603 |
-| `SpecPage.tsx` | 363 |
-| `FeasibilityStep.tsx` | 98 |
-| `RefinementStep.tsx` | 219 |
-| `BlueprintStep.tsx` | 148 |
-| `SelectionStep.tsx` | 108 |
-| `FinalizationStep.tsx` | 81 |
+5. Fix incomplete I2C validation in firmware
+6. Add pagination bounds check
 
 ---
 
@@ -201,6 +178,8 @@ The main SpecPage.tsx is now 363 lines (71% reduction) and focuses solely on orc
 
 - All 648 tests pass
 - TypeScript compiles without errors
-- Deploy pipeline is stable (GitHub Actions - Cloudflare Pages)
+- Deploy pipeline is stable (GitHub Actions → Cloudflare Pages)
 - LLM costs dominated by image generation (~2000x text completions)
 - Architecture is sound; main remaining debt is orchestrator organization
+- WorkOS OAuth and user approval workflow recently added
+- Blueprint generation now creates real images (not placeholders)

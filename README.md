@@ -62,8 +62,8 @@ Open http://localhost:8788
 | **Backend** | Cloudflare Pages Functions |
 | **Database** | Cloudflare D1 (SQLite) |
 | **Storage** | Cloudflare R2 |
-| **LLM** | OpenRouter (Gemini 3.0 Flash) |
-| **Testing** | Vitest (648 tests, 70% coverage) |
+| **LLM** | OpenRouter (Gemini 2.0 Flash) |
+| **Testing** | Vitest (648 tests, 63% coverage) |
 
 ## Architecture
 
@@ -114,6 +114,8 @@ Secrets are managed via `wrangler pages secret put <NAME>`.
 
 - Bcrypt password hashing (auto-migrates from plaintext)
 - Session-based auth with 7-day sliding expiry
+- WorkOS AuthKit OAuth integration
+- User approval workflow
 - Rate limiting on login (5 attempts/15min, 30min lockout)
 - Request size limits (10MB general, 5MB for specs)
 - React Error Boundary for graceful error recovery
@@ -123,8 +125,8 @@ Secrets are managed via `wrangler pages secret put <NAME>`.
 - Session cleanup endpoint for maintenance
 
 **Known Issues** (see todo.md for full list):
-- Orchestrator.ts complexity (1603 lines, needs module split)
-- Error logging should use logger utility throughout
+- Orchestrator.ts complexity (1641 lines, needs module split)
+- Error logging should use logger utility throughout (68 console calls to migrate)
 - Some LLM response parsing should migrate to Zod validation
 
 ## License

@@ -71,7 +71,7 @@ pnpm db:reset          # Reset local DB and re-run all migrations
 
 ### The Spec Pipeline (Core Flow)
 
-The app guides users through a 5-step process implemented in `src/pages/SpecPage.tsx` (363 lines, orchestration only). Step components are in `src/components/spec-steps/`:
+The app guides users through a 5-step process implemented in `src/pages/SpecPage.tsx` (362 lines, orchestration only). Step components are in `src/components/spec-steps/`:
 
 | Step | Status Value | Component | What Happens |
 |------|--------------|-----------|--------------|
@@ -114,12 +114,14 @@ When creating example prompts, use ONLY these components or the project will be 
 
 Key tables in D1:
 
-- **users**: id, username, password_hash (bcrypt, auto-upgraded from plaintext on login), is_admin
+- **users**: id, username, password_hash (bcrypt, auto-upgraded from plaintext on login), is_admin, control_mode, is_approved
 - **sessions**: id, user_id, expires_at (7-day sliding expiry, extended on activity)
-- **projects**: id, user_id, name, status, spec (JSON ProjectSpec)
+- **projects**: id, user_id, name, description, status, spec (JSON ProjectSpec)
 - **pcb_blocks**: 21 pre-seeded circuit modules
-- **llm_requests**: Usage tracking with cost_usd
+- **llm_requests**: Usage tracking with cost_usd, latency_ms
 - **debug_logs**: Admin logging (category, level, request_id for correlation)
+- **conversations**: project_id, messages (JSON), timestamps
+- **gallery_visibility**: project_id, visibility (public/private/anonymous)
 
 ### LLM Integration
 
@@ -134,8 +136,11 @@ All requests proxy through `/api/llm/*`:
 ### Auth
 
 - Session cookies, 7-day expiry, HttpOnly
+- WorkOS AuthKit OAuth integration available
 - Default user: `mike`/`mike` (admin)
-- Public routes: `/api/auth/*`, `/api/blocks`, `/api/images`
+- User approval workflow (is_approved flag)
+- Control modes: vibe_it, fix_it, design_it
+- Public routes: `/api/auth/*`, `/api/blocks`, `/api/images`, `/api/gallery/*`
 
 ## Development Workflow
 
@@ -218,7 +223,7 @@ Logs are stored in D1 for admin users and viewable via `GET /api/admin/logs`.
 
 ## Testing
 
-Vitest with 648 tests, ~70% coverage. Target 90%+ on core modules.
+Vitest with 648 tests, ~63% overall coverage. Target 90%+ on core modules.
 
 **Fully Tested (90%+)**:
 - `src/prompts/*.ts` - All prompt template builders (96.51%)
@@ -229,9 +234,9 @@ Vitest with 648 tests, ~70% coverage. Target 90%+ on core modules.
 - `functions/api/llm/pricing.ts` - Cost calculations (100%)
 
 **Partially Tested**:
-- `src/services/llm.ts` - LLM client (82%)
-- `src/services/orchestrator.ts` - Multi-agent orchestration (49%)
-- `src/services/pcb-merge.ts` - KiCad block merging (tested)
+- `src/services/llm.ts` - LLM client (61%)
+- `src/services/orchestrator.ts` - Multi-agent orchestration (34%)
+- `src/services/pcb-merge.ts` - KiCad block merging (46%)
 
 **Not Tested**:
 - `src/lib/openscadRenderer.ts` - WASM wrapper (0%)
@@ -248,7 +253,7 @@ Vitest with 648 tests, ~70% coverage. Target 90%+ on core modules.
 - ~~**Memory Leak in Orchestrator**~~ - FIXED: `trimConversationHistory()` limits to 15 messages
 - ~~**API Key Exposure**~~ - FIXED: Error responses sanitized in `image.ts`
 - ~~**Session ID Regex**~~ - FIXED: UUID format validation in `_middleware.ts`
-- ~~**SpecPage size**~~ - FIXED: Split into 8 components (1253 → 363 lines, 71% reduction)
+- ~~**SpecPage size**~~ - FIXED: Split into 8 components (1253 → 362 lines, 71% reduction)
 - ~~**Missing Input Validation**~~ - FIXED: Server-side length limits enforced
 - ~~**No Rate Limiting**~~ - FIXED: 5 attempts/15min window, 30min lockout on login
 - ~~**Type Unsafety**~~ - FIXED: Added runtime guards in SpecPage handlers
@@ -259,8 +264,8 @@ Vitest with 648 tests, ~70% coverage. Target 90%+ on core modules.
 ### Remaining Issues
 
 #### Medium Priority
-1. **Orchestrator complexity** - `src/services/orchestrator.ts` (1603 lines) needs module split
-2. **Standardize error logging** - Replace console.error with logger utility throughout
+1. **Orchestrator complexity** - `src/services/orchestrator.ts` (1641 lines) needs module split
+2. **Standardize error logging** - Replace console.error with logger utility throughout (68 calls to migrate)
 3. **Use extractAndValidateJson** - Migrate remaining JSON parsing in step components
 
 #### Low Priority
@@ -332,4 +337,28 @@ Post-spec stages for hardware generation:
 | Firmware | `pages/workspace/FirmwareStageView.tsx`, `prompts/firmware.ts` | ESP32 code generation, Monaco editor |
 | Export | `pages/workspace/ExportStageView.tsx` | Spec MD/JSON, BOM CSV, ZIP downloads |
 
-**Orchestrator** (`services/orchestrator.ts`, 1603 lines): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`.
+**Orchestrator** (`services/orchestrator.ts`, 1641 lines): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`.
+
+## API Endpoints
+
+**LLM** (`/api/llm/*`):
+- `POST /api/llm/chat` - Main chat endpoint with retry logic (395 LOC)
+- `POST /api/llm/image` - Image generation with cost tracking (216 LOC)
+- `POST /api/llm/stream` - Server-sent events streaming (320 LOC)
+- `POST /api/llm/tools` - Gemini function calling (691 LOC)
+
+**Projects** (`/api/projects/*`):
+- `GET /api/projects` - List with pagination and status filter
+- `POST /api/projects` - Create new project
+- `GET /api/projects/{id}` - Get project details
+- `PUT /api/projects/{id}` - Update project
+- `DELETE /api/projects/{id}` - Delete project
+
+**Gallery** (`/api/gallery/*`):
+- `GET /api/gallery/index` - Public project gallery
+- `GET /api/gallery/{id}` - Get public project details
+
+**Admin** (`/api/admin/*`):
+- `GET /api/admin/logs` - View debug logs
+- `POST /api/admin/cleanup-sessions` - Remove expired sessions
+- `GET /api/admin/users` - User management
