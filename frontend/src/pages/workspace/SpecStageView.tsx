@@ -31,6 +31,19 @@ import type {
 } from '@/db/schema'
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+/** Check if a blueprint URL is valid (not a placeholder) */
+function isValidBlueprintUrl(url: string | undefined): boolean {
+  if (!url) return false
+  // Valid URLs start with http or /api and don't contain "placeholder"
+  const isValidPrefix = url.startsWith('http') || url.startsWith('/api')
+  const isPlaceholder = url.includes('placeholder')
+  return isValidPrefix && !isPlaceholder
+}
+
+// =============================================================================
 // API Functions
 // =============================================================================
 
@@ -752,12 +765,14 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
             >
               {generating[index] ? (
                 <Loader2 className="w-6 h-6 text-copper animate-spin" strokeWidth={1.5} />
-              ) : blueprints[index] ? (
+              ) : blueprints[index] && isValidBlueprintUrl(blueprints[index].url) ? (
                 <img
                   src={blueprints[index].url}
                   alt={`Blueprint ${index + 1}`}
                   className="w-full h-full object-cover"
                 />
+              ) : blueprints[index] ? (
+                <span className="text-steel-dim text-xs">No image</span>
               ) : (
                 <XCircle className="w-6 h-6 text-red-400" strokeWidth={1.5} />
               )}
@@ -777,12 +792,14 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
             >
               {generating[index] ? (
                 <Loader2 className="w-6 h-6 text-copper animate-spin" strokeWidth={1.5} />
-              ) : blueprints[index] ? (
+              ) : blueprints[index] && isValidBlueprintUrl(blueprints[index].url) ? (
                 <img
                   src={blueprints[index].url}
                   alt={`Blueprint ${index + 1}`}
                   className="w-full h-full object-cover"
                 />
+              ) : blueprints[index] ? (
+                <span className="text-steel-dim text-xs">No image</span>
               ) : (
                 <XCircle className="w-6 h-6 text-red-400" strokeWidth={1.5} />
               )}
@@ -843,11 +860,17 @@ function SelectionStep({ blueprints, onSelect, onRegenerate }: SelectionStepProp
         </button>
 
         <div className="bg-surface-900 border border-surface-700 p-4">
-          <img
-            src={bp.url}
-            alt={`Design ${selected + 1}`}
-            className="w-full max-h-96 object-contain mb-4"
-          />
+          {isValidBlueprintUrl(bp.url) ? (
+            <img
+              src={bp.url}
+              alt={`Design ${selected + 1}`}
+              className="w-full max-h-96 object-contain mb-4"
+            />
+          ) : (
+            <div className="w-full h-48 bg-surface-800 flex items-center justify-center mb-4">
+              <span className="text-steel-dim text-sm">Image not available</span>
+            </div>
+          )}
 
           <div className="space-y-4">
             <div>
@@ -910,7 +933,13 @@ function SelectionStep({ blueprints, onSelect, onRegenerate }: SelectionStepProp
             onClick={() => setSelected(index)}
             className="aspect-square border-2 border-surface-600 hover:border-copper/50 transition-all overflow-hidden"
           >
-            <img src={bp.url} alt={`Design ${index + 1}`} className="w-full h-full object-cover" />
+            {isValidBlueprintUrl(bp.url) ? (
+              <img src={bp.url} alt={`Design ${index + 1}`} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-surface-800 flex items-center justify-center">
+                <span className="text-steel-dim text-sm">No image</span>
+              </div>
+            )}
           </button>
         ))}
       </div>
@@ -1041,7 +1070,7 @@ function FinalSpecDisplay({ finalSpec, blueprintUrl, onContinue }: FinalSpecDisp
       </div>
 
       {/* Blueprint preview - only show if URL is valid (not a placeholder) */}
-      {blueprintUrl && (blueprintUrl.startsWith('http') || blueprintUrl.startsWith('/api')) && (
+      {isValidBlueprintUrl(blueprintUrl) && (
         <div className="bg-surface-900 border border-surface-700 p-6">
           <h3 className="text-sm font-mono text-steel-dim mb-3 tracking-wide">SELECTED DESIGN</h3>
           <div className="rounded-lg overflow-hidden border border-surface-600">
