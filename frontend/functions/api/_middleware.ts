@@ -11,6 +11,8 @@ const PUBLIC_ROUTES = [
   '/api/auth/login',
   '/api/auth/logout',
   '/api/auth/me',
+  '/api/auth/workos',
+  '/api/auth/callback',
   '/api/blocks',
   '/api/images',
   '/api/gallery',

@@ -16,6 +16,10 @@ export interface Env {
   OPENROUTER_API_KEY: string
   TEXT_MODEL_SLUG?: string
   IMAGE_MODEL_SLUG?: string
+
+  // WorkOS OAuth
+  WORKOS_CLIENT_ID: string
+  WORKOS_API_KEY: string
 }
 
 // Extend the context with our typed env
