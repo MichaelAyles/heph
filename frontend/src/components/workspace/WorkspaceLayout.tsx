@@ -61,10 +61,16 @@ export function WorkspaceLayout() {
       // Merge with fresh spec
       const mergedSpec = { ...freshProject?.spec, ...specUpdate }
 
+      // Build update payload - include name if finalSpec has one
+      const updatePayload: { spec: typeof mergedSpec; name?: string } = { spec: mergedSpec }
+      if (specUpdate.finalSpec?.name) {
+        updatePayload.name = specUpdate.finalSpec.name
+      }
+
       const res = await fetch(`/api/projects/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spec: mergedSpec }),
+        body: JSON.stringify(updatePayload),
       })
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ['project', id] })
