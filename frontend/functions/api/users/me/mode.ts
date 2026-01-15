@@ -3,18 +3,25 @@
  * Update current user's control mode
  */
 
-import type { Env, AuthenticatedEnv } from '../../../env'
+import type { Env } from '../../../env'
 
 type ControlMode = 'vibe_it' | 'fix_it' | 'design_it'
 
 const VALID_MODES: ControlMode[] = ['vibe_it', 'fix_it', 'design_it']
 
-export const onRequestPut: PagesFunction<Env> = async (context) => {
-  const { env } = context as { env: AuthenticatedEnv }
+interface User {
+  id: string
+  username: string
+  displayName: string | null
+  isAdmin?: boolean
+}
 
-  // Middleware should have set user
-  const userId = env.user?.id
-  if (!userId) {
+export const onRequestPut: PagesFunction<Env> = async (context) => {
+  const { env, data } = context
+
+  // Middleware sets user in data
+  const user = data.user as User | undefined
+  if (!user?.id) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -30,7 +37,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }
 
     await env.DB.prepare('UPDATE users SET control_mode = ? WHERE id = ?')
-      .bind(controlMode, userId)
+      .bind(controlMode, user.id)
       .run()
 
     return Response.json({ success: true, controlMode })
