@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Loader2,
   AlertCircle,
@@ -15,11 +15,15 @@ import {
   Mail,
   X,
   Image as ImageIcon,
+  CheckCircle,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/stores/auth'
 
 export function LandingPage() {
+  const [searchParams] = useSearchParams()
+  const accessRequested = searchParams.get('access_requested') === 'true'
+
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -74,8 +78,21 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-ash">
+      {/* Access Requested Banner */}
+      {accessRequested && (
+        <div className="fixed top-0 left-0 right-0 z-[60] bg-emerald-500/10 border-b border-emerald-500/30 px-6 py-3">
+          <div className="max-w-6xl mx-auto flex items-center justify-center gap-2 text-emerald-400">
+            <CheckCircle className="w-5 h-5" strokeWidth={1.5} />
+            <span className="text-sm font-medium">Access requested! We'll notify you when your account is approved.</span>
+          </div>
+        </div>
+      )}
+
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-ash/80 backdrop-blur-sm border-b border-surface-700">
+      <nav className={clsx(
+        "fixed left-0 right-0 z-50 bg-ash/80 backdrop-blur-sm border-b border-surface-700",
+        accessRequested ? "top-12" : "top-0"
+      )}>
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="Phaestus" className="h-8 w-auto" />
@@ -205,7 +222,7 @@ export function LandingPage() {
                         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                       />
                     </svg>
-                    Continue with Google
+                    Request Access with Google
                   </a>
                 </form>
               </div>

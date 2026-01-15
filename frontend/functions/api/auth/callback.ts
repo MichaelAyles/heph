@@ -85,10 +85,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // Find or create user in D1
     let user = await env.DB.prepare(
-      'SELECT id, username, display_name, is_admin FROM users WHERE workos_id = ?'
+      'SELECT id, username, display_name, is_admin, is_approved FROM users WHERE workos_id = ?'
     )
       .bind(workosUser.id)
-      .first()
+      .first<{ id: string; username: string; display_name: string | null; is_admin: number; is_approved: number }>()
+
+    let isNewUser = false
 
     if (!user) {
       // Check if user exists by email (for linking)
@@ -96,7 +98,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         'SELECT id FROM users WHERE username = ?'
       )
         .bind(workosUser.email)
-        .first()
+        .first<{ id: string }>()
 
       if (existingByEmail) {
         // Link WorkOS to existing user
@@ -105,20 +107,21 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           .run()
 
         user = await env.DB.prepare(
-          'SELECT id, username, display_name, is_admin FROM users WHERE id = ?'
+          'SELECT id, username, display_name, is_admin, is_approved FROM users WHERE id = ?'
         )
           .bind(existingByEmail.id)
           .first()
       } else {
-        // Create new user
+        // Create new user (not approved by default)
+        isNewUser = true
         const userId = crypto.randomUUID().replace(/-/g, '')
         const displayName = [workosUser.first_name, workosUser.last_name]
           .filter(Boolean)
           .join(' ') || null
 
         await env.DB.prepare(
-          `INSERT INTO users (id, username, password_hash, display_name, workos_id, is_admin)
-           VALUES (?, ?, '', ?, ?, 0)`
+          `INSERT INTO users (id, username, password_hash, display_name, workos_id, is_admin, is_approved)
+           VALUES (?, ?, '', ?, ?, 0, 0)`
         )
           .bind(userId, workosUser.email, displayName, workosUser.id)
           .run()
@@ -128,8 +131,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           username: workosUser.email,
           display_name: displayName,
           is_admin: 0,
+          is_approved: 0,
         }
       }
+    }
+
+    // Check if user is approved
+    if (!user!.is_approved) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: '/?access_requested=true',
+          'Set-Cookie': 'oauth_state=; Max-Age=0; Path=/',
+        },
+      })
     }
 
     // Create session
@@ -153,16 +168,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const isSecure = url.protocol === 'https:'
     const cookieOptions = `HttpOnly; SameSite=Lax; Max-Age=604800; Path=/${isSecure ? '; Secure' : ''}`
 
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: '/',
-        'Set-Cookie': [
-          `session=${sessionId}; ${cookieOptions}`,
-          'oauth_state=; Max-Age=0; Path=/', // Clear state cookie
-        ].join(', '),
-      },
-    })
+    const headers = new Headers()
+    headers.set('Location', '/')
+    headers.append('Set-Cookie', `session=${sessionId}; ${cookieOptions}`)
+    headers.append('Set-Cookie', 'oauth_state=; Max-Age=0; Path=/')
+
+    return new Response(null, { status: 302, headers })
   } catch (err) {
     console.error('OAuth callback error:', err)
     return redirectWithError('Authentication failed')

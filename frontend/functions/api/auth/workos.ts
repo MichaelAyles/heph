@@ -31,7 +31,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   authUrl.searchParams.set('redirect_uri', redirectUri)
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('state', state)
-  authUrl.searchParams.set('provider', 'authkit')
+  authUrl.searchParams.set('provider', 'GoogleOAuth')
 
   // Store state in cookie for verification on callback
   const response = new Response(null, {

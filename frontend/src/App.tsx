@@ -12,6 +12,7 @@ import { SpecViewerPage } from '@/pages/SpecViewerPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { BlocksPage } from '@/pages/BlocksPage'
 import { AdminLogsPage } from '@/pages/AdminLogsPage'
+import { AdminUsersPage } from '@/pages/AdminUsersPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { GalleryPage } from '@/pages/GalleryPage'
 import { GalleryDetailPage } from '@/pages/GalleryDetailPage'
@@ -55,6 +56,7 @@ function AuthenticatedApp() {
         <Route path="blocks" element={<BlocksPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="admin/logs" element={<AdminLogsPage />} />
+        <Route path="admin/users" element={<AdminUsersPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
