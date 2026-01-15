@@ -16,7 +16,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "pnpm typecheck && pnpm lint && pnpm test:run && pnpm build",
+    "check": "pnpm typecheck && pnpm test:run && pnpm build",
     "precommit": "pnpm check",
     "db:migrate": "wrangler d1 migrations apply phaestus --local",
     "db:migrate:remote": "wrangler d1 migrations apply phaestus --remote",

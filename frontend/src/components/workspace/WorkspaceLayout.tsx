@@ -74,6 +74,8 @@ export function WorkspaceLayout() {
       })
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ['project', id] })
+        // Also invalidate projects list so stage indicators stay in sync
+        queryClient.invalidateQueries({ queryKey: ['projects'] })
       } else {
         console.error('Failed to update spec:', await res.text())
       }
