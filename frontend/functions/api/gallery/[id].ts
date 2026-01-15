@@ -20,7 +20,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, params } = context
   const { id } = params
 
-  // Get the project
+  // Get the project (must be public and complete)
   const result = await env.DB.prepare(
     `
     SELECT
@@ -31,10 +31,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       p.spec,
       p.created_at,
       p.updated_at,
+      p.show_author,
       u.username as author_username
     FROM projects p
     JOIN users u ON p.user_id = u.id
-    WHERE p.id = ? AND p.status = 'complete'
+    WHERE p.id = ? AND p.status = 'complete' AND p.is_public = 1
     `
   )
     .bind(id)
@@ -60,7 +61,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     status: result.status,
     createdAt: result.created_at,
     updatedAt: result.updated_at,
-    authorUsername: result.author_username,
+    authorUsername: result.show_author ? result.author_username : 'Anonymous',
     spec: spec
       ? {
           // Only expose safe fields

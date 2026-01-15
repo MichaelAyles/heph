@@ -5,6 +5,8 @@
  */
 
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Download,
   FileText,
@@ -18,6 +20,9 @@ import {
   ExternalLink,
   Table,
   MessageSquare,
+  Globe,
+  User,
+  ChevronRight,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import JSZip from 'jszip'
@@ -49,11 +54,51 @@ interface ExportItem {
   onDownload: () => Promise<void>
 }
 
+interface VisibilitySettings {
+  isPublic: boolean
+  showAuthor: boolean
+}
+
+async function fetchVisibility(projectId: string): Promise<VisibilitySettings> {
+  const res = await fetch(`/api/projects/${projectId}/visibility`)
+  if (!res.ok) throw new Error('Failed to fetch visibility')
+  return res.json()
+}
+
+async function updateVisibility(
+  projectId: string,
+  settings: Partial<VisibilitySettings>
+): Promise<VisibilitySettings> {
+  const res = await fetch(`/api/projects/${projectId}/visibility`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+  if (!res.ok) throw new Error('Failed to update visibility')
+  return res.json()
+}
+
 export function ExportStageView() {
   const { project } = useWorkspaceContext()
+  const queryClient = useQueryClient()
 
   const [downloading, setDownloading] = useState<string | null>(null)
   const [downloaded, setDownloaded] = useState<Set<string>>(new Set())
+
+  // Visibility settings for gallery publishing
+  const { data: visibility, isLoading: visibilityLoading } = useQuery({
+    queryKey: ['visibility', project?.id],
+    queryFn: () => fetchVisibility(project!.id),
+    enabled: !!project?.id && project?.status === 'complete',
+  })
+
+  const visibilityMutation = useMutation({
+    mutationFn: (settings: Partial<VisibilitySettings>) =>
+      updateVisibility(project!.id, settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['visibility', project?.id] })
+    },
+  })
 
   const firmwareComplete = project?.spec?.stages?.firmware?.status === 'complete'
 
@@ -758,6 +803,91 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
             </div>
           )
         })}
+      </div>
+
+      {/* Gallery Publishing */}
+      <div className="mt-8 max-w-2xl">
+        <div className="bg-surface-900 rounded-lg border border-surface-700 p-5">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-lg bg-surface-800 flex items-center justify-center flex-shrink-0">
+              <Globe className="w-5 h-5 text-copper" strokeWidth={1.5} />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-steel mb-1">Share to Gallery</h3>
+              <p className="text-xs text-steel-dim mb-4">
+                Make your project visible to the public. Others can view your specifications and design concepts.
+              </p>
+
+              {visibilityLoading ? (
+                <div className="flex items-center gap-2 text-xs text-steel-dim">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Loading...
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Publish toggle */}
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-steel-dim" strokeWidth={1.5} />
+                      <span className="text-sm text-steel">Publish to Gallery</span>
+                    </div>
+                    <button
+                      onClick={() => visibilityMutation.mutate({ isPublic: !visibility?.isPublic })}
+                      disabled={visibilityMutation.isPending}
+                      className={clsx(
+                        'relative w-10 h-5 rounded-full transition-colors',
+                        visibility?.isPublic ? 'bg-copper' : 'bg-surface-600'
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform',
+                          visibility?.isPublic && 'translate-x-5'
+                        )}
+                      />
+                    </button>
+                  </label>
+
+                  {/* Author toggle (only shown when published) */}
+                  {visibility?.isPublic && (
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-steel-dim" strokeWidth={1.5} />
+                        <span className="text-sm text-steel">Show my username</span>
+                      </div>
+                      <button
+                        onClick={() => visibilityMutation.mutate({ showAuthor: !visibility?.showAuthor })}
+                        disabled={visibilityMutation.isPending}
+                        className={clsx(
+                          'relative w-10 h-5 rounded-full transition-colors',
+                          visibility?.showAuthor ? 'bg-copper' : 'bg-surface-600'
+                        )}
+                      >
+                        <span
+                          className={clsx(
+                            'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform',
+                            visibility?.showAuthor && 'translate-x-5'
+                          )}
+                        />
+                      </button>
+                    </label>
+                  )}
+
+                  {/* Link to gallery */}
+                  {visibility?.isPublic && project?.id && (
+                    <Link
+                      to={`/gallery/${project.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs text-copper hover:text-copper-light transition-colors mt-2"
+                    >
+                      View in Gallery
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* External Resources */}
