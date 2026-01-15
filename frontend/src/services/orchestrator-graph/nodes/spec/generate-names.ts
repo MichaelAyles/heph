@@ -11,7 +11,7 @@ import {
   type OrchestratorStateUpdate,
   type GeneratedName,
 } from '../../state'
-import { NAMING_SYSTEM_PROMPT, buildNamingPrompt } from '@/prompts/naming'
+import { NAMING_SYSTEM_PROMPT, buildNamingPrompt } from '../../../../prompts/naming'
 
 /**
  * Default fallback names if generation fails

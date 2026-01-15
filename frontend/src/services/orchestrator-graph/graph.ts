@@ -14,7 +14,7 @@ import {
   projectSpecToState,
 } from './state'
 import { D1Checkpointer, type D1Database } from './checkpointer'
-import type { ProjectSpec, PcbBlock } from '@/db/schema'
+import type { ProjectSpec, PcbBlock } from '../../db/schema'
 
 // Import all nodes
 import {

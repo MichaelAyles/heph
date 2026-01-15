@@ -11,7 +11,7 @@ import {
   type OrchestratorStateUpdate,
   type StageState,
 } from '../../state'
-import type { FinalSpec } from '@/db/schema'
+import type { FinalSpec } from '../../../../db/schema'
 
 /**
  * Finalize the specification and lock it.

@@ -6,7 +6,7 @@
  */
 
 import { createHistoryItem, type OrchestratorState, type OrchestratorStateUpdate } from '../../state'
-import type { Decision } from '@/db/schema'
+import type { Decision } from '../../../../db/schema'
 
 /**
  * Auto-answer open questions by selecting the first option for each.

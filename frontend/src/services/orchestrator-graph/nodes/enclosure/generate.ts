@@ -14,8 +14,8 @@ import {
   buildEnclosurePrompt,
   buildEnclosureInputFromSpec,
   ENCLOSURE_SYSTEM_PROMPT,
-} from '@/prompts/enclosure'
-import type { EnclosureArtifacts } from '@/db/schema'
+} from '../../../../prompts/enclosure'
+import type { EnclosureArtifacts } from '../../../../db/schema'
 
 /**
  * Generate OpenSCAD code for the enclosure.

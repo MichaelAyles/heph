@@ -9,8 +9,8 @@ import {
   type OrchestratorState,
   type OrchestratorStateUpdate,
 } from '../../state'
-import { autoSelectBlocks } from '@/prompts/block-selection'
-import type { PlacedBlock, PCBArtifacts } from '@/db/schema'
+import { autoSelectBlocks } from '../../../../prompts/block-selection'
+import type { PlacedBlock, PCBArtifacts } from '../../../../db/schema'
 
 /** Grid size in mm */
 const GRID_SIZE_MM = 12.7

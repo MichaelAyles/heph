@@ -13,8 +13,8 @@ import {
 import {
   validateCrossStage,
   type ValidationResult,
-} from '@/prompts/validation'
-import type { ProjectSpec } from '@/db/schema'
+} from '../../../../prompts/validation'
+import type { ProjectSpec } from '../../../../db/schema'
 
 /**
  * Validation check types

@@ -14,8 +14,8 @@ import {
   buildFirmwarePrompt,
   buildFirmwareInputFromSpec,
   FIRMWARE_SYSTEM_PROMPT,
-} from '@/prompts/firmware'
-import type { FirmwareArtifacts, FirmwareFile } from '@/db/schema'
+} from '../../../../prompts/firmware'
+import type { FirmwareArtifacts, FirmwareFile } from '../../../../db/schema'
 
 const VALID_LANGUAGES = ['cpp', 'c', 'h', 'json'] as const
 

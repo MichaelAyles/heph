@@ -18,7 +18,7 @@ import type {
   Decision,
   Blueprint,
   StageStatus,
-} from '@/db/schema'
+} from '../../db/schema'
 
 // =============================================================================
 // TYPES

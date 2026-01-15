@@ -11,7 +11,7 @@ import {
   type OrchestratorStateUpdate,
   type ReviewResult,
 } from '../../state'
-import { FIRMWARE_REVIEW_PROMPT } from '@/prompts/review'
+import { FIRMWARE_REVIEW_PROMPT } from '../../../../prompts/review'
 
 /**
  * Review the generated firmware code against the spec.

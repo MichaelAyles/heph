@@ -6,7 +6,7 @@
  */
 
 import { createHistoryItem, type OrchestratorState, type OrchestratorStateUpdate } from '../../state'
-import type { Blueprint } from '@/db/schema'
+import type { Blueprint } from '../../../../db/schema'
 
 /**
  * Default style hints for blueprint generation

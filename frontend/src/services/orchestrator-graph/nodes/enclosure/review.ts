@@ -11,7 +11,7 @@ import {
   type OrchestratorStateUpdate,
   type ReviewResult,
 } from '../../state'
-import { ENCLOSURE_REVIEW_PROMPT } from '@/prompts/review'
+import { ENCLOSURE_REVIEW_PROMPT } from '../../../../prompts/review'
 
 /**
  * Review the generated enclosure code against the spec.

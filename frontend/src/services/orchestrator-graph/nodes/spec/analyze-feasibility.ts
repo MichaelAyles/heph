@@ -7,8 +7,8 @@
 
 import { llmAdapter, createChatRequest } from '../../llm-wrapper'
 import { createHistoryItem, type OrchestratorState, type OrchestratorStateUpdate } from '../../state'
-import { buildFeasibilityPrompt, FEASIBILITY_SYSTEM_PROMPT } from '@/prompts/feasibility'
-import type { FeasibilityAnalysis, OpenQuestion } from '@/db/schema'
+import { buildFeasibilityPrompt, FEASIBILITY_SYSTEM_PROMPT } from '../../../../prompts/feasibility'
+import type { FeasibilityAnalysis, OpenQuestion } from '../../../../db/schema'
 
 /**
  * Analyze the feasibility of a project description.
