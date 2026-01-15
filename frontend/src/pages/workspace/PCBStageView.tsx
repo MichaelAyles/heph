@@ -7,6 +7,7 @@ import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { BlockSelector } from '@/components/pcb/BlockSelector'
 import { PCB3DViewer } from '@/components/pcb/PCB3DViewer'
 import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
+import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import { mergeBlockSchematics } from '@/services/pcb-merge'
 import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '@/db/schema'
 
@@ -206,27 +207,40 @@ export function PCBStageView() {
               Select and place circuit blocks to build your schematic
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Step indicators */}
-            <StepIndicator
-              step={1}
-              label="Select Blocks"
-              active={currentStep === 'select_blocks'}
-              complete={currentStep !== 'select_blocks'}
-            />
-            <ArrowRight className="w-4 h-4 text-surface-600" />
-            <StepIndicator
-              step={2}
-              label="Generate"
-              active={currentStep === 'generating'}
-              complete={currentStep === 'preview'}
-            />
-            <ArrowRight className="w-4 h-4 text-surface-600" />
-            <StepIndicator
-              step={3}
-              label="Preview"
-              active={currentStep === 'preview'}
-              complete={false}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {/* Step indicators */}
+              <StepIndicator
+                step={1}
+                label="Select Blocks"
+                active={currentStep === 'select_blocks'}
+                complete={currentStep !== 'select_blocks'}
+              />
+              <ArrowRight className="w-4 h-4 text-surface-600" />
+              <StepIndicator
+                step={2}
+                label="Generate"
+                active={currentStep === 'generating'}
+                complete={currentStep === 'preview'}
+              />
+              <ArrowRight className="w-4 h-4 text-surface-600" />
+              <StepIndicator
+                step={3}
+                label="Preview"
+                active={currentStep === 'preview'}
+                complete={false}
+              />
+            </div>
+            {/* User mark complete button */}
+            <StageCompleteButton
+              stage="pcb"
+              spec={spec || null}
+              projectId={project?.id || ''}
+              canComplete={!!pcbArtifacts?.schematicData && selectedBlocks.length > 0}
+              onComplete={() => {
+                queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
+                queryClient.invalidateQueries({ queryKey: ['projects'] })
+              }}
             />
           </div>
         </div>

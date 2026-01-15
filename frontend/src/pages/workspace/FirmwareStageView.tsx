@@ -28,6 +28,7 @@ import {
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
+import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import { llm } from '@/services/llm'
 import {
   FIRMWARE_SYSTEM_PROMPT,
@@ -751,6 +752,17 @@ Upload this .bin file back to PHAESTUS for distribution.
               <MessageSquare className="w-4 h-4" />
               Modify
             </button>
+            {/* User mark complete button */}
+            <StageCompleteButton
+              stage="firmware"
+              spec={spec || null}
+              projectId={project?.id || ''}
+              canComplete={!!spec?.firmware?.files?.length}
+              onComplete={() => {
+                queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
+                queryClient.invalidateQueries({ queryKey: ['projects'] })
+              }}
+            />
           </div>
         </div>
 

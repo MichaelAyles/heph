@@ -17,6 +17,7 @@ import Editor from '@monaco-editor/react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { STLViewer } from '@/components/enclosure/STLViewer'
 import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
+import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import type { PcbBlock } from '@/db/schema'
 import {
   renderOpenSCAD,
@@ -576,27 +577,40 @@ export function EnclosureStageView() {
               AI-generated parametric enclosure with 3D preview
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Step indicators */}
-            <StepIndicator
-              step={1}
-              label="Generate"
-              active={currentStep === 'generate'}
-              complete={currentStep !== 'generate'}
-            />
-            <ArrowRight className="w-4 h-4 text-surface-600" />
-            <StepIndicator
-              step={2}
-              label="Edit"
-              active={currentStep === 'edit'}
-              complete={currentStep === 'preview'}
-            />
-            <ArrowRight className="w-4 h-4 text-surface-600" />
-            <StepIndicator
-              step={3}
-              label="Preview"
-              active={currentStep === 'preview'}
-              complete={false}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {/* Step indicators */}
+              <StepIndicator
+                step={1}
+                label="Generate"
+                active={currentStep === 'generate'}
+                complete={currentStep !== 'generate'}
+              />
+              <ArrowRight className="w-4 h-4 text-surface-600" />
+              <StepIndicator
+                step={2}
+                label="Edit"
+                active={currentStep === 'edit'}
+                complete={currentStep === 'preview'}
+              />
+              <ArrowRight className="w-4 h-4 text-surface-600" />
+              <StepIndicator
+                step={3}
+                label="Preview"
+                active={currentStep === 'preview'}
+                complete={false}
+              />
+            </div>
+            {/* User mark complete button */}
+            <StageCompleteButton
+              stage="enclosure"
+              spec={spec || null}
+              projectId={project?.id || ''}
+              canComplete={!!spec?.enclosure?.openScadCode}
+              onComplete={() => {
+                queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
+                queryClient.invalidateQueries({ queryKey: ['projects'] })
+              }}
             />
           </div>
         </div>
