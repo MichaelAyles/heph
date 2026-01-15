@@ -307,16 +307,31 @@ export class HardwareOrchestrator {
 
       // Process tool calls
       if (response.toolCalls && response.toolCalls.length > 0) {
-        for (const toolCall of response.toolCalls) {
-          await this.executeToolCall(toolCall)
-        }
-
-        // Add assistant message with tool calls
+        // IMPORTANT: Add assistant message FIRST, then tool results
+        // Gemini requires: assistant (with tool_calls) -> tool results (in order)
         this.conversationHistory.push({
           role: 'assistant',
           content: response.content,
           toolCalls: response.toolCalls,
         })
+
+        // Execute all tool calls and collect results
+        const toolResults: Array<{ toolCallId: string; result: unknown }> = []
+        for (const toolCall of response.toolCalls) {
+          const result = await this.executeToolCallWithoutHistory(toolCall)
+          toolResults.push({ toolCallId: toolCall.id, result })
+        }
+
+        // Add ALL tool results to history (must match count of tool calls)
+        for (const { toolCallId, result } of toolResults) {
+          const toolCall = response.toolCalls.find(tc => tc.id === toolCallId)
+          const compressedResult = this.compressToolResult(toolCall?.name || '', result)
+          this.conversationHistory.push({
+            role: 'tool',
+            content: JSON.stringify(compressedResult),
+            toolCallId,
+          })
+        }
       } else if (response.finishReason === 'stop') {
         // No tool calls, check if we should continue
         this.conversationHistory.push({
@@ -491,6 +506,155 @@ export class HardwareOrchestrator {
       action: name,
       result: typeof result === 'string' ? result : JSON.stringify(compressedResult).slice(0, 200),
     })
+  }
+
+  /**
+   * Execute a tool call without adding to conversation history.
+   * Used when we need to batch tool results together (required by Gemini).
+   */
+  private async executeToolCallWithoutHistory(toolCall: ToolCall): Promise<unknown> {
+    const { name, arguments: args } = toolCall
+
+    this.addHistoryItem({
+      type: 'tool_call',
+      stage: this.state.currentStage,
+      action: name,
+      details: args as Record<string, unknown>,
+    })
+
+    this.updateState({ currentAction: `Executing: ${name}` })
+
+    let result: unknown
+
+    try {
+      switch (name) {
+        case 'analyze_feasibility':
+          result = await this.executeFeasibility(args.description as string)
+          break
+
+        case 'answer_questions_auto':
+          result = await this.executeAutoAnswer(
+            args.questions as string[],
+            args.reasoning as string
+          )
+          break
+
+        case 'generate_blueprints':
+          result = await this.executeGenerateBlueprints(args.style_hints as string[])
+          break
+
+        case 'select_blueprint':
+          result = await this.executeSelectBlueprint(args.index as number, args.reasoning as string)
+          break
+
+        case 'generate_project_names':
+          result = await this.executeGenerateProjectNames()
+          break
+
+        case 'select_project_name':
+          result = await this.executeSelectProjectName(
+            args.index as number | undefined,
+            args.customName as string | undefined,
+            args.reasoning as string
+          )
+          break
+
+        case 'finalize_spec':
+          result = await this.executeFinalizeSpec(args.confirm as boolean)
+          break
+
+        case 'select_pcb_blocks':
+          result = await this.executeSelectBlocks(
+            args.blocks as Array<{ blockSlug: string; gridX: number; gridY: number }>,
+            args.reasoning as string
+          )
+          break
+
+        case 'generate_enclosure':
+          result = await this.executeGenerateEnclosure(
+            args.style as string,
+            args.wall_thickness as number | undefined,
+            args.corner_radius as number | undefined,
+            args.feedback as string | undefined
+          )
+          break
+
+        case 'review_enclosure':
+          result = await this.executeReviewEnclosure()
+          break
+
+        case 'generate_firmware':
+          result = await this.executeGenerateFirmware(
+            args.enable_wifi as boolean | undefined,
+            args.enable_ble as boolean | undefined,
+            args.enable_ota as boolean | undefined,
+            args.enable_deep_sleep as boolean | undefined,
+            args.feedback as string | undefined
+          )
+          break
+
+        case 'review_firmware':
+          result = await this.executeReviewFirmware()
+          break
+
+        case 'accept_and_render':
+          result = await this.executeAcceptAndRender(args.stage as string)
+          break
+
+        case 'validate_cross_stage':
+          result = await this.executeValidation(args.check_type as string)
+          break
+
+        case 'fix_stage_issue':
+          result = await this.executeFixIssue(
+            args.stage as string,
+            args.issue as string,
+            args.fix as string
+          )
+          break
+
+        case 'mark_stage_complete':
+          result = await this.executeMarkComplete(args.stage as string)
+          break
+
+        case 'report_progress':
+          result = this.executeReportProgress(
+            args.message as string,
+            args.stage as string,
+            args.percentage as number
+          )
+          break
+
+        case 'request_user_input':
+          result = await this.executeRequestUserInput(
+            args.question as string,
+            args.options as string[] | undefined,
+            args.context as string
+          )
+          break
+
+        default:
+          result = { error: `Unknown tool: ${name}` }
+      }
+    } catch (error) {
+      result = { error: error instanceof Error ? error.message : String(error) }
+      this.addHistoryItem({
+        type: 'error',
+        stage: this.state.currentStage,
+        action: `${name} failed`,
+        result: String(result),
+      })
+    }
+
+    // Add to display history (but NOT to conversationHistory - that's done by caller)
+    this.addHistoryItem({
+      type: 'tool_result',
+      stage: this.state.currentStage,
+      action: name,
+      result: typeof result === 'string' ? result : JSON.stringify(this.compressToolResult(name, result)).slice(0, 200),
+    })
+
+    return result
   }
 
   // ===========================================================================
