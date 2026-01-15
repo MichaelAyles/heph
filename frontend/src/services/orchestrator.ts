@@ -574,12 +574,36 @@ export class HardwareOrchestrator {
   }
 
   private async executeGenerateBlueprints(styleHints: string[]): Promise<unknown> {
-    // In a real implementation, this would call the image generation API
-    // For now, return a placeholder
-    const blueprints = styleHints.map((style, i) => ({
-      url: `/api/images/placeholder-blueprint-${i}.png`,
-      prompt: `${this.currentSpec?.description || ''} - ${style} style`,
-    }))
+    const description = this.currentSpec?.description || ''
+    const blueprints: Array<{ url: string; prompt: string }> = []
+
+    // Generate images in parallel
+    const prompts = styleHints.map((style) => `${description} - ${style} style`)
+
+    const results = await Promise.allSettled(
+      prompts.map(async (prompt) => {
+        const response = await fetch('/api/llm/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        })
+        if (!response.ok) throw new Error('Image generation failed')
+        const data = await response.json()
+        if (!data.imageUrl) throw new Error('No image returned')
+        return { url: data.imageUrl, prompt }
+      })
+    )
+
+    // Collect successful results
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        blueprints.push(result.value)
+      }
+    }
+
+    if (blueprints.length === 0) {
+      return { error: 'All image generations failed' }
+    }
 
     if (this.currentSpec) {
       this.currentSpec.blueprints = blueprints
