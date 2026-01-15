@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Loader2,
   AlertCircle,
@@ -13,6 +14,7 @@ import {
   ChevronRight,
   Mail,
   X,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/stores/auth'
@@ -79,6 +81,14 @@ export function LandingPage() {
             <img src="/logo.png" alt="Phaestus" className="h-8 w-auto" />
             <span className="text-lg font-semibold tracking-tight text-steel">PHAESTUS</span>
           </div>
+          <div className="flex items-center gap-6">
+            <Link
+              to="/gallery"
+              className="flex items-center gap-1.5 text-steel-dim hover:text-steel transition-colors text-sm font-medium"
+            >
+              <ImageIcon className="w-4 h-4" strokeWidth={1.5} />
+              Gallery
+            </Link>
           <div className="relative">
             <button
               onClick={() => setShowLoginPopover(!showLoginPopover)}
@@ -166,6 +176,7 @@ export function LandingPage() {
                 </form>
               </div>
             )}
+          </div>
           </div>
         </div>
       </nav>
