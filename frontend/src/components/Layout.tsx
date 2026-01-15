@@ -7,6 +7,7 @@ import {
   Layers,
   LogOut,
   User,
+  Users,
   ScrollText,
   Zap,
   Shield,
@@ -30,7 +31,10 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
-const adminNavigation = [{ name: 'Logs', href: '/admin/logs', icon: ScrollText }]
+const adminNavigation = [
+  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Logs', href: '/admin/logs', icon: ScrollText },
+]
 
 export function Layout() {
   const location = useLocation()
