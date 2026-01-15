@@ -9,6 +9,7 @@ import {
   User,
   Users,
   ScrollText,
+  Cpu,
   Zap,
   Shield,
   Pencil,
@@ -33,6 +34,7 @@ const navigation = [
 
 const adminNavigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'LLMs', href: '/admin/llms', icon: Cpu },
   { name: 'Logs', href: '/admin/logs', icon: ScrollText },
 ]
 
@@ -159,16 +161,14 @@ export function Layout() {
             </Link>
           )}
 
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-steel-dim font-mono">Gemini 3.0 Flash</p>
-            <button
-              onClick={logout}
-              className="p-1.5 text-steel-dim hover:text-steel hover:bg-surface-800 transition-colors"
-              title="Sign out"
-            >
-              <LogOut className="w-4 h-4" strokeWidth={1.5} />
-            </button>
-          </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 p-1.5 text-steel-dim hover:text-steel hover:bg-surface-800 transition-colors w-full"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" strokeWidth={1.5} />
+            <span className="text-xs">Sign out</span>
+          </button>
         </div>
       </aside>
 
