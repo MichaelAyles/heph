@@ -40,11 +40,12 @@ The blueprint shows WHERE features should be located:
 
 ## OpenSCAD Best Practices
 
-- Use \`$fn = 32;\` for smooth curves
+- Use \`$fn = 32;\` for smooth curves (avoid higher values - they slow rendering)
 - Define all dimensions as variables at the top
 - Use modules for reusable parts
 - Use difference() for cutouts, union() for assembly
-- Apply hull() for smooth transitions
+- **PERFORMANCE**: Prefer minkowski() over hull() with spheres for rounded boxes
+- For rounded rectangles, use 2D offset() + linear_extrude() instead of hull() on spheres
 - **NEVER use text() function** - fonts unavailable in WebAssembly
 - Ensure cutouts extend fully through walls (add 1mm to cutout depth)
 - Add 0.3mm tolerance for PCB slots and snap-fits
@@ -258,12 +259,13 @@ export const ENCLOSURE_SYSTEM_PROMPT = `You are PHAESTUS, an expert parametric C
 
 ## OpenSCAD Best Practices
 
-- Use \`$fn = 32;\` for smooth curves (increase for final render)
+- Use \`$fn = 32;\` for smooth curves (avoid higher values - they slow rendering significantly)
 - Define all dimensions as variables at the top for easy modification
 - Use modules for reusable parts (pcb_mount, usb_cutout, etc.)
 - Comment each major section
 - Use difference() for cutouts, union() for assembly
-- Apply hull() for smooth transitions between shapes
+- **PERFORMANCE**: For rounded boxes, use 2D offset() + linear_extrude() instead of hull() on spheres
+- Avoid hull() with many spheres - it's computationally expensive
 - **NEVER use text() function** - fonts are not available in WebAssembly environments
 
 ## Standard Cutout Templates
@@ -381,14 +383,16 @@ usb_z = 3;
 // MODULES
 // ============================================
 
+// FAST: 2D offset approach (preferred for performance)
 module rounded_box(w, h, d, r) {
-    hull() {
-        for (x = [r, w-r])
-            for (y = [r, h-r])
-                translate([x, y, 0])
-                cylinder(h=d, r=r);
-    }
+    linear_extrude(d)
+    offset(r)
+    offset(-r)
+    square([w, h], center=true);
 }
+
+// SLOW: hull() on cylinders (avoid for complex shapes)
+// module rounded_box_slow(w, h, d, r) { hull() for(...) cylinder(); }
 
 // ... more modules ...
 

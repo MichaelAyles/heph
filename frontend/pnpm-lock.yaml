@@ -38,9 +38,6 @@ importers:
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)
-      openscad-wasm:
-        specifier: ^0.0.4
-        version: 0.0.4
       react:
         specifier: ^19.2.0
         version: 19.2.3
@@ -2203,9 +2200,6 @@ packages:
 
   obug@2.1.1:
     resolution: {integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==}
-
-  openscad-wasm@0.0.4:
-    resolution: {integrity: sha512-ChYe3cgL4JBstRVrR6XnhvF/4E9EsFR1kmGks7eTIT2awSMYVkoeYmFLt80h4V4J/DPIJw106MhIiIv6V9XpLA==}
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -4883,8 +4877,6 @@ snapshots:
   node-releases@2.0.27: {}
 
   obug@2.1.1: {}
-
-  openscad-wasm@0.0.4: {}
 
   optionator@0.9.4:
     dependencies:

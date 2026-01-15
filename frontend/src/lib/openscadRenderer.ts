@@ -1,24 +1,21 @@
 /**
  * OpenSCAD WASM Renderer
  *
- * Lazy-loads openscad-wasm and provides a simple API for rendering
- * OpenSCAD code to STL binary format.
+ * Uses the 2025 OpenSCAD WASM build with Manifold backend for fast rendering.
+ * Loads from /openscad/openscad.js and /openscad/openscad.wasm
  */
 
-// Lazy-loaded module reference
-let openscadInstance: OpenSCADInstance | null = null
-let loadPromise: Promise<OpenSCADInstance> | null = null
+// Emscripten module interface
+interface EmscriptenFS {
+  writeFile: (path: string, data: string | Uint8Array) => void
+  readFile: (path: string, options?: { encoding?: string }) => Uint8Array | string
+  unlink: (path: string) => void
+  mkdir: (path: string) => void
+}
 
-interface OpenSCADInstance {
-  renderToStl: (code: string) => Promise<string>
-  getInstance: () => {
-    FS: {
-      writeFile: (path: string, data: string | Uint8Array) => void
-      readFile: (path: string, options?: { encoding?: string }) => Uint8Array | string
-      unlink: (path: string) => void
-    }
-    callMain: (args: string[]) => number
-  }
+interface OpenSCADModule {
+  FS: EmscriptenFS
+  callMain: (args: string[]) => number
 }
 
 interface RenderResult {
@@ -28,20 +25,26 @@ interface RenderResult {
   error?: string
 }
 
+// Lazy-loaded module reference
+let openscadModule: OpenSCADModule | null = null
+let loadPromise: Promise<OpenSCADModule> | null = null
+
 // Warnings to suppress (expected in WASM environment)
 const SUPPRESSED_WARNINGS = [
   'Could not initialize localization',
   'Fontconfig error',
   "Can't get font",
+  'WARNING:',
+  'DEPRECATED:',
 ]
 
 /**
- * Load the OpenSCAD WASM module
- * This is lazy-loaded to avoid blocking initial page load
+ * Load the OpenSCAD WASM module from public folder
+ * Uses the 2025 build with Manifold support
  */
-async function loadOpenSCAD(): Promise<OpenSCADInstance> {
-  if (openscadInstance) {
-    return openscadInstance
+async function loadOpenSCAD(): Promise<OpenSCADModule> {
+  if (openscadModule) {
+    return openscadModule
   }
 
   if (loadPromise) {
@@ -52,6 +55,7 @@ async function loadOpenSCAD(): Promise<OpenSCADInstance> {
     // Temporarily suppress known WASM warnings during initialization
     const originalConsoleLog = console.log
     const originalConsoleError = console.error
+    const originalConsoleWarn = console.warn
 
     const filterWarning = (args: unknown[]) => {
       const msg = args.join(' ')
@@ -64,20 +68,47 @@ async function loadOpenSCAD(): Promise<OpenSCADInstance> {
     console.error = (...args) => {
       if (!filterWarning(args)) originalConsoleError(...args)
     }
+    console.warn = (...args) => {
+      if (!filterWarning(args)) originalConsoleWarn(...args)
+    }
 
     try {
-      // Dynamic import to enable code splitting
-      // The package exports createOpenSCAD as a named export
-      const { createOpenSCAD } = await import('openscad-wasm')
-      const instance = await createOpenSCAD()
+      // Load the OpenSCAD module from public folder
+      // The module is an ES module that exports a factory function
+      // Use dynamic string to avoid TypeScript static analysis issues
+      const modulePath = '/openscad/openscad.js'
+      const OpenSCADFactory = (await import(/* @vite-ignore */ modulePath)).default
 
-      openscadInstance = instance
-      return openscadInstance
+      // Initialize with noInitialRun to prevent auto-execution
+      const module: OpenSCADModule = await OpenSCADFactory({
+        noInitialRun: true,
+        print: (text: string) => {
+          if (!filterWarning([text])) {
+            console.log('[OpenSCAD]', text)
+          }
+        },
+        printErr: (text: string) => {
+          if (!filterWarning([text])) {
+            console.error('[OpenSCAD]', text)
+          }
+        },
+      })
+
+      // Create locale directory (required by OpenSCAD)
+      try {
+        module.FS.mkdir('/locale')
+      } catch {
+        // Directory may already exist
+      }
+
+      openscadModule = module
+      return openscadModule
     } finally {
       // Restore console after a short delay to catch startup warnings
       setTimeout(() => {
         console.log = originalConsoleLog
         console.error = originalConsoleError
+        console.warn = originalConsoleWarn
       }, 1000)
     }
   })()
@@ -87,6 +118,7 @@ async function loadOpenSCAD(): Promise<OpenSCADInstance> {
 
 /**
  * Render OpenSCAD code to STL
+ * Uses Manifold backend for dramatically faster rendering (~100x faster than CGAL)
  */
 export async function renderOpenSCAD(code: string): Promise<RenderResult> {
   const logs: string[] = []
@@ -108,14 +140,38 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
   }
 
   try {
-    const instance = await loadOpenSCAD()
+    const module = await loadOpenSCAD()
 
-    // Use the high-level API provided by openscad-wasm
-    const stlString = await instance.renderToStl(code)
+    // Write the OpenSCAD code to a virtual file
+    module.FS.writeFile('/input.scad', code)
 
-    // Convert string to Uint8Array for binary STL handling
-    const encoder = new TextEncoder()
-    const stl = encoder.encode(stlString)
+    // Run OpenSCAD with Manifold backend for much faster rendering
+    // --backend=manifold uses the Manifold geometry kernel instead of CGAL
+    // --export-format=binstl for binary STL (smaller, faster)
+    const exitCode = module.callMain([
+      '/input.scad',
+      '-o',
+      '/output.stl',
+      '--backend=manifold',
+      '--export-format=binstl',
+    ])
+
+    if (exitCode !== 0) {
+      throw new Error(`OpenSCAD exited with code ${exitCode}`)
+    }
+
+    // Read the output STL file
+    const stlData = module.FS.readFile('/output.stl')
+    const stl =
+      stlData instanceof Uint8Array ? stlData : new TextEncoder().encode(stlData as string)
+
+    // Clean up virtual files
+    try {
+      module.FS.unlink('/input.scad')
+      module.FS.unlink('/output.stl')
+    } catch {
+      // Ignore cleanup errors
+    }
 
     return {
       stl,
@@ -158,7 +214,7 @@ export function revokeSTLBlobUrl(url: string): void {
  * Check if OpenSCAD WASM is loaded
  */
 export function isOpenSCADLoaded(): boolean {
-  return openscadInstance !== null
+  return openscadModule !== null
 }
 
 /**
