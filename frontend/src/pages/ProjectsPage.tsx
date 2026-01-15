@@ -320,7 +320,7 @@ export function ProjectsPage() {
                 {deleteConfirm === project.id ? (
                   <div className="bg-red-500/10 border border-red-500/30 p-4">
                     <p className="text-steel mb-3">
-                      Delete "{project.name || 'Untitled Project'}"?
+                      Delete "{project.spec?.finalSpec?.name || project.name || 'Untitled Project'}"?
                     </p>
                     <div className="flex gap-2">
                       <button
@@ -347,7 +347,7 @@ export function ProjectsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-base font-semibold text-steel truncate">
-                            {project.name || 'Untitled Project'}
+                            {project.spec?.finalSpec?.name || project.name || 'Untitled Project'}
                           </h3>
                         </div>
                         <div className="mb-2">
