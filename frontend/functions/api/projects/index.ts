@@ -30,7 +30,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const offset = parseInt(url.searchParams.get('offset') || '0')
 
   let query =
-    'SELECT id, name, description, status, created_at, updated_at FROM projects WHERE user_id = ?'
+    'SELECT id, name, description, status, spec, created_at, updated_at FROM projects WHERE user_id = ?'
   const params: (string | number)[] = [user.id]
 
   if (status) {
@@ -56,14 +56,25 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     .bind(...countParams)
     .first()
 
-  const projects = result.results.map((row) => ({
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    status: row.status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }))
+  const projects = result.results.map((row) => {
+    let spec = null
+    if (row.spec) {
+      try {
+        spec = typeof row.spec === 'string' ? JSON.parse(row.spec) : row.spec
+      } catch {
+        // Ignore parse errors
+      }
+    }
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      status: row.status,
+      spec,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  })
 
   return Response.json({
     projects,
