@@ -1,455 +1,618 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  ReactFlow,
+  Controls,
+  Background,
+  BackgroundVariant,
+  useNodesState,
+  useEdgesState,
+  MarkerType,
+  Position,
+  type Node,
+  type Edge,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import {
   ArrowLeft,
-  Play,
-  Square,
   Loader2,
-  Check,
   X,
   Workflow,
   ToggleLeft,
   ToggleRight,
-  Trash2,
+  Save,
+  RotateCcw,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
-interface StateEvent {
-  id: number
-  timestamp: string
-  type: 'state' | 'spec' | 'complete' | 'error'
-  node?: string
-  data: unknown
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface GraphNode {
+  id: string
+  name: string
+  displayName: string
+  stage: string
+  description: string | null
+  hasPrompt: boolean
+  isActive: boolean
+  temperature?: number
+  maxTokens?: number
 }
 
-type OrchestratorMode = 'vibe_it' | 'fix_it' | 'design_it'
+interface GraphEdge {
+  id: string
+  source: string
+  target: string
+  condition?: string
+  label?: string
+  type: string
+}
 
-const TEST_DESCRIPTIONS = [
-  'A WiFi-enabled temperature and humidity sensor for my greenhouse',
-  'A motion-activated LED light strip controller',
-  'A battery-powered air quality monitor with OLED display',
-]
+interface OrchestratorPrompt {
+  id: string
+  node_name: string
+  display_name: string
+  stage: string
+  description: string | null
+  system_prompt: string
+  user_prompt_template: string
+  temperature: number
+  max_tokens: number
+  is_active: number
+  updated_at: string
+  updated_by: string | null
+}
+
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const STAGE_COLORS: Record<string, string> = {
+  spec: '#10B981',
+  pcb: '#3B82F6',
+  enclosure: '#8B5CF6',
+  firmware: '#F59E0B',
+  export: '#EF4444',
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  spec: 'Specification',
+  pcb: 'PCB Layout',
+  enclosure: 'Enclosure',
+  firmware: 'Firmware',
+  export: 'Export',
+}
+
+// =============================================================================
+// LAYOUT HELPERS
+// =============================================================================
+
+function layoutNodes(graphNodes: GraphNode[]): Node[] {
+  // Group nodes by stage
+  const stageGroups: Record<string, GraphNode[]> = {
+    spec: [],
+    pcb: [],
+    enclosure: [],
+    firmware: [],
+    export: [],
+  }
+
+  for (const node of graphNodes) {
+    if (node.id === 'START') {
+      stageGroups.spec.unshift(node)
+    } else if (node.id === 'END') {
+      stageGroups.export.push(node)
+    } else {
+      stageGroups[node.stage]?.push(node)
+    }
+  }
+
+  const nodes: Node[] = []
+  let y = 0
+  const stageSpacing = 200
+  const nodeSpacing = 120
+  const stageX: Record<string, number> = {}
+
+  // Layout nodes stage by stage
+  for (const stage of ['spec', 'pcb', 'enclosure', 'firmware', 'export']) {
+    const stageNodes = stageGroups[stage]
+    if (stageNodes.length === 0) continue
+
+    stageX[stage] = y
+
+    for (let i = 0; i < stageNodes.length; i++) {
+      const node = stageNodes[i]
+      const isStartEnd = node.id === 'START' || node.id === 'END'
+
+      nodes.push({
+        id: node.id,
+        type: isStartEnd ? 'input' : node.hasPrompt ? 'default' : 'output',
+        position: { x: i * nodeSpacing, y },
+        data: {
+          label: node.displayName,
+          ...node,
+        },
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        style: {
+          background: isStartEnd
+            ? '#374151'
+            : node.hasPrompt
+              ? STAGE_COLORS[node.stage]
+              : '#4B5563',
+          color: '#fff',
+          border: 'none',
+          borderRadius: isStartEnd ? '50%' : '8px',
+          padding: isStartEnd ? '12px' : '10px 16px',
+          fontSize: '12px',
+          fontWeight: 500,
+          minWidth: isStartEnd ? '60px' : '120px',
+          textAlign: 'center' as const,
+          cursor: node.hasPrompt ? 'pointer' : 'default',
+          opacity: node.isActive ? 1 : 0.5,
+        },
+      })
+    }
+
+    y += stageSpacing
+  }
+
+  return nodes
+}
+
+function layoutEdges(graphEdges: GraphEdge[]): Edge[] {
+  return graphEdges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    label: edge.label,
+    type: edge.type === 'loop' ? 'smoothstep' : 'default',
+    animated: edge.type === 'loop',
+    style: {
+      stroke: edge.type === 'conditional' ? '#F59E0B' : edge.type === 'loop' ? '#EF4444' : '#6B7280',
+      strokeWidth: 2,
+    },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: edge.type === 'conditional' ? '#F59E0B' : edge.type === 'loop' ? '#EF4444' : '#6B7280',
+    },
+    labelStyle: {
+      fill: '#9CA3AF',
+      fontSize: 10,
+    },
+    labelBgStyle: {
+      fill: '#1F2937',
+    },
+  }))
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
 
 export function AdminOrchestratorPage() {
-  // Feature flag state (persisted to localStorage)
+  // Feature flag state
   const [useLangGraph, setUseLangGraph] = useState(() => {
     return localStorage.getItem('USE_LANGGRAPH_ORCHESTRATOR') === 'true'
   })
 
-  // Test configuration
-  const [description, setDescription] = useState(TEST_DESCRIPTIONS[0])
-  const [mode, setMode] = useState<OrchestratorMode>('vibe_it')
-  const [projectId] = useState(() => `test-${Date.now()}`)
+  // Graph state
+  const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null)
+  const [isLoadingGraph, setIsLoadingGraph] = useState(true)
+  const [graphError, setGraphError] = useState<string | null>(null)
 
-  // Test state
-  const [isRunning, setIsRunning] = useState(false)
-  const [events, setEvents] = useState<StateEvent[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const eventIdRef = useRef(0)
+  // React Flow state
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
+  // Selected node for editing
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [selectedPrompt, setSelectedPrompt] = useState<OrchestratorPrompt | null>(null)
+  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Edited prompt state
+  const [editedSystemPrompt, setEditedSystemPrompt] = useState('')
+  const [editedUserTemplate, setEditedUserTemplate] = useState('')
+  const [editedTemperature, setEditedTemperature] = useState(0.3)
+  const [editedMaxTokens, setEditedMaxTokens] = useState(4096)
+
+  // Check if there are unsaved changes
+  const hasChanges = useMemo(() => {
+    if (!selectedPrompt) return false
+    return (
+      editedSystemPrompt !== selectedPrompt.system_prompt ||
+      editedUserTemplate !== selectedPrompt.user_prompt_template ||
+      editedTemperature !== selectedPrompt.temperature ||
+      editedMaxTokens !== selectedPrompt.max_tokens
+    )
+  }, [selectedPrompt, editedSystemPrompt, editedUserTemplate, editedTemperature, editedMaxTokens])
+
+  // Fetch graph data
+  useEffect(() => {
+    async function fetchGraph() {
+      setIsLoadingGraph(true)
+      setGraphError(null)
+      try {
+        const response = await fetch('/api/admin/orchestrator/graph')
+        if (!response.ok) {
+          throw new Error(`Failed to fetch graph: ${response.status}`)
+        }
+        const data = await response.json()
+        setGraphData(data)
+
+        // Layout and set nodes/edges
+        const layoutedNodes = layoutNodes(data.nodes)
+        const layoutedEdges = layoutEdges(data.edges)
+        setNodes(layoutedNodes)
+        setEdges(layoutedEdges)
+      } catch (error) {
+        setGraphError(error instanceof Error ? error.message : 'Unknown error')
+      } finally {
+        setIsLoadingGraph(false)
+      }
+    }
+
+    fetchGraph()
+  }, [setNodes, setEdges])
+
+  // Fetch prompt when node is selected
+  useEffect(() => {
+    if (!selectedNode) {
+      setSelectedPrompt(null)
+      return
+    }
+
+    const node = graphData?.nodes.find((n) => n.id === selectedNode)
+    if (!node?.hasPrompt) {
+      setSelectedPrompt(null)
+      return
+    }
+
+    async function fetchPrompt() {
+      setIsLoadingPrompt(true)
+      setSaveError(null)
+      try {
+        const response = await fetch(`/api/admin/orchestrator/prompts/${selectedNode}`)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch prompt: ${response.status}`)
+        }
+        const data = await response.json()
+        setSelectedPrompt(data.prompt)
+        setEditedSystemPrompt(data.prompt.system_prompt)
+        setEditedUserTemplate(data.prompt.user_prompt_template)
+        setEditedTemperature(data.prompt.temperature)
+        setEditedMaxTokens(data.prompt.max_tokens)
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : 'Unknown error')
+      } finally {
+        setIsLoadingPrompt(false)
+      }
+    }
+
+    fetchPrompt()
+  }, [selectedNode, graphData])
+
+  // Handle node click
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    const nodeData = node.data as unknown as GraphNode
+    if (nodeData.hasPrompt) {
+      setSelectedNode(node.id)
+    }
+  }, [])
+
+  // Toggle feature flag
   const toggleFeatureFlag = useCallback(() => {
     const newValue = !useLangGraph
     setUseLangGraph(newValue)
     localStorage.setItem('USE_LANGGRAPH_ORCHESTRATOR', String(newValue))
   }, [useLangGraph])
 
-  const clearEvents = useCallback(() => {
-    setEvents([])
-    setError(null)
-    eventIdRef.current = 0
-  }, [])
+  // Save prompt
+  const savePrompt = useCallback(async () => {
+    if (!selectedNode || !selectedPrompt) return
 
-  const runTest = useCallback(async () => {
-    if (isRunning) return
-
-    setIsRunning(true)
-    setError(null)
-    clearEvents()
-
-    abortControllerRef.current = new AbortController()
-
+    setIsSaving(true)
+    setSaveError(null)
     try {
-      const response = await fetch('/api/orchestrator/run', {
-        method: 'POST',
+      const response = await fetch(`/api/admin/orchestrator/prompts/${selectedNode}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectId,
-          mode,
-          description,
-          availableBlocks: [],
+          system_prompt: editedSystemPrompt,
+          user_prompt_template: editedUserTemplate,
+          temperature: editedTemperature,
+          max_tokens: editedMaxTokens,
         }),
-        signal: abortControllerRef.current.signal,
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `HTTP ${response.status}`)
+        const data = await response.json()
+        throw new Error(data.error || `Failed to save: ${response.status}`)
       }
 
-      // Read SSE stream
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        // Parse SSE events
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line in buffer
-
-        let currentEventType: string | null = null
-        let currentData: string | null = null
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEventType = line.slice(7).trim()
-          } else if (line.startsWith('data: ')) {
-            currentData = line.slice(6)
-          } else if (line === '' && currentEventType && currentData) {
-            // End of event
-            try {
-              const parsed = JSON.parse(currentData)
-              const event: StateEvent = {
-                id: eventIdRef.current++,
-                timestamp: new Date().toISOString(),
-                type: currentEventType as StateEvent['type'],
-                node: parsed.node,
-                data: parsed,
-              }
-              setEvents((prev) => [...prev, event])
-
-              if (currentEventType === 'error') {
-                setError(parsed.error)
-              }
-            } catch {
-              console.error('Failed to parse event data:', currentData)
-            }
-            currentEventType = null
-            currentData = null
-          }
-        }
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        setEvents((prev) => [
-          ...prev,
-          {
-            id: eventIdRef.current++,
-            timestamp: new Date().toISOString(),
-            type: 'error',
-            data: { error: 'Test stopped by user' },
-          },
-        ])
-      } else {
-        const message = err instanceof Error ? err.message : String(err)
-        setError(message)
-        setEvents((prev) => [
-          ...prev,
-          {
-            id: eventIdRef.current++,
-            timestamp: new Date().toISOString(),
-            type: 'error',
-            data: { error: message },
-          },
-        ])
-      }
+      const data = await response.json()
+      setSelectedPrompt(data.prompt)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Unknown error')
     } finally {
-      setIsRunning(false)
-      abortControllerRef.current = null
+      setIsSaving(false)
     }
-  }, [isRunning, projectId, mode, description, clearEvents])
+  }, [selectedNode, selectedPrompt, editedSystemPrompt, editedUserTemplate, editedTemperature, editedMaxTokens])
 
-  const stopTest = useCallback(() => {
-    abortControllerRef.current?.abort()
-  }, [])
+  // Reset changes
+  const resetChanges = useCallback(() => {
+    if (selectedPrompt) {
+      setEditedSystemPrompt(selectedPrompt.system_prompt)
+      setEditedUserTemplate(selectedPrompt.user_prompt_template)
+      setEditedTemperature(selectedPrompt.temperature)
+      setEditedMaxTokens(selectedPrompt.max_tokens)
+    }
+  }, [selectedPrompt])
 
   return (
-    <div className="min-h-screen bg-ash">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700">
+      <header className="h-14 flex items-center justify-between px-6 border-b border-surface-700 flex-shrink-0">
         <div className="flex items-center gap-4">
           <Link to="/" className="p-2 hover:bg-surface-800 transition-colors">
             <ArrowLeft className="w-5 h-5 text-steel-dim" strokeWidth={1.5} />
           </Link>
           <h1 className="text-base font-semibold text-steel tracking-tight">
-            LANGGRAPH ORCHESTRATOR
+            ORCHESTRATOR GRAPH EDITOR
           </h1>
         </div>
+
+        {/* Feature Flag Toggle */}
+        <button
+          onClick={toggleFeatureFlag}
+          className={clsx(
+            'flex items-center gap-2 px-4 py-1.5 text-sm transition-all',
+            useLangGraph
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              : 'bg-surface-700 text-steel-dim border border-surface-600'
+          )}
+        >
+          {useLangGraph ? (
+            <>
+              <ToggleRight className="w-4 h-4" strokeWidth={1.5} />
+              LangGraph Enabled
+            </>
+          ) : (
+            <>
+              <ToggleLeft className="w-4 h-4" strokeWidth={1.5} />
+              LangGraph Disabled
+            </>
+          )}
+        </button>
       </header>
 
-      {/* Content */}
-      <div className="p-8 overflow-auto">
-        <div className="max-w-4xl space-y-8">
-          {/* Feature Flag Toggle */}
-          <section className="p-4 bg-surface-800 border border-surface-700">
-            <h3 className="text-sm font-mono text-steel-dim mb-4 tracking-wide flex items-center gap-2">
-              <Workflow className="w-4 h-4 text-copper" strokeWidth={1.5} />
-              FEATURE FLAG
-            </h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-steel mb-1">USE_LANGGRAPH_ORCHESTRATOR</p>
-                <p className="text-xs text-steel-dim">
-                  When enabled, the orchestrator store will use the LangGraph backend instead of the
-                  legacy marathon agent.
+      {/* Main Content */}
+      <div className="flex-1 flex min-h-0">
+        {/* Graph Panel */}
+        <div className="flex-1 relative">
+          {isLoadingGraph ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-copper animate-spin" strokeWidth={1.5} />
+            </div>
+          ) : graphError ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <X className="w-8 h-8 text-red-400 mx-auto mb-2" strokeWidth={1.5} />
+                <p className="text-red-400">{graphError}</p>
+                <p className="text-steel-dim text-sm mt-2">
+                  Make sure to run the migration: pnpm db:migrate
                 </p>
               </div>
-              <button
-                onClick={toggleFeatureFlag}
-                className={clsx(
-                  'flex items-center gap-2 px-4 py-2 transition-all',
-                  useLangGraph
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-surface-700 text-steel-dim border border-surface-600'
-                )}
-              >
-                {useLangGraph ? (
-                  <>
-                    <ToggleRight className="w-5 h-5" strokeWidth={1.5} />
-                    Enabled
-                  </>
-                ) : (
-                  <>
-                    <ToggleLeft className="w-5 h-5" strokeWidth={1.5} />
-                    Disabled
-                  </>
-                )}
-              </button>
             </div>
-            {useLangGraph && (
-              <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
-                Note: Frontend integration is not yet complete. The flag is set but the store will
-                fall back to the legacy orchestrator until the API streaming client is implemented.
-              </div>
-            )}
-          </section>
-
-          {/* Test Configuration */}
-          <section className="p-4 bg-surface-800 border border-surface-700">
-            <h3 className="text-sm font-mono text-steel-dim mb-4 tracking-wide flex items-center gap-2">
-              <Play className="w-4 h-4 text-copper" strokeWidth={1.5} />
-              TEST ORCHESTRATOR
-            </h3>
-
-            {/* Description */}
-            <div className="mb-4">
-              <label className="block text-sm text-steel-dim mb-2">Project Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={isRunning}
-                rows={3}
-                className="w-full px-3 py-2 bg-surface-900 border border-surface-600 text-steel text-sm focus:border-copper focus:outline-none disabled:opacity-50"
-                placeholder="Describe your hardware project..."
+          ) : (
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeClick={onNodeClick}
+              fitView
+              fitViewOptions={{ padding: 0.2 }}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#374151" />
+              <Controls
+                style={{
+                  background: '#1F2937',
+                  border: '1px solid #374151',
+                  borderRadius: '4px',
+                }}
               />
-              <div className="flex gap-2 mt-2">
-                {TEST_DESCRIPTIONS.map((desc, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setDescription(desc)}
-                    disabled={isRunning}
-                    className="text-xs text-steel-dim hover:text-copper transition-colors disabled:opacity-50"
-                  >
-                    Example {i + 1}
-                  </button>
-                ))}
-              </div>
-            </div>
+            </ReactFlow>
+          )}
 
-            {/* Mode */}
-            <div className="mb-4">
-              <label className="block text-sm text-steel-dim mb-2">Mode</label>
-              <div className="flex gap-2">
-                {(['vibe_it', 'fix_it', 'design_it'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMode(m)}
-                    disabled={isRunning}
-                    className={clsx(
-                      'px-3 py-1.5 text-sm font-mono transition-all disabled:opacity-50',
-                      mode === m
-                        ? 'bg-copper/20 text-copper border border-copper'
-                        : 'bg-surface-700 text-steel-dim border border-surface-600 hover:border-surface-500'
-                    )}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
+          {/* Stage Legend */}
+          <div className="absolute bottom-4 left-4 bg-surface-800 border border-surface-700 p-3 rounded">
+            <p className="text-xs font-mono text-steel-dim mb-2">STAGES</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(STAGE_LABELS).map(([stage, label]) => (
+                <div key={stage} className="flex items-center gap-1.5">
+                  <div
+                    className="w-3 h-3 rounded"
+                    style={{ backgroundColor: STAGE_COLORS[stage] }}
+                  />
+                  <span className="text-xs text-steel-dim">{label}</span>
+                </div>
+              ))}
             </div>
+          </div>
 
-            {/* Actions */}
-            <div className="flex gap-3">
-              <button
-                onClick={runTest}
-                disabled={isRunning || !description.trim()}
-                className={clsx(
-                  'flex items-center gap-2 px-4 py-2 font-medium transition-all',
-                  isRunning
-                    ? 'bg-surface-700 text-steel-dim cursor-wait'
-                    : 'bg-copper-gradient text-ash hover:opacity-90'
+          {/* Instructions */}
+          <div className="absolute top-4 left-4 bg-surface-800/90 border border-surface-700 p-3 rounded text-xs text-steel-dim max-w-xs">
+            <p className="font-medium text-steel mb-1">Click a colored node to edit its prompt</p>
+            <p>Gray nodes are control flow only (no LLM calls)</p>
+          </div>
+        </div>
+
+        {/* Editor Panel */}
+        <div className="w-[500px] border-l border-surface-700 flex flex-col bg-surface-900 overflow-hidden">
+          {selectedNode && selectedPrompt ? (
+            <>
+              {/* Editor Header */}
+              <div className="p-4 border-b border-surface-700 flex-shrink-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-sm font-semibold text-steel">
+                    {selectedPrompt.display_name}
+                  </h2>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded"
+                    style={{
+                      backgroundColor: `${STAGE_COLORS[selectedPrompt.stage]}20`,
+                      color: STAGE_COLORS[selectedPrompt.stage],
+                    }}
+                  >
+                    {selectedPrompt.stage}
+                  </span>
+                </div>
+                {selectedPrompt.description && (
+                  <p className="text-xs text-steel-dim">{selectedPrompt.description}</p>
                 )}
-              >
-                {isRunning ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
-                    Running...
-                  </>
+              </div>
+
+              {/* Editor Content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {isLoadingPrompt ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-copper animate-spin" strokeWidth={1.5} />
+                  </div>
                 ) : (
                   <>
-                    <Play className="w-4 h-4" strokeWidth={1.5} />
-                    Run Test
+                    {/* System Prompt */}
+                    <div>
+                      <label className="block text-xs font-mono text-steel-dim mb-2">
+                        SYSTEM PROMPT
+                      </label>
+                      <textarea
+                        value={editedSystemPrompt}
+                        onChange={(e) => setEditedSystemPrompt(e.target.value)}
+                        className="w-full h-48 px-3 py-2 bg-surface-800 border border-surface-600 text-steel text-xs font-mono focus:border-copper focus:outline-none resize-none"
+                        placeholder="System prompt..."
+                      />
+                    </div>
+
+                    {/* User Prompt Template */}
+                    <div>
+                      <label className="block text-xs font-mono text-steel-dim mb-2">
+                        USER PROMPT TEMPLATE
+                        <span className="text-steel-dim/50 ml-2">
+                          (use {'{{variable}}'} for substitution)
+                        </span>
+                      </label>
+                      <textarea
+                        value={editedUserTemplate}
+                        onChange={(e) => setEditedUserTemplate(e.target.value)}
+                        className="w-full h-32 px-3 py-2 bg-surface-800 border border-surface-600 text-steel text-xs font-mono focus:border-copper focus:outline-none resize-none"
+                        placeholder="User prompt template..."
+                      />
+                    </div>
+
+                    {/* Parameters */}
+                    <div className="flex gap-4">
+                      <div className="flex-1">
+                        <label className="block text-xs font-mono text-steel-dim mb-2">
+                          TEMPERATURE
+                        </label>
+                        <input
+                          type="number"
+                          value={editedTemperature}
+                          onChange={(e) => setEditedTemperature(parseFloat(e.target.value) || 0)}
+                          min={0}
+                          max={2}
+                          step={0.1}
+                          className="w-full px-3 py-2 bg-surface-800 border border-surface-600 text-steel text-sm focus:border-copper focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-mono text-steel-dim mb-2">
+                          MAX TOKENS
+                        </label>
+                        <input
+                          type="number"
+                          value={editedMaxTokens}
+                          onChange={(e) => setEditedMaxTokens(parseInt(e.target.value) || 0)}
+                          min={100}
+                          max={16000}
+                          step={100}
+                          className="w-full px-3 py-2 bg-surface-800 border border-surface-600 text-steel text-sm focus:border-copper focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Last Updated */}
+                    {selectedPrompt.updated_at && (
+                      <p className="text-xs text-steel-dim">
+                        Last updated: {new Date(selectedPrompt.updated_at).toLocaleString()}
+                        {selectedPrompt.updated_by && ` by ${selectedPrompt.updated_by}`}
+                      </p>
+                    )}
                   </>
                 )}
-              </button>
-              {isRunning && (
-                <button
-                  onClick={stopTest}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 font-medium transition-all hover:bg-red-500/30"
-                >
-                  <Square className="w-4 h-4" strokeWidth={1.5} />
-                  Stop
-                </button>
-              )}
-              {events.length > 0 && !isRunning && (
-                <button
-                  onClick={clearEvents}
-                  className="flex items-center gap-2 px-4 py-2 bg-surface-700 text-steel-dim border border-surface-600 font-medium transition-all hover:text-steel"
-                >
-                  <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                  Clear
-                </button>
-              )}
-            </div>
-          </section>
+              </div>
 
-          {/* Event Stream */}
-          {events.length > 0 && (
-            <section className="p-4 bg-surface-800 border border-surface-700">
-              <h3 className="text-sm font-mono text-steel-dim mb-4 tracking-wide flex items-center gap-2">
-                <Workflow className="w-4 h-4 text-copper" strokeWidth={1.5} />
-                EVENT STREAM ({events.length} events)
-              </h3>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto font-mono text-xs">
-                {events.map((event) => (
-                  <div
-                    key={event.id}
+              {/* Editor Footer */}
+              <div className="p-4 border-t border-surface-700 flex-shrink-0">
+                {saveError && (
+                  <p className="text-red-400 text-xs mb-3">{saveError}</p>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={savePrompt}
+                    disabled={!hasChanges || isSaving}
                     className={clsx(
-                      'p-3 border',
-                      event.type === 'error'
-                        ? 'bg-red-500/10 border-red-500/30'
-                        : event.type === 'complete'
-                          ? 'bg-emerald-500/10 border-emerald-500/30'
-                          : event.type === 'spec'
-                            ? 'bg-blue-500/10 border-blue-500/30'
-                            : 'bg-surface-900 border-surface-600'
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition-all',
+                      hasChanges && !isSaving
+                        ? 'bg-copper-gradient text-ash hover:opacity-90'
+                        : 'bg-surface-700 text-steel-dim cursor-not-allowed'
                     )}
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      {event.type === 'error' ? (
-                        <X className="w-3 h-3 text-red-400" strokeWidth={2} />
-                      ) : event.type === 'complete' ? (
-                        <Check className="w-3 h-3 text-emerald-400" strokeWidth={2} />
-                      ) : (
-                        <div className="w-3 h-3 rounded-full bg-copper" />
-                      )}
-                      <span
-                        className={clsx(
-                          'font-semibold',
-                          event.type === 'error'
-                            ? 'text-red-400'
-                            : event.type === 'complete'
-                              ? 'text-emerald-400'
-                              : event.type === 'spec'
-                                ? 'text-blue-400'
-                                : 'text-copper'
-                        )}
-                      >
-                        {event.type.toUpperCase()}
-                        {event.node && ` → ${event.node}`}
-                      </span>
-                      <span className="text-steel-dim ml-auto">
-                        {new Date(event.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                    <pre className="text-steel-dim overflow-x-auto whitespace-pre-wrap break-all">
-                      {JSON.stringify(event.data, null, 2)}
-                    </pre>
-                  </div>
-                ))}
+                    {isSaving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
+                    ) : (
+                      <Save className="w-4 h-4" strokeWidth={1.5} />
+                    )}
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    onClick={resetChanges}
+                    disabled={!hasChanges}
+                    className={clsx(
+                      'px-4 py-2 text-sm font-medium transition-all',
+                      hasChanges
+                        ? 'bg-surface-700 text-steel border border-surface-600 hover:bg-surface-600'
+                        : 'bg-surface-800 text-steel-dim cursor-not-allowed'
+                    )}
+                  >
+                    <RotateCcw className="w-4 h-4" strokeWidth={1.5} />
+                  </button>
+                </div>
               </div>
-
-              {/* Summary */}
-              <div className="mt-4 pt-4 border-t border-surface-600 flex gap-4 text-xs">
-                <span className="text-steel-dim">
-                  State events:{' '}
-                  <span className="text-copper">
-                    {events.filter((e) => e.type === 'state').length}
-                  </span>
-                </span>
-                <span className="text-steel-dim">
-                  Spec updates:{' '}
-                  <span className="text-blue-400">
-                    {events.filter((e) => e.type === 'spec').length}
-                  </span>
-                </span>
-                <span className="text-steel-dim">
-                  Errors:{' '}
-                  <span className="text-red-400">
-                    {events.filter((e) => e.type === 'error').length}
-                  </span>
-                </span>
-                {events.some((e) => e.type === 'complete') && (
-                  <span className="text-emerald-400">Completed</span>
-                )}
+            </>
+          ) : selectedNode ? (
+            <div className="flex-1 flex items-center justify-center text-steel-dim">
+              <div className="text-center">
+                <Workflow className="w-8 h-8 mx-auto mb-2 opacity-50" strokeWidth={1.5} />
+                <p>This node has no editable prompt</p>
+                <p className="text-xs mt-1">Control flow nodes don't call the LLM</p>
               </div>
-            </section>
-          )}
-
-          {/* Error Display */}
-          {error && !events.some((e) => e.type === 'error') && (
-            <section className="p-4 bg-red-500/10 border border-red-500/30">
-              <h3 className="text-sm font-mono text-red-400 mb-2 tracking-wide flex items-center gap-2">
-                <X className="w-4 h-4" strokeWidth={1.5} />
-                ERROR
-              </h3>
-              <p className="text-red-400 text-sm">{error}</p>
-            </section>
-          )}
-
-          {/* Architecture Info */}
-          <section className="p-4 bg-surface-800 border border-surface-700">
-            <h3 className="text-sm font-mono text-steel-dim mb-4 tracking-wide">ARCHITECTURE</h3>
-            <div className="text-sm text-steel-dim space-y-2">
-              <p>
-                The LangGraph orchestrator runs server-side on Cloudflare Workers with{' '}
-                <code className="text-copper">nodejs_compat</code> enabled.
-              </p>
-              <p>Graph topology:</p>
-              <pre className="p-3 bg-surface-900 border border-surface-600 text-xs overflow-x-auto">
-                {`START → analyzeFeasibility → [rejected?] → END
-                      ↓
-  answerQuestions → generateBlueprints → selectBlueprint →
-  generateNames → selectName → finalizeSpec → markSpecComplete
-                      ↓
-  selectBlocks → validatePcb → markPcbComplete
-                      ↓
-  [ENCLOSURE LOOP] generate → review → decide → [accept | retry]
-                      ↓
-  [FIRMWARE LOOP] generate → review → decide → [accept | retry]
-                      ↓
-  markExportComplete → END`}
-              </pre>
             </div>
-          </section>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-steel-dim">
+              <div className="text-center">
+                <Workflow className="w-8 h-8 mx-auto mb-2 opacity-50" strokeWidth={1.5} />
+                <p>Select a node to edit its prompt</p>
+                <p className="text-xs mt-1">Click any colored node in the graph</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
