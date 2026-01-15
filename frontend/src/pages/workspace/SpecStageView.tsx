@@ -1040,8 +1040,8 @@ function FinalSpecDisplay({ finalSpec, blueprintUrl, onContinue }: FinalSpecDisp
         <p className="text-steel-dim">{finalSpec.summary}</p>
       </div>
 
-      {/* Blueprint preview */}
-      {blueprintUrl && (
+      {/* Blueprint preview - only show if URL is valid (not a placeholder) */}
+      {blueprintUrl && (blueprintUrl.startsWith('http') || blueprintUrl.startsWith('/api')) && (
         <div className="bg-surface-900 border border-surface-700 p-6">
           <h3 className="text-sm font-mono text-steel-dim mb-3 tracking-wide">SELECTED DESIGN</h3>
           <div className="rounded-lg overflow-hidden border border-surface-600">
