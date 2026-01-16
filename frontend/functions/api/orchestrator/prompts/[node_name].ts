@@ -7,27 +7,27 @@
  */
 
 import type { Env } from '../../../env'
-import type { OrchestratorPromptRow } from '@/db/schema'
+import type { OrchestratorPromptRow } from '../../../../src/db/schema'
 import {
   ORCHESTRATOR_SYSTEM_PROMPT,
-} from '@/prompts/orchestrator'
+} from '../../../../src/prompts/orchestrator'
 import {
   FEASIBILITY_SYSTEM_PROMPT,
-} from '@/prompts/feasibility'
+} from '../../../../src/prompts/feasibility'
 import {
   ENCLOSURE_SYSTEM_PROMPT,
   ENCLOSURE_VISION_SYSTEM_PROMPT,
-} from '@/prompts/enclosure'
+} from '../../../../src/prompts/enclosure'
 import {
   FIRMWARE_SYSTEM_PROMPT,
-} from '@/prompts/firmware'
+} from '../../../../src/prompts/firmware'
 import {
   ENCLOSURE_REVIEW_PROMPT,
   FIRMWARE_REVIEW_PROMPT,
-} from '@/prompts/review'
+} from '../../../../src/prompts/review'
 import {
   NAMING_SYSTEM_PROMPT,
-} from '@/prompts/naming'
+} from '../../../../src/prompts/naming'
 
 // Hardcoded fallback prompts
 const HARDCODED_PROMPTS: Record<string, string> = {
