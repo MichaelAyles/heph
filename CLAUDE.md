@@ -102,18 +102,22 @@ When creating example prompts, use ONLY these components or the project will be 
 ### Key Directories
 
 - `src/pages/` - Route components (SpecPage.tsx orchestrates the pipeline)
+- `src/pages/workspace/` - Workspace stage views (Spec, PCB, Enclosure, Firmware, Export)
 - `src/components/spec-steps/` - Individual step components (Feasibility, Refinement, Blueprint, Selection, Finalization)
-- `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure)
+- `src/components/admin/orchestrator/` - Admin orchestrator editor (PromptEditor, FlowVisualization, HookConfiguration)
+- `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure, orchestrator)
 - `src/services/` - LLM client, orchestrator, PCB merging
 - `src/stores/` - Zustand state (auth, workspace, orchestrator)
-- `functions/api/` - Cloudflare Pages Functions (auth, llm, projects, admin)
+- `functions/api/` - Cloudflare Pages Functions (auth, llm, projects, admin, orchestrator)
+- `functions/api/admin/orchestrator/` - Admin API for managing orchestrator prompts, edges, and hooks
 - `functions/lib/` - Shared utilities (gemini.ts, logger.ts, json.ts)
-- `migrations/` - D1 SQL migrations
+- `migrations/` - D1 SQL migrations (16 migrations)
 
 ### Database Schema
 
-Key tables in D1:
+Key tables in D1 (16 migrations):
 
+**Core Tables:**
 - **users**: id, username, password_hash (bcrypt, auto-upgraded from plaintext on login), is_admin, control_mode, is_approved
 - **sessions**: id, user_id, expires_at (7-day sliding expiry, extended on activity)
 - **projects**: id, user_id, name, description, status, spec (JSON ProjectSpec)
@@ -122,6 +126,12 @@ Key tables in D1:
 - **debug_logs**: Admin logging (category, level, request_id for correlation)
 - **conversations**: project_id, messages (JSON), timestamps
 - **gallery_visibility**: project_id, visibility (public/private/anonymous)
+
+**Orchestrator Tables (migrations 0013-0016):**
+- **orchestrator_prompts**: 8 pre-seeded agent prompts (orchestrator, feasibility, enclosure, enclosure_vision, firmware, naming, enclosure_review, firmware_review) with node_name, system_prompt, category (agent/generator/reviewer), stage, token_estimate, version
+- **orchestrator_edges**: Workflow graph defining transitions between orchestrator nodes
+- **orchestrator_hooks**: Pre/post execution hooks for orchestrator node workflows
+- **context_tags**: Dynamic context tagging for orchestrator state management
 
 ### LLM Integration
 
@@ -304,6 +314,7 @@ const data = result.data // Fully typed!
 | Available components | `src/prompts/feasibility.ts` lines 10-45 |
 | Step components | `src/components/spec-steps/` |
 | Step orchestration | `src/pages/SpecPage.tsx` |
+| Workspace stages | `src/pages/workspace/*StageView.tsx` |
 | Error boundary | `src/components/ErrorBoundary.tsx` |
 | LLM chat | `functions/api/llm/chat.ts` |
 | Image generation | `functions/api/llm/image.ts` |
@@ -317,6 +328,11 @@ const data = result.data // Fully typed!
 | LLM response schemas | `src/schemas/llm-responses.ts` |
 | Pricing calculations | `functions/api/llm/pricing.ts` |
 | Admin logs API | `functions/api/admin/logs.ts` |
+| Admin orchestrator UI | `src/pages/AdminOrchestratorPage.tsx` |
+| Orchestrator prompt editor | `src/components/admin/orchestrator/PromptEditor.tsx` |
+| Orchestrator flow viz | `src/components/admin/orchestrator/FlowVisualization.tsx` |
+| Orchestrator admin API | `functions/api/admin/orchestrator/` |
+| Runtime prompt loading | `functions/api/orchestrator/prompts.ts` |
 
 ## Cost Insights
 
@@ -339,13 +355,34 @@ Post-spec stages for hardware generation:
 
 **Orchestrator** (`services/orchestrator.ts`, 1641 lines): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`.
 
-## API Endpoints
+### Orchestrator Agent System
+
+The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` table:
+
+| Node Name | Category | Stage | Purpose |
+|-----------|----------|-------|---------|
+| `orchestrator` | agent | - | Main coordinator that decides workflow and makes final decisions |
+| `feasibility` | agent | spec | Analyzes user description against available components |
+| `naming` | generator | spec | Generates creative project names |
+| `enclosure` | generator | enclosure | Generates OpenSCAD code for basic enclosures |
+| `enclosure_vision` | generator | enclosure | Blueprint-aware enclosure generation using product images |
+| `firmware` | generator | firmware | Generates ESP32-C6 firmware (Arduino/PlatformIO) |
+| `enclosure_review` | reviewer | enclosure | Reviews OpenSCAD against specification |
+| `firmware_review` | reviewer | firmware | Reviews firmware code for correctness |
+
+**Admin Management**: The `AdminOrchestratorPage` provides:
+- Prompt editing with token estimation
+- Workflow graph visualization
+- Hook configuration for pre/post execution logic
+- Context tag management
+
+## API Endpoints (35+ endpoints)
 
 **LLM** (`/api/llm/*`):
-- `POST /api/llm/chat` - Main chat endpoint with retry logic (395 LOC)
-- `POST /api/llm/image` - Image generation with cost tracking (216 LOC)
-- `POST /api/llm/stream` - Server-sent events streaming (320 LOC)
-- `POST /api/llm/tools` - Gemini function calling (691 LOC)
+- `POST /api/llm/chat` - Main chat endpoint with retry logic
+- `POST /api/llm/image` - Image generation with cost tracking
+- `POST /api/llm/stream` - Server-sent events streaming
+- `POST /api/llm/tools` - Gemini function calling
 
 **Projects** (`/api/projects/*`):
 - `GET /api/projects` - List with pagination and status filter
@@ -353,12 +390,43 @@ Post-spec stages for hardware generation:
 - `GET /api/projects/{id}` - Get project details
 - `PUT /api/projects/{id}` - Update project
 - `DELETE /api/projects/{id}` - Delete project
+- `GET /api/projects/{id}/conversations` - Get conversation history
+- `POST /api/projects/{id}/visibility` - Set gallery visibility
+
+**Auth** (`/api/auth/*`):
+- `POST /api/auth/login` - Credential login with rate limiting
+- `POST /api/auth/logout` - Logout
+- `GET /api/auth/me` - Current user info
+- `POST /api/auth/callback` - OAuth callback
+- `POST /api/auth/workos` - WorkOS OAuth
 
 **Gallery** (`/api/gallery/*`):
-- `GET /api/gallery/index` - Public project gallery
+- `GET /api/gallery` - Public project gallery
 - `GET /api/gallery/{id}` - Get public project details
 
 **Admin** (`/api/admin/*`):
 - `GET /api/admin/logs` - View debug logs
 - `POST /api/admin/cleanup-sessions` - Remove expired sessions
 - `GET /api/admin/users` - User management
+
+**Admin Orchestrator** (`/api/admin/orchestrator/*`):
+- `GET /api/admin/orchestrator/prompts` - List all orchestrator prompts
+- `POST /api/admin/orchestrator/prompts` - Create new prompt
+- `PUT /api/admin/orchestrator/prompts/{node_name}` - Update prompt
+- `POST /api/admin/orchestrator/prompts/{node_name}/reset` - Reset to default
+- `GET /api/admin/orchestrator/edges` - Get workflow graph
+- `PUT /api/admin/orchestrator/edges` - Update workflow
+- `GET /api/admin/orchestrator/hooks` - Get hook configuration
+- `PUT /api/admin/orchestrator/hooks` - Update hooks
+
+**Public Orchestrator** (`/api/orchestrator/*`):
+- `GET /api/orchestrator/prompts/{node_name}` - Get runtime prompt (used by orchestrator service)
+
+**Blocks** (`/api/blocks/*`):
+- `GET /api/blocks` - List all PCB blocks
+- `GET /api/blocks/{slug}` - Block details
+- `GET /api/blocks/{slug}/files/*` - Block file serving
+
+**Settings** (`/api/settings/*`):
+- `GET /api/settings` - User settings
+- `GET /api/settings/usage` - Usage/cost tracking

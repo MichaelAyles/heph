@@ -27,7 +27,8 @@ PHAESTUS transforms natural language specifications into manufacturable hardware
 - 3D-printable enclosures (OpenSCAD → STL)
 - ESP32 firmware with Monaco editor and AI generation
 - Bill of Materials export (CSV)
-- Multi-agent orchestration for autonomous design
+- Multi-agent orchestration for autonomous design (8 specialized agents)
+- Admin interface for editing orchestrator prompts and workflows
 - Complete project export (spec, BOM, enclosure, firmware)
 
 ## Live Demo
@@ -63,7 +64,7 @@ Open http://localhost:8788
 | **Database** | Cloudflare D1 (SQLite) |
 | **Storage** | Cloudflare R2 |
 | **LLM** | OpenRouter (Gemini 2.0 Flash) |
-| **Testing** | Vitest (648 tests, 63% coverage) |
+| **Testing** | Vitest (648 tests, all passing) |
 
 ## Architecture
 
@@ -124,9 +125,9 @@ Secrets are managed via `wrangler pages secret put <NAME>`.
 - Cost tracking for all LLM requests
 - Session cleanup endpoint for maintenance
 
-**Known Issues** (see todo.md for full list):
-- Orchestrator.ts complexity (1641 lines, needs module split)
-- Error logging should use logger utility throughout (68 console calls to migrate)
+**Known Issues** (see TODO.md for full list):
+- Orchestrator.ts complexity (1641 lines, could benefit from module split)
+- Error logging could be standardized with logger utility (68 console calls remain)
 - Some LLM response parsing should migrate to Zod validation
 
 ## License

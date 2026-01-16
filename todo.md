@@ -1,8 +1,8 @@
 # PHAESTUS Code Review & Technical Debt
 
-**Last Review**: January 15, 2026
+**Last Review**: January 16, 2026
 **Overall Status**: Production-ready
-**Test Coverage**: 63% overall (648 tests)
+**Test Coverage**: 648 tests (all passing)
 
 ---
 
@@ -11,20 +11,23 @@
 The codebase is mature and production-ready with solid engineering practices:
 - Full 5-step spec pipeline (feasibility → refinement → blueprints → selection → finalization)
 - Multi-stage workspace (PCB, Enclosure, Firmware, Export)
-- Hardware orchestrator with autonomous agent capabilities
+- Hardware orchestrator with 8 specialized agents and admin management UI
 - Comprehensive LLM integration with retry logic, streaming, and tool calling
-- 12 database migrations, WorkOS OAuth, user approval workflow
-- All major API endpoints operational
+- 16 database migrations, WorkOS OAuth, user approval workflow
+- 35+ API endpoints operational including orchestrator admin API
 
-### Recent Changes (Jan 2025)
+### Recent Changes (Jan 2026)
 
 | Change | Commit | Impact |
 |--------|--------|--------|
+| Add orchestrator editor admin page | 0e61f3f | Full CRUD for agent prompts |
+| Add orchestrator admin API endpoints | af582ca | prompts, edges, hooks management |
+| Add 4 new database migrations (0013-0016) | - | orchestrator_prompts, edges, hooks, context_tags |
+| Fix @/db/schema imports in admin handlers | 2c8697b | Build fixes for wrangler |
+| Add Orchestrator link to admin sidebar | 467ba21 | Admin navigation |
 | Fix finalSpec type in ProjectsPage | 14f4b74 | Type safety for spec interface |
-| Prefer finalSpec.name in UI display | 9e2da8d | Better name resolution in views |
 | Orchestrator generates real blueprints | e3f442f | No more placeholder images |
 | Validate blueprint URLs | 70bf9c1 | Prevent 404s in SpecStageView |
-| Include spec in projects list API | 7bd4269 | Stage status display works |
 
 ---
 
@@ -48,6 +51,7 @@ The codebase is mature and production-ready with solid engineering practices:
 | Session cleanup missing | Admin endpoint for cleanup |
 | Blueprint placeholder images | Orchestrator now generates real images |
 | Blueprint URL validation | URLs validated before display |
+| No orchestrator prompt management | Admin UI with full CRUD for 8 agents |
 
 ### Remaining Issues
 
@@ -72,29 +76,38 @@ The codebase is mature and production-ready with solid engineering practices:
 
 | File | Lines | Status |
 |------|-------|--------|
-| `orchestrator.ts` | 1641 | Needs split |
+| `orchestrator.ts` | 1641 | Could benefit from split |
 | `SpecPage.tsx` | 362 | Refactored |
 | `SpecStageView.tsx` | 1495 | Monitor |
+| `EnclosureStageView.tsx` | 962 | Good |
+| `FirmwareStageView.tsx` | 914 | Good |
+| `ExportStageView.tsx` | 927 | Good |
 | `FeasibilityStep.tsx` | 103 | Good |
 | `RefinementStep.tsx` | 240 | Good |
 | `BlueprintStep.tsx` | 162 | Good |
 | `SelectionStep.tsx` | 112 | Good |
 | `FinalizationStep.tsx` | 94 | Good |
+| `AdminOrchestratorPage.tsx` | ~200 | New - admin UI |
+| `PromptEditor.tsx` | ~300 | New - prompt editing |
+| `FlowVisualization.tsx` | ~200 | New - workflow graph |
 
-### API Endpoints (28 total)
+### API Endpoints (35+ total)
 
 | Category | Endpoints |
 |----------|-----------|
 | LLM | chat, image, stream, tools |
-| Projects | list, create, get, update, delete |
-| Auth | login, logout, register, me, WorkOS callback |
+| Projects | list, create, get, update, delete, conversations, visibility |
+| Auth | login, logout, me, callback, workos |
 | Admin | logs, users, cleanup-sessions |
-| Blocks | list, get |
+| Admin Orchestrator | prompts (list, create, update, reset), edges, hooks |
+| Orchestrator | prompts (runtime loading) |
+| Blocks | list, get, files |
 | Gallery | index, get |
+| Settings | settings, usage |
 
-### Database (12 migrations)
+### Database (16 migrations)
 
-Key tables:
+**Core Tables:**
 - `users` - id, username, password_hash, is_admin, control_mode, is_approved
 - `sessions` - id, user_id, expires_at
 - `projects` - id, user_id, name, description, status, spec
@@ -102,6 +115,12 @@ Key tables:
 - `llm_requests` - model, tokens, cost_usd, latency_ms
 - `conversations` - project_id, messages
 - `gallery_visibility` - project_id, visibility
+
+**Orchestrator Tables (migrations 0013-0016):**
+- `orchestrator_prompts` - 8 pre-seeded agent prompts with versioning
+- `orchestrator_edges` - Workflow transition graph
+- `orchestrator_hooks` - Pre/post execution callbacks
+- `context_tags` - Dynamic context tagging
 
 ---
 
@@ -152,34 +171,37 @@ Key tables:
 
 ## Remaining Work
 
-### High Priority
-1. **Split Orchestrator.ts into modules** (4-6h)
+### Medium Priority (Nice to Have)
+1. **Split Orchestrator.ts into modules**
    - Extract tool handlers into separate files
    - Separate state management
    - Improve testability
+   - Note: Currently functional, split would improve maintainability
 
-### Medium Priority
-2. **Standardize error logging** (2h)
+2. **Standardize error logging**
    - Replace 68 console.error/warn calls with logger utility
    - Add structured logging throughout
 
-3. **Use extractAndValidateJson throughout** (2h)
+3. **Use extractAndValidateJson throughout**
    - Replace regex JSON extraction in step components
    - Add schema validation for all LLM responses
 
 ### Low Priority
 4. Add workspace stage view tests
-5. Fix incomplete I2C validation in firmware
-6. Add pagination bounds check
+5. Fix incomplete I2C validation in firmware (regex-based, misses variable addresses)
+6. Add pagination bounds check (large offsets on expensive queries)
 
 ---
 
 ## Notes
 
-- All 648 tests pass
+- All 648 tests pass (verified January 16, 2026)
 - TypeScript compiles without errors
 - Deploy pipeline is stable (GitHub Actions → Cloudflare Pages)
 - LLM costs dominated by image generation (~2000x text completions)
 - Architecture is sound; main remaining debt is orchestrator organization
-- WorkOS OAuth and user approval workflow recently added
-- Blueprint generation now creates real images (not placeholders)
+- WorkOS OAuth and user approval workflow active
+- Blueprint generation creates real images (not placeholders)
+- Orchestrator admin UI complete with prompt editing, flow visualization, and hook configuration
+- 8 specialized agents seeded and editable via admin interface
+- 16 database migrations supporting full orchestrator workflow management
