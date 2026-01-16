@@ -14,6 +14,7 @@ import { BlocksPage } from '@/pages/BlocksPage'
 import { AdminLogsPage } from '@/pages/AdminLogsPage'
 import { AdminUsersPage } from '@/pages/AdminUsersPage'
 import { AdminLLMsPage } from '@/pages/AdminLLMsPage'
+import { AdminOrchestratorPage } from '@/pages/AdminOrchestratorPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { GalleryPage } from '@/pages/GalleryPage'
 import { GalleryDetailPage } from '@/pages/GalleryDetailPage'
@@ -59,6 +60,7 @@ function AuthenticatedApp() {
         <Route path="admin/logs" element={<AdminLogsPage />} />
         <Route path="admin/users" element={<AdminUsersPage />} />
         <Route path="admin/llms" element={<AdminLLMsPage />} />
+        <Route path="admin/orchestrator" element={<AdminOrchestratorPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

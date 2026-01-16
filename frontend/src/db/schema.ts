@@ -506,3 +506,151 @@ export function settingsFromRow(row: SettingsRow): SystemSettings {
     updatedAt: row.updated_at,
   }
 }
+
+// =============================================================================
+// ORCHESTRATOR PROMPTS
+// =============================================================================
+
+export type OrchestratorPromptCategory = 'agent' | 'generator' | 'reviewer'
+export type OrchestratorStageType = 'spec' | 'pcb' | 'enclosure' | 'firmware' | null
+
+export interface OrchestratorPrompt {
+  id: string
+  nodeName: string
+  displayName: string
+  description: string | null
+  systemPrompt: string
+  category: OrchestratorPromptCategory
+  stage: OrchestratorStageType
+  isActive: boolean
+  tokenEstimate: number | null
+  version: number
+  contextTags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OrchestratorPromptRow {
+  id: string
+  node_name: string
+  display_name: string
+  description: string | null
+  system_prompt: string
+  category: string
+  stage: string | null
+  is_active: number
+  token_estimate: number | null
+  version: number
+  context_tags: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function promptFromRow(row: OrchestratorPromptRow): OrchestratorPrompt {
+  return {
+    id: row.id,
+    nodeName: row.node_name,
+    displayName: row.display_name,
+    description: row.description,
+    systemPrompt: row.system_prompt,
+    category: row.category as OrchestratorPromptCategory,
+    stage: row.stage as OrchestratorStageType,
+    isActive: row.is_active === 1,
+    tokenEstimate: row.token_estimate,
+    version: row.version,
+    contextTags: row.context_tags ? JSON.parse(row.context_tags) : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+// =============================================================================
+// ORCHESTRATOR EDGES
+// =============================================================================
+
+export type OrchestratorEdgeType = 'flow' | 'conditional' | 'loop'
+
+export interface OrchestratorEdge {
+  id: string
+  fromNode: string
+  toNode: string
+  condition: Record<string, unknown> | null
+  edgeType: OrchestratorEdgeType
+  priority: number
+  description: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OrchestratorEdgeRow {
+  id: string
+  from_node: string
+  to_node: string
+  condition: string | null
+  edge_type: string
+  priority: number
+  description: string | null
+  is_active: number
+  created_at: string
+  updated_at: string
+}
+
+export function edgeFromRow(row: OrchestratorEdgeRow): OrchestratorEdge {
+  return {
+    id: row.id,
+    fromNode: row.from_node,
+    toNode: row.to_node,
+    condition: row.condition ? JSON.parse(row.condition) : null,
+    edgeType: row.edge_type as OrchestratorEdgeType,
+    priority: row.priority,
+    description: row.description,
+    isActive: row.is_active === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+// =============================================================================
+// ORCHESTRATOR HOOKS
+// =============================================================================
+
+export type OrchestratorHookType = 'on_enter' | 'on_exit' | 'on_result' | 'on_error'
+
+export interface OrchestratorHook {
+  id: string
+  nodeName: string
+  hookType: OrchestratorHookType
+  hookFunction: string
+  hookConfig: Record<string, unknown> | null
+  priority: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OrchestratorHookRow {
+  id: string
+  node_name: string
+  hook_type: string
+  hook_function: string
+  hook_config: string | null
+  priority: number
+  is_active: number
+  created_at: string
+  updated_at: string
+}
+
+export function hookFromRow(row: OrchestratorHookRow): OrchestratorHook {
+  return {
+    id: row.id,
+    nodeName: row.node_name,
+    hookType: row.hook_type as OrchestratorHookType,
+    hookFunction: row.hook_function,
+    hookConfig: row.hook_config ? JSON.parse(row.hook_config) : null,
+    priority: row.priority,
+    isActive: row.is_active === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
