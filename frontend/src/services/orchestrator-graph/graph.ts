@@ -108,15 +108,12 @@ export function createOrchestratorGraph() {
   // ENCLOSURE STAGE NODES
   // =========================================================================
 
-  graph.addNode('generateEnclosure', async (state: OrchestratorState) => {
-    // Check if there's feedback from previous decide node
-    const feedback = (state as OrchestratorState & { _enclosureFeedback?: string })._enclosureFeedback
-    return generateEnclosureNode(state, undefined, undefined, undefined, feedback)
-  })
+  // generateEnclosure reads feedback from state.enclosureFeedback
+  graph.addNode('generateEnclosure', generateEnclosureNode)
   graph.addNode('reviewEnclosure', reviewEnclosureNode)
   // decideEnclosure uses Command API - declare possible destinations
   graph.addNode('decideEnclosure', decideEnclosureNode, {
-    ends: ['acceptEnclosure', 'generateEnclosure', 'reviewEnclosure', 'requestUserInput'],
+    ends: ['acceptEnclosure', 'generateEnclosure', 'reviewEnclosure', 'requestUserInput', '__end__'],
   })
   graph.addNode('acceptEnclosure', acceptEnclosureNode)
   graph.addNode('markEnclosureComplete', markEnclosureComplete)
@@ -126,15 +123,12 @@ export function createOrchestratorGraph() {
   // FIRMWARE STAGE NODES
   // =========================================================================
 
-  graph.addNode('generateFirmware', async (state: OrchestratorState) => {
-    // Check if there's feedback from previous decide node
-    const feedback = (state as OrchestratorState & { _firmwareFeedback?: string })._firmwareFeedback
-    return generateFirmwareNode(state, undefined, undefined, undefined, undefined, feedback)
-  })
+  // generateFirmware reads feedback from state.firmwareFeedback
+  graph.addNode('generateFirmware', generateFirmwareNode)
   graph.addNode('reviewFirmware', reviewFirmwareNode)
   // decideFirmware uses Command API - declare possible destinations
   graph.addNode('decideFirmware', decideFirmwareNode, {
-    ends: ['acceptFirmware', 'generateFirmware', 'reviewFirmware', 'requestUserInput'],
+    ends: ['acceptFirmware', 'generateFirmware', 'reviewFirmware', 'requestUserInput', '__end__'],
   })
   graph.addNode('acceptFirmware', acceptFirmwareNode)
   graph.addNode('markFirmwareComplete', markFirmwareComplete)
@@ -234,21 +228,81 @@ export function createOrchestratorGraph() {
 // =============================================================================
 
 /**
- * Compile the graph with an in-memory checkpointer (for testing/development).
+ * Nodes where the graph should pause for user input (human-in-the-loop).
+ *
+ * In 'design_it' mode, users make all decisions manually.
+ * In 'fix_it' mode, users can intervene when the agent gets stuck.
+ * In 'vibe_it' mode, the agent runs autonomously.
  */
-export function compileWithMemory() {
+export const INTERRUPT_NODES = {
+  /** Nodes where users must make a choice */
+  userDecisions: ['selectBlueprint', 'selectName'],
+  /** Nodes where the agent requests user input after getting stuck */
+  agentEscalation: ['requestUserInput'],
+  /** All interruptible nodes */
+  all: ['selectBlueprint', 'selectName', 'requestUserInput'],
+} as const
+
+/**
+ * Options for compiling the graph.
+ */
+export interface CompileOptions {
+  /** Nodes to interrupt before (for human-in-the-loop) */
+  interruptBefore?: string[]
+  /** Nodes to interrupt after */
+  interruptAfter?: string[]
+}
+
+/**
+ * Compile the graph with an in-memory checkpointer (for testing/development).
+ *
+ * @param options - Optional compile options including interrupt nodes
+ */
+export function compileWithMemory(options: CompileOptions = {}) {
   const graph = createOrchestratorGraph()
   const checkpointer = new MemorySaver()
-  return graph.compile({ checkpointer })
+  return graph.compile({
+    checkpointer,
+    interruptBefore: options.interruptBefore,
+    interruptAfter: options.interruptAfter,
+  })
 }
 
 /**
  * Compile the graph with a D1 checkpointer (for production).
+ *
+ * @param db - D1 database for persistence
+ * @param options - Optional compile options including interrupt nodes
  */
-export function compileWithD1(db: D1Database) {
+export function compileWithD1(db: D1Database, options: CompileOptions = {}) {
   const graph = createOrchestratorGraph()
   const checkpointer = new D1Checkpointer(db)
-  return graph.compile({ checkpointer })
+  return graph.compile({
+    checkpointer,
+    interruptBefore: options.interruptBefore,
+    interruptAfter: options.interruptAfter,
+  })
+}
+
+/**
+ * Get interrupt configuration based on orchestrator mode.
+ *
+ * @param mode - The orchestrator mode
+ * @returns Compile options with appropriate interrupt nodes
+ */
+export function getInterruptConfigForMode(mode: OrchestratorMode): CompileOptions {
+  switch (mode) {
+    case 'design_it':
+      // Full human control - interrupt at all decision points
+      return { interruptBefore: [...INTERRUPT_NODES.all] }
+    case 'fix_it':
+      // Agent runs but user can intervene when stuck
+      return { interruptBefore: [...INTERRUPT_NODES.agentEscalation] }
+    case 'vibe_it':
+    default:
+      // Fully autonomous - no interrupts
+      return {}
+  }
 }
 
 // =============================================================================
@@ -291,6 +345,11 @@ export function prepareInitialState(input: OrchestratorInput): Partial<Orchestra
 /**
  * Run the orchestrator graph.
  *
+ * Uses mode-based interrupt configuration:
+ * - 'vibe_it': Fully autonomous, no interrupts
+ * - 'fix_it': Interrupts only when agent escalates
+ * - 'design_it': Interrupts at all user decision points
+ *
  * @param input - Initial input
  * @param db - Optional D1 database for persistence
  * @returns Async generator of state updates
@@ -299,7 +358,14 @@ export async function* runOrchestrator(
   input: OrchestratorInput,
   db?: D1Database
 ) {
-  const compiled = db ? compileWithD1(db) : compileWithMemory()
+  // Get interrupt config based on mode
+  const interruptConfig = getInterruptConfigForMode(input.mode)
+
+  // Compile with appropriate checkpointer and interrupt config
+  const compiled = db
+    ? compileWithD1(db, interruptConfig)
+    : compileWithMemory(interruptConfig)
+
   const initialState = prepareInitialState(input)
 
   const config = {
@@ -310,6 +376,43 @@ export async function* runOrchestrator(
 
   // Stream state updates
   for await (const update of await compiled.stream(initialState, config)) {
+    yield update
+  }
+}
+
+/**
+ * Resume the orchestrator after an interrupt.
+ *
+ * Call this after the user has provided input at an interrupt point.
+ * The graph will continue from where it left off.
+ *
+ * @param projectId - The project ID (thread_id)
+ * @param userInput - Optional user input to merge into state
+ * @param db - Optional D1 database for persistence
+ * @param mode - Orchestrator mode for interrupt config
+ * @returns Async generator of state updates
+ */
+export async function* resumeOrchestrator(
+  projectId: string,
+  userInput: Partial<OrchestratorState> | null,
+  mode: OrchestratorMode,
+  db?: D1Database
+) {
+  const interruptConfig = getInterruptConfigForMode(mode)
+
+  const compiled = db
+    ? compileWithD1(db, interruptConfig)
+    : compileWithMemory(interruptConfig)
+
+  const config = {
+    configurable: {
+      thread_id: projectId,
+    },
+  }
+
+  // Resume with optional user input
+  const input = userInput ?? null
+  for await (const update of await compiled.stream(input, config)) {
     yield update
   }
 }

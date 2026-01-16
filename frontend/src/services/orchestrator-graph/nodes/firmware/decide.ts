@@ -8,6 +8,9 @@
 import { Command } from '@langchain/langgraph'
 import {
   createHistoryItem,
+  hasExceededMaxIterations,
+  createMaxIterationsError,
+  MAX_LOOP_ATTEMPTS,
   type OrchestratorState,
   type OrchestratorStateUpdate,
 } from '../../state'
@@ -15,15 +18,13 @@ import {
 /** Minimum score to accept firmware */
 const ACCEPT_THRESHOLD = 85
 
-/** Maximum number of generation attempts */
-const MAX_ATTEMPTS = 3
-
 /**
  * Decide next action based on firmware review.
  *
  * Decision logic:
+ * - Max iterations exceeded: Stop with error
  * - score >= 85: Accept and render
- * - attempts >= 3: Request user input (can't auto-improve further)
+ * - attempts >= MAX_LOOP_ATTEMPTS: Request user input (can't auto-improve further)
  * - otherwise: Regenerate with feedback
  *
  * @param state - Current orchestrator state
@@ -32,6 +33,14 @@ const MAX_ATTEMPTS = 3
 export function decideFirmwareNode(
   state: OrchestratorState
 ): Command {
+  // Safety check for runaway loops
+  if (hasExceededMaxIterations(state)) {
+    return new Command({
+      update: createMaxIterationsError(state),
+      goto: '__end__',
+    })
+  }
+
   const { firmwareReview, firmwareAttempts } = state
 
   if (!firmwareReview) {
@@ -52,6 +61,7 @@ export function decideFirmwareNode(
   if (score >= ACCEPT_THRESHOLD || verdict === 'accept') {
     return new Command({
       update: {
+        firmwareFeedback: null, // Clear feedback on accept
         history: [
           createHistoryItem(
             'progress',
@@ -67,7 +77,7 @@ export function decideFirmwareNode(
   }
 
   // If max attempts reached, request user input
-  if (firmwareAttempts >= MAX_ATTEMPTS) {
+  if (firmwareAttempts >= MAX_LOOP_ATTEMPTS) {
     return new Command({
       update: {
         history: [
@@ -75,7 +85,7 @@ export function decideFirmwareNode(
             'progress',
             'firmware',
             'decide_firmware',
-            `Max attempts (${MAX_ATTEMPTS}) reached, requesting user input`,
+            `Max attempts (${MAX_LOOP_ATTEMPTS}) reached, requesting user input`,
             { score, attempts: firmwareAttempts, decision: 'escalate' }
           ),
         ],
@@ -84,7 +94,7 @@ export function decideFirmwareNode(
     })
   }
 
-  // Otherwise, regenerate with feedback
+  // Otherwise, regenerate with feedback (store in proper state field)
   const feedback = issues
     .map((issue) => `- ${issue.description}${issue.suggestion ? `: ${issue.suggestion}` : ''}`)
     .join('\n')
@@ -92,6 +102,7 @@ export function decideFirmwareNode(
   return new Command({
     update: {
       firmwareReview: null, // Clear review for fresh attempt
+      firmwareFeedback: feedback, // Store feedback in proper state field
       history: [
         createHistoryItem(
           'progress',
@@ -101,9 +112,7 @@ export function decideFirmwareNode(
           { score, attempts: firmwareAttempts, decision: 'revise', issueCount: issues.length }
         ),
       ],
-      // Store feedback for next generation
-      _firmwareFeedback: feedback,
-    } as OrchestratorStateUpdate & { _firmwareFeedback: string },
+    } as OrchestratorStateUpdate,
     goto: 'generateFirmware',
   })
 }
@@ -121,5 +130,5 @@ export function shouldAcceptFirmware(state: OrchestratorState): boolean {
  * Check if firmware attempts are exhausted
  */
 export function firmwareAttemptsExhausted(state: OrchestratorState): boolean {
-  return state.firmwareAttempts >= MAX_ATTEMPTS
+  return state.firmwareAttempts >= MAX_LOOP_ATTEMPTS
 }

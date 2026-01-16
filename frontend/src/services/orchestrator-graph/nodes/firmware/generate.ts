@@ -22,12 +22,13 @@ const VALID_LANGUAGES = ['cpp', 'c', 'h', 'json'] as const
 /**
  * Generate ESP32 firmware code.
  *
+ * Reads feedback from state.firmwareFeedback if this is a revision attempt.
+ *
  * @param state - Current orchestrator state
  * @param enableWifi - Enable WiFi functionality
  * @param enableBle - Enable BLE functionality
  * @param enableOta - Enable OTA updates
  * @param enableDeepSleep - Enable deep sleep
- * @param feedback - Feedback from previous review (for revision)
  * @returns State update with firmware artifacts
  */
 export async function generateFirmwareNode(
@@ -35,10 +36,9 @@ export async function generateFirmwareNode(
   enableWifi?: boolean,
   enableBle?: boolean,
   enableOta?: boolean,
-  enableDeepSleep?: boolean,
-  feedback?: string
+  enableDeepSleep?: boolean
 ): Promise<OrchestratorStateUpdate> {
-  const { finalSpec, pcb, projectId, firmwareAttempts } = state
+  const { finalSpec, pcb, projectId, firmwareAttempts, firmwareFeedback } = state
 
   if (!finalSpec || !pcb) {
     return {
@@ -65,8 +65,8 @@ export async function generateFirmwareNode(
 
     // Build prompt, including feedback if this is a revision
     let userPrompt = buildFirmwarePrompt(input)
-    if (feedback) {
-      userPrompt += `\n\n## PREVIOUS REVIEW FEEDBACK - Address these issues:\n${feedback}`
+    if (firmwareFeedback) {
+      userPrompt += `\n\n## PREVIOUS REVIEW FEEDBACK - Address these issues:\n${firmwareFeedback}`
     }
 
     const chatRequest = createChatRequest(
@@ -106,6 +106,7 @@ export async function generateFirmwareNode(
       firmware,
       firmwareAttempts: firmwareAttempts + 1,
       firmwareReview: null, // Clear previous review
+      firmwareFeedback: null, // Clear feedback after using it
       history: [
         createHistoryItem(
           'tool_result',
@@ -115,7 +116,7 @@ export async function generateFirmwareNode(
           {
             fileCount: files.length,
             fileNames: files.map((f) => f.path),
-            isRevision: !!feedback,
+            isRevision: !!firmwareFeedback,
           }
         ),
       ],

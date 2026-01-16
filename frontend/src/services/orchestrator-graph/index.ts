@@ -18,6 +18,10 @@ export {
   createHistoryItem,
   stateToProjectSpec,
   projectSpecToState,
+  hasExceededMaxIterations,
+  createMaxIterationsError,
+  MAX_ITERATIONS,
+  MAX_LOOP_ATTEMPTS,
 } from './state'
 
 // LLM wrapper for nodes
@@ -43,7 +47,11 @@ export {
   compileWithD1,
   prepareInitialState,
   runOrchestrator,
+  resumeOrchestrator,
+  getInterruptConfigForMode,
+  INTERRUPT_NODES,
   type OrchestratorInput,
+  type CompileOptions,
 } from './graph'
 
 // Node exports (for testing and custom graphs)

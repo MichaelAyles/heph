@@ -21,6 +21,16 @@ import type {
 } from '../../db/schema'
 
 // =============================================================================
+// CONSTANTS
+// =============================================================================
+
+/** Maximum iterations before forcing stop (safety limit) */
+export const MAX_ITERATIONS = 100
+
+/** Maximum attempts for generate/review loops */
+export const MAX_LOOP_ATTEMPTS = 3
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -204,6 +214,12 @@ export const OrchestratorStateAnnotation = Annotation.Root({
     reducer: (_, next) => next,
   }),
 
+  /** Feedback from review to pass to next generation attempt */
+  enclosureFeedback: Annotation<string | null>({
+    default: () => null,
+    reducer: (_, next) => next,
+  }),
+
   // -------------------------------------------------------------------------
   // Firmware Stage Artifacts + Review Loop State
   // -------------------------------------------------------------------------
@@ -223,6 +239,12 @@ export const OrchestratorStateAnnotation = Annotation.Root({
   /** Number of firmware generation attempts (for max 3 loop) */
   firmwareAttempts: Annotation<number>({
     default: () => 0,
+    reducer: (_, next) => next,
+  }),
+
+  /** Feedback from review to pass to next generation attempt */
+  firmwareFeedback: Annotation<string | null>({
+    default: () => null,
     reducer: (_, next) => next,
   }),
 
@@ -325,6 +347,32 @@ export function createHistoryItem(
     action,
     result,
     details,
+  }
+}
+
+/**
+ * Check if iteration count has exceeded the safety limit.
+ * Use this in nodes to prevent infinite loops.
+ */
+export function hasExceededMaxIterations(state: OrchestratorState): boolean {
+  return state.iterationCount >= MAX_ITERATIONS
+}
+
+/**
+ * Create an error state update for max iterations exceeded.
+ */
+export function createMaxIterationsError(state: OrchestratorState): OrchestratorStateUpdate {
+  return {
+    error: `Maximum iterations (${MAX_ITERATIONS}) exceeded. Stopping orchestration.`,
+    history: [
+      createHistoryItem(
+        'error',
+        state.currentStage,
+        'max_iterations_exceeded',
+        `Stopped after ${state.iterationCount} iterations`,
+        { iterationCount: state.iterationCount, maxIterations: MAX_ITERATIONS }
+      ),
+    ],
   }
 }
 

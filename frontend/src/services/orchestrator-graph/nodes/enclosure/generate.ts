@@ -20,21 +20,21 @@ import type { EnclosureArtifacts } from '../../../../db/schema'
 /**
  * Generate OpenSCAD code for the enclosure.
  *
+ * Reads feedback from state.enclosureFeedback if this is a revision attempt.
+ *
  * @param state - Current orchestrator state
  * @param style - Enclosure style (box, rounded_box, handheld, wall_mount, desktop)
  * @param wallThickness - Wall thickness in mm (default: 2)
  * @param cornerRadius - Corner radius in mm (default: 3)
- * @param feedback - Feedback from previous review (for revision)
  * @returns State update with enclosure artifacts
  */
 export async function generateEnclosureNode(
   state: OrchestratorState,
   style?: string,
   wallThickness?: number,
-  cornerRadius?: number,
-  feedback?: string
+  cornerRadius?: number
 ): Promise<OrchestratorStateUpdate> {
-  const { finalSpec, pcb, projectId, enclosureAttempts } = state
+  const { finalSpec, pcb, projectId, enclosureAttempts, enclosureFeedback } = state
 
   if (!finalSpec || !pcb) {
     return {
@@ -62,8 +62,8 @@ export async function generateEnclosureNode(
 
     // Build prompt, including feedback if this is a revision
     let userPrompt = buildEnclosurePrompt(input)
-    if (feedback) {
-      userPrompt += `\n\n## PREVIOUS REVIEW FEEDBACK - Address these issues:\n${feedback}`
+    if (enclosureFeedback) {
+      userPrompt += `\n\n## PREVIOUS REVIEW FEEDBACK - Address these issues:\n${enclosureFeedback}`
     }
 
     const chatRequest = createChatRequest(
@@ -93,6 +93,7 @@ export async function generateEnclosureNode(
       enclosure,
       enclosureAttempts: enclosureAttempts + 1,
       enclosureReview: null, // Clear previous review
+      enclosureFeedback: null, // Clear feedback after using it
       history: [
         createHistoryItem(
           'tool_result',
@@ -103,7 +104,7 @@ export async function generateEnclosureNode(
             codeLength: openScadCode.length,
             dimensions,
             features,
-            isRevision: !!feedback,
+            isRevision: !!enclosureFeedback,
           }
         ),
       ],
