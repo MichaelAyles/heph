@@ -109,7 +109,8 @@ export function createOrchestratorGraph() {
   // =========================================================================
 
   // generateEnclosure reads feedback from state.enclosureFeedback
-  graph.addNode('generateEnclosure', generateEnclosureNode)
+  // Wrap to only pass state (extra params use defaults)
+  graph.addNode('generateEnclosure', async (state: OrchestratorState) => generateEnclosureNode(state))
   graph.addNode('reviewEnclosure', reviewEnclosureNode)
   // decideEnclosure uses Command API - declare possible destinations
   graph.addNode('decideEnclosure', decideEnclosureNode, {
@@ -124,7 +125,8 @@ export function createOrchestratorGraph() {
   // =========================================================================
 
   // generateFirmware reads feedback from state.firmwareFeedback
-  graph.addNode('generateFirmware', generateFirmwareNode)
+  // Wrap to only pass state (extra params use defaults)
+  graph.addNode('generateFirmware', async (state: OrchestratorState) => generateFirmwareNode(state))
   graph.addNode('reviewFirmware', reviewFirmwareNode)
   // decideFirmware uses Command API - declare possible destinations
   graph.addNode('decideFirmware', decideFirmwareNode, {
