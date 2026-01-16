@@ -4,7 +4,7 @@
  */
 
 import type { Env } from '../../../env'
-import type { OrchestratorPromptRow } from '@/db/schema'
+import type { OrchestratorPromptRow } from '../../../../src/db/schema'
 
 // =============================================================================
 // GET /api/admin/orchestrator/prompts - List all prompts

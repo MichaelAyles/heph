@@ -4,7 +4,7 @@
  */
 
 import type { Env } from '../../../env'
-import type { OrchestratorHookRow } from '@/db/schema'
+import type { OrchestratorHookRow } from '../../../../src/db/schema'
 
 // =============================================================================
 // GET /api/admin/orchestrator/hooks - List all hooks

@@ -4,7 +4,7 @@
  */
 
 import type { Env } from '../../../../env'
-import type { OrchestratorPromptRow } from '@/db/schema'
+import type { OrchestratorPromptRow } from '../../../../../src/db/schema'
 
 // Hardcoded defaults for reset functionality
 const HARDCODED_PROMPTS: Record<string, { displayName: string; description: string; systemPrompt: string; category: string; stage: string | null; tokenEstimate: number }> = {

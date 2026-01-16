@@ -4,7 +4,7 @@
  */
 
 import type { Env } from '../../../env'
-import type { OrchestratorEdgeRow } from '@/db/schema'
+import type { OrchestratorEdgeRow } from '../../../../src/db/schema'
 
 // =============================================================================
 // GET /api/admin/orchestrator/edges - List all edges
