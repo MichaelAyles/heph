@@ -106,7 +106,8 @@ When creating example prompts, use ONLY these components or the project will be 
 - `src/components/spec-steps/` - Individual step components (Feasibility, Refinement, Blueprint, Selection, Finalization)
 - `src/components/admin/orchestrator/` - Admin orchestrator editor (PromptEditor, FlowVisualization, HookConfiguration)
 - `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure, orchestrator)
-- `src/services/` - LLM client, orchestrator, PCB merging
+- `src/services/` - LLM client, PCB merging
+- `src/services/orchestrator/` - Modular orchestrator (tools/, helpers/, types.ts, orchestrator.ts, index.ts)
 - `src/stores/` - Zustand state (auth, workspace, orchestrator)
 - `functions/api/` - Cloudflare Pages Functions (auth, llm, projects, admin, orchestrator)
 - `functions/api/admin/orchestrator/` - Admin API for managing orchestrator prompts, edges, and hooks
@@ -245,7 +246,7 @@ Vitest with 648 tests, ~63% overall coverage. Target 90%+ on core modules.
 
 **Partially Tested**:
 - `src/services/llm.ts` - LLM client (61%)
-- `src/services/orchestrator.ts` - Multi-agent orchestration (34%)
+- `src/services/orchestrator/` - Multi-agent orchestration (modular, ~34%)
 - `src/services/pcb-merge.ts` - KiCad block merging (46%)
 
 **Not Tested**:
@@ -274,7 +275,7 @@ Vitest with 648 tests, ~63% overall coverage. Target 90%+ on core modules.
 ### Remaining Issues
 
 #### Medium Priority
-1. **Orchestrator complexity** - `src/services/orchestrator.ts` (1641 lines) needs module split
+1. ~~**Orchestrator complexity**~~ - FIXED: Split into modular architecture in `src/services/orchestrator/`
 2. **Standardize error logging** - Replace console.error with logger utility throughout (68 calls to migrate)
 3. **Use extractAndValidateJson** - Migrate remaining JSON parsing in step components
 
@@ -353,7 +354,7 @@ Post-spec stages for hardware generation:
 | Firmware | `pages/workspace/FirmwareStageView.tsx`, `prompts/firmware.ts` | ESP32 code generation, Monaco editor |
 | Export | `pages/workspace/ExportStageView.tsx` | Spec MD/JSON, BOM CSV, ZIP downloads |
 
-**Orchestrator** (`services/orchestrator.ts`, 1641 lines): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`.
+**Orchestrator** (`services/orchestrator/`): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`. Modular architecture with separate files for tools, helpers, and types.
 
 ### Orchestrator Agent System
 
