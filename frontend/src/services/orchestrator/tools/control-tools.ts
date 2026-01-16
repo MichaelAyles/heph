@@ -174,10 +174,10 @@ export async function markStageComplete(
 /**
  * Report progress to user
  */
-export function reportProgress(
+export async function reportProgress(
   ctx: OrchestratorContext,
   args: Record<string, unknown>
-): ToolResult {
+): Promise<ToolResult> {
   const message = args.message as string
   const stage = args.stage as string
   const percentage = args.percentage as number | undefined

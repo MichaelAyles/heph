@@ -2,6 +2,8 @@
 /inspiration/
 agents.md
 .claude/
+/kicad_seed_data/
+chat.txt
 
 # Cloudflare local state
 .wrangler/
