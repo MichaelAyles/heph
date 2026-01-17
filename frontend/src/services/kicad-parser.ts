@@ -8,6 +8,7 @@
  */
 
 import { parseSchematic, analyzeConnectivity } from '../lib/tokn';
+import type { SExpr } from '../lib/tokn/sexpr';
 import { parse, get, getAll } from '../lib/tokn/sexpr';
 // Note: Using relative import because this file is imported by functions code
 import type { BusSignal } from '../schemas/block';
@@ -127,6 +128,115 @@ export function parseKicadSchematic(content: string): Partial<KicadExtract> {
 }
 
 /**
+ * Check if an element is on Edge.Cuts layer
+ */
+function isOnEdgeCuts(elem: SExpr[]): boolean {
+  const layer = get(elem, 'layer');
+  if (layer && layer.length >= 2) {
+    return layer[1] === 'Edge.Cuts';
+  }
+  return false;
+}
+
+/**
+ * Extract board dimensions from Edge.Cuts layer elements
+ */
+function extractBoardOutline(
+  expr: SExpr
+): { width: number; height: number } | undefined {
+  if (!Array.isArray(expr)) return undefined;
+
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  let foundEdgeCuts = false;
+
+  // Look for gr_rect on Edge.Cuts (most common for rectangular boards)
+  const grRects = getAll(expr, 'gr_rect');
+  for (const rectExpr of grRects) {
+    if (typeof rectExpr === 'string') continue;
+    const rect = rectExpr as SExpr[];
+    if (!isOnEdgeCuts(rect)) continue;
+    foundEdgeCuts = true;
+
+    const start = get(rect, 'start');
+    const end = get(rect, 'end');
+    if (start && start.length >= 3 && end && end.length >= 3) {
+      const x1 = parseFloat(start[1] as string);
+      const y1 = parseFloat(start[2] as string);
+      const x2 = parseFloat(end[1] as string);
+      const y2 = parseFloat(end[2] as string);
+      if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
+        minX = Math.min(minX, x1, x2);
+        minY = Math.min(minY, y1, y2);
+        maxX = Math.max(maxX, x1, x2);
+        maxY = Math.max(maxY, y1, y2);
+      }
+    }
+  }
+
+  // Look for gr_line segments on Edge.Cuts
+  const grLines = getAll(expr, 'gr_line');
+  for (const lineExpr of grLines) {
+    if (typeof lineExpr === 'string') continue;
+    const line = lineExpr as SExpr[];
+    if (!isOnEdgeCuts(line)) continue;
+    foundEdgeCuts = true;
+
+    const start = get(line, 'start');
+    const end = get(line, 'end');
+    if (start && start.length >= 3 && end && end.length >= 3) {
+      const x1 = parseFloat(start[1] as string);
+      const y1 = parseFloat(start[2] as string);
+      const x2 = parseFloat(end[1] as string);
+      const y2 = parseFloat(end[2] as string);
+      if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
+        minX = Math.min(minX, x1, x2);
+        minY = Math.min(minY, y1, y2);
+        maxX = Math.max(maxX, x1, x2);
+        maxY = Math.max(maxY, y1, y2);
+      }
+    }
+  }
+
+  // Look for gr_poly on Edge.Cuts
+  const grPolys = getAll(expr, 'gr_poly');
+  for (const polyExpr of grPolys) {
+    if (typeof polyExpr === 'string') continue;
+    const poly = polyExpr as SExpr[];
+    if (!isOnEdgeCuts(poly)) continue;
+    foundEdgeCuts = true;
+
+    const pts = get(poly, 'pts');
+    if (pts) {
+      const xyPoints = getAll(pts, 'xy');
+      for (const xy of xyPoints) {
+        if (Array.isArray(xy) && xy.length >= 3) {
+          const x = parseFloat(xy[1] as string);
+          const y = parseFloat(xy[2] as string);
+          if (!isNaN(x) && !isNaN(y)) {
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      }
+    }
+  }
+
+  if (foundEdgeCuts && minX !== Infinity) {
+    return {
+      width: Math.round((maxX - minX) * 100) / 100,
+      height: Math.round((maxY - minY) * 100) / 100,
+    };
+  }
+
+  return undefined;
+}
+
+/**
  * Parse KiCad PCB and extract nets and board info
  */
 export function parseKicadPcbFile(content: string): Partial<KicadExtract> {
@@ -148,38 +258,40 @@ export function parseKicadPcbFile(content: string): Partial<KicadExtract> {
     }
   }
 
-  // Try to extract board dimensions from Edge.Cuts layer
-  let boardSize: KicadExtract['boardSize'] | undefined;
+  // Extract board dimensions from Edge.Cuts layer
+  let boardSize = extractBoardOutline(expr);
 
-  // Look for gr_rect on Edge.Cuts layer or estimate from footprint positions
-  const footprints = getAll(expr, 'footprint');
-  if (footprints.length > 0) {
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
+  // Fallback: estimate from footprint positions if no Edge.Cuts found
+  if (!boardSize) {
+    const footprints = getAll(expr, 'footprint');
+    if (footprints.length > 0) {
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
 
-    for (const fp of footprints) {
-      const at = get(fp, 'at');
-      if (at && at.length >= 3) {
-        const x = parseFloat(at[1] as string);
-        const y = parseFloat(at[2] as string);
-        if (!isNaN(x) && !isNaN(y)) {
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
+      for (const fp of footprints) {
+        const at = get(fp, 'at');
+        if (at && at.length >= 3) {
+          const x = parseFloat(at[1] as string);
+          const y = parseFloat(at[2] as string);
+          if (!isNaN(x) && !isNaN(y)) {
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
         }
       }
-    }
 
-    if (minX !== Infinity) {
-      // Add margin for component sizes (rough estimate)
-      const margin = 5;
-      boardSize = {
-        width: Math.round((maxX - minX + margin * 2) * 10) / 10,
-        height: Math.round((maxY - minY + margin * 2) * 10) / 10,
-      };
+      if (minX !== Infinity) {
+        // Add margin for component sizes (rough estimate)
+        const margin = 5;
+        boardSize = {
+          width: Math.round((maxX - minX + margin * 2) * 10) / 10,
+          height: Math.round((maxY - minY + margin * 2) * 10) / 10,
+        };
+      }
     }
   }
 

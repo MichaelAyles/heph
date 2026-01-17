@@ -128,6 +128,31 @@ interface BusConnection {
 5. **taps**: Identify 0R resistors that connect signals to the bus
 6. **components**: Group identical components (e.g., 4x bus connectors as quantity: 4)
 
+## IMPORTANT - Bus Tap Format
+
+For bus taps, use SIMPLE formats:
+- \`from\`: Use component reference + net name, e.g., "U1 I2C_SDA" or "ESP32 SDA pin"
+- \`to\`: Use bus signal name, e.g., "BUS_I2C1_SDA"
+- \`purpose\`: Brief explanation of why you'd remove this resistor
+
+DO NOT:
+- Invent pin names like "GPIO22_D4_SDA" - use actual net names from the extracted data
+- Use complex formats like "U1.GPIO22_D4_SDA"
+- Make up connection details not in the extracted data
+
+Example tap:
+\`\`\`json
+{
+  "signal": "I2C1_SDA",
+  "reference": "R1",
+  "isolates": {
+    "from": "U1 SDA",
+    "to": "BUS_I2C1_SDA",
+    "purpose": "Isolate I2C data line from MCU"
+  }
+}
+\`\`\`
+
 ## Common I2C Addresses (decimal)
 
 - BME280/BMP280: 118 (0x76) or 119 (0x77)
@@ -153,11 +178,17 @@ export function buildBlockGenerationUserPrompt(
   const gridSize = calculateGridSize(extract.boardSize)
   const formattedExtract = formatExtractForLLM(extract)
 
+  // Include actual board dimensions if available
+  const boardDims = extract.boardSize
+    ? `**Actual Board Size**: ${extract.boardSize.width}mm x ${extract.boardSize.height}mm`
+    : '**Board Size**: Not detected from Edge.Cuts'
+
   let prompt = `Generate a block.json for this KiCad design.
 
 **Slug**: ${slug}
 ${suggestedCategory ? `**Suggested Category**: ${suggestedCategory}` : ''}
-**Suggested Grid Size**: ${gridSize[0]}x${gridSize[1]} (${gridSize[0] * 12.7}mm x ${gridSize[1] * 12.7}mm)
+${boardDims}
+**Grid Size**: ${gridSize[0]}x${gridSize[1]} units (${(gridSize[0] * 12.7).toFixed(1)}mm x ${(gridSize[1] * 12.7).toFixed(1)}mm coverage)
 
 ## Extracted KiCad Data
 
@@ -166,17 +197,20 @@ ${formattedExtract}
 ## Instructions
 
 1. Analyze the components to determine the block's primary function
-2. Identify any 0R resistors that act as bus taps
+2. Identify 0R resistors that act as bus taps - ONLY include taps for signals you can verify from the net list
 3. Detect I2C/SPI usage from the nets
 4. Generate a complete, valid block.json
 
-Remember:
-- edges.north and edges.south arrays must each have exactly ${gridSize[0]} element(s)
-- Use "ALL" for signals if all 20 bus pins are connected
-- I2C addresses must be decimal integers (not hex strings)
-- Include ALL components from the extracted data
+## CRITICAL Requirements
 
-Return ONLY the JSON object.`
+- **gridSize**: Use EXACTLY [${gridSize[0]}, ${gridSize[1]}] as calculated from board dimensions
+- **edges.north**: Array must have EXACTLY ${gridSize[0]} element(s)
+- **edges.south**: Array must have EXACTLY ${gridSize[0]} element(s)
+- **i2c.addresses**: Use decimal integers (e.g., 118 not "0x76")
+- **taps**: Only include taps for signals visible in the net list
+- **components**: Include ALL components from the extracted data
+
+Return ONLY the JSON object. No markdown, no explanation.`
 
   return prompt
 }
