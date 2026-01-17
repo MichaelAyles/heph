@@ -65,6 +65,7 @@ export function KiCanvasViewer({
   onError,
 }: KiCanvasViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const embedRef = useRef<HTMLElement | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -93,11 +94,15 @@ export function KiCanvasViewer({
 
         if (!mounted || !containerRef.current) return
 
-        // Clear previous content
-        containerRef.current.innerHTML = ''
+        // Remove previous embed if it exists
+        if (embedRef.current && embedRef.current.parentNode) {
+          embedRef.current.parentNode.removeChild(embedRef.current)
+          embedRef.current = null
+        }
 
         // Create KiCanvas embed element
         const embed = document.createElement('kicanvas-embed')
+        embedRef.current = embed
 
         // Use content attribute if provided (forked feature), otherwise use src
         if (content) {
@@ -111,6 +116,8 @@ export function KiCanvasViewer({
         embed.style.width = '100%'
         embed.style.height = '100%'
         embed.style.display = 'block'
+        embed.style.position = 'absolute'
+        embed.style.inset = '0'
 
         // Listen for load/error events
         embed.addEventListener('load', () => {
@@ -151,6 +158,11 @@ export function KiCanvasViewer({
 
     return () => {
       mounted = false
+      // Clean up embed on unmount
+      if (embedRef.current && embedRef.current.parentNode) {
+        embedRef.current.parentNode.removeChild(embedRef.current)
+        embedRef.current = null
+      }
     }
   }, [src, content, controls, theme, onLoad, onError])
 
