@@ -8,28 +8,41 @@
 
 <p align="center">
   <a href="https://phaestus.app">Live Demo</a> •
+  <a href="#features">Features</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#architecture">Architecture</a>
 </p>
 
 ---
 
-PHAESTUS transforms natural language specifications into manufacturable hardware through a guided 5-step process:
+PHAESTUS transforms natural language specifications into manufacturable hardware through a guided design process:
 
+## Features
+
+### Spec Pipeline (5 Steps)
 1. **Feasibility Analysis** - Scores your idea across categories (communication, processing, power, I/O)
-2. **Refinement** - Surfaces questions to lock down open decisions
-3. **Blueprints** - Generates product render variations with iterative feedback
-4. **Selection** - Pick your favorite design direction
+2. **Refinement** - Surfaces questions to lock down open decisions (2-5 rounds)
+3. **Blueprints** - Generates 4 product render variations with iterative feedback
+4. **Selection** - Pick your favorite design direction, regenerate with feedback
 5. **Finalization** - Generates locked spec with detailed BOM
 
-**Current Capabilities**:
-- KiCad schematics with auto-selected circuit blocks
-- 3D-printable enclosures (OpenSCAD → STL)
-- ESP32 firmware with Monaco editor and AI generation
-- Bill of Materials export (CSV)
-- Multi-agent orchestration for autonomous design (8 specialized agents)
-- Admin interface for editing orchestrator prompts and workflows
-- Complete project export (spec, BOM, enclosure, firmware)
+### Workspace Stages (Post-Spec)
+- **PCB Stage** - Block selection from 21+ pre-validated modules, grid-based layout, KiCad schematic merging
+- **Enclosure Stage** - OpenSCAD generation, real-time STL preview (WASM), visual validation against blueprints
+- **Firmware Stage** - ESP32-C6 code generation (Arduino/PlatformIO), Monaco editor, multi-file support
+- **Export Stage** - Download all artifacts (spec, PCB, enclosure, firmware), gallery publishing
+
+### Admin Features
+- **Block Library** - Manage 21+ PCB blocks with LLM-assisted import from KiCad files
+- **Orchestrator Editor** - Edit 8 specialized agent prompts, visualize workflow DAG, configure hooks
+- **User Management** - Approval workflow, admin status, usage tracking
+- **Debug Logs** - Real-time log streaming with filtering by level/category
+
+### Technical Highlights
+- **TOKN Parser** - Custom KiCad S-expression parser for token-optimized hardware representation
+- **Formal Block System** - Zod-validated block.json schema with DRC validation
+- **Multi-Agent Orchestrator** - 8 specialized agents (feasibility, naming, enclosure, firmware, reviewers)
+- **OpenSCAD 2025 WASM** - Real-time STL rendering with Manifold backend
 
 ## Live Demo
 
@@ -39,11 +52,11 @@ Contact: contact@phaestus.app
 
 ## Scope
 
-PHAESTUS focuses on hobbyist/maker-level hardware. Hard rejections:
-- FPGA designs
-- High voltage (>24V)
-- Safety-critical systems
-- Healthcare/medical devices
+PHAESTUS focuses on hobbyist/maker-level hardware:
+
+**Supported**: ESP32-C6, common sensors (BME280, PIR, etc.), WS2812B LEDs, OLED displays, motor drivers, LiPo/USB/DC power
+
+**Hard Rejections**: FPGA, high voltage (>24V), safety-critical, healthcare/medical, complex RF, precision analog
 
 ## Quick Start
 
@@ -59,12 +72,12 @@ Open http://localhost:8788
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | React 19, Vite, TypeScript, TailwindCSS, Zustand |
+| **Frontend** | React 19, Vite, TypeScript, TailwindCSS 4, Zustand |
 | **Backend** | Cloudflare Pages Functions |
-| **Database** | Cloudflare D1 (SQLite) |
+| **Database** | Cloudflare D1 (SQLite, 18 migrations) |
 | **Storage** | Cloudflare R2 |
-| **LLM** | OpenRouter (Gemini 2.0 Flash) |
-| **Testing** | Vitest (648 tests, all passing) |
+| **LLM** | OpenRouter / Google Gemini |
+| **Testing** | Vitest (648 tests, ~63% coverage) |
 
 ## Architecture
 
@@ -73,14 +86,15 @@ Open http://localhost:8788
 │                    Cloudflare Edge                       │
 ├─────────────────────────────────────────────────────────┤
 │  Pages (Static)  │  Functions (API)  │  D1  │  R2      │
-│  React SPA       │  /api/*           │  DB  │  Assets  │
+│  React SPA       │  /api/* (40+)     │  DB  │  Assets  │
 └─────────────────────────────────────────────────────────┘
                             │
-                            ▼
-                    ┌───────────────┐
-                    │  OpenRouter   │
-                    │  (LLM Proxy)  │
-                    └───────────────┘
+              ┌─────────────┼─────────────┐
+              ▼             ▼             ▼
+      ┌───────────┐ ┌───────────┐ ┌───────────┐
+      │ OpenRouter│ │  Gemini   │ │   TOKN    │
+      │ (LLM)     │ │  (Images) │ │  Parser   │
+      └───────────┘ └───────────┘ └───────────┘
 ```
 
 ## Development
@@ -89,10 +103,9 @@ Open http://localhost:8788
 pnpm install      # Install dependencies
 pnpm dev          # Frontend only (port 5173)
 pnpm dev:full     # Full stack (port 8788)
-pnpm test         # Run tests
-pnpm test:coverage # Run with coverage
-pnpm typecheck    # Type check
-pnpm lint         # Lint
+pnpm test         # Run tests (watch mode)
+pnpm test:run     # Run tests (single run)
+pnpm check        # Full CI check (typecheck + test + build)
 ```
 
 ## Database
@@ -109,7 +122,7 @@ pnpm db:reset            # Reset and re-run all migrations
 pnpm deploy   # Build and deploy to Cloudflare Pages
 ```
 
-Secrets are managed via `wrangler pages secret put <NAME>`.
+CI/CD via GitHub Actions on push to `main`.
 
 ## Security
 
@@ -119,16 +132,20 @@ Secrets are managed via `wrangler pages secret put <NAME>`.
 - User approval workflow
 - Rate limiting on login (5 attempts/15min, 30min lockout)
 - Request size limits (10MB general, 5MB for specs)
-- React Error Boundary for graceful error recovery
-- LLM retry logic with exponential backoff (3 attempts)
-- Input validation and length limits (2000 char max)
+- Input validation (2000 char max)
+- LLM retry with exponential backoff
 - Cost tracking for all LLM requests
-- Session cleanup endpoint for maintenance
 
-**Known Issues** (see TODO.md for full list):
-- Orchestrator.ts complexity (1641 lines, could benefit from module split)
-- Error logging could be standardized with logger utility (68 console calls remain)
-- Some LLM response parsing should migrate to Zod validation
+## API Endpoints (40+)
+
+| Category | Endpoints |
+|----------|-----------|
+| Auth | login, logout, me, OAuth callback |
+| Projects | CRUD, conversations, visibility |
+| LLM | chat, image, stream, tools |
+| Blocks | list, details, file serving |
+| Admin | logs, users, blocks, orchestrator |
+| Gallery | public list, public details |
 
 ## License
 

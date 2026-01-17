@@ -130,23 +130,26 @@ When creating example prompts, use ONLY these components or the project will be 
 - `src/components/spec-steps/` - Individual step components (Feasibility, Refinement, Blueprint, Selection, Finalization)
 - `src/components/admin/orchestrator/` - Admin orchestrator editor (PromptEditor, FlowVisualization, HookConfiguration)
 - `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure, orchestrator)
-- `src/services/` - LLM client, PCB merging
+- `src/services/` - LLM client, PCB merging, KiCad parsing
 - `src/services/orchestrator/` - Modular orchestrator (tools/, helpers/, types.ts, orchestrator.ts, index.ts)
+- `src/lib/tokn/` - TOKN KiCad parser (sexpr.ts, kicadSch.ts, connectivity.ts, toknEncoder.ts)
 - `src/stores/` - Zustand state (auth, workspace, orchestrator)
+- `src/components/admin/blocks/` - Block management UI (BlockImportWizard, BlockEditor)
 - `functions/api/` - Cloudflare Pages Functions (auth, llm, projects, admin, orchestrator)
 - `functions/api/admin/orchestrator/` - Admin API for managing orchestrator prompts, edges, and hooks
+- `functions/api/admin/blocks/` - Block management API (generate, upload, CRUD)
 - `functions/lib/` - Shared utilities (gemini.ts, logger.ts, json.ts)
-- `migrations/` - D1 SQL migrations (16 migrations)
+- `migrations/` - D1 SQL migrations (18 migrations)
 
 ### Database Schema
 
-Key tables in D1 (16 migrations):
+Key tables in D1 (18 migrations):
 
 **Core Tables:**
 - **users**: id, username, password_hash (bcrypt, auto-upgraded from plaintext on login), is_admin, control_mode, is_approved
 - **sessions**: id, user_id, expires_at (7-day sliding expiry, extended on activity)
 - **projects**: id, user_id, name, description, status, spec (JSON ProjectSpec)
-- **pcb_blocks**: 21 pre-seeded circuit modules
+- **pcb_blocks**: 21 pre-seeded circuit modules with definition (JSON), version, files (schematic, PCB, STEP)
 - **llm_requests**: Usage tracking with cost_usd, latency_ms
 - **debug_logs**: Admin logging (category, level, request_id for correlation)
 - **conversations**: project_id, messages (JSON), timestamps
@@ -157,6 +160,10 @@ Key tables in D1 (16 migrations):
 - **orchestrator_edges**: Workflow graph defining transitions between orchestrator nodes
 - **orchestrator_hooks**: Pre/post execution hooks for orchestrator node workflows
 - **context_tags**: Dynamic context tagging for orchestrator state management
+
+**Block Tables (migrations 0017-0018):**
+- **pcb_blocks.definition**: JSON block.json schema with metadata, electrical, physical properties
+- **pcb_blocks.version**: Schema version tracking for block definitions
 
 ### LLM Integration
 
@@ -358,6 +365,13 @@ const data = result.data // Fully typed!
 | Orchestrator flow viz | `src/components/admin/orchestrator/FlowVisualization.tsx` |
 | Orchestrator admin API | `functions/api/admin/orchestrator/` |
 | Runtime prompt loading | `functions/api/orchestrator/prompts.ts` |
+| TOKN KiCad parser | `src/lib/tokn/` |
+| KiCad file parser | `src/services/kicad-parser.ts` |
+| Block definition schema | `src/schemas/block.ts` |
+| Block import wizard | `src/components/admin/blocks/BlockImportWizard.tsx` |
+| Block generation prompt | `src/prompts/block-generation.ts` |
+| Admin blocks API | `functions/api/admin/blocks/` |
+| Block file serving | `functions/api/blocks/[slug]/files/` |
 
 ## Cost Insights
 
@@ -380,6 +394,38 @@ Post-spec stages for hardware generation:
 
 **Orchestrator** (`services/orchestrator/`): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`. Modular architecture with separate files for tools, helpers, and types.
 
+### TOKN KiCad Parser
+
+Custom TypeScript implementation for parsing KiCad files (`src/lib/tokn/`):
+
+| File | Purpose |
+|------|---------|
+| `sexpr.ts` | S-expression tokenizer and parser |
+| `kicadSch.ts` | Schematic parser (components, wires, labels, pins) |
+| `connectivity.ts` | Net list builder using union-find algorithm |
+| `toknEncoder.ts` | Compact TOKN format encoder (~92% token reduction) |
+
+Used by the block import wizard to extract components, nets, and bus signals from KiCad files.
+
+### Block Import System
+
+Admin block management (`/admin/blocks`):
+
+1. **Block Import Wizard** - Upload KiCad files (.kicad_sch, .kicad_pcb)
+   - TOKN parser extracts components, nets, board dimensions
+   - LLM generates block.json with metadata, electrical specs, physical properties
+   - Zod validation against BlockDefinition schema
+   - User review/edit JSON before saving
+   - Files uploaded to R2, definition stored in D1
+
+2. **Manual Editor** - Direct JSON editing for advanced users
+
+**Block Definition Schema** (`src/schemas/block.ts`):
+- `metadata`: name, category, description, grid dimensions
+- `electrical`: interfaces (I2C, SPI, GPIO), power (mA draw), bus signals
+- `physical`: connectors, edge connections, mounting
+- `files`: schematic, PCB, STEP model references
+
 ### Orchestrator Agent System
 
 The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` table:
@@ -401,7 +447,7 @@ The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` 
 - Hook configuration for pre/post execution logic
 - Context tag management
 
-## API Endpoints (35+ endpoints)
+## API Endpoints (40+ endpoints)
 
 **LLM** (`/api/llm/*`):
 - `POST /api/llm/chat` - Main chat endpoint with retry logic
@@ -434,6 +480,14 @@ The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` 
 - `POST /api/admin/cleanup-sessions` - Remove expired sessions
 - `GET /api/admin/users` - User management
 
+**Admin Blocks** (`/api/admin/blocks/*`):
+- `GET /api/admin/blocks` - List blocks with filtering
+- `POST /api/admin/blocks` - Create block from JSON definition
+- `POST /api/admin/blocks/generate` - LLM-assisted generation from KiCad files
+- `POST /api/admin/blocks/upload` - Upload KiCad files to R2
+- `PUT /api/admin/blocks/{slug}` - Update block definition
+- `DELETE /api/admin/blocks/{slug}` - Delete block
+
 **Admin Orchestrator** (`/api/admin/orchestrator/*`):
 - `GET /api/admin/orchestrator/prompts` - List all orchestrator prompts
 - `POST /api/admin/orchestrator/prompts` - Create new prompt
@@ -450,8 +504,9 @@ The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` 
 **Blocks** (`/api/blocks/*`):
 - `GET /api/blocks` - List all PCB blocks
 - `GET /api/blocks/{slug}` - Block details
-- `GET /api/blocks/{slug}/files/*` - Block file serving
+- `GET /api/blocks/{slug}/files/*` - Block file serving (schematic, PCB, STEP, thumbnail)
 
 **Settings** (`/api/settings/*`):
 - `GET /api/settings` - User settings
+- `PUT /api/settings` - Update settings
 - `GET /api/settings/usage` - Usage/cost tracking
