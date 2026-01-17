@@ -319,6 +319,28 @@ export const BlockComponentSchema = z.object({
 export type BlockComponentDef = z.infer<typeof BlockComponentSchema>
 
 // =============================================================================
+// Wireless Capabilities
+// =============================================================================
+
+/**
+ * Wireless protocol capabilities (primarily for MCU blocks)
+ */
+export const WirelessCapabilitySchema = z.enum([
+  'wifi4',      // 802.11n
+  'wifi5',      // 802.11ac
+  'wifi6',      // 802.11ax
+  'ble4',       // Bluetooth Low Energy 4.x
+  'ble5',       // Bluetooth Low Energy 5.x
+  'zigbee',     // Zigbee 3.0
+  'thread',     // Thread / Matter
+  'lora',       // LoRa
+  'nfc',        // NFC
+  'uwb',        // Ultra-Wideband
+])
+
+export type WirelessCapability = z.infer<typeof WirelessCapabilitySchema>
+
+// =============================================================================
 // Firmware Hints
 // =============================================================================
 
@@ -368,6 +390,9 @@ export const BlockDefinitionSchema = z.object({
 
   // Bill of materials
   components: z.array(BlockComponentSchema),
+
+  // Wireless capabilities (for MCU blocks)
+  wireless: z.array(WirelessCapabilitySchema).optional().describe('e.g., ["wifi6", "ble5", "thread", "zigbee"]'),
 
   // Firmware hints for code generation
   firmware: FirmwareHintsSchema.optional(),

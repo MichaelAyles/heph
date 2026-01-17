@@ -118,6 +118,9 @@ interface BlockDefinition {
     quantity: number
   }>
 
+  // Wireless capabilities (for MCU blocks)
+  wireless?: Array<'wifi4' | 'wifi5' | 'wifi6' | 'ble4' | 'ble5' | 'zigbee' | 'thread' | 'lora' | 'nfc' | 'uwb'>
+
   // Optional
   physical?: {
     overhang?: { north?: number; south?: number; east?: number; west?: number }
@@ -229,6 +232,22 @@ For ESP32-C6 (XIAO module):
 For sensors (e.g., BME280):
 - I2C pins: typically min=0, max=3.3, direction=bidirectional
 - Check datasheet for 5V tolerance
+
+## Wireless Capabilities
+
+For MCU blocks, include wireless protocols supported:
+- ESP32-C6: ["wifi6", "ble5", "thread", "zigbee"]
+- ESP32-S3: ["wifi4", "ble5"]
+- nRF52840: ["ble5", "thread", "zigbee"]
+
+## Power Rail Notes
+
+Power rails (3V3, 5V0) can often be INPUT or OUTPUT depending on configuration:
+- MCU with USB: 5V0 is OUTPUT (from USB), 3V3 is OUTPUT (from onboard regulator)
+- MCU with external 5V: 5V0 is INPUT, 3V3 may be OUTPUT (MCU reg) or INPUT (external reg)
+- The 0R taps control whether the MCU's rails connect to the bus
+
+Include taps for power rails (3V3, 5V0) if they have 0R resistors for isolation.
 
 ## Common I2C Addresses (decimal)
 
