@@ -4,7 +4,8 @@
  * Extracts components, wires, junctions, and labels from KiCad schematics.
  */
 
-import { parse, get, getAll, getValue, SExpr } from './sexpr';
+import type { SExpr } from './sexpr';
+import { parse, get, getAll, getValue } from './sexpr';
 
 export interface Point {
   x: number;

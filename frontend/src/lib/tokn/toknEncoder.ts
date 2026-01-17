@@ -2,8 +2,10 @@
  * TOKN encoder - converts KiCad schematics to TOKN format.
  */
 
-import { Schematic, Component, parseSchematic } from './kicadSch';
-import { Netlist, analyzeConnectivity } from './connectivity';
+import type { Schematic, Component } from './kicadSch';
+import { parseSchematic } from './kicadSch';
+import type { Netlist } from './connectivity';
+import { analyzeConnectivity } from './connectivity';
 
 // Type normalization rules
 const TYPE_NORMALIZATION: Record<string, string> = {

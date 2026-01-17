@@ -8,7 +8,7 @@
  */
 
 import { parseSchematic, analyzeConnectivity } from '../lib/tokn';
-import { parse, get, getAll, getValue } from '../lib/tokn/sexpr';
+import { parse, get, getAll } from '../lib/tokn/sexpr';
 // Note: Using relative import because this file is imported by functions code
 import type { BusSignal } from '../schemas/block';
 

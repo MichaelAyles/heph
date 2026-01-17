@@ -14,8 +14,8 @@ export {
 } from './toknEncoder';
 
 // KiCad schematic parser
-export {
-  parseSchematic,
+export { parseSchematic } from './kicadSch';
+export type {
   Point,
   Pin,
   LibSymbol,
@@ -27,8 +27,8 @@ export {
 } from './kicadSch';
 
 // Connectivity analyzer
-export {
-  analyzeConnectivity,
+export { analyzeConnectivity } from './connectivity';
+export type {
   WireSegment,
   Net,
   Netlist,
@@ -40,5 +40,5 @@ export {
   get,
   getAll,
   getValue,
-  SExpr,
 } from './sexpr';
+export type { SExpr } from './sexpr';

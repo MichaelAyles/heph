@@ -4,12 +4,12 @@
  * Builds a net list by tracing wire connections between component pins.
  */
 
-import {
+import type {
   Schematic,
   Component,
   Point,
-  pointHash,
 } from './kicadSch';
+import { pointHash } from './kicadSch';
 
 export interface WireSegment {
   points: [number, number][]; // List of [x, y] coordinates
