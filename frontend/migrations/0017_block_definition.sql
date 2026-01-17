@@ -9,6 +9,4 @@ ALTER TABLE pcb_blocks ADD COLUMN definition TEXT DEFAULT NULL;
 -- Add version column for tracking block updates
 ALTER TABLE pcb_blocks ADD COLUMN version TEXT DEFAULT '1.0.0';
 
--- Add created_at and updated_at timestamps
-ALTER TABLE pcb_blocks ADD COLUMN created_at TEXT DEFAULT (datetime('now'));
-ALTER TABLE pcb_blocks ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
+-- Note: created_at and updated_at already exist from 0001_initial.sql
