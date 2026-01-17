@@ -90,6 +90,37 @@ export const BlockCategorySchema = z.enum([
 export type BlockCategory = z.infer<typeof BlockCategorySchema>
 
 // =============================================================================
+// Voltage and Electrical Characteristics
+// =============================================================================
+
+/**
+ * Pin direction for DRC validation
+ */
+export const PinDirectionSchema = z.enum([
+  'input',       // Input only (e.g., ADC input)
+  'output',      // Output only (e.g., power supply output)
+  'bidirectional', // GPIO, I2C, etc.
+  'power',       // Power rail (GND, 3V3, 5V0)
+  'open-drain',  // Requires external pull-up
+])
+
+export type PinDirection = z.infer<typeof PinDirectionSchema>
+
+/**
+ * Voltage limits for a signal connection
+ * Used for DRC to prevent connecting 5V outputs to 3.3V-only inputs
+ */
+export const VoltageLimitsSchema = z.object({
+  min: z.number().describe('Minimum voltage (usually 0)'),
+  max: z.number().describe('Maximum voltage (e.g., 3.3, 5.0)'),
+  nominal: z.number().optional().describe('Typical operating voltage'),
+  fiveVoltTolerant: z.boolean().optional().describe('Can accept 5V input even if max is 3.3V'),
+  direction: PinDirectionSchema,
+})
+
+export type VoltageLimits = z.infer<typeof VoltageLimitsSchema>
+
+// =============================================================================
 // Bus Interface Schemas
 // =============================================================================
 
@@ -104,6 +135,7 @@ export const BusTapSchema = z.object({
     to: z.string().describe('e.g., "BUS_3V3"'),
     purpose: z.string().describe('e.g., "Allows isolated 3V3 regulator for peripherals"'),
   }),
+  voltage: VoltageLimitsSchema.optional().describe('Voltage limits for DRC validation'),
 })
 
 export type BusTap = z.infer<typeof BusTapSchema>
@@ -113,8 +145,9 @@ export type BusTap = z.infer<typeof BusTapSchema>
  */
 export const PermanentConnectionSchema = z.object({
   signal: BusSignalSchema,
-  connectedTo: z.string().describe('e.g., "U1.17" (SPI_CS0 direct to ESP32)'),
-  reason: z.string().describe('e.g., "Always needed for SPI communication"'),
+  pin: z.string().describe('e.g., "U1 MTDI" or "U1.17"'),
+  reason: z.string().optional().describe('e.g., "Always needed for SPI communication"'),
+  voltage: VoltageLimitsSchema.describe('Voltage limits - REQUIRED for DRC'),
 })
 
 export type PermanentConnection = z.infer<typeof PermanentConnectionSchema>

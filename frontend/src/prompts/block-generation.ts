@@ -58,11 +58,30 @@ interface BlockDefinition {
     // 0R resistor taps - signals that can be isolated by removing the resistor
     taps?: Array<{
       signal: BusSignal      // Which bus signal
-      reference: string      // Resistor reference (e.g., "R1")
+      reference: string      // Resistor reference (e.g., "R3")
       isolates: {
-        from: string         // What gets disconnected (e.g., "U1.12")
-        to: string           // Bus connection (e.g., "BUS_3V3")
+        from: string         // What gets disconnected (e.g., "U1 GPIO22_D4_SDA")
+        to: string           // Bus connection (e.g., "BUS_I2C1_SDA")
         purpose: string      // Why you'd nofit this
+      }
+      voltage: {             // REQUIRED - voltage limits for DRC
+        min: number          // Usually 0
+        max: number          // e.g., 3.3 for ESP32, 5.0 for 5V-tolerant
+        direction: 'input' | 'output' | 'bidirectional' | 'power' | 'open-drain'
+        fiveVoltTolerant?: boolean  // Can accept 5V even if max is 3.3
+      }
+    }>
+
+    // Permanent connections - signals hardwired to bus (no isolation option)
+    permanent?: Array<{
+      signal: BusSignal      // Which bus signal
+      pin: string            // e.g., "U1 MTDI" or "U1.17"
+      reason?: string        // Why it's hardwired
+      voltage: {             // REQUIRED - voltage limits for DRC
+        min: number
+        max: number
+        direction: 'input' | 'output' | 'bidirectional' | 'power' | 'open-drain'
+        fiveVoltTolerant?: boolean
       }
     }>
 
@@ -162,7 +181,7 @@ Bus taps are 0R resistors that sit between a bus signal and a component (usually
 - Do NOT match resistors to signals by name similarity
 - Do NOT invent connections - ONLY use what's in the nets data
 
-### Tap format:
+### Tap format (with voltage limits):
 \`\`\`json
 {
   "signal": "I2C1_SDA",
@@ -171,9 +190,45 @@ Bus taps are 0R resistors that sit between a bus signal and a component (usually
     "from": "U1 GPIO22_D4_SDA",
     "to": "BUS_I2C1_SDA",
     "purpose": "Isolate I2C data line from MCU"
+  },
+  "voltage": {
+    "min": 0,
+    "max": 3.3,
+    "direction": "bidirectional"
   }
 }
 \`\`\`
+
+## Permanent Connections (Hardwired)
+
+Some signals are directly connected to the bus without a 0R resistor (can't be isolated).
+Trace the nets to find signals where a bus signal connects DIRECTLY to a component pin.
+
+Example: If net shows \`SPI_CS0,"J3.13,J4.13,J5.13,J6.13,U1.17"\` with NO resistor, it's permanent:
+\`\`\`json
+{
+  "signal": "SPI_CS0",
+  "pin": "U1 MTDI",
+  "reason": "Directly connected for SPI chip select",
+  "voltage": {
+    "min": 0,
+    "max": 3.3,
+    "direction": "bidirectional"
+  }
+}
+\`\`\`
+
+## Voltage Limits Reference
+
+For ESP32-C6 (XIAO module):
+- All GPIO pins: min=0, max=3.3, direction=bidirectional (NOT 5V tolerant!)
+- 3V3 rail: min=3.0, max=3.6, direction=power
+- 5V rail: min=4.5, max=5.5, direction=power
+- GND: min=0, max=0, direction=power
+
+For sensors (e.g., BME280):
+- I2C pins: typically min=0, max=3.3, direction=bidirectional
+- Check datasheet for 5V tolerance
 
 ## Common I2C Addresses (decimal)
 
@@ -226,8 +281,10 @@ ${schematicData}
 
 1. Analyze the components to determine the block's primary function
 2. **TRACE THE NETS** to identify bus taps - follow the step-by-step process in the system prompt
-3. Detect I2C/SPI usage from the nets
-4. Generate a complete, valid block.json
+3. **IDENTIFY PERMANENT CONNECTIONS** - bus signals connected directly to components (no 0R resistor)
+4. **ADD VOLTAGE LIMITS** to ALL taps and permanent connections
+5. Detect I2C/SPI usage from the nets
+6. Generate a complete, valid block.json
 
 ## CRITICAL Requirements
 
@@ -236,6 +293,9 @@ ${schematicData}
 - **edges.south**: Array must have EXACTLY ${gridSize[0]} element(s)
 - **i2c.addresses**: Use decimal integers (e.g., 118 not "0x76")
 - **taps**: MUST trace nets to find correct resistor - do NOT guess!
+- **taps.voltage**: REQUIRED for every tap - include min, max, and direction
+- **permanent**: Include ALL bus signals that connect directly to component pins without a 0R resistor
+- **permanent.voltage**: REQUIRED for every permanent connection
 - **components**: Include ALL components from the extracted data
 
 Return ONLY the JSON object. No markdown, no explanation.`
