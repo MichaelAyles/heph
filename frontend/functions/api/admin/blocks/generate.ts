@@ -82,6 +82,56 @@ function extractJsonFromResponse(content: string): string {
   throw new Error('No JSON found in LLM response')
 }
 
+/**
+ * Attempt to repair common JSON syntax errors from LLM output
+ */
+function tryRepairJson(jsonString: string): string {
+  let repaired = jsonString
+
+  // Try to parse as-is first
+  try {
+    JSON.parse(repaired)
+    return repaired
+  } catch {
+    // Continue with repairs
+  }
+
+  // Common fix: LLM sometimes uses ] instead of } to close objects
+  // Count brackets to find mismatches
+  let braceCount = 0
+  let bracketCount = 0
+  const chars = repaired.split('')
+
+  for (let i = 0; i < chars.length; i++) {
+    const char = chars[i]
+    if (char === '{') braceCount++
+    if (char === '}') braceCount--
+    if (char === '[') bracketCount++
+    if (char === ']') {
+      bracketCount--
+      // If we have more closing brackets than opening, and we're missing a closing brace,
+      // this ] might be a typo for }
+      if (bracketCount < 0 && braceCount > 0) {
+        chars[i] = '}'
+        bracketCount++
+        braceCount--
+      }
+    }
+  }
+
+  repaired = chars.join('')
+
+  // Try parsing the repaired version
+  try {
+    JSON.parse(repaired)
+    console.log('JSON repair successful')
+    return repaired
+  } catch {
+    // Return original if repair didn't help
+    return jsonString
+  }
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, data, request } = context
   const user = data.user as { id: string; isAdmin: boolean } | undefined
@@ -195,11 +245,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     let generatedBlock: unknown
     try {
       jsonString = extractJsonFromResponse(llmResponse)
+      // Try to repair common LLM JSON mistakes (e.g., ] instead of })
+      jsonString = tryRepairJson(jsonString)
       generatedBlock = JSON.parse(jsonString)
     } catch (jsonError) {
+      // Provide more detail about the parse error
+      const parseError = jsonError instanceof SyntaxError ? jsonError.message : 'Unknown parse error'
       return Response.json(
         {
           error: 'Failed to parse LLM response as JSON',
+          parseError,
           rawResponse: llmResponse,
           extract: {
             components: extract.components,
