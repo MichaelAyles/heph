@@ -4,11 +4,15 @@ import { clsx } from 'clsx'
 
 interface KiCanvasViewerProps {
   /** URL to the KiCad schematic or PCB file */
-  src: string
+  src?: string
+  /** Raw KiCad S-expression content (schematic or PCB) - alternative to src */
+  content?: string
   /** Type of document to display */
   type?: 'schematic' | 'pcb'
   /** Control level: none, basic, or full */
   controls?: 'none' | 'basic' | 'full'
+  /** Theme: kicad (light) or dark */
+  theme?: 'kicad' | 'dark'
   /** Additional class names */
   className?: string
   /** Callback when loading completes */
@@ -35,8 +39,8 @@ async function loadKiCanvas(): Promise<void> {
 
     const script = document.createElement('script')
     script.type = 'module'
-    // Using unpkg CDN for KiCanvas - this bundles all dependencies
-    script.src = 'https://kicanvas.org/kicanvas/kicanvas.js'
+    // Using forked KiCanvas with content attribute support and proper theming
+    script.src = 'https://kicanvas.mikeayles.com/kicanvas/kicanvas.js'
     script.onload = () => {
       kicanvasLoaded = true
       resolve()
@@ -52,8 +56,10 @@ async function loadKiCanvas(): Promise<void> {
 
 export function KiCanvasViewer({
   src,
+  content,
   type = 'schematic',
   controls = 'basic',
+  theme = 'kicad',
   className,
   onLoad,
   onError,
@@ -64,6 +70,12 @@ export function KiCanvasViewer({
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
+    if (!src && !content) {
+      setError('No source or content provided')
+      setLoading(false)
+      return
+    }
+
     let mounted = true
 
     async function init() {
@@ -86,8 +98,16 @@ export function KiCanvasViewer({
 
         // Create KiCanvas embed element
         const embed = document.createElement('kicanvas-embed')
-        embed.setAttribute('src', src)
+
+        // Use content attribute if provided (forked feature), otherwise use src
+        if (content) {
+          embed.setAttribute('content', content)
+        } else if (src) {
+          embed.setAttribute('src', src)
+        }
+
         embed.setAttribute('controls', controls)
+        embed.setAttribute('theme', theme)
         embed.style.width = '100%'
         embed.style.height = '100%'
         embed.style.display = 'block'
@@ -132,7 +152,7 @@ export function KiCanvasViewer({
     return () => {
       mounted = false
     }
-  }, [src, controls, onLoad, onError])
+  }, [src, content, controls, theme, onLoad, onError])
 
   // Handle fullscreen toggle
   const toggleFullscreen = () => {

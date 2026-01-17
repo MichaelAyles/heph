@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { BlockCategory } from '@/schemas/block'
+import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 
 interface BlockImportWizardProps {
   onClose: () => void
@@ -612,12 +613,13 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                       <div className="text-xs text-steel-dim mb-2">
                         PCB Preview via KiCanvas
                       </div>
-                      <div className="flex-1 bg-white rounded overflow-hidden">
-                        <kicanvas-embed
-                          src={`data:application/x-kicad-pcb;base64,${btoa(pcbContent)}`}
+                      <div className="flex-1 rounded overflow-hidden">
+                        <KiCanvasViewer
+                          content={pcbContent}
+                          type="pcb"
                           controls="full"
                           theme="kicad"
-                          style={{ width: '100%', height: '100%' }}
+                          className="h-full"
                         />
                       </div>
                     </div>
