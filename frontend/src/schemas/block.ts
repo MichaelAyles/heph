@@ -314,6 +314,7 @@ export const BlockComponentSchema = z.object({
   manufacturer: z.string().optional(),
   mpn: z.string().optional().describe('Manufacturer part number'),
   quantity: z.number().int().positive(),
+  nofit: z.boolean().optional().describe('True if component should not be populated (e.g., board interconnects)'),
 })
 
 export type BlockComponentDef = z.infer<typeof BlockComponentSchema>

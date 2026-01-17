@@ -116,6 +116,7 @@ interface BlockDefinition {
     value: string       // 100nF, 10k, ESP32-C6
     footprint: string   // 0402, 0603, QFN-48
     quantity: number
+    nofit?: boolean     // True for components not to be populated (board interconnects)
   }>
 
   // Wireless capabilities (for MCU blocks)
@@ -149,6 +150,9 @@ interface BusConnection {
 4. **i2c.addresses**: Use decimal numbers (e.g., 118 for 0x76), NOT hex strings
 5. **taps**: Identify 0R resistors that connect signals to the bus
 6. **components**: Group identical components (e.g., 4x bus connectors as quantity: 4)
+7. **nofit**: Mark components with \`nofit: true\` if they should NOT be populated:
+   - Bus interconnects (footprint contains "ForgeLabs_Interconnect") are ALWAYS nofit
+   - These are board-to-board connections, not actual components to solder
 
 ## CRITICAL - How to Identify Bus Taps
 
