@@ -128,25 +128,47 @@ interface BusConnection {
 5. **taps**: Identify 0R resistors that connect signals to the bus
 6. **components**: Group identical components (e.g., 4x bus connectors as quantity: 4)
 
-## IMPORTANT - Bus Tap Format
+## CRITICAL - How to Identify Bus Taps
 
-For bus taps, use SIMPLE formats:
-- \`from\`: Use component reference + net name, e.g., "U1 I2C_SDA" or "ESP32 SDA pin"
-- \`to\`: Use bus signal name, e.g., "BUS_I2C1_SDA"
-- \`purpose\`: Brief explanation of why you'd remove this resistor
+Bus taps are 0R resistors that sit between a bus signal and a component (usually an MCU). You MUST trace the nets to find the correct resistor. Follow these steps EXACTLY:
 
-DO NOT:
-- Invent pin names like "GPIO22_D4_SDA" - use actual net names from the extracted data
-- Use complex formats like "U1.GPIO22_D4_SDA"
-- Make up connection details not in the extracted data
+### Step-by-step tap tracing:
 
-Example tap:
+1. **Find the bus signal net** - Look in the nets section for bus signals like I2C1_SDA, GPIO_0, etc.
+   Example: \`I2C1_SDA,"J3.3,J4.3,J5.3,J6.3,R3.1"\`
+
+2. **Identify which resistor pin is in that net** - The net shows R3.1 is connected to I2C1_SDA
+   So the tap resistor is **R3** (not R1, not R2 - specifically R3 because R3.1 is in the net)
+
+3. **Find what the OTHER pin connects to** - Search for a net containing R3.2
+   Example: \`N13,"R3.2,U1.5"\` - R3.2 connects to U1 pin 5
+
+4. **Look up the pin name** - Check the pins section for U1 pin 5
+   Example: \`5,GPIO22_D4_SDA\`
+
+5. **Create the tap entry**:
+   - signal: "I2C1_SDA" (the bus signal name)
+   - reference: "R3" (the resistor you found in step 2)
+   - from: "U1 GPIO22_D4_SDA" (component + pin name from step 4)
+
+### Example trace for I2C1_SDA:
+- Net: \`I2C1_SDA,"J3.3,J4.3,J5.3,J6.3,R3.1"\` → resistor is R3
+- Net: \`N13,"R3.2,U1.5"\` → R3 connects to U1 pin 5
+- Pin: \`5,GPIO22_D4_SDA\` → pin 5 is GPIO22_D4_SDA
+- Result: signal=I2C1_SDA, reference=R3, from="U1 GPIO22_D4_SDA"
+
+### WRONG approach (DO NOT DO THIS):
+- Do NOT guess resistors based on sequential numbering (R1, R2, R3...)
+- Do NOT match resistors to signals by name similarity
+- Do NOT invent connections - ONLY use what's in the nets data
+
+### Tap format:
 \`\`\`json
 {
   "signal": "I2C1_SDA",
-  "reference": "R1",
+  "reference": "R3",
   "isolates": {
-    "from": "U1 SDA",
+    "from": "U1 GPIO22_D4_SDA",
     "to": "BUS_I2C1_SDA",
     "purpose": "Isolate I2C data line from MCU"
   }
@@ -173,7 +195,8 @@ Return ONLY valid JSON. No markdown, no explanation, no code fences.`
 export function buildBlockGenerationUserPrompt(
   extract: KicadExtract,
   slug: string,
-  suggestedCategory?: BlockCategory
+  suggestedCategory?: BlockCategory,
+  toknData?: string
 ): string {
   const gridSize = calculateGridSize(extract.boardSize)
   const formattedExtract = formatExtractForLLM(extract)
@@ -183,6 +206,9 @@ export function buildBlockGenerationUserPrompt(
     ? `**Actual Board Size**: ${extract.boardSize.width}mm x ${extract.boardSize.height}mm`
     : '**Board Size**: Not detected from Edge.Cuts'
 
+  // Use TOKN if available (has pin-level net connections), otherwise use simplified format
+  const schematicData = toknData || formattedExtract
+
   let prompt = `Generate a block.json for this KiCad design.
 
 **Slug**: ${slug}
@@ -190,14 +216,16 @@ ${suggestedCategory ? `**Suggested Category**: ${suggestedCategory}` : ''}
 ${boardDims}
 **Grid Size**: ${gridSize[0]}x${gridSize[1]} units (${(gridSize[0] * 12.7).toFixed(1)}mm x ${(gridSize[1] * 12.7).toFixed(1)}mm coverage)
 
-## Extracted KiCad Data
+## Schematic Data (TOKN format)
 
-${formattedExtract}
+\`\`\`
+${schematicData}
+\`\`\`
 
 ## Instructions
 
 1. Analyze the components to determine the block's primary function
-2. Identify 0R resistors that act as bus taps - ONLY include taps for signals you can verify from the net list
+2. **TRACE THE NETS** to identify bus taps - follow the step-by-step process in the system prompt
 3. Detect I2C/SPI usage from the nets
 4. Generate a complete, valid block.json
 
@@ -207,7 +235,7 @@ ${formattedExtract}
 - **edges.north**: Array must have EXACTLY ${gridSize[0]} element(s)
 - **edges.south**: Array must have EXACTLY ${gridSize[0]} element(s)
 - **i2c.addresses**: Use decimal integers (e.g., 118 not "0x76")
-- **taps**: Only include taps for signals visible in the net list
+- **taps**: MUST trace nets to find correct resistor - do NOT guess!
 - **components**: Include ALL components from the extracted data
 
 Return ONLY the JSON object. No markdown, no explanation.`
@@ -221,10 +249,11 @@ Return ONLY the JSON object. No markdown, no explanation.`
 export function buildBlockGenerationMessages(
   extract: KicadExtract,
   slug: string,
-  suggestedCategory?: BlockCategory
+  suggestedCategory?: BlockCategory,
+  toknData?: string
 ): { role: 'system' | 'user'; content: string }[] {
   return [
     { role: 'system', content: buildBlockGenerationSystemPrompt() },
-    { role: 'user', content: buildBlockGenerationUserPrompt(extract, slug, suggestedCategory) },
+    { role: 'user', content: buildBlockGenerationUserPrompt(extract, slug, suggestedCategory, toknData) },
   ]
 }

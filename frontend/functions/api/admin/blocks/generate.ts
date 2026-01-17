@@ -167,8 +167,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       )
     }
 
-    // Build LLM messages
-    const messages = buildBlockGenerationMessages(extract, slug, suggestedCategory)
+    // Build LLM messages with TOKN data for accurate net tracing
+    const messages = buildBlockGenerationMessages(extract, slug, suggestedCategory, toknOutput)
 
     // Call LLM
     let llmResponse: string
