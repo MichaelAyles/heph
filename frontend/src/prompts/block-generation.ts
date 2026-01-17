@@ -4,9 +4,11 @@
  * LLM prompt for generating block.json metadata from extracted KiCad data.
  */
 
-import type { KicadExtract } from '@/services/kicad-parser'
-import { formatExtractForLLM, calculateGridSize } from '@/services/kicad-parser'
-import { BUS_PINOUT, type BlockCategory } from '@/schemas/block'
+// Note: Using relative imports because this file is imported by functions code,
+// and wrangler doesn't resolve @/ aliases
+import type { KicadExtract } from '../services/kicad-parser'
+import { formatExtractForLLM, calculateGridSize } from '../services/kicad-parser'
+import { BUS_PINOUT, type BlockCategory } from '../schemas/block'
 
 /**
  * Build the system prompt for block.json generation

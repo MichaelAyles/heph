@@ -67,6 +67,30 @@ pnpm db:reset          # Reset local DB and re-run all migrations
 
 **Path Aliases**: `@/` resolves to `frontend/src/`. For functions, use `@/../functions/` (e.g., `import { extractAndValidateJson } from '@/../functions/lib/json'`).
 
+**IMPORTANT - Functions Import Rules**:
+- Files in `functions/` are bundled separately by wrangler, which does NOT resolve `@/` aliases
+- If a `src/` file is imported by functions code (directly or transitively), it MUST use relative imports, not `@/`
+- Safe pattern: Files only used by frontend can use `@/`. Files used by functions must use relative paths.
+- Example: `functions/lib/block-validator.ts` imports from `../../src/schemas/block` (relative), not `@/schemas/block`
+
+## Pre-Commit Checklist
+
+Before committing, always run the full CI check locally:
+
+```bash
+cd frontend && pnpm check
+```
+
+This runs `typecheck && test:run && build` which matches CI. The build step includes wrangler bundling the functions, which catches:
+- Path alias resolution failures in functions code
+- Missing dependencies
+- Bundle size issues
+
+**Common CI failures not caught by `pnpm typecheck` alone**:
+1. **`@/` aliases in functions-imported files** - wrangler can't resolve them
+2. **Missing exports** - TypeScript may pass but bundler fails
+3. **Circular dependencies** - Can cause bundle failures
+
 ## Architecture
 
 ### The Spec Pipeline (Core Flow)

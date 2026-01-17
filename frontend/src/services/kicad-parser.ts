@@ -8,7 +8,8 @@
  */
 
 import { parseKicadSch, parseKicadPcb } from 'kicadts'
-import type { BusSignal } from '@/schemas/block'
+// Note: Using relative import because this file is imported by functions code
+import type { BusSignal } from '../schemas/block'
 
 // All valid bus signals that can be detected from net names
 const BUS_SIGNAL_PATTERNS: { pattern: RegExp; signal: BusSignal }[] = [
