@@ -22,6 +22,9 @@ import {
   Settings,
   Cable,
   Box,
+  Eye,
+  FileText,
+  List,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { BlockCategory } from '@/schemas/block'
@@ -52,8 +55,11 @@ interface GenerateResponse {
     gpioSignals: string[]
     powerRails: string[]
   }
+  tokn?: string
   rawLlmResponse?: string
 }
+
+type LeftPanelTab = 'extract' | 'tokn' | 'preview'
 
 type WizardStep = 'upload' | 'generating' | 'review' | 'saving'
 
@@ -72,9 +78,12 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
   const [category, setCategory] = useState<BlockCategory | ''>('')
   const [schematicFile, setSchematicFile] = useState<File | null>(null)
   const [pcbFile, setPcbFile] = useState<File | null>(null)
+  const [pcbContent, setPcbContent] = useState<string | null>(null)
+  const [stepFile, setStepFile] = useState<File | null>(null)
   const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null)
   const [editedJson, setEditedJson] = useState('')
   const [jsonError, setJsonError] = useState<string | null>(null)
+  const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('extract')
 
   // Generate block.json from KiCad files
   const generateMutation = useMutation({
@@ -139,11 +148,12 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
       }
 
       // Now upload the KiCad files
-      if (schematicFile || pcbFile) {
+      if (schematicFile || pcbFile || stepFile) {
         const uploadFormData = new FormData()
         uploadFormData.append('slug', slug)
         if (schematicFile) uploadFormData.append('schematic', schematicFile)
         if (pcbFile) uploadFormData.append('pcb', pcbFile)
+        if (stepFile) uploadFormData.append('step', stepFile)
         uploadFormData.append('blockJson', editedJson)
 
         const uploadRes = await fetch('/api/admin/blocks/upload', {
@@ -198,9 +208,14 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
     }
   }
 
-  const handlePcbChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePcbChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) setPcbFile(file)
+    if (file) {
+      setPcbFile(file)
+      // Read content for KiCanvas preview
+      const content = await file.text()
+      setPcbContent(content)
+    }
   }
 
   const isValidSlug = /^[a-z0-9-]+$/.test(slug) && slug.length >= 3 && slug.length <= 50
@@ -382,6 +397,47 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                 </div>
               </div>
 
+              {/* STEP file upload */}
+              <div>
+                <label className="block text-sm font-medium text-steel mb-2">
+                  3D Model (optional)
+                </label>
+                <div
+                  className={clsx(
+                    'border-2 border-dashed p-4 text-center transition-colors',
+                    stepFile
+                      ? 'border-emerald-500/50 bg-emerald-500/10'
+                      : 'border-surface-700 hover:border-surface-600'
+                  )}
+                >
+                  <input
+                    type="file"
+                    accept=".step,.stp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) setStepFile(file)
+                    }}
+                    className="hidden"
+                    id="step-upload"
+                  />
+                  <label htmlFor="step-upload" className="cursor-pointer">
+                    {stepFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Box className="w-8 h-8 text-emerald-400" strokeWidth={1.5} />
+                        <span className="text-sm text-steel">{stepFile.name}</span>
+                        <span className="text-xs text-steel-dim">Click to change</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Box className="w-8 h-8 text-steel-dim" strokeWidth={1.5} />
+                        <span className="text-sm text-steel-dim">.step/.stp file</span>
+                        <span className="text-xs text-steel-dim">Export from KiCad: File &gt; Export &gt; STEP</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              </div>
+
               {generateMutation.error && (
                 <div className="p-3 bg-red-500/20 border border-red-500/30 text-red-400 text-sm">
                   {generateMutation.error instanceof Error
@@ -406,89 +462,167 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
           {/* Step 3: Review */}
           {(step === 'review' || step === 'saving') && generateResult && (
             <div className="flex h-[500px]">
-              {/* Left: Extracted info */}
-              <div className="w-1/3 border-r border-surface-700 p-4 overflow-auto">
-                <h3 className="text-sm font-medium text-steel mb-3">Extracted Data</h3>
-
-                {/* Validation status */}
-                <div className="mb-4">
-                  {generateResult.isValid ? (
-                    <div className="flex items-center gap-2 text-sm text-emerald-400">
-                      <CheckCircle className="w-4 h-4" strokeWidth={1.5} />
-                      Schema valid
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-amber-400">
-                        <AlertTriangle className="w-4 h-4" strokeWidth={1.5} />
-                        Validation issues
-                      </div>
-                      <ul className="text-xs text-red-400 ml-6 list-disc">
-                        {generateResult.validationErrors.map((err, i) => (
-                          <li key={i}>{err}</li>
-                        ))}
-                      </ul>
-                    </div>
+              {/* Left: Tabs and content */}
+              <div className="w-1/3 border-r border-surface-700 flex flex-col">
+                {/* Tab bar */}
+                <div className="flex border-b border-surface-700">
+                  <button
+                    onClick={() => setLeftPanelTab('extract')}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-2 text-xs transition-colors',
+                      leftPanelTab === 'extract'
+                        ? 'bg-surface-800 text-copper border-b-2 border-copper'
+                        : 'text-steel-dim hover:text-steel'
+                    )}
+                  >
+                    <List className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    Extract
+                  </button>
+                  <button
+                    onClick={() => setLeftPanelTab('tokn')}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-2 text-xs transition-colors',
+                      leftPanelTab === 'tokn'
+                        ? 'bg-surface-800 text-copper border-b-2 border-copper'
+                        : 'text-steel-dim hover:text-steel'
+                    )}
+                  >
+                    <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    TOKN
+                  </button>
+                  {pcbContent && (
+                    <button
+                      onClick={() => setLeftPanelTab('preview')}
+                      className={clsx(
+                        'flex items-center gap-1.5 px-3 py-2 text-xs transition-colors',
+                        leftPanelTab === 'preview'
+                          ? 'bg-surface-800 text-copper border-b-2 border-copper'
+                          : 'text-steel-dim hover:text-steel'
+                      )}
+                    >
+                      <Eye className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      Preview
+                    </button>
                   )}
                 </div>
 
-                {/* Board size */}
-                {generateResult.extract.boardSize && (
-                  <div className="mb-3">
-                    <div className="text-xs text-steel-dim mb-1">Board Size</div>
-                    <div className="text-sm text-steel">
-                      {generateResult.extract.boardSize.width}mm ×{' '}
-                      {generateResult.extract.boardSize.height}mm
-                    </div>
-                    <div className="text-xs text-steel-dim">
-                      Grid: {generateResult.extract.suggestedGridSize[0]}×
-                      {generateResult.extract.suggestedGridSize[1]}
-                    </div>
-                  </div>
-                )}
-
-                {/* Bus signals */}
-                {generateResult.extract.busSignals.length > 0 && (
-                  <div className="mb-3">
-                    <div className="text-xs text-steel-dim mb-1">Bus Signals</div>
-                    <div className="flex flex-wrap gap-1">
-                      {generateResult.extract.busSignals.map((sig) => (
-                        <span key={sig} className="px-1.5 py-0.5 text-xs bg-copper/20 text-copper">
-                          {sig}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Components */}
-                <div className="mb-3">
-                  <div className="text-xs text-steel-dim mb-1">
-                    Components ({generateResult.extract.components.length})
-                  </div>
-                  <div className="space-y-1 max-h-40 overflow-auto">
-                    {generateResult.extract.components.map((c, i) => (
-                      <div key={i} className="text-xs text-steel">
-                        <span className="text-copper">{c.reference}</span>: {c.value}
-                        {c.footprint && (
-                          <span className="text-steel-dim"> ({c.footprint})</span>
+                {/* Tab content */}
+                <div className="flex-1 overflow-auto p-4">
+                  {/* Extract tab */}
+                  {leftPanelTab === 'extract' && (
+                    <>
+                      {/* Validation status */}
+                      <div className="mb-4">
+                        {generateResult.isValid ? (
+                          <div className="flex items-center gap-2 text-sm text-emerald-400">
+                            <CheckCircle className="w-4 h-4" strokeWidth={1.5} />
+                            Schema valid
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-amber-400">
+                              <AlertTriangle className="w-4 h-4" strokeWidth={1.5} />
+                              Validation issues
+                            </div>
+                            <ul className="text-xs text-red-400 ml-6 list-disc">
+                              {generateResult.validationErrors.map((err, i) => (
+                                <li key={i}>{err}</li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Nets */}
-                {generateResult.extract.nets.length > 0 && (
-                  <div>
-                    <div className="text-xs text-steel-dim mb-1">
-                      Nets ({generateResult.extract.nets.length})
+                      {/* Board size */}
+                      {generateResult.extract.boardSize && (
+                        <div className="mb-3">
+                          <div className="text-xs text-steel-dim mb-1">Board Size</div>
+                          <div className="text-sm text-steel">
+                            {generateResult.extract.boardSize.width}mm ×{' '}
+                            {generateResult.extract.boardSize.height}mm
+                          </div>
+                          <div className="text-xs text-steel-dim">
+                            Grid: {generateResult.extract.suggestedGridSize[0]}×
+                            {generateResult.extract.suggestedGridSize[1]}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bus signals */}
+                      {generateResult.extract.busSignals.length > 0 && (
+                        <div className="mb-3">
+                          <div className="text-xs text-steel-dim mb-1">Bus Signals</div>
+                          <div className="flex flex-wrap gap-1">
+                            {generateResult.extract.busSignals.map((sig) => (
+                              <span key={sig} className="px-1.5 py-0.5 text-xs bg-copper/20 text-copper">
+                                {sig}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Components */}
+                      <div className="mb-3">
+                        <div className="text-xs text-steel-dim mb-1">
+                          Components ({generateResult.extract.components.length})
+                        </div>
+                        <div className="space-y-1 max-h-40 overflow-auto">
+                          {generateResult.extract.components.map((c, i) => (
+                            <div key={i} className="text-xs text-steel">
+                              <span className="text-copper">{c.reference}</span>: {c.value}
+                              {c.footprint && (
+                                <span className="text-steel-dim"> ({c.footprint})</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Nets */}
+                      {generateResult.extract.nets.length > 0 && (
+                        <div>
+                          <div className="text-xs text-steel-dim mb-1">
+                            Nets ({generateResult.extract.nets.length})
+                          </div>
+                          <div className="text-xs text-steel-dim max-h-24 overflow-auto">
+                            {generateResult.extract.nets.join(', ')}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* TOKN tab */}
+                  {leftPanelTab === 'tokn' && (
+                    <div className="h-full">
+                      {generateResult.tokn ? (
+                        <pre className="text-xs text-steel font-mono whitespace-pre-wrap overflow-auto h-full">
+                          {generateResult.tokn}
+                        </pre>
+                      ) : (
+                        <div className="text-steel-dim text-sm">No TOKN output available</div>
+                      )}
                     </div>
-                    <div className="text-xs text-steel-dim max-h-24 overflow-auto">
-                      {generateResult.extract.nets.join(', ')}
+                  )}
+
+                  {/* Preview tab - KiCanvas */}
+                  {leftPanelTab === 'preview' && pcbContent && (
+                    <div className="h-full flex flex-col">
+                      <div className="text-xs text-steel-dim mb-2">
+                        PCB Preview via KiCanvas
+                      </div>
+                      <div className="flex-1 bg-white rounded overflow-hidden">
+                        <kicanvas-embed
+                          src={`data:application/x-kicad-pcb;base64,${btoa(pcbContent)}`}
+                          controls="full"
+                          theme="kicad"
+                          style={{ width: '100%', height: '100%' }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {/* Right: JSON editor */}

@@ -13,6 +13,7 @@ import { parseKicadFiles, formatExtractForLLM, calculateGridSize } from '../../.
 import { buildBlockGenerationMessages } from '../../../../src/prompts/block-generation'
 import { parseBlockJson } from '../../../lib/block-validator'
 import type { BlockCategory } from '../../../../src/schemas/block'
+import { convertToTokn } from '../../../../src/lib/tokn'
 
 interface GenerateRequest {
   slug: string
@@ -151,8 +152,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Parse KiCad files
     let extract
+    let toknOutput: string | undefined
     try {
       extract = parseKicadFiles(schematicContent, pcbContent)
+      // Generate TOKN representation from schematic
+      toknOutput = convertToTokn(schematicContent)
     } catch (parseError) {
       return Response.json(
         {
@@ -228,6 +232,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         gpioSignals: extract.gpioSignals,
         powerRails: extract.powerRails,
       },
+      tokn: toknOutput,
       rawLlmResponse: llmResponse,
     })
   } catch (error) {
