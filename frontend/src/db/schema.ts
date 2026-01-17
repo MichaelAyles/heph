@@ -334,6 +334,7 @@ export interface BlockFiles {
   pcb: string // e.g., "mcu-esp32c6.kicad_pcb"
   stepModel?: string // e.g., "mcu-esp32c6.step"
   thumbnail?: string // e.g., "mcu-esp32c6.png"
+  blockJson?: string // e.g., "block.json"
 }
 
 // Net mapping for schematic merge
