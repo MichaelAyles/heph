@@ -4,12 +4,13 @@
  * Extracts component and net information from KiCad schematic and PCB files
  * for LLM-assisted block.json generation.
  *
- * Uses kicadts for parsing KiCad S-expression files.
+ * Uses tokn for parsing KiCad S-expression files.
  */
 
-import { parseKicadSch, parseKicadPcb } from 'kicadts'
+import { parseSchematic, analyzeConnectivity } from '../lib/tokn';
+import { parse, get, getAll, getValue } from '../lib/tokn/sexpr';
 // Note: Using relative import because this file is imported by functions code
-import type { BusSignal } from '../schemas/block'
+import type { BusSignal } from '../schemas/block';
 
 // All valid bus signals that can be detected from net names
 const BUS_SIGNAL_PATTERNS: { pattern: RegExp; signal: BusSignal }[] = [
@@ -47,16 +48,16 @@ const BUS_SIGNAL_PATTERNS: { pattern: RegExp; signal: BusSignal }[] = [
   { pattern: /^AUX_?4$/i, signal: 'AUX_4' },
   { pattern: /^AUX_?5$/i, signal: 'AUX_5' },
   { pattern: /^AUX_?6$/i, signal: 'AUX_6' },
-]
+];
 
 /**
  * Extracted component from KiCad schematic
  */
 export interface ExtractedComponent {
-  reference: string // U1, R1, C1
-  value: string // ESP32-C6, 10k, 100nF
-  footprint: string // QFN-48, 0402, 0603
-  libraryId?: string // Library reference
+  reference: string; // U1, R1, C1
+  value: string; // ESP32-C6, 10k, 100nF
+  footprint: string; // QFN-48, 0402, 0603
+  libraryId?: string; // Library reference
 }
 
 /**
@@ -64,170 +65,155 @@ export interface ExtractedComponent {
  */
 export interface KicadExtract {
   // From schematic
-  components: ExtractedComponent[]
+  components: ExtractedComponent[];
 
   // From PCB
-  nets: string[]
+  nets: string[];
   boardSize?: {
-    width: number // mm
-    height: number // mm
-  }
+    width: number; // mm
+    height: number; // mm
+  };
 
   // Inferred from net names
-  busSignals: BusSignal[]
-  i2cSignals: string[]
-  spiSignals: string[]
-  gpioSignals: string[]
-  powerRails: string[]
-  auxSignals: string[]
+  busSignals: BusSignal[];
+  i2cSignals: string[];
+  spiSignals: string[];
+  gpioSignals: string[];
+  powerRails: string[];
+  auxSignals: string[];
 
   // Raw data for debugging
-  projectName?: string
-}
-
-/**
- * Extract a property value from a KiCad symbol
- */
-function getSymbolProperty(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  symbol: any,
-  propertyName: string
-): string | undefined {
-  if (!symbol.properties) return undefined
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const prop = symbol.properties.find((p: any) => p.key === propertyName)
-  return prop?.value
+  projectName?: string;
 }
 
 /**
  * Parse KiCad schematic and extract components
  */
 export function parseKicadSchematic(content: string): Partial<KicadExtract> {
-  const sch = parseKicadSch(content)
-  const components: ExtractedComponent[] = []
+  const sch = parseSchematic(content);
+  const netlist = analyzeConnectivity(sch);
+  const components: ExtractedComponent[] = [];
 
-  // Extract components from symbols
-  const symbols = sch.symbols || []
-  for (const symbol of symbols) {
-    const reference = getSymbolProperty(symbol, 'Reference') || ''
-    const value = getSymbolProperty(symbol, 'Value') || ''
-    const footprint = getSymbolProperty(symbol, 'Footprint') || ''
+  // Extract components from parsed schematic
+  for (const comp of netlist.components) {
+    const reference = comp.reference || '';
+    const value = comp.value || '';
+    const footprint = comp.footprint || '';
 
     // Skip power symbols and test points
     if (reference.startsWith('#') || reference.startsWith('TP')) {
-      continue
+      continue;
     }
 
     // Skip symbols without a valid reference
     if (!reference || reference === '?') {
-      continue
+      continue;
     }
 
     components.push({
       reference,
       value,
       footprint: footprint.split(':').pop() || footprint, // Remove library prefix
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      libraryId: (symbol as any).libId,
-    })
-  }
-
-  // Extract project name from title block if available
-  let projectName: string | undefined
-  if (sch.titleBlock?.title) {
-    projectName = sch.titleBlock.title
+      libraryId: comp.libId,
+    });
   }
 
   return {
     components,
-    projectName,
-  }
+    projectName: sch.title || undefined,
+    // Also extract nets from schematic connectivity
+    nets: netlist.nets.map((n) => n.name),
+  };
 }
 
 /**
  * Parse KiCad PCB and extract nets and board info
  */
 export function parseKicadPcbFile(content: string): Partial<KicadExtract> {
-  const pcb = parseKicadPcb(content)
+  const expr = parse(content);
+
+  if (!Array.isArray(expr) || expr[0] !== 'kicad_pcb') {
+    throw new Error('Not a valid KiCad PCB file');
+  }
 
   // Extract all net names
-  const nets: string[] = []
-  const pcbNets = pcb.nets || []
+  const nets: string[] = [];
+  const pcbNets = getAll(expr, 'net');
   for (const net of pcbNets) {
-    const netName = net.name
-    if (netName && netName !== '' && !netName.startsWith('unconnected-')) {
-      nets.push(netName)
+    if (net.length >= 3 && typeof net[2] === 'string') {
+      const netName = net[2];
+      if (netName && netName !== '' && !netName.startsWith('unconnected-')) {
+        nets.push(netName);
+      }
     }
   }
 
   // Try to extract board dimensions from Edge.Cuts layer
-  // This is a simplified approach - proper extraction would analyze the edge cuts graphics
-  let boardSize: KicadExtract['boardSize'] | undefined
+  let boardSize: KicadExtract['boardSize'] | undefined;
 
-  // Look for gr_rect or gr_line on Edge.Cuts layer
-  // For now, we'll use the footprint positions to estimate bounds
-  const footprints = pcb.footprints || []
+  // Look for gr_rect on Edge.Cuts layer or estimate from footprint positions
+  const footprints = getAll(expr, 'footprint');
   if (footprints.length > 0) {
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
-      maxY = -Infinity
+      maxY = -Infinity;
 
     for (const fp of footprints) {
-      // Access position via type assertion as kicadts types may not fully expose all properties
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const at = (fp as any).at
-      if (at) {
-        const x = typeof at.x === 'number' ? at.x : 0
-        const y = typeof at.y === 'number' ? at.y : 0
-        minX = Math.min(minX, x)
-        minY = Math.min(minY, y)
-        maxX = Math.max(maxX, x)
-        maxY = Math.max(maxY, y)
+      const at = get(fp, 'at');
+      if (at && at.length >= 3) {
+        const x = parseFloat(at[1] as string);
+        const y = parseFloat(at[2] as string);
+        if (!isNaN(x) && !isNaN(y)) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
       }
     }
 
     if (minX !== Infinity) {
       // Add margin for component sizes (rough estimate)
-      const margin = 5
+      const margin = 5;
       boardSize = {
         width: Math.round((maxX - minX + margin * 2) * 10) / 10,
         height: Math.round((maxY - minY + margin * 2) * 10) / 10,
-      }
+      };
     }
   }
 
   return {
     nets,
     boardSize,
-  }
+  };
 }
 
 /**
  * Classify a net name into bus signal category
  */
 function classifyNet(netName: string): {
-  busSignal?: BusSignal
-  category: 'i2c' | 'spi' | 'gpio' | 'power' | 'aux' | 'other'
+  busSignal?: BusSignal;
+  category: 'i2c' | 'spi' | 'gpio' | 'power' | 'aux' | 'other';
 } {
   // Check against known bus signal patterns
   for (const { pattern, signal } of BUS_SIGNAL_PATTERNS) {
     if (pattern.test(netName)) {
-      let category: 'i2c' | 'spi' | 'gpio' | 'power' | 'aux' | 'other' = 'other'
-      if (signal.startsWith('I2C')) category = 'i2c'
-      else if (signal.startsWith('SPI')) category = 'spi'
-      else if (signal.startsWith('GPIO')) category = 'gpio'
-      else if (['GND', '3V3', '5V0'].includes(signal)) category = 'power'
-      else if (signal.startsWith('AUX')) category = 'aux'
+      let category: 'i2c' | 'spi' | 'gpio' | 'power' | 'aux' | 'other' = 'other';
+      if (signal.startsWith('I2C')) category = 'i2c';
+      else if (signal.startsWith('SPI')) category = 'spi';
+      else if (signal.startsWith('GPIO')) category = 'gpio';
+      else if (['GND', '3V3', '5V0'].includes(signal)) category = 'power';
+      else if (signal.startsWith('AUX')) category = 'aux';
 
-      return { busSignal: signal, category }
+      return { busSignal: signal, category };
     }
   }
 
   // Infer category from patterns even if not exact bus signal match
-  const lower = netName.toLowerCase()
+  const lower = netName.toLowerCase();
   if (lower.includes('sda') || lower.includes('scl') || lower.includes('i2c')) {
-    return { category: 'i2c' }
+    return { category: 'i2c' };
   }
   if (
     lower.includes('mosi') ||
@@ -236,10 +222,10 @@ function classifyNet(netName: string): {
     lower.includes('spi') ||
     lower.includes('cs')
   ) {
-    return { category: 'spi' }
+    return { category: 'spi' };
   }
   if (lower.includes('gpio')) {
-    return { category: 'gpio' }
+    return { category: 'gpio' };
   }
   if (
     lower.includes('gnd') ||
@@ -250,13 +236,13 @@ function classifyNet(netName: string): {
     lower.includes('pwr') ||
     lower.includes('bat')
   ) {
-    return { category: 'power' }
+    return { category: 'power' };
   }
   if (lower.includes('aux')) {
-    return { category: 'aux' }
+    return { category: 'aux' };
   }
 
-  return { category: 'other' }
+  return { category: 'other' };
 }
 
 /**
@@ -266,39 +252,40 @@ export function mergeExtracts(
   schExtract: Partial<KicadExtract>,
   pcbExtract: Partial<KicadExtract>
 ): KicadExtract {
-  const nets = pcbExtract.nets || []
+  // Use nets from PCB if available, otherwise from schematic
+  const nets = pcbExtract.nets?.length ? pcbExtract.nets : schExtract.nets || [];
 
   // Classify nets and build signal lists
-  const busSignals = new Set<BusSignal>()
-  const i2cSignals: string[] = []
-  const spiSignals: string[] = []
-  const gpioSignals: string[] = []
-  const powerRails: string[] = []
-  const auxSignals: string[] = []
+  const busSignals = new Set<BusSignal>();
+  const i2cSignals: string[] = [];
+  const spiSignals: string[] = [];
+  const gpioSignals: string[] = [];
+  const powerRails: string[] = [];
+  const auxSignals: string[] = [];
 
   for (const net of nets) {
-    const { busSignal, category } = classifyNet(net)
+    const { busSignal, category } = classifyNet(net);
 
     if (busSignal) {
-      busSignals.add(busSignal)
+      busSignals.add(busSignal);
     }
 
     switch (category) {
       case 'i2c':
-        if (!i2cSignals.includes(net)) i2cSignals.push(net)
-        break
+        if (!i2cSignals.includes(net)) i2cSignals.push(net);
+        break;
       case 'spi':
-        if (!spiSignals.includes(net)) spiSignals.push(net)
-        break
+        if (!spiSignals.includes(net)) spiSignals.push(net);
+        break;
       case 'gpio':
-        if (!gpioSignals.includes(net)) gpioSignals.push(net)
-        break
+        if (!gpioSignals.includes(net)) gpioSignals.push(net);
+        break;
       case 'power':
-        if (!powerRails.includes(net)) powerRails.push(net)
-        break
+        if (!powerRails.includes(net)) powerRails.push(net);
+        break;
       case 'aux':
-        if (!auxSignals.includes(net)) auxSignals.push(net)
-        break
+        if (!auxSignals.includes(net)) auxSignals.push(net);
+        break;
     }
   }
 
@@ -313,7 +300,7 @@ export function mergeExtracts(
     powerRails,
     auxSignals,
     projectName: schExtract.projectName,
-  }
+  };
 }
 
 /**
@@ -323,9 +310,9 @@ export function parseKicadFiles(
   schematicContent: string,
   pcbContent?: string
 ): KicadExtract {
-  const schExtract = parseKicadSchematic(schematicContent)
-  const pcbExtract = pcbContent ? parseKicadPcbFile(pcbContent) : {}
-  return mergeExtracts(schExtract, pcbExtract)
+  const schExtract = parseKicadSchematic(schematicContent);
+  const pcbExtract = pcbContent ? parseKicadPcbFile(pcbContent) : {};
+  return mergeExtracts(schExtract, pcbExtract);
 }
 
 /**
@@ -333,18 +320,18 @@ export function parseKicadFiles(
  * Grid unit is 12.7mm (0.5")
  */
 export function calculateGridSize(boardSize?: {
-  width: number
-  height: number
+  width: number;
+  height: number;
 }): [number, number] {
   if (!boardSize) {
-    return [1, 1] // Default to 1x1
+    return [1, 1]; // Default to 1x1
   }
 
-  const GRID_UNIT_MM = 12.7
-  const width = Math.max(1, Math.ceil(boardSize.width / GRID_UNIT_MM))
-  const height = Math.max(1, Math.ceil(boardSize.height / GRID_UNIT_MM))
+  const GRID_UNIT_MM = 12.7;
+  const width = Math.max(1, Math.ceil(boardSize.width / GRID_UNIT_MM));
+  const height = Math.max(1, Math.ceil(boardSize.height / GRID_UNIT_MM));
 
-  return [width, height]
+  return [width, height];
 }
 
 /**
@@ -352,64 +339,64 @@ export function calculateGridSize(boardSize?: {
  * Reduces tokens while preserving essential information
  */
 export function formatExtractForLLM(extract: KicadExtract): string {
-  const lines: string[] = []
+  const lines: string[] = [];
 
   // Components
   if (extract.components.length > 0) {
-    lines.push('## Components')
+    lines.push('## Components');
     for (const c of extract.components) {
-      lines.push(`- ${c.reference}: ${c.value} (${c.footprint})`)
+      lines.push(`- ${c.reference}: ${c.value} (${c.footprint})`);
     }
-    lines.push('')
+    lines.push('');
   }
 
   // Board size
   if (extract.boardSize) {
-    lines.push(`## Board Size`)
-    lines.push(`${extract.boardSize.width}mm x ${extract.boardSize.height}mm`)
-    const gridSize = calculateGridSize(extract.boardSize)
-    lines.push(`Suggested grid: ${gridSize[0]}x${gridSize[1]}`)
-    lines.push('')
+    lines.push(`## Board Size`);
+    lines.push(`${extract.boardSize.width}mm x ${extract.boardSize.height}mm`);
+    const gridSize = calculateGridSize(extract.boardSize);
+    lines.push(`Suggested grid: ${gridSize[0]}x${gridSize[1]}`);
+    lines.push('');
   }
 
   // Nets
   if (extract.nets.length > 0) {
-    lines.push('## Nets')
-    lines.push(extract.nets.join(', '))
-    lines.push('')
+    lines.push('## Nets');
+    lines.push(extract.nets.join(', '));
+    lines.push('');
   }
 
   // Classified signals
   if (extract.busSignals.length > 0) {
-    lines.push('## Bus Signals Detected')
-    lines.push(extract.busSignals.join(', '))
-    lines.push('')
+    lines.push('## Bus Signals Detected');
+    lines.push(extract.busSignals.join(', '));
+    lines.push('');
   }
 
   if (extract.powerRails.length > 0) {
-    lines.push('### Power Rails')
-    lines.push(extract.powerRails.join(', '))
+    lines.push('### Power Rails');
+    lines.push(extract.powerRails.join(', '));
   }
 
   if (extract.i2cSignals.length > 0) {
-    lines.push('### I2C Signals')
-    lines.push(extract.i2cSignals.join(', '))
+    lines.push('### I2C Signals');
+    lines.push(extract.i2cSignals.join(', '));
   }
 
   if (extract.spiSignals.length > 0) {
-    lines.push('### SPI Signals')
-    lines.push(extract.spiSignals.join(', '))
+    lines.push('### SPI Signals');
+    lines.push(extract.spiSignals.join(', '));
   }
 
   if (extract.gpioSignals.length > 0) {
-    lines.push('### GPIO Signals')
-    lines.push(extract.gpioSignals.join(', '))
+    lines.push('### GPIO Signals');
+    lines.push(extract.gpioSignals.join(', '));
   }
 
   if (extract.auxSignals.length > 0) {
-    lines.push('### AUX Signals')
-    lines.push(extract.auxSignals.join(', '))
+    lines.push('### AUX Signals');
+    lines.push(extract.auxSignals.join(', '));
   }
 
-  return lines.join('\n')
+  return lines.join('\n');
 }
