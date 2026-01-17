@@ -17,9 +17,11 @@ import {
   Trash2,
   Edit,
   FileJson,
+  FileCode,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { BlockCategory } from '@/schemas/block'
+import { BlockImportWizard } from '@/components/admin/blocks/BlockImportWizard'
 
 interface BlockSummary {
   id: string
@@ -68,6 +70,7 @@ export function AdminBlocksPage() {
   const [selectedBlock, setSelectedBlock] = useState<BlockSummary | null>(null)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [isUploaderOpen, setIsUploaderOpen] = useState(false)
+  const [isImportWizardOpen, setIsImportWizardOpen] = useState(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -116,14 +119,21 @@ export function AdminBlocksPage() {
           </div>
           <div className="flex gap-2">
             <button
+              onClick={() => setIsImportWizardOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors"
+            >
+              <FileCode className="w-4 h-4" strokeWidth={1.5} />
+              Import from KiCad
+            </button>
+            <button
               onClick={() => {
                 setSelectedBlock(null)
                 setIsEditorOpen(true)
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-surface-800 text-steel text-sm font-medium hover:bg-surface-700 transition-colors"
             >
               <Plus className="w-4 h-4" strokeWidth={1.5} />
-              New Block
+              Manual JSON
             </button>
           </div>
         </div>
@@ -313,6 +323,17 @@ export function AdminBlocksPage() {
             block={selectedBlock}
             onClose={() => {
               setIsUploaderOpen(false)
+              queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
+            }}
+          />
+        )}
+
+        {/* Import Wizard */}
+        {isImportWizardOpen && (
+          <BlockImportWizard
+            onClose={() => setIsImportWizardOpen(false)}
+            onSuccess={() => {
+              setIsImportWizardOpen(false)
               queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
             }}
           />
