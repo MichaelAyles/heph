@@ -289,10 +289,16 @@ export interface PcbBlock {
   power: { currentMaxMa: number }
   components: BlockComponent[]
   isValidated: boolean
+  isActive: boolean
   // New fields for PCB merging
   edges?: BlockEdges
   files?: BlockFiles
   netMappings?: Record<string, NetMapping>
+  // New formal definition (block.json schema)
+  definition?: import('@/schemas/block').BlockDefinition
+  version?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type BlockCategory = 'mcu' | 'power' | 'sensor' | 'output' | 'connector' | 'utility'
@@ -415,10 +421,15 @@ export interface PcbBlockRow {
   components: string | null // JSON string
   is_validated: number // 0 or 1
   is_active: number
-  // New fields for PCB merging
+  // Fields for PCB merging
   edges: string | null // JSON string
   files: string | null // JSON string
   net_mappings: string | null // JSON string
+  // New formal definition (block.json schema)
+  definition: string | null // JSON string
+  version: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 export interface ConversationRow {
@@ -489,10 +500,16 @@ export function blockFromRow(row: PcbBlockRow): PcbBlock {
     power: row.power ? JSON.parse(row.power) : { currentMaxMa: 0 },
     components: row.components ? JSON.parse(row.components) : [],
     isValidated: row.is_validated === 1,
-    // New fields for PCB merging
+    isActive: row.is_active === 1,
+    // Fields for PCB merging
     edges: row.edges ? JSON.parse(row.edges) : undefined,
     files: row.files ? JSON.parse(row.files) : undefined,
     netMappings: row.net_mappings ? JSON.parse(row.net_mappings) : undefined,
+    // New formal definition (block.json schema)
+    definition: row.definition ? JSON.parse(row.definition) : undefined,
+    version: row.version ?? undefined,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
   }
 }
 

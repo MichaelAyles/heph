@@ -205,6 +205,10 @@ describe('schema transform functions', () => {
         edges: null,
         files: null,
         net_mappings: null,
+        definition: null,
+        version: null,
+        created_at: null,
+        updated_at: null,
       }
 
       const result = blockFromRow(row)
@@ -223,9 +227,14 @@ describe('schema transform functions', () => {
         power: { currentMaxMa: 150 },
         components: [{ ref: 'U1', value: 'ESP32-C6', package: 'QFN' }],
         isValidated: true,
+        isActive: true,
         edges: undefined,
         files: undefined,
         netMappings: undefined,
+        definition: undefined,
+        version: undefined,
+        createdAt: undefined,
+        updatedAt: undefined,
       })
     })
 
@@ -248,6 +257,10 @@ describe('schema transform functions', () => {
         edges: null,
         files: null,
         net_mappings: null,
+        definition: null,
+        version: null,
+        created_at: null,
+        updated_at: null,
       }
 
       const result = blockFromRow(row)
@@ -274,6 +287,10 @@ describe('schema transform functions', () => {
         edges: null,
         files: null,
         net_mappings: null,
+        definition: null,
+        version: null,
+        created_at: null,
+        updated_at: null,
       }
 
       const result = blockFromRow(row)
@@ -300,6 +317,10 @@ describe('schema transform functions', () => {
         edges: null,
         files: null,
         net_mappings: null,
+        definition: null,
+        version: null,
+        created_at: null,
+        updated_at: null,
       }
 
       const result = blockFromRow(row)
@@ -326,6 +347,10 @@ describe('schema transform functions', () => {
         edges: null,
         files: null,
         net_mappings: null,
+        definition: null,
+        version: null,
+        created_at: null,
+        updated_at: null,
       }
 
       const row2: PcbBlockRow = {
@@ -346,6 +371,10 @@ describe('schema transform functions', () => {
         edges: null,
         files: null,
         net_mappings: null,
+        definition: null,
+        version: null,
+        created_at: null,
+        updated_at: null,
       }
 
       expect(blockFromRow(row1).isValidated).toBe(true)
@@ -374,6 +403,10 @@ describe('schema transform functions', () => {
           edges: null,
           files: null,
           net_mappings: null,
+          definition: null,
+          version: null,
+          created_at: null,
+          updated_at: null,
         }
 
         const result = blockFromRow(row)
@@ -400,6 +433,10 @@ describe('schema transform functions', () => {
         edges: null,
         files: null,
         net_mappings: null,
+        definition: null,
+        version: null,
+        created_at: null,
+        updated_at: null,
       }
 
       const result = blockFromRow(row)
@@ -430,6 +467,10 @@ describe('schema transform functions', () => {
         edges: JSON.stringify(edges),
         files: JSON.stringify(files),
         net_mappings: JSON.stringify(netMappings),
+        definition: null,
+        version: null,
+        created_at: null,
+        updated_at: null,
       }
 
       const result = blockFromRow(row)

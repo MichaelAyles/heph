@@ -4,48 +4,22 @@
  * POST /api/admin/blocks/upload
  * - Accepts multipart form data with:
  *   - slug: block slug (e.g., "mcu-esp32c6")
- *   - schematic: .kicad_sch file
- *   - pcb: .kicad_pcb file (optional)
- *   - step: .step/.stp file (optional)
+ *   - schematic: .kicad_sch file (REQUIRED)
+ *   - pcb: .kicad_pcb file (REQUIRED)
+ *   - step: .step/.stp file (REQUIRED for enclosure generation)
+ *   - blockJson: block.json content as text (optional - validates and updates definition)
  *   - thumbnail: .png file (optional)
- *   - edges: JSON string of edge definitions
- *   - netMappings: JSON string of net mappings
  */
 
-interface Env {
-  DB: D1Database
-  STORAGE: R2Bucket
-  user?: {
-    id: string
-    username: string
-    displayName: string | null
-    isAdmin: boolean
-  }
-}
-
-interface PagesFunction<E> {
-  (context: {
-    request: Request
-    env: E
-    params: Record<string, string>
-    data: Record<string, unknown>
-  }): Promise<Response>
-}
-
-interface AuthenticatedEnv extends Env {
-  user: {
-    id: string
-    username: string
-    displayName: string | null
-    isAdmin: boolean
-  }
-}
+import type { Env } from '../../../env.d'
+import { parseBlockJson, getBlockFileRequirements } from '../../../lib/block-validator'
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const { env } = context as { env: AuthenticatedEnv }
+  const { env, data } = context
+  const user = data.user as { id: string; isAdmin: boolean } | undefined
 
   // Check admin permission
-  if (!env.user?.isAdmin) {
+  if (!user?.isAdmin) {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
@@ -58,7 +32,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // Validate block exists in database
-    const block = await env.DB.prepare('SELECT * FROM pcb_blocks WHERE slug = ?').bind(slug).first()
+    const block = await env.DB.prepare('SELECT * FROM pcb_blocks WHERE slug = ?')
+      .bind(slug)
+      .first<{ id: string; files: string | null; definition: string | null }>()
 
     if (!block) {
       return Response.json({ error: `Block "${slug}" not found in database` }, { status: 404 })
@@ -107,57 +83,122 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       uploadedFiles.thumbnail = `${slug}.png`
     }
 
-    // Parse and validate edge definitions
-    const edgesJson = formData.get('edges') as string | null
-    let edges = null
-    if (edgesJson) {
-      try {
-        edges = JSON.parse(edgesJson)
-        // Basic validation
-        if (!edges.north || !edges.south || !edges.east || !edges.west) {
-          return Response.json(
-            { error: 'Edges must include north, south, east, and west arrays' },
-            { status: 400 }
-          )
-        }
-      } catch {
-        return Response.json({ error: 'Invalid edges JSON' }, { status: 400 })
+    // Also upload block.json to R2 if provided
+    const blockJsonContent = formData.get('blockJson') as string | null
+    let definitionUpdated = false
+
+    if (blockJsonContent) {
+      // Validate the block.json content
+      const validationResult = parseBlockJson(blockJsonContent)
+      if (!validationResult.success) {
+        return Response.json(
+          { error: 'Invalid block.json', errors: validationResult.errors },
+          { status: 400 }
+        )
       }
-    }
 
-    // Parse net mappings
-    const netMappingsJson = formData.get('netMappings') as string | null
-    let netMappings = null
-    if (netMappingsJson) {
-      try {
-        netMappings = JSON.parse(netMappingsJson)
-      } catch {
-        return Response.json({ error: 'Invalid netMappings JSON' }, { status: 400 })
+      // Ensure slug matches
+      if (validationResult.data.slug !== slug) {
+        return Response.json(
+          { error: `block.json slug "${validationResult.data.slug}" doesn't match upload slug "${slug}"` },
+          { status: 400 }
+        )
       }
-    }
 
-    // Build files JSON from existing + new
-    const existingFiles = block.files ? JSON.parse(block.files as string) : {}
-    const files = { ...existingFiles, ...uploadedFiles }
+      // Upload block.json to R2
+      const key = `${r2Prefix}block.json`
+      await env.STORAGE.put(key, blockJsonContent, {
+        httpMetadata: { contentType: 'application/json' },
+      })
+      uploadedFiles.blockJson = 'block.json'
+      definitionUpdated = true
 
-    // Update database
-    await env.DB.prepare(
-      `UPDATE pcb_blocks
-       SET files = ?, edges = COALESCE(?, edges), net_mappings = COALESCE(?, net_mappings)
-       WHERE slug = ?`
-    )
-      .bind(
-        JSON.stringify(files),
-        edges ? JSON.stringify(edges) : null,
-        netMappings ? JSON.stringify(netMappings) : null,
-        slug
+      // Extract legacy fields for backwards compatibility
+      const definition = validationResult.data
+      const taps = definition.bus.taps?.map((t) => ({ net: t.signal })) || []
+      const i2cAddresses = definition.bus.i2c?.addresses.map((a) => `0x${a.toString(16)}`) || null
+      const spiCs = definition.bus.spi?.csPin || null
+      const power = definition.bus.power?.requires?.[0]
+        ? { current_max_ma: definition.bus.power.requires[0].maxMa }
+        : definition.bus.power?.provides?.[0]
+          ? { current_max_ma: -definition.bus.power.provides[0].maxMa }
+          : { current_max_ma: 0 }
+      const components = definition.components.map((c) => ({
+        ref: c.reference,
+        value: c.value,
+        package: c.footprint,
+      }))
+
+      // Build files JSON from existing + new
+      const existingFiles = block.files ? JSON.parse(block.files) : {}
+      const files = { ...existingFiles, ...uploadedFiles }
+
+      // Update database with definition and files
+      await env.DB.prepare(
+        `UPDATE pcb_blocks
+         SET name = ?, category = ?, description = ?,
+             width_units = ?, height_units = ?,
+             taps = ?, i2c_addresses = ?, spi_cs = ?,
+             power = ?, components = ?,
+             definition = ?, version = ?, files = ?,
+             updated_at = ?
+         WHERE slug = ?`
       )
-      .run()
+        .bind(
+          definition.name,
+          definition.category,
+          definition.description,
+          definition.gridSize[0],
+          definition.gridSize[1],
+          JSON.stringify(taps),
+          i2cAddresses ? JSON.stringify(i2cAddresses) : null,
+          spiCs,
+          JSON.stringify(power),
+          JSON.stringify(components),
+          blockJsonContent,
+          definition.version,
+          JSON.stringify(files),
+          new Date().toISOString(),
+          slug
+        )
+        .run()
+    } else {
+      // Just update files without definition
+      const existingFiles = block.files ? JSON.parse(block.files) : {}
+      const files = { ...existingFiles, ...uploadedFiles }
+
+      await env.DB.prepare(
+        `UPDATE pcb_blocks SET files = ?, updated_at = ? WHERE slug = ?`
+      )
+        .bind(JSON.stringify(files), new Date().toISOString(), slug)
+        .run()
+    }
+
+    // Check if all required files are now present
+    const existingFiles = block.files ? JSON.parse(block.files) : {}
+    const allFiles = { ...existingFiles, ...uploadedFiles }
+    const requirements = getBlockFileRequirements(slug)
+    const presentFiles = Object.values(allFiles).filter(Boolean) as string[]
+    const missingFiles = requirements.required.filter((f) => !presentFiles.includes(f))
+
+    // Auto-validate if all required files are present and definition exists
+    if (missingFiles.length === 0 && (definitionUpdated || block.definition)) {
+      await env.DB.prepare('UPDATE pcb_blocks SET is_validated = 1 WHERE slug = ?')
+        .bind(slug)
+        .run()
+    }
 
     return Response.json({
       success: true,
       slug,
       uploadedFiles,
+      definitionUpdated,
+      fileStatus: {
+        required: requirements.required,
+        present: presentFiles,
+        missing: missingFiles,
+      },
+      isValidated: missingFiles.length === 0 && (definitionUpdated || block.definition !== null),
       message: `Block "${slug}" updated with ${Object.keys(uploadedFiles).length} file(s)`,
     })
   } catch (error) {
