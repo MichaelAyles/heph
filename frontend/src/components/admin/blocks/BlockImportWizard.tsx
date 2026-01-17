@@ -93,7 +93,10 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
       const result = await res.json()
 
       if (!res.ok) {
-        throw new Error(result.error || 'Generation failed')
+        const errorMsg = result.details
+          ? `${result.error}: ${result.details}`
+          : result.error || 'Generation failed'
+        throw new Error(errorMsg)
       }
 
       return result as GenerateResponse
