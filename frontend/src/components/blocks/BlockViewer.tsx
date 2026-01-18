@@ -32,6 +32,7 @@ import {
 import type { BlockDefinition, BusSignal } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
+import { StepViewer } from '@/components/pcb/StepViewer'
 import type { LucideIcon } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
@@ -623,14 +624,22 @@ function FilesTab({ block }: { block: PcbBlock }) {
   const files: Partial<BlockFiles> = block.files || {}
   const hasSchematic = !!files.schematic
   const hasPcb = !!files.pcb
+  const hasStep = !!files.stepModel
 
-  const [previewType, setPreviewType] = useState<'schematic' | 'pcb' | null>(
-    hasSchematic ? 'schematic' : hasPcb ? 'pcb' : null
+  const [previewType, setPreviewType] = useState<'schematic' | 'pcb' | '3d' | null>(
+    hasSchematic ? 'schematic' : hasPcb ? 'pcb' : hasStep ? '3d' : null
   )
   const [previewContent, setPreviewContent] = useState<string | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
 
-  const loadPreview = async (type: 'schematic' | 'pcb') => {
+  const loadPreview = async (type: 'schematic' | 'pcb' | '3d') => {
+    // 3D preview doesn't need to load content - StepViewer fetches directly
+    if (type === '3d') {
+      setPreviewType('3d')
+      setPreviewContent(null)
+      return
+    }
+
     const filename = type === 'schematic' ? files.schematic : files.pcb
     if (!filename) return
 
@@ -691,7 +700,7 @@ function FilesTab({ block }: { block: PcbBlock }) {
       </div>
 
       {/* Preview */}
-      {(hasSchematic || hasPcb) && (
+      {(hasSchematic || hasPcb || hasStep) && (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sm font-medium text-white">Preview</span>
@@ -722,6 +731,19 @@ function FilesTab({ block }: { block: PcbBlock }) {
                   PCB
                 </button>
               )}
+              {hasStep && (
+                <button
+                  onClick={() => loadPreview('3d')}
+                  className={clsx(
+                    'px-3 py-1 text-xs rounded transition-colors',
+                    previewType === '3d'
+                      ? 'bg-copper text-surface-900'
+                      : 'bg-surface-700 text-steel hover:text-white'
+                  )}
+                >
+                  3D Model
+                </button>
+              )}
             </div>
           </div>
           <div className="bg-surface-900 rounded-lg overflow-hidden" style={{ height: 400 }}>
@@ -729,6 +751,11 @@ function FilesTab({ block }: { block: PcbBlock }) {
               <div className="h-full flex items-center justify-center text-steel-dim">
                 Loading preview...
               </div>
+            ) : previewType === '3d' && files.stepModel ? (
+              <StepViewer
+                url={`/api/blocks/${block.slug}/files/${files.stepModel}`}
+                className="h-full"
+              />
             ) : previewContent ? (
               <KiCanvasViewer
                 content={previewContent}
