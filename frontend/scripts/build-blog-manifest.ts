@@ -69,7 +69,8 @@ function extractFirstImage(content: string, slug: string, blogDir: string): stri
   // Look for markdown images: ![alt](path)
   const match = content.match(/!\[([^\]]*)\]\(([^)]+)\)/)
   if (match) {
-    const imagePath = match[2]
+    // Decode URL-encoded paths (e.g., %20 -> space)
+    const imagePath = decodeURIComponent(match[2])
     // Handle relative paths (images in the same blog directory)
     if (!imagePath.startsWith('http')) {
       const srcPath = path.join(blogDir, imagePath)

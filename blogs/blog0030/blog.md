@@ -2,6 +2,8 @@
 
 **Date**: January 15, 2026
 
+![OAuth login modal with Google sign-in](2026-01-18%2017_00_55-NVIDIA%20GeForce%20Overlay.png)
+
 ## The Problem
 
 We're in a Google hackathon. Users need to log in. Our current auth is username/password stored in D1 with bcrypt hashing. Works fine for internal testing, but asking hackathon judges to create accounts with passwords feels... wrong.
@@ -178,6 +180,8 @@ New users get created with `is_approved = 0`. They authenticate successfully, th
 ### Admin Management
 
 Built a quick admin page at `/admin/users` to see pending requests:
+
+![Admin user management page](2026-01-18%2017_01_25-NVIDIA%20GeForce%20Overlay.png)
 
 ```typescript
 // GET /api/admin/users?filter=pending

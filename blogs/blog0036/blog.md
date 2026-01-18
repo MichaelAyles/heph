@@ -2,6 +2,8 @@
 
 **Date**: January 18, 2026
 
+![BlockViewer showing ESP32 block details with KiCanvas schematic preview](2026-01-18%2017_04_16-NVIDIA%20GeForce%20Overlay.png)
+
 ## The Problem: Blocks Are Opaque
 
 We've built a system that imports KiCad designs and generates block definitions. But once a block is in the database, viewing it means:
@@ -40,6 +42,8 @@ The BlockViewer component displays everything about a block in one place:
 ```
 
 Four tabs organize the information:
+
+![BlockViewer bus interface tab showing taps and connections](2026-01-18%2017_02_46-NVIDIA%20GeForce%20Overlay.png)
 
 **Bus Interface**: Taps (0Ω resistors for signal isolation), permanent connections, power requirements, and I2C/SPI details. This is where you verify the block will integrate correctly with the bus.
 
@@ -223,6 +227,8 @@ The content is fetched from R2 via our API, then passed to KiCanvasViewer:
 
 The result: interactive schematic and PCB viewing directly in the browser. Pan, zoom, click components - all without leaving the admin panel.
 
+![KiCanvas schematic viewer embedded in BlockViewer](2026-01-18%2017_03_04-NVIDIA%20GeForce%20Overlay.png)
+
 ## Fullscreen Support
 
 For detailed inspection, KiCanvasViewer includes a fullscreen toggle:
@@ -252,6 +258,8 @@ useEffect(() => {
 
 When fullscreen, the viewer gets `fixed inset-0 z-50` positioning to fill the screen.
 
+![Fullscreen KiCanvas schematic view](2026-01-18%2017_03_24-NVIDIA%20GeForce%20Overlay.png)
+
 ## Integration with Admin
 
 The AdminBlocksPage now has a "View" button for each block:
@@ -267,6 +275,8 @@ The AdminBlocksPage now has a "View" button for each block:
 ```
 
 Clicking it opens a modal with the BlockViewer:
+
+![Admin blocks page with View button](2026-01-18%2017_03_44-NVIDIA%20GeForce%20Overlay.png)
 
 ```tsx
 {viewingBlock && (
