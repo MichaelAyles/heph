@@ -33,6 +33,7 @@ The codebase is mature and production-ready with solid engineering practices:
 | Add CI workflow for PR checks | 3b22e90 | GitHub Actions integration |
 | Replace kicadts with TOKN parser | 7d99f5a | KiCad 8 support |
 | Add LLM-assisted block import | d03af50 | Automated block.json generation |
+| Standardize error logging | 2002222 | Structured logger utility, 86 calls migrated |
 
 ---
 
@@ -65,6 +66,7 @@ The codebase is mature and production-ready with solid engineering practices:
 | Race condition in generate/regenerate (EnclosureStageView) | AbortController for cancellation |
 | File upload failure silently ignored (BlockImportWizard) | Throw error on upload failure |
 | KiCanvasViewer loading timeout stale closure | Use ref for timeout, clear on load/error/unmount |
+| Standardize error logging | Client-side logger utility + migration of 86 console calls |
 
 ### Remaining Issues
 
@@ -79,7 +81,6 @@ The codebase is mature and production-ready with solid engineering practices:
 | Direct state mutation in file tree | `FirmwareStageView.tsx:566-574` | React may miss updates | 30m |
 | useMemo used for side effects | `PCBStageView.tsx:44-48, 171-175` | Anti-pattern | 30m |
 | Silent failures in ExportStageView | `ExportStageView.tsx:310-387, 634-644` | No user feedback | 1h |
-| Standardize error logging | 68 console.error/warn calls | Debug difficulty | 2h |
 | Use extractAndValidateJson | `spec-steps/*.tsx` | Parse failures | 2h |
 
 #### Low Priority
@@ -206,15 +207,11 @@ The codebase is mature and production-ready with solid engineering practices:
 ## Remaining Work
 
 ### Medium Priority (Nice to Have)
-1. **Standardize error logging**
-   - Replace 68 console.error/warn calls with logger utility
-   - Add structured logging throughout
-
-2. **Use extractAndValidateJson throughout**
+1. **Use extractAndValidateJson throughout**
    - Replace regex JSON extraction in step components and orchestrator tools
    - Add Zod schema validation for all LLM responses
 
-3. **Add `state.history` trimming to orchestrator**
+2. **Add `state.history` trimming to orchestrator**
    - Implement max size (e.g., 200 items) with FIFO eviction
    - Similar pattern to existing `trimConversationHistory()`
 
