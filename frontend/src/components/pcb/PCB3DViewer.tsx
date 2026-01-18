@@ -1,17 +1,19 @@
 /**
  * PCB 3D Viewer Component
  *
- * Displays a 3D visualization of the PCB with placed blocks as colored boxes.
+ * Displays a 3D visualization of the PCB with placed blocks.
+ * Loads real STEP models when available, falls back to colored boxes.
  * Uses React Three Fiber for rendering with orbit controls.
  */
 
-import { Suspense, useRef, useMemo, useState } from 'react'
+import { Suspense, useRef, useMemo, useState, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Box, Html, PerspectiveCamera } from '@react-three/drei'
 import * as THREE from 'three'
 import { Loader2, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { PlacedBlock, PcbBlock, BlockCategory } from '@/db/schema'
+import occtimportjs from 'occt-import-js'
 
 // Grid size in mm (standard 0.5" = 12.7mm)
 const GRID_SIZE = 12.7
@@ -19,7 +21,7 @@ const GRID_SIZE = 12.7
 // PCB thickness in mm
 const PCB_THICKNESS = 1.6
 
-// Block height (component standoff)
+// Block height (component standoff) - used for fallback boxes
 const BLOCK_HEIGHT = 8
 
 // Category colors for blocks
@@ -31,6 +33,9 @@ const CATEGORY_COLORS: Record<BlockCategory, string> = {
   connector: '#6b7280', // Gray - Connectors
   utility: '#8b5cf6',  // Purple - Utility
 }
+
+// Cache for loaded STEP geometries
+const geometryCache = new Map<string, THREE.BufferGeometry | null>()
 
 interface PCB3DViewerProps {
   /** Board dimensions in mm */
@@ -51,11 +56,128 @@ interface BlockMeshProps {
 }
 
 /**
- * Single block mesh component
+ * Load STEP file and convert to Three.js BufferGeometry
+ */
+async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | null> {
+  // Check cache first
+  if (geometryCache.has(url)) {
+    return geometryCache.get(url) || null
+  }
+
+  try {
+    // Initialize the OCCT library
+    const occt = await occtimportjs()
+
+    // Fetch the STEP file
+    const response = await fetch(url)
+    if (!response.ok) {
+      geometryCache.set(url, null)
+      return null
+    }
+
+    const buffer = await response.arrayBuffer()
+    const fileBuffer = new Uint8Array(buffer)
+
+    // Parse the STEP file
+    const result = occt.ReadStepFile(fileBuffer, null)
+
+    if (!result.success || result.meshes.length === 0) {
+      geometryCache.set(url, null)
+      return null
+    }
+
+    // Combine all meshes into a single geometry
+    const geometries: THREE.BufferGeometry[] = []
+
+    for (const mesh of result.meshes) {
+      const geometry = new THREE.BufferGeometry()
+
+      // Set vertices
+      geometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3)
+      )
+
+      // Set normals if available
+      if (mesh.attributes.normal) {
+        geometry.setAttribute(
+          'normal',
+          new THREE.Float32BufferAttribute(mesh.attributes.normal.array, 3)
+        )
+      }
+
+      // Set indices if available
+      if (mesh.index) {
+        geometry.setIndex(new THREE.BufferAttribute(mesh.index.array, 1))
+      }
+
+      geometries.push(geometry)
+    }
+
+    // Merge all geometries
+    const mergedGeometry = geometries.length === 1
+      ? geometries[0]
+      : mergeGeometries(geometries)
+
+    // Compute normals if not present
+    if (!mergedGeometry.attributes.normal) {
+      mergedGeometry.computeVertexNormals()
+    }
+
+    // Center the geometry and get its bounding box for scaling
+    mergedGeometry.computeBoundingBox()
+
+    geometryCache.set(url, mergedGeometry)
+    return mergedGeometry
+  } catch (error) {
+    console.warn('Failed to load STEP file:', url, error)
+    geometryCache.set(url, null)
+    return null
+  }
+}
+
+/**
+ * Merge multiple geometries into one
+ */
+function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const merged = new THREE.BufferGeometry()
+
+  // Collect all positions and normals
+  const positions: number[] = []
+  const normals: number[] = []
+
+  for (const geom of geometries) {
+    const pos = geom.attributes.position
+    for (let i = 0; i < pos.count; i++) {
+      positions.push(pos.getX(i), pos.getY(i), pos.getZ(i))
+    }
+
+    const norm = geom.attributes.normal
+    if (norm) {
+      for (let i = 0; i < norm.count; i++) {
+        normals.push(norm.getX(i), norm.getY(i), norm.getZ(i))
+      }
+    }
+  }
+
+  merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  if (normals.length > 0) {
+    merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  }
+
+  return merged
+}
+
+/**
+ * Single block mesh component - loads STEP model if available, falls back to box
  */
 function BlockMesh({ placed, block }: BlockMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null)
+  const groupRef = useRef<THREE.Group>(null)
   const [hovered, setHovered] = useState(false)
+  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null)
+  const [loadingStep, setLoadingStep] = useState(false)
+  const [stepFailed, setStepFailed] = useState(false)
 
   // Calculate block size in mm
   const width = block.widthUnits * GRID_SIZE
@@ -64,26 +186,107 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
   // Calculate position (grid position * grid size, centered)
   const x = placed.gridX * GRID_SIZE + width / 2
   const z = placed.gridY * GRID_SIZE + depth / 2
-  const y = PCB_THICKNESS / 2 + BLOCK_HEIGHT / 2
+  const y = PCB_THICKNESS / 2
 
   // Get category color
   const color = CATEGORY_COLORS[block.category] || '#6b7280'
 
+  // Get STEP file URL if available
+  const stepUrl = useMemo(() => {
+    if (block.files?.stepModel) {
+      return `/api/blocks/${block.slug}/files/${block.files.stepModel}`
+    }
+    return null
+  }, [block.slug, block.files?.stepModel])
+
+  // Load STEP geometry
+  useEffect(() => {
+    if (!stepUrl || stepFailed) return
+
+    setLoadingStep(true)
+    loadStepGeometry(stepUrl)
+      .then((geom) => {
+        if (geom) {
+          setGeometry(geom)
+        } else {
+          setStepFailed(true)
+        }
+      })
+      .finally(() => setLoadingStep(false))
+  }, [stepUrl, stepFailed])
+
   // Pulse animation on hover
   useFrame(() => {
-    if (meshRef.current && hovered) {
-      meshRef.current.scale.y = 1 + Math.sin(Date.now() * 0.005) * 0.05
-    } else if (meshRef.current) {
-      meshRef.current.scale.y = 1
+    const target = geometry ? groupRef.current : meshRef.current
+    if (target && hovered) {
+      target.scale.y = 1 + Math.sin(Date.now() * 0.005) * 0.05
+    } else if (target) {
+      target.scale.y = 1
     }
   })
 
+  // Scale and position for STEP geometry
+  const stepScale = useMemo(() => {
+    if (!geometry?.boundingBox) return [1, 1, 1]
+
+    const box = geometry.boundingBox
+    const size = new THREE.Vector3()
+    box.getSize(size)
+
+    // Scale to fit within the block's grid area
+    // Leave 1mm margin on each side
+    const targetWidth = width - 2
+    const targetDepth = depth - 2
+    const targetHeight = BLOCK_HEIGHT
+
+    const scaleX = size.x > 0 ? targetWidth / size.x : 1
+    const scaleY = size.y > 0 ? targetHeight / size.y : 1
+    const scaleZ = size.z > 0 ? targetDepth / size.z : 1
+
+    // Use uniform scale to maintain proportions
+    const uniformScale = Math.min(scaleX, scaleY, scaleZ)
+
+    return [uniformScale, uniformScale, uniformScale]
+  }, [geometry, width, depth])
+
+  // If we have loaded geometry, render it
+  if (geometry && !stepFailed) {
+    return (
+      <group>
+        <group
+          ref={groupRef}
+          position={[x, y + BLOCK_HEIGHT / 2, z]}
+          scale={stepScale as [number, number, number]}
+          onPointerOver={() => setHovered(true)}
+          onPointerOut={() => setHovered(false)}
+        >
+          <mesh geometry={geometry}>
+            <meshStandardMaterial
+              color={hovered ? '#f97316' : '#e5e5e5'}
+              metalness={0.3}
+              roughness={0.5}
+            />
+          </mesh>
+        </group>
+        {/* Block label */}
+        {hovered && (
+          <Html position={[x, y + BLOCK_HEIGHT + 4, z]} center>
+            <div className="px-2 py-1 bg-surface-800 text-steel text-xs rounded shadow-lg whitespace-nowrap">
+              {block.name}
+            </div>
+          </Html>
+        )}
+      </group>
+    )
+  }
+
+  // Fallback to colored box
   return (
     <group>
       <Box
         ref={meshRef}
         args={[width - 1, BLOCK_HEIGHT, depth - 1]} // Slight gap between blocks
-        position={[x, y, z]}
+        position={[x, y + BLOCK_HEIGHT / 2, z]}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
       >
@@ -93,9 +296,15 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
           roughness={0.6}
         />
       </Box>
+      {/* Loading indicator for STEP */}
+      {loadingStep && (
+        <Html position={[x, y + BLOCK_HEIGHT + 2, z]} center>
+          <div className="text-xs text-steel-dim">Loading...</div>
+        </Html>
+      )}
       {/* Block label */}
-      {hovered && (
-        <Html position={[x, y + BLOCK_HEIGHT, z]} center>
+      {hovered && !loadingStep && (
+        <Html position={[x, y + BLOCK_HEIGHT + 4, z]} center>
           <div className="px-2 py-1 bg-surface-800 text-steel text-xs rounded shadow-lg whitespace-nowrap">
             {block.name}
           </div>

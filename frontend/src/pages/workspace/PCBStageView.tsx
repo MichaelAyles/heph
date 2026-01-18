@@ -216,6 +216,8 @@ export function PCBStageView() {
                 label="Select Blocks"
                 active={currentStep === 'select_blocks'}
                 complete={currentStep !== 'select_blocks'}
+                onClick={() => setCurrentStep('select_blocks')}
+                canClick={currentStep !== 'select_blocks' && currentStep !== 'generating'}
               />
               <ArrowRight className="w-4 h-4 text-surface-600" />
               <StepIndicator
@@ -462,16 +464,24 @@ interface StepIndicatorProps {
   label: string
   active: boolean
   complete: boolean
+  onClick?: () => void
+  canClick?: boolean
 }
 
-function StepIndicator({ step, label, active, complete }: StepIndicatorProps) {
+function StepIndicator({ step, label, active, complete, onClick, canClick }: StepIndicatorProps) {
+  const isClickable = canClick && onClick && !active
+
   return (
-    <div
+    <button
+      onClick={isClickable ? onClick : undefined}
+      disabled={!isClickable}
       className={clsx(
-        'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm',
+        'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors',
         active && 'bg-copper/20 text-copper',
         complete && 'bg-emerald-500/20 text-emerald-400',
-        !active && !complete && 'text-steel-dim'
+        !active && !complete && 'text-steel-dim',
+        isClickable && 'cursor-pointer hover:bg-surface-700',
+        !isClickable && 'cursor-default'
       )}
     >
       {complete ? (
@@ -482,7 +492,7 @@ function StepIndicator({ step, label, active, complete }: StepIndicatorProps) {
         <span className="w-4 h-4 flex items-center justify-center text-xs">{step}</span>
       )}
       <span>{label}</span>
-    </div>
+    </button>
   )
 }
 
