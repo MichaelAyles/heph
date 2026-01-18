@@ -11,7 +11,7 @@ This walkthrough demonstrates the complete PHAESTUS product development flow, fr
 
 First-time visitors see a clean landing page explaining what PHAESTUS does: transform natural language descriptions into complete hardware designs.
 
-![Landing Page](0029-images/01-landing-page.png)
+![Landing Page](01-landing-page.png)
 
 The page highlights key features:
 - **KiCad Schematics** - Professional circuit designs
@@ -24,29 +24,29 @@ The page highlights key features:
 
 Clicking "Sign In" opens a modal for credentials. The interface is minimal and focused.
 
-![Login Modal](0029-images/02-login-modal.png)
+![Login Modal](02-login-modal.png)
 
 After logging in, the dashboard shows the authenticated home view with navigation to all features.
 
-![Logged In Home](0029-images/03-logged-in-home.png)
+![Logged In Home](03-logged-in-home.png)
 
 ## Creating a New Project
 
 The "New Project" page asks users to describe their hardware in plain English. Example prompts help illustrate the level of detail expected.
 
-![New Project Page](0029-images/04-new-project-page.png)
+![New Project Page](04-new-project-page.png)
 
 For this walkthrough, we'll build a soil moisture monitor:
 
 > "Battery-powered soil moisture monitor with ESP32-C6 WiFi, BME280 for temperature/humidity, capacitive soil probe input, MQTT alerts to Home Assistant, LiPo battery with USB-C charging (TP4056), 0.96" OLED status display, IP65 weatherproof enclosure"
 
-![Project Description Filled](0029-images/05-project-description-filled.png)
+![Project Description Filled](05-project-description-filled.png)
 
 ## Phase 1: Feasibility Analysis
 
 The AI analyzes the request across four dimensions: Communication, Processing, Power, and I/O. Our soil moisture monitor scores 92%.
 
-![Feasibility Analysis](0029-images/06-feasibility-analysis.png)
+![Feasibility Analysis](06-feasibility-analysis.png)
 
 The analysis confirms:
 - WiFi 6 via ESP32-C6 (100% for communication)
@@ -58,7 +58,7 @@ The analysis confirms:
 
 The AI asks targeted questions to lock down design decisions. These address edge cases that affect the final design.
 
-![Refinement Questions](0029-images/07-refinement-questions.png)
+![Refinement Questions](07-refinement-questions.png)
 
 Questions cover:
 1. **Soil probe connector type** - 3-pin JST-PH, screw terminals, or solder pads?
@@ -67,27 +67,27 @@ Questions cover:
 
 Users select their preferences:
 
-![Refinement Answered](0029-images/08-refinement-answered.png)
+![Refinement Answered](08-refinement-answered.png)
 
 ## Phase 3: Blueprint Generation
 
 Four AI-generated product renders are created in parallel, showing different design interpretations.
 
-![Blueprints Generating](0029-images/09-blueprints-generating.png)
+![Blueprints Generating](09-blueprints-generating.png)
 
 The system generates 8 variations total - 4 "3D Render" style and 4 "Product Photography" style:
 
-![Blueprint Selection](0029-images/10-blueprint-selection.png)
+![Blueprint Selection](10-blueprint-selection.png)
 
 Users can click any design to see a larger view and provide feedback for regeneration:
 
-![Design Detail](0029-images/11-design-detail.png)
+![Design Detail](11-design-detail.png)
 
 ## Phase 4: Specification Complete
 
 After selecting a design, the AI generates a complete specification document with a creative project name.
 
-![Spec Complete](0029-images/12-spec-complete.png)
+![Spec Complete](12-spec-complete.png)
 
 Our project is named "TerraLink C6 Weatherproof Monitor" - the AI avoids generic prefixes like "Smart" or "IoT".
 
@@ -95,7 +95,7 @@ Our project is named "TerraLink C6 Weatherproof Monitor" - the AI avoids generic
 
 The PCB stage shows a library of 21 pre-validated circuit blocks. Users select the components needed for their design.
 
-![PCB Block Selector](0029-images/13-pcb-block-selector.png)
+![PCB Block Selector](13-pcb-block-selector.png)
 
 For the soil moisture monitor, we select:
 - ESP32-C6 MCU (2x2 grid)
@@ -103,11 +103,11 @@ For the soil moisture monitor, we select:
 - BME280 Environment Sensor (1x1 grid)
 - OLED Connector (1x1 grid)
 
-![PCB Blocks Selected](0029-images/14-pcb-blocks-selected.png)
+![PCB Blocks Selected](14-pcb-blocks-selected.png)
 
 Clicking "Generate Schematic" merges the selected blocks into a unified KiCad schematic:
 
-![PCB Schematic Generated](0029-images/15-pcb-schematic-generated.png)
+![PCB Schematic Generated](15-pcb-schematic-generated.png)
 
 The board dimensions (50.8 × 25.4 mm) are calculated automatically based on block sizes.
 
@@ -115,15 +115,15 @@ The board dimensions (50.8 × 25.4 mm) are calculated automatically based on blo
 
 The enclosure page generates parametric OpenSCAD code based on the PCB dimensions.
 
-![Enclosure Page](0029-images/16-enclosure-page.png)
+![Enclosure Page](16-enclosure-page.png)
 
 The AI generates code and identifies potential issues:
 
-![Enclosure Generating](0029-images/17-enclosure-generating.png)
+![Enclosure Generating](17-enclosure-generating.png)
 
 The OpenSCAD code is displayed in an editor, ready for customization:
 
-![Enclosure Code Generated](0029-images/18-enclosure-code-generated.png)
+![Enclosure Code Generated](18-enclosure-code-generated.png)
 
 Parameters include:
 - Wall thickness
@@ -135,7 +135,7 @@ Parameters include:
 
 Clicking "Render" generates a 3D preview using OpenSCAD WASM:
 
-![Enclosure 3D Preview](0029-images/19-enclosure-3d-preview.png)
+![Enclosure 3D Preview](19-enclosure-3d-preview.png)
 
 The preview is interactive - users can rotate, zoom, and pan.
 
@@ -143,7 +143,7 @@ The preview is interactive - users can rotate, zoom, and pan.
 
 The firmware page shows a PlatformIO project structure for the ESP32-C6:
 
-![Firmware Page](0029-images/20-firmware-page.png)
+![Firmware Page](20-firmware-page.png)
 
 The file tree includes:
 - `platformio.ini` - Build configuration
@@ -152,7 +152,7 @@ The file tree includes:
 
 The main source file contains startup code and a basic LED blink loop:
 
-![Firmware Main.cpp](0029-images/21-firmware-main-cpp.png)
+![Firmware Main.cpp](21-firmware-main-cpp.png)
 
 Users can:
 - Edit code directly in the browser
@@ -163,7 +163,7 @@ Users can:
 
 The final stage provides all downloadable files:
 
-![Export Page](0029-images/22-export-page.png)
+![Export Page](22-export-page.png)
 
 Available downloads:
 - **spec.md** - Complete specification with requirements and BOM

@@ -14,7 +14,7 @@ So we did. `AdminOrchestratorPage.tsx` grew to 619 lines:
 - Stage-based color coding (spec, PCB, enclosure, firmware, export)
 - Click-to-edit prompt functionality
 
-![Our Custom Graph Editor](0032-images/langgraph-node-editor.png)
+![Our Custom Graph Editor](langgraph-node-editor.png)
 
 It looked professional. Nodes colored by stage, edges showing the flow, a panel to edit prompts. We were proud of it.
 

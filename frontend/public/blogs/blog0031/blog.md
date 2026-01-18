@@ -8,7 +8,7 @@ Clicking "Render" on the enclosure page was painful. A moderately complex design
 
 The design in question: a sleek rounded remote enclosure for the AERO-CLICK C6 project.
 
-![Product Blueprint](0031-images/Screenshot%202026-01-15%20at%2023.21.08.png)
+![Product Blueprint](Screenshot%202026-01-15%20at%2023.21.08.png)
 
 The culprit was obvious once I looked at the OpenSCAD code:
 
@@ -121,7 +121,7 @@ const exitCode = module.callMain([
 
 Same enclosure design. Same `hull()` on 8 spheres. Renders in ~2 seconds instead of ~2 minutes.
 
-![Enclosure Editor with 3D Preview](0031-images/Screenshot%202026-01-15%20at%2023.20.48.png)
+![Enclosure Editor with 3D Preview](Screenshot%202026-01-15%20at%2023.20.48.png)
 
 The OpenSCAD code on the left, instant 3D preview on the right. That `$fn = 64` and `pill_shape` module that used to choke the renderer now completes before you can reach for your coffee.
 
@@ -137,7 +137,7 @@ For `hull()` operations specifically, Manifold's algorithm is fundamentally diff
 
 Here's the same code running in desktop OpenSCAD for comparison:
 
-![Side-by-side with Desktop OpenSCAD](0031-images/Screenshot%202026-01-15%20at%2023.22.14.png)
+![Side-by-side with Desktop OpenSCAD](Screenshot%202026-01-15%20at%2023.22.14.png)
 
 The desktop app shows geometry cache stats in the console. With the Manifold backend, both the web and desktop versions now render at comparable speeds.
 

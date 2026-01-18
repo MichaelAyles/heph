@@ -2,7 +2,7 @@
 
 **Date**: January 17, 2026
 
-![TOKN Logo](0035-images/logo.png)
+![TOKN Logo](logo.png)
 
 ## The `hide` Token Problem
 
@@ -21,7 +21,7 @@ KiCad 8 added `hide` as a shorthand for hidden properties. Old parsers choke on 
 
 ## Enter TOKN
 
-![TOKN Format Comparison - 92% Token Reduction](0035-images/tokn-comparison.png)
+![TOKN Format Comparison - 92% Token Reduction](tokn-comparison.png)
 
 [TOKN](https://github.com/MichaelAyles/tokn) (Token-Optimised KiCad Notation) is a format designed specifically for feeding KiCad schematics to LLMs. The parser handles all KiCad versions, and the output format compresses schematics by ~92% compared to raw S-expressions.
 

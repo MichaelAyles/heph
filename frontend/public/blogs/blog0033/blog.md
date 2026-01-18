@@ -66,19 +66,19 @@ Pin 14-20: AUX_0 through AUX_6
 
 A 1x1 block gets one connector per edge. A 2x2 block gets two. All connectors on a block are tied together - same signals everywhere.
 
-![1x1 JST-PH Battery Connector - PCB Layout](0033-images/2026-01-17%2019_54_45-1x1-jst-ph-battery-connector%20—%20PCB%20Editor.png)
+![1x1 JST-PH Battery Connector - PCB Layout](2026-01-17%2019_54_45-1x1-jst-ph-battery-connector%20—%20PCB%20Editor.png)
 
 This JST-PH battery connector block is 1x1 (12.7mm square). You can see the single 20-pin bus connector at the top edge, mounting holes in the corners, and the JST connector routing GND and VBAT to AUX pins.
 
-![1x1 JST-PH Battery Connector - 3D View](0033-images/2026-01-17%2019_54_58-3D%20Viewer.png)
+![1x1 JST-PH Battery Connector - 3D View](2026-01-17%2019_54_58-3D%20Viewer.png)
 
 The 3D view shows how compact a 1x1 block is - just enough room for a JST-PH connector and routing. One bus connector on the north edge passes all 20 signals through.
 
-![2x2 ESP32-C6 MCU Block - PCB Layout](0033-images/2026-01-17%2019_53_30-ESP32%20—%20PCB%20Editor.png)
+![2x2 ESP32-C6 MCU Block - PCB Layout](2026-01-17%2019_53_30-ESP32%20—%20PCB%20Editor.png)
 
 The ESP32-C6 MCU block is 2x2 (25.4mm square). The PCB layout shows all the bus signal routing - GPIO_0 through GPIO_3, SPI signals, I2C, AUX channels, and power rails. Each labeled pad corresponds to a pin on the 20-pin bus connectors.
 
-![2x2 ESP32-C6 MCU Block - 3D Top View](0033-images/2026-01-17%2019_53_49-3D%20Viewer.png)
+![2x2 ESP32-C6 MCU Block - 3D Top View](2026-01-17%2019_53_49-3D%20Viewer.png)
 
 The 3D view shows the XIAO ESP32-C6 module with its USB-C port and antenna. The bus connectors line the edges - two on each side for this 2x2 block. Notice the RF antenna at the top - that's why this block has a 5mm north overhang declared in its `physical.overhang` property.
 
@@ -100,7 +100,7 @@ The grid constraint (12.7mm = 0.5") isn't arbitrary. It matches standard bus con
 
 The MCU's J4 connector lines up with the sensor's J1. Same signals, physical connection. No routing needed.
 
-![Bus Connector Underside - 20 Pins Per Connector](0033-images/2026-01-17%2019_54_08-3D%20Viewer.png)
+![Bus Connector Underside - 20 Pins Per Connector](2026-01-17%2019_54_08-3D%20Viewer.png)
 
 Looking at the underside of the ESP32 block, you can see the bus connector pins. Each connector has 20 pins carrying the full bus. When blocks stack, these pins mate with the connectors on the block below.
 

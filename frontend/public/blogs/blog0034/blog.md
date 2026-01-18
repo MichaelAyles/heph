@@ -17,7 +17,7 @@ For someone with a working KiCad design, this is transcription work. The informa
 
 ## The Solution: Parse, Extract, Generate
 
-![ESP32 PCB in KiCad Editor](0034-images/2026-01-17%2019_53_30-ESP32%20—%20PCB%20Editor.png)
+![ESP32 PCB in KiCad Editor](2026-01-17%2019_53_30-ESP32%20—%20PCB%20Editor.png)
 
 This is what we're starting with - a KiCad PCB with labeled nets (GPIO_0, SPI_CS0, AUX_2, 3V3_C6...) and component placements. All this information is machine-readable in the `.kicad_sch` and `.kicad_pcb` files.
 
@@ -333,6 +333,6 @@ in files imported by functions code.
 
 The full flow - from KiCad design to validated block in the database - now takes under a minute instead of an hour.
 
-![The Result: ESP32-C6 Block Ready for Use](0034-images/2026-01-17%2019_53_49-3D%20Viewer.png)
+![The Result: ESP32-C6 Block Ready for Use](2026-01-17%2019_53_49-3D%20Viewer.png)
 
 And this is what you get - a fully documented block with formal bus interface definitions, power budgets, and component BOMs. Ready to be combined with other blocks in the PHAESTUS grid system.
