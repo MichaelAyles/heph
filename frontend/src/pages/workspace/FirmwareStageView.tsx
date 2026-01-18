@@ -381,6 +381,63 @@ export function FirmwareStageView() {
     []
   )
 
+  // Save firmware to project
+  const saveMutation = useMutation({
+    mutationFn: async (files: FirmwareProject['files']) => {
+      const spec = project?.spec || {
+        description: '',
+        feasibility: null,
+        openQuestions: [],
+        decisions: [],
+        blueprints: [],
+        selectedBlueprint: null,
+        finalSpec: null,
+      }
+
+      // Convert files to match FirmwareFile schema (cpp | c | h | json)
+      const firmwareFiles = files.map((f) => ({
+        path: f.path,
+        content: f.content,
+        language: f.language === 'ini' ? 'json' : f.language, // Map ini to json for storage
+      }))
+
+      // Update firmware artifacts
+      spec.firmware = {
+        files: firmwareFiles as {
+          path: string
+          content: string
+          language: 'cpp' | 'c' | 'h' | 'json'
+        }[],
+        buildStatus: 'pending',
+      }
+
+      // Update stage status
+      spec.stages = spec.stages || {
+        spec: { status: 'complete' },
+        pcb: { status: 'complete' },
+        enclosure: { status: 'complete' },
+        firmware: { status: 'pending' },
+        export: { status: 'pending' },
+      }
+      spec.stages.firmware = {
+        status: 'complete',
+        completedAt: new Date().toISOString(),
+      }
+
+      const response = await fetch(`/api/projects/${project?.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spec }),
+      })
+
+      if (!response.ok) throw new Error('Failed to save firmware')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
+    },
+  })
+
   const handleSelectFile = useCallback(
     async (node: FileNode) => {
       // Save current file first if dirty
@@ -440,63 +497,6 @@ export function FirmwareStageView() {
       setIsDirty(true)
     }
   }, [])
-
-  // Save firmware to project
-  const saveMutation = useMutation({
-    mutationFn: async (files: FirmwareProject['files']) => {
-      const spec = project?.spec || {
-        description: '',
-        feasibility: null,
-        openQuestions: [],
-        decisions: [],
-        blueprints: [],
-        selectedBlueprint: null,
-        finalSpec: null,
-      }
-
-      // Convert files to match FirmwareFile schema (cpp | c | h | json)
-      const firmwareFiles = files.map((f) => ({
-        path: f.path,
-        content: f.content,
-        language: f.language === 'ini' ? 'json' : f.language, // Map ini to json for storage
-      }))
-
-      // Update firmware artifacts
-      spec.firmware = {
-        files: firmwareFiles as {
-          path: string
-          content: string
-          language: 'cpp' | 'c' | 'h' | 'json'
-        }[],
-        buildStatus: 'pending',
-      }
-
-      // Update stage status
-      spec.stages = spec.stages || {
-        spec: { status: 'complete' },
-        pcb: { status: 'complete' },
-        enclosure: { status: 'complete' },
-        firmware: { status: 'pending' },
-        export: { status: 'pending' },
-      }
-      spec.stages.firmware = {
-        status: 'complete',
-        completedAt: new Date().toISOString(),
-      }
-
-      const response = await fetch(`/api/projects/${project?.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spec }),
-      })
-
-      if (!response.ok) throw new Error('Failed to save firmware')
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
-    },
-  })
 
   // Generate firmware with LLM
   const handleGenerate = async () => {
