@@ -2,7 +2,7 @@
 
 **Date**: January 18, 2026
 
-![BlockViewer showing ESP32 block details with KiCanvas schematic preview](2026-01-18%2017_04_16-NVIDIA%20GeForce%20Overlay.png)
+![BlockViewer Files tab showing interactive KiCanvas PCB layout preview](2026-01-18%2017_04_16-NVIDIA%20GeForce%20Overlay.png)
 
 ## The Problem: Blocks Are Opaque
 
@@ -43,11 +43,13 @@ The BlockViewer component displays everything about a block in one place:
 
 Four tabs organize the information:
 
-![BlockViewer bus interface tab showing taps and connections](2026-01-18%2017_02_46-NVIDIA%20GeForce%20Overlay.png)
-
 **Bus Interface**: Taps (0Ω resistors for signal isolation), permanent connections, power requirements, and I2C/SPI details. This is where you verify the block will integrate correctly with the bus.
 
+![BlockViewer Bus Interface tab showing signal taps with resistor isolation details](2026-01-18%2017_03_04-NVIDIA%20GeForce%20Overlay.png)
+
 **Edges**: Visual representation of north/south edge connectors. Shows which bus signals are exposed on each edge column.
+
+![BlockViewer Edges tab showing north and south edge connector mappings](2026-01-18%2017_03_24-NVIDIA%20GeForce%20Overlay.png)
 
 **Components**: Full BOM with reference designators, values, footprints, and quantities. Distinguishes between components to populate and no-fit items (board-to-board interconnects).
 
@@ -227,7 +229,7 @@ The content is fetched from R2 via our API, then passed to KiCanvasViewer:
 
 The result: interactive schematic and PCB viewing directly in the browser. Pan, zoom, click components - all without leaving the admin panel.
 
-![KiCanvas schematic viewer embedded in BlockViewer](2026-01-18%2017_03_04-NVIDIA%20GeForce%20Overlay.png)
+![KiCanvas schematic viewer embedded in BlockViewer Files tab](2026-01-18%2017_03_44-NVIDIA%20GeForce%20Overlay.png)
 
 ## Fullscreen Support
 
@@ -258,11 +260,11 @@ useEffect(() => {
 
 When fullscreen, the viewer gets `fixed inset-0 z-50` positioning to fill the screen.
 
-![Fullscreen KiCanvas schematic view](2026-01-18%2017_03_24-NVIDIA%20GeForce%20Overlay.png)
-
 ## Integration with Admin
 
 The AdminBlocksPage now has a "View" button for each block:
+
+![Admin PCB Block Library page with block cards](2026-01-18%2017_02_46-NVIDIA%20GeForce%20Overlay.png)
 
 ```tsx
 <button
@@ -275,8 +277,6 @@ The AdminBlocksPage now has a "View" button for each block:
 ```
 
 Clicking it opens a modal with the BlockViewer:
-
-![Admin blocks page with View button](2026-01-18%2017_03_44-NVIDIA%20GeForce%20Overlay.png)
 
 ```tsx
 {viewingBlock && (

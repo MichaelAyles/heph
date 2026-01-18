@@ -200,6 +200,8 @@ Conditions support AND/OR logic and eight operators: `==`, `!=`, `>=`, `<=`, `>`
 
 ### Phase 5: UI Enhancements
 
+![Edge-Driven Orchestration UI](2026-01-18%2017_41_52-NVIDIA%20GeForce%20Overlay.png)
+
 **PromptEditor** now has six tabs:
 
 ```
