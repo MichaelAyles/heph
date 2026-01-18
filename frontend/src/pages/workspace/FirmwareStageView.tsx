@@ -28,6 +28,7 @@ import {
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
+import { logger } from '@/lib/logger'
 import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import { llm } from '@/services/llm'
 import {
@@ -450,7 +451,7 @@ export function FirmwareStageView() {
         try {
           await saveMutation.mutateAsync(filesToSave)
         } catch (err) {
-          console.error('Failed to auto-save firmware:', err)
+          logger.firmware('Failed to auto-save firmware', { error: err })
           // Continue with file switch even if save failed - data is in local state
         }
       }
@@ -541,7 +542,7 @@ export function FirmwareStageView() {
       // Save to project
       await saveMutation.mutateAsync(result.files)
     } catch (error) {
-      console.error('Firmware generation failed:', error)
+      logger.firmware('Firmware generation failed', { error })
       setGenerationError(error instanceof Error ? error.message : 'Generation failed')
     } finally {
       setIsGenerating(false)
@@ -630,7 +631,7 @@ export function FirmwareStageView() {
       setChatInput('')
       setShowChat(false)
     } catch (error) {
-      console.error('Firmware modification failed:', error)
+      logger.firmware('Firmware modification failed', { error })
       setGenerationError(error instanceof Error ? error.message : 'Modification failed')
     } finally {
       setIsModifying(false)

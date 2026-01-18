@@ -12,6 +12,7 @@ import type {
   EdgeExecutionState,
 } from '../../schemas/orchestrator-node'
 import type { OrchestratorHook } from '../../db/schema'
+import { logger } from '../../lib/logger'
 
 // =============================================================================
 // EDGE EXECUTION ENGINE CLASS
@@ -48,7 +49,7 @@ export class EdgeExecutionEngine {
       const data = await response.json()
       this.edges = (data.edges || data).map(this.transformEdgeRow)
     } catch (error) {
-      console.error('Failed to load edges, using empty graph:', error)
+      logger.error('orchestrator', 'Failed to load edges, using empty graph', { error })
       this.edges = []
     }
   }
@@ -61,13 +62,13 @@ export class EdgeExecutionEngine {
       const response = await fetch('/api/admin/orchestrator/hooks')
       if (!response.ok) {
         // Hooks are optional, don't throw
-        console.warn(`Failed to load hooks: ${response.status}`)
+        logger.warn('orchestrator', `Failed to load hooks: ${response.status}`)
         return
       }
       const data = await response.json()
       this.hooks = data.hooks || data || []
     } catch (error) {
-      console.warn('Failed to load hooks:', error)
+      logger.warn('orchestrator', 'Failed to load hooks', { error })
       this.hooks = []
     }
   }
@@ -173,7 +174,7 @@ export class EdgeExecutionEngine {
     )
 
     if (!edge) {
-      console.warn(`No edge from ${this.state.currentNode} to ${nodeName}`)
+      logger.warn('orchestrator', `No edge from ${this.state.currentNode} to ${nodeName}`)
       return false
     }
 
@@ -311,7 +312,7 @@ export class EdgeExecutionEngine {
         }
         return true
       default:
-        console.warn(`Unknown operator: ${operator}`)
+        logger.warn('orchestrator', `Unknown operator: ${operator}`)
         return false
     }
   }
@@ -340,7 +341,7 @@ export class EdgeExecutionEngine {
       try {
         await this.executeHook(hook)
       } catch (error) {
-        console.error(`Hook execution failed: ${hook.id}`, error)
+        logger.error('orchestrator', `Hook execution failed: ${hook.id}`, { error })
         // Continue with other hooks unless this is a critical hook
       }
     }
@@ -376,7 +377,7 @@ export class EdgeExecutionEngine {
     if (hookFn) {
       await hookFn(hook.hookConfig || {}, this.state.context)
     } else {
-      console.warn(`Unknown hook function: ${hook.hookFunction}`)
+      logger.warn('orchestrator', `Unknown hook function: ${hook.hookFunction}`)
     }
   }
 

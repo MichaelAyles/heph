@@ -9,6 +9,7 @@
 import type { Env } from '../../../env.d'
 import { parseBlockJson, validateBlockFiles, getBlockFileRequirements } from '../../../lib/block-validator'
 import type { BlockDefinition } from '../../../../src/schemas/block'
+import { createLogger } from '../../../lib/logger'
 
 interface BlockRow {
   id: string
@@ -101,7 +102,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       },
     })
   } catch (error) {
-    console.error('Get block error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'Get block error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Failed to get block' },
       { status: 500 }
@@ -236,7 +238,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       message: `Block "${slug}" updated`,
     })
   } catch (error) {
-    console.error('Update block error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'Update block error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Failed to update block' },
       { status: 500 }
@@ -274,8 +277,8 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
         try {
           await env.STORAGE.delete(key)
           deletedFiles.push(filename as string)
-        } catch (e) {
-          console.error(`Failed to delete R2 file ${key}:`, e)
+        } catch {
+          // R2 file deletion failed - continue with other files
         }
       }
     }
@@ -292,7 +295,8 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       message: `Block "${slug}" and ${deletedFiles.length} file(s) deleted`,
     })
   } catch (error) {
-    console.error('Delete block error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'Delete block error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Failed to delete block' },
       { status: 500 }

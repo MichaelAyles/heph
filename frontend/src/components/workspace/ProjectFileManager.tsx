@@ -27,6 +27,7 @@ import Markdown from 'react-markdown'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { STLViewer } from '@/components/enclosure/STLViewer'
 import type { ProjectSpec } from '@/db/schema'
+import { logger } from '@/lib/logger'
 
 interface ConversationMessage {
   role: string
@@ -729,7 +730,7 @@ export function ProjectFileManager({
         const data = (await res.json()) as { conversations: Conversation[] }
         setConversations(data.conversations || [])
       } catch (err) {
-        console.error('Failed to fetch conversations:', err)
+        logger.error('api', 'Failed to fetch conversations', { error: err })
         setConversationsError('Failed to load conversations')
       } finally {
         setConversationsLoading(false)

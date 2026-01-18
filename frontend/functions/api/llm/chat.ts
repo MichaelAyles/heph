@@ -389,7 +389,7 @@ async function logConversation(
         errorMessage
       )
       .run()
-  } catch (err) {
-    console.error('Failed to log conversation:', err)
+  } catch {
+    // Silently fail - conversation logging is best-effort
   }
 }

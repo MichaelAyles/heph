@@ -7,6 +7,7 @@
 
 import type { Env } from '../../../env.d'
 import { parseBlockJson, validateBlockFiles, getBlockFileRequirements } from '../../../lib/block-validator'
+import { createLogger } from '../../../lib/logger'
 
 interface BlockRow {
   id: string
@@ -114,7 +115,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     return Response.json({ blocks })
   } catch (error) {
-    console.error('List blocks error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'List blocks error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Failed to list blocks' },
       { status: 500 }
@@ -215,7 +217,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       message: `Block "${definition.name}" created. Upload required files to complete setup.`,
     })
   } catch (error) {
-    console.error('Create block error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'Create block error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Failed to create block' },
       { status: 500 }

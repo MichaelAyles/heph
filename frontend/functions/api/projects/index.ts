@@ -1,4 +1,5 @@
 import type { Env } from '../../env'
+import { createLogger } from '../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -142,7 +143,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       { status: 201 }
     )
   } catch (error) {
-    console.error('Create project error:', error)
+    const logger = createLogger(env)
+    await logger.error('project', 'Create project error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ error: 'Failed to create project' }, { status: 500 })
   }
 }

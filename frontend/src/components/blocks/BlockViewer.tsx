@@ -33,6 +33,7 @@ import type { BlockDefinition, BusSignal } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import type { LucideIcon } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 // =============================================================================
 // Types
@@ -643,7 +644,7 @@ function FilesTab({ block }: { block: PcbBlock }) {
         setPreviewContent(content)
       }
     } catch (err) {
-      console.error('Failed to load preview:', err)
+      logger.error('ui', 'Failed to load preview', { error: err })
     } finally {
       setLoadingPreview(false)
     }

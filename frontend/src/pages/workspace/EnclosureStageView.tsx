@@ -15,6 +15,7 @@ import {
 import { clsx } from 'clsx'
 import Editor from '@monaco-editor/react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
+import { logger } from '@/lib/logger'
 import { STLViewer } from '@/components/enclosure/STLViewer'
 import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
 import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
@@ -106,7 +107,7 @@ export function EnclosureStageView() {
     preloadOpenSCAD()
       .then(() => setWasmLoaded(true))
       .catch((err) => {
-        console.error('Failed to preload OpenSCAD:', err)
+        logger.enclosure('Failed to preload OpenSCAD', { error: err })
         setRenderError('Failed to load OpenSCAD. Rendering will not be available.')
       })
   }, [])
@@ -363,7 +364,7 @@ export function EnclosureStageView() {
       // Don't show error if operation was aborted
       if (signal.aborted) return
 
-      console.error('Failed to generate enclosure:', error)
+      logger.enclosure('Failed to generate enclosure', { error })
       setRenderError(error instanceof Error ? error.message : 'Failed to generate enclosure')
     } finally {
       if (!signal.aborted) {
@@ -449,7 +450,7 @@ export function EnclosureStageView() {
       // Don't show error if operation was aborted
       if (signal.aborted) return
 
-      console.error('Failed to regenerate enclosure:', error)
+      logger.enclosure('Failed to regenerate enclosure', { error })
       setRenderError(error instanceof Error ? error.message : 'Failed to regenerate')
     } finally {
       if (!signal.aborted) {
@@ -464,7 +465,7 @@ export function EnclosureStageView() {
     const blueprintUrl = spec?.blueprints?.[blueprintIndex]?.url
 
     if (!blueprintUrl || !stlViewerRef.current) {
-      console.warn('Cannot perform visual validation: missing blueprint or viewer ref')
+      logger.warn('enclosure', 'Cannot perform visual validation: missing blueprint or viewer ref')
       return
     }
 
@@ -507,7 +508,7 @@ export function EnclosureStageView() {
       setVisualValidationResult(result)
       setShowComparison(true)
     } catch (error) {
-      console.error('Visual validation failed:', error)
+      logger.enclosure('Visual validation failed', { error })
       setRenderError(error instanceof Error ? error.message : 'Visual validation failed')
     } finally {
       setIsVisualValidating(false)
@@ -556,7 +557,7 @@ export function EnclosureStageView() {
       setStlBlobUrl(blobUrl)
       setCurrentStep('preview')
     } catch (error) {
-      console.error('Failed to render STL:', error)
+      logger.enclosure('Failed to render STL', { error })
       setRenderError(error instanceof Error ? error.message : 'Failed to render STL')
     } finally {
       setIsRendering(false)

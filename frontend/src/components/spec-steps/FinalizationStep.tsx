@@ -4,6 +4,7 @@ import { llm } from '@/services/llm'
 import { FINAL_SPEC_SYSTEM_PROMPT, buildFinalSpecPrompt } from '@/prompts/finalSpec'
 import type { FinalSpec } from '@/db/schema'
 import type { FinalizationStepProps } from './types'
+import { logger } from '@/lib/logger'
 
 export function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) {
   const [status, setStatus] = useState('Generating final specification...')
@@ -52,7 +53,7 @@ export function FinalizationStep({ project, spec, onComplete }: FinalizationStep
         result.lockedAt = new Date().toISOString()
         onComplete(result)
       } catch (err) {
-        console.error('Failed to generate final spec:', err)
+        logger.error('project', 'Failed to generate final spec', { error: err })
         setError('Failed to generate specification. Please try again.')
         isRunningRef.current = false
       }

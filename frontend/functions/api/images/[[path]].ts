@@ -4,6 +4,7 @@
  */
 
 import type { Env } from '../../env'
+import { createLogger } from '../../lib/logger'
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, params } = context
@@ -34,7 +35,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     return new Response(object.body, { headers })
   } catch (error) {
-    console.error('Error serving image:', error)
+    const logger = createLogger(env)
+    await logger.error('image', 'Error serving image', { error: error instanceof Error ? error.message : String(error), key })
     return new Response('Internal server error', { status: 500 })
   }
 }

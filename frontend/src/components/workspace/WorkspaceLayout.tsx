@@ -8,6 +8,7 @@ import { OrchestratorSidebar } from './OrchestratorSidebar'
 import { useWorkspaceStore, type WorkspaceStage } from '@/stores/workspace'
 import { useOrchestratorStore } from '@/stores/orchestrator'
 import type { Project, ProjectSpec } from '@/db/schema'
+import { logger } from '@/lib/logger'
 
 async function fetchProject(id: string): Promise<Project> {
   const res = await fetch(`/api/projects/${id}`)
@@ -53,7 +54,7 @@ export function WorkspaceLayout() {
       // Fetch current project to get fresh spec (avoid stale cache issues)
       const getRes = await fetch(`/api/projects/${id}`)
       if (!getRes.ok) {
-        console.error('Failed to fetch project for spec update')
+        logger.error('api', 'Failed to fetch project for spec update')
         return
       }
       const { project: freshProject } = await getRes.json()
@@ -77,7 +78,7 @@ export function WorkspaceLayout() {
         // Also invalidate projects list so stage indicators stay in sync
         queryClient.invalidateQueries({ queryKey: ['projects'] })
       } else {
-        console.error('Failed to update spec:', await res.text())
+        logger.error('api', 'Failed to update spec', { error: await res.text() })
       }
     },
     [id, queryClient]

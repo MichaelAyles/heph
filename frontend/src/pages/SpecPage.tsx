@@ -15,6 +15,7 @@ import { useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Lock } from 'lucide-react'
+import { logger } from '@/lib/logger'
 import {
   StepIndicator,
   FeasibilityStep,
@@ -238,7 +239,7 @@ export function SpecPage() {
         spec: { ...spec, blueprints: updatedBlueprints },
       })
     } catch (err) {
-      console.error('Failed to regenerate blueprint:', err)
+      logger.project('Failed to regenerate blueprint', { error: err })
       // Re-throw so SelectionStep can handle the error state
       throw err
     }

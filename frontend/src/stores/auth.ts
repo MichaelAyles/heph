@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand'
+import { logger } from '@/lib/logger'
 
 export type ControlMode = 'vibe_it' | 'fix_it' | 'design_it'
 
@@ -43,7 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: null, isAuthenticated: false, isLoading: false })
       }
     } catch (error) {
-      console.error('Auth check failed:', error)
+      logger.error('auth', 'Auth check failed', { error })
       set({ user: null, isAuthenticated: false, isLoading: false })
     }
   },
@@ -65,7 +66,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       return { success: false, error: data.error || 'Login failed' }
     } catch (error) {
-      console.error('Login failed:', error)
+      logger.error('auth', 'Login failed', { error })
       return { success: false, error: 'Network error' }
     }
   },
@@ -74,7 +75,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
     } catch (error) {
-      console.error('Logout failed:', error)
+      logger.error('auth', 'Logout failed', { error })
     } finally {
       set({ user: null, isAuthenticated: false })
     }
@@ -98,7 +99,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const data = await res.json()
       return { success: false, error: data.error || 'Failed to update mode' }
     } catch (error) {
-      console.error('Update control mode failed:', error)
+      logger.error('auth', 'Update control mode failed', { error })
       return { success: false, error: 'Network error' }
     }
   },

@@ -6,6 +6,7 @@
  */
 
 import type { Env } from '../../env'
+import { createLogger } from '../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -40,7 +41,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   // Handle OAuth errors
   if (error) {
-    console.error('OAuth error:', error, url.searchParams.get('error_description'))
+    const logger = createLogger(env)
+    await logger.error('auth', 'OAuth error', { error, description: url.searchParams.get('error_description') })
     return redirectWithError('OAuth authorization failed')
   }
 
@@ -76,7 +78,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
-      console.error('Token exchange failed:', errorText)
+      const logger = createLogger(env)
+      await logger.error('auth', 'Token exchange failed', { error: errorText })
       return redirectWithError('Authentication failed')
     }
 
@@ -175,7 +178,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     return new Response(null, { status: 302, headers })
   } catch (err) {
-    console.error('OAuth callback error:', err)
+    const logger = createLogger(env)
+    await logger.error('auth', 'OAuth callback error', { error: err instanceof Error ? err.message : String(err) })
     return redirectWithError('Authentication failed')
   }
 }

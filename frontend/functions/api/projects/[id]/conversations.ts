@@ -4,6 +4,7 @@
  */
 
 import type { Env } from '../../../env'
+import { createLogger } from '../../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -105,7 +106,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       },
     })
   } catch (error) {
-    console.error('Error fetching conversations:', error)
+    const logger = createLogger(env)
+    await logger.error('project', 'Error fetching conversations', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ error: 'Failed to fetch conversations' }, { status: 500 })
   }
 }

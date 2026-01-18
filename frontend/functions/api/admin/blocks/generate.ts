@@ -14,6 +14,7 @@ import { buildBlockGenerationMessages } from '../../../../src/prompts/block-gene
 import { parseBlockJson } from '../../../lib/block-validator'
 import type { BlockCategory } from '../../../../src/schemas/block'
 import { convertToTokn } from '../../../../src/lib/tokn'
+import { createLogger } from '../../../lib/logger'
 
 interface GenerateRequest {
   slug: string
@@ -291,7 +292,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       rawLlmResponse: llmResponse,
     })
   } catch (error) {
-    console.error('Block generation error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'Block generation error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Generation failed' },
       { status: 500 }

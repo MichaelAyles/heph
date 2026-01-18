@@ -17,6 +17,7 @@ import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { useAuthStore } from '@/stores/auth'
 import { llm } from '@/services/llm'
+import { logger } from '@/lib/logger'
 import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '@/prompts/feasibility'
 import { REFINEMENT_SYSTEM_PROMPT, buildRefinementPrompt } from '@/prompts/refinement'
 import { buildBlueprintPrompts } from '@/prompts/blueprint'
@@ -199,7 +200,7 @@ function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilitySte
         onComplete(feasibility, questions)
       } catch (err) {
         setError('Failed to analyze feasibility. Please try again.')
-        console.error(err)
+        logger.error('project', 'Feasibility analysis failed', { error: err })
         setIsRunning(false)
       }
     }
@@ -491,7 +492,7 @@ function RefinementStep({ project, spec, onDecisions, onComplete }: RefinementSt
           onComplete()
         }
       } catch (err) {
-        console.error('Failed to parse refinement response', err)
+        logger.error('project', 'Failed to parse refinement response', { error: err })
         onComplete()
       } finally {
         setIsChecking(false)
@@ -1002,7 +1003,7 @@ function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) 
         result.lockedAt = new Date().toISOString()
         onComplete(result)
       } catch (err) {
-        console.error('Failed to generate final spec', err)
+        logger.error('project', 'Failed to generate final spec', { error: err })
         setError('Failed to generate specification. Please try again.')
         setIsRunning(false)
       }

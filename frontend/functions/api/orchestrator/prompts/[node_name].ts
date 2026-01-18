@@ -8,6 +8,7 @@
  */
 
 import type { Env } from '../../../env'
+import { createLogger } from '../../../lib/logger'
 import type { OrchestratorPromptRow } from '../../../../src/db/schema'
 import {
   ORCHESTRATOR_SYSTEM_PROMPT,
@@ -87,7 +88,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
   } catch (error) {
     // Database error, fall through to hardcoded
-    console.error('Failed to load prompt from database:', error)
+    const logger = createLogger(env)
+    await logger.warn('api', 'Failed to load prompt from database, using hardcoded', { nodeName, error: error instanceof Error ? error.message : String(error) })
   }
 
   // Fall back to hardcoded

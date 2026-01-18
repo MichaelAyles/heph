@@ -4,6 +4,7 @@
  */
 
 import type { Env } from '../../env'
+import { createLogger } from '../../lib/logger'
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env } = context
@@ -55,7 +56,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       },
     })
   } catch (error) {
-    console.error('Auth check error:', error)
+    const logger = createLogger(env)
+    await logger.error('auth', 'Auth check error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

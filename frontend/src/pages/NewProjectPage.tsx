@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Flame, Loader2, ArrowRight, Terminal, AlertCircle } from 'lucide-react'
 import { clsx } from 'clsx'
+import { logger } from '@/lib/logger'
 
 const MAX_DESCRIPTION_LENGTH = 2000
 
@@ -65,7 +66,7 @@ export function NewProjectPage() {
       // Navigate to spec development page
       navigate(`/project/${project.id}`)
     } catch (err) {
-      console.error('Error:', err)
+      logger.project('Project creation failed', { error: err })
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setIsCreating(false)
     }

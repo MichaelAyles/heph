@@ -5,6 +5,7 @@
 
 import bcrypt from 'bcryptjs'
 import type { Env } from '../../env'
+import { createLogger } from '../../lib/logger'
 
 interface LoginRequest {
   username: string
@@ -170,7 +171,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       headers,
     })
   } catch (error) {
-    console.error('Login error:', error)
+    const logger = createLogger(env)
+    await logger.error('auth', 'Login error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

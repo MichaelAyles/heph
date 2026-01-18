@@ -4,6 +4,7 @@
  */
 
 import type { Env } from '../../../env'
+import { createLogger } from '../../../lib/logger'
 
 type ControlMode = 'vibe_it' | 'fix_it' | 'design_it'
 
@@ -42,7 +43,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     return Response.json({ success: true, controlMode })
   } catch (error) {
-    console.error('Update control mode error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'Update control mode error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -6,6 +6,7 @@
  */
 
 import type { EnhancedOrchestratorPrompt } from '../../schemas/orchestrator-node'
+import { logger } from '../../lib/logger'
 
 // Hardcoded fallback prompts (imported for backward compatibility)
 import { ORCHESTRATOR_SYSTEM_PROMPT } from '../../prompts/orchestrator'
@@ -56,7 +57,7 @@ export async function loadPrompt(
         // Prompt not found in DB, try fallback
         return getFallbackPrompt(nodeName)
       }
-      console.error(`Failed to load prompt ${nodeName}: ${response.status}`)
+      logger.error('orchestrator', `Failed to load prompt ${nodeName}: ${response.status}`)
       return getFallbackPrompt(nodeName)
     }
 
@@ -71,7 +72,7 @@ export async function loadPrompt(
 
     return prompt
   } catch (error) {
-    console.error(`Error loading prompt ${nodeName}:`, error)
+    logger.error('orchestrator', `Error loading prompt ${nodeName}`, { error })
     return getFallbackPrompt(nodeName)
   }
 }
@@ -283,8 +284,8 @@ export async function preloadPrompts(): Promise<void> {
 
   try {
     await loadPrompts(commonPrompts)
-    console.log(`Preloaded ${promptCache.size} orchestrator prompts`)
+    logger.info('orchestrator', `Preloaded ${promptCache.size} orchestrator prompts`)
   } catch (error) {
-    console.error('Failed to preload prompts:', error)
+    logger.error('orchestrator', 'Failed to preload prompts', { error })
   }
 }

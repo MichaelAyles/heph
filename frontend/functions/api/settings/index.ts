@@ -1,4 +1,5 @@
 import type { Env } from '../../env'
+import { createLogger } from '../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -67,7 +68,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       },
     })
   } catch (error) {
-    console.error('Update settings error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'Update settings error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ error: 'Failed to update settings' }, { status: 500 })
   }
 }

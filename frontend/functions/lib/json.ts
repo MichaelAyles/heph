@@ -22,7 +22,7 @@ export function safeJsonParse<T>(json: string | null | undefined, fallback: T): 
   try {
     return JSON.parse(json) as T
   } catch {
-    console.error('[safeJsonParse] Failed to parse JSON:', json.slice(0, 100))
+    // Parse failed - return fallback silently
     return fallback
   }
 }

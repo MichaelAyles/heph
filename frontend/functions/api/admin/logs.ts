@@ -4,6 +4,7 @@
  */
 
 import type { Env } from '../../env'
+import { createLogger } from '../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -117,7 +118,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       },
     })
   } catch (error) {
-    console.error('Error fetching logs:', error)
+    const logger = createLogger(env, user)
+    await logger.error('api', 'Error fetching logs', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ error: 'Failed to fetch logs' }, { status: 500 })
   }
 }
@@ -146,7 +148,8 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       message: `Deleted logs older than ${olderThanDays} days`,
     })
   } catch (error) {
-    console.error('Error deleting logs:', error)
+    const logger = createLogger(env, user)
+    await logger.error('api', 'Error deleting logs', { error: error instanceof Error ? error.message : String(error) })
     return Response.json({ error: 'Failed to delete logs' }, { status: 500 })
   }
 }

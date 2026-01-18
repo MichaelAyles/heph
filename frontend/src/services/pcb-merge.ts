@@ -17,6 +17,7 @@ import {
   Paper,
 } from 'kicadts'
 import type { PlacedBlock, PcbBlock } from '@/db/schema'
+import { logger } from '@/lib/logger'
 
 // Grid unit size in mm (0.5" = 12.7mm)
 const GRID_UNIT_MM = 12.7
@@ -147,7 +148,7 @@ export async function mergeBlockSchematics(
   for (const placed of placedBlocks) {
     const block = blockMap.get(placed.blockId)
     if (!block || !block.files?.schematic) {
-      console.warn(`Block ${placed.blockSlug} has no schematic file, skipping`)
+      logger.warn('pcb', `Block ${placed.blockSlug} has no schematic file, skipping`)
       continue
     }
 
@@ -176,7 +177,7 @@ export async function mergeBlockSchematics(
         }
       }
     } catch (error) {
-      console.error(`Failed to load schematic for ${placed.blockSlug}:`, error)
+      logger.error('pcb', `Failed to load schematic for ${placed.blockSlug}`, { error })
     }
   }
 

@@ -4,6 +4,7 @@ import { llm } from '@/services/llm'
 import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '@/prompts/feasibility'
 import type { FeasibilityAnalysis, OpenQuestion } from '@/db/schema'
 import type { FeasibilityStepProps } from './types'
+import { logger } from '@/lib/logger'
 
 export function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilityStepProps) {
   const [status, setStatus] = useState('Analyzing your project...')
@@ -61,7 +62,7 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
         onComplete(feasibility, questions)
       } catch (err) {
         setError('Failed to analyze feasibility. Please try again.')
-        console.error('Feasibility analysis error:', err)
+        logger.error('project', 'Feasibility analysis error', { error: err })
         isRunningRef.current = false
       }
     }

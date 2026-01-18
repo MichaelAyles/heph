@@ -42,8 +42,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     if (row.spec) {
       try {
         spec = JSON.parse(row.spec as string)
-      } catch (parseError) {
-        console.error('Failed to parse spec JSON:', parseError, 'Raw spec:', row.spec)
+      } catch {
+        // Failed to parse spec JSON - return error placeholder
         spec = { error: 'Failed to parse spec', raw: row.spec }
       }
     }
@@ -60,7 +60,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       },
     })
   } catch (error) {
-    console.error('Get project error:', error)
+    const logger = createLogger(env)
+    await logger.error('project', 'Get project error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: 'Failed to get project', details: String(error) },
       { status: 500 }

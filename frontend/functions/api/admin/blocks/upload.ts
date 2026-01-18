@@ -13,6 +13,7 @@
 
 import type { Env } from '../../../env.d'
 import { parseBlockJson, getBlockFileRequirements } from '../../../lib/block-validator'
+import { createLogger } from '../../../lib/logger'
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, data } = context
@@ -202,7 +203,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       message: `Block "${slug}" updated with ${Object.keys(uploadedFiles).length} file(s)`,
     })
   } catch (error) {
-    console.error('Block upload error:', error)
+    const logger = createLogger(env)
+    await logger.error('api', 'Block upload error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Upload failed' },
       { status: 500 }

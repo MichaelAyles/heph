@@ -5,6 +5,7 @@ import { llm } from '@/services/llm'
 import { REFINEMENT_SYSTEM_PROMPT, buildRefinementPrompt } from '@/prompts/refinement'
 import type { Decision, OpenQuestion } from '@/db/schema'
 import type { RefinementStepProps } from './types'
+import { logger } from '@/lib/logger'
 
 const MAX_REFINEMENT_ROUNDS = 5
 
@@ -60,7 +61,7 @@ export function RefinementStep({ project, spec, onDecisions, onComplete }: Refin
           onComplete()
         }
       } catch (err) {
-        console.error('Failed to parse refinement response:', err)
+        logger.error('project', 'Failed to parse refinement response', { error: err })
         onComplete() // Proceed anyway
       } finally {
         setIsChecking(false)

@@ -9,6 +9,7 @@ import { PCB3DViewer } from '@/components/pcb/PCB3DViewer'
 import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
 import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import { mergeBlockSchematics } from '@/services/pcb-merge'
+import { logger } from '@/lib/logger'
 import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '@/db/schema'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
@@ -159,7 +160,7 @@ export function PCBStageView() {
 
       setCurrentStep('preview')
     } catch (error) {
-      console.error('Merge failed:', error)
+      logger.pcb('Merge failed', { error })
       setMergeError(error instanceof Error ? error.message : 'Failed to merge schematics')
       setCurrentStep('select_blocks')
     } finally {

@@ -232,8 +232,8 @@ async function processStream(
       'success',
       null
     )
-  } catch (error) {
-    console.error('Stream processing error:', error)
+  } catch {
+    // Stream processing error - send error event to client
     await writer.write(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`))
   } finally {
     await writer.close()
@@ -314,7 +314,7 @@ async function logConversation(
         errorMessage
       )
       .run()
-  } catch (err) {
-    console.error('Failed to log conversation:', err)
+  } catch {
+    // Silently fail - conversation logging is best-effort
   }
 }

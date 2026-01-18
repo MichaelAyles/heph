@@ -13,6 +13,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import * as THREE from 'three'
 import { Loader2, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
 import { clsx } from 'clsx'
+import { logger } from '@/lib/logger'
 
 /**
  * Ref interface for STLViewer component
@@ -178,7 +179,7 @@ export const STLViewer = forwardRef<STLViewerRef, STLViewerProps>(function STLVi
       takeScreenshot: async (): Promise<string | null> => {
         const gl = glRef.current
         if (!gl) {
-          console.warn('WebGL renderer not ready for screenshot')
+          logger.warn('ui', 'WebGL renderer not ready for screenshot')
           return null
         }
 
@@ -192,7 +193,7 @@ export const STLViewer = forwardRef<STLViewerRef, STLViewerProps>(function STLVi
           const base64 = dataUrl.split(',')[1]
           return base64
         } catch (error) {
-          console.error('Failed to take screenshot:', error)
+          logger.error('ui', 'Failed to take screenshot', { error })
           return null
         }
       },

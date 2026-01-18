@@ -24,6 +24,7 @@ import {
   User,
   ChevronRight,
 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 import { clsx } from 'clsx'
 import JSZip from 'jszip'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
@@ -314,7 +315,7 @@ After building, find the binary at:
       // Fetch all conversations for this project
       const res = await fetch(`/api/projects/${project.id}/conversations?limit=200`)
       if (!res.ok) {
-        console.error('Failed to fetch conversations - may require admin access')
+        logger.export('Failed to fetch conversations - may require admin access')
         return
       }
 
@@ -382,7 +383,7 @@ These conversations document the design process and can be used for:
         `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-conversations.zip`
       )
     } catch (error) {
-      console.error('Failed to export conversations:', error)
+      logger.export('Failed to export conversations', { error })
     }
   }
 
@@ -637,7 +638,7 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
       await downloadFn()
       setDownloaded((prev) => new Set(prev).add(id))
     } catch (error) {
-      console.error(`Download failed for ${id}:`, error)
+      logger.export(`Download failed for ${id}`, { error })
     } finally {
       setDownloading(null)
     }

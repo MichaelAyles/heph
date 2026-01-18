@@ -5,6 +5,7 @@
  */
 
 import type { Env } from '../../../env'
+import { createLogger } from '../../../lib/logger'
 
 interface PagesFunction<E> {
   (context: {
@@ -54,7 +55,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       showAuthor: row.show_author === 1,
     } as VisibilityResponse)
   } catch (error) {
-    console.error('Get visibility error:', error)
+    const logger = createLogger(env)
+    await logger.error('project', 'Get visibility error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: 'Failed to get visibility settings' },
       { status: 500 }
@@ -133,7 +135,8 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
       showAuthor: updated?.show_author === 1,
     } as VisibilityResponse)
   } catch (error) {
-    console.error('Update visibility error:', error)
+    const logger = createLogger(env)
+    await logger.error('project', 'Update visibility error', { error: error instanceof Error ? error.message : String(error) })
     return Response.json(
       { error: 'Failed to update visibility settings' },
       { status: 500 }

@@ -6,6 +6,7 @@
  * backward compatibility during migration.
  */
 
+import { logger } from '@/lib/logger'
 import {
   ORCHESTRATOR_SYSTEM_PROMPT,
 } from '@/prompts/orchestrator'
@@ -66,7 +67,7 @@ export async function loadPrompt(nodeName: string): Promise<string> {
       return data.systemPrompt
     }
   } catch (error) {
-    console.warn(`Failed to load prompt from API for ${nodeName}:`, error)
+    logger.warn('orchestrator', `Failed to load prompt from API for ${nodeName}`, { error })
   }
 
   // Fall back to hardcoded
