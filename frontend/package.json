@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "pnpm build && pnpm pages:dev",
-    "build": "pnpm build:blogs && tsc -b && vite build",
+    "build": "npx tsx scripts/build-blog-manifest.ts && tsc -b && vite build",
     "build:blogs": "tsx scripts/build-blog-manifest.ts",
     "preview": "vite preview",
     "lint": "eslint .",
