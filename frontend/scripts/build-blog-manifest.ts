@@ -129,6 +129,15 @@ function parseBlogNumber(filename: string): number {
   return match ? parseInt(match[1], 10) : 0
 }
 
+// Strip the first h1 and date line from HTML to avoid duplicates with our header
+function stripTitleAndDate(html: string): string {
+  // Remove first <h1>...</h1>
+  let result = html.replace(/<h1[^>]*>.*?<\/h1>\s*/i, '')
+  // Remove the date paragraph (usually <p><strong>Date</strong>: ...</p>)
+  result = result.replace(/<p>\s*<strong>Date<\/strong>:?\s*[^<]*<\/p>\s*/i, '')
+  return result.trim()
+}
+
 // Process a single blog file
 function processBlog(filename: string): BlogEntry | null {
   const filePath = path.join(BLOGS_DIR, filename)
@@ -143,8 +152,9 @@ function processBlog(filename: string): BlogEntry | null {
   const thumbnailPath = extractFirstImage(content, slug)
   const readingTime = calculateReadingTime(content)
 
-  // Convert to HTML
-  const htmlContent = marked.parse(content) as string
+  // Convert to HTML and strip duplicate title/date
+  const rawHtml = marked.parse(content) as string
+  const htmlContent = stripTitleAndDate(rawHtml)
 
   return {
     slug,

@@ -85,9 +85,7 @@ export function BlogPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link to="/" className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-copper-gradient rounded flex items-center justify-center">
-                  <span className="text-ash font-bold text-sm">P</span>
-                </div>
+                <img src="/logo.png" alt="Phaestus" className="h-8 w-auto" />
                 <span className="text-lg font-bold text-steel">PHAESTUS</span>
               </Link>
               <span className="text-surface-500">|</span>
