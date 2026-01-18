@@ -625,18 +625,50 @@ function FilesTab({ block }: { block: PcbBlock }) {
   const hasSchematic = !!files.schematic
   const hasPcb = !!files.pcb
   const hasStep = !!files.stepModel
+  const hasBlockJson = !!files.blockJson
 
-  const [previewType, setPreviewType] = useState<'schematic' | 'pcb' | '3d' | null>(
-    hasSchematic ? 'schematic' : hasPcb ? 'pcb' : hasStep ? '3d' : null
+  const [previewType, setPreviewType] = useState<'schematic' | 'pcb' | '3d' | 'json' | null>(
+    hasSchematic ? 'schematic' : hasPcb ? 'pcb' : hasStep ? '3d' : hasBlockJson ? 'json' : null
   )
   const [previewContent, setPreviewContent] = useState<string | null>(null)
+  const [jsonContent, setJsonContent] = useState<string | null>(null)
+  const [jsonEdited, setJsonEdited] = useState(false)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const [savingJson, setSavingJson] = useState(false)
+  const [jsonError, setJsonError] = useState<string | null>(null)
 
-  const loadPreview = async (type: 'schematic' | 'pcb' | '3d') => {
+  const loadPreview = async (type: 'schematic' | 'pcb' | '3d' | 'json') => {
     // 3D preview doesn't need to load content - StepViewer fetches directly
     if (type === '3d') {
       setPreviewType('3d')
       setPreviewContent(null)
+      return
+    }
+
+    // JSON preview
+    if (type === 'json') {
+      if (!files.blockJson) return
+      setLoadingPreview(true)
+      setPreviewType('json')
+      try {
+        const res = await fetch(`/api/blocks/${block.slug}/files/${files.blockJson}`)
+        if (res.ok) {
+          const content = await res.text()
+          // Pretty print the JSON
+          try {
+            const parsed = JSON.parse(content)
+            setJsonContent(JSON.stringify(parsed, null, 2))
+          } catch {
+            setJsonContent(content)
+          }
+          setJsonEdited(false)
+          setJsonError(null)
+        }
+      } catch (err) {
+        logger.error('ui', 'Failed to load JSON', { error: err })
+      } finally {
+        setLoadingPreview(false)
+      }
       return
     }
 
@@ -656,6 +688,47 @@ function FilesTab({ block }: { block: PcbBlock }) {
       logger.error('ui', 'Failed to load preview', { error: err })
     } finally {
       setLoadingPreview(false)
+    }
+  }
+
+  const handleJsonChange = (value: string) => {
+    setJsonContent(value)
+    setJsonEdited(true)
+    // Validate JSON
+    try {
+      JSON.parse(value)
+      setJsonError(null)
+    } catch (e) {
+      setJsonError(e instanceof Error ? e.message : 'Invalid JSON')
+    }
+  }
+
+  const handleSaveJson = async () => {
+    if (!jsonContent || jsonError) return
+
+    setSavingJson(true)
+    try {
+      // Parse to validate and get the definition
+      const definition = JSON.parse(jsonContent)
+
+      // Update the block via API
+      const res = await fetch(`/api/admin/blocks/${block.slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ definition }),
+      })
+
+      if (res.ok) {
+        setJsonEdited(false)
+        // Could trigger a refresh here if needed
+      } else {
+        const err = await res.json()
+        setJsonError(err.error || 'Failed to save')
+      }
+    } catch (err) {
+      setJsonError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSavingJson(false)
     }
   }
 
@@ -700,52 +773,89 @@ function FilesTab({ block }: { block: PcbBlock }) {
       </div>
 
       {/* Preview */}
-      {(hasSchematic || hasPcb || hasStep) && (
+      {(hasSchematic || hasPcb || hasStep || hasBlockJson) && (
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-sm font-medium text-white">Preview</span>
-            <div className="flex gap-1">
-              {hasSchematic && (
-                <button
-                  onClick={() => loadPreview('schematic')}
-                  className={clsx(
-                    'px-3 py-1 text-xs rounded transition-colors',
-                    previewType === 'schematic'
-                      ? 'bg-copper text-surface-900'
-                      : 'bg-surface-700 text-steel hover:text-white'
-                  )}
-                >
-                  Schematic
-                </button>
-              )}
-              {hasPcb && (
-                <button
-                  onClick={() => loadPreview('pcb')}
-                  className={clsx(
-                    'px-3 py-1 text-xs rounded transition-colors',
-                    previewType === 'pcb'
-                      ? 'bg-copper text-surface-900'
-                      : 'bg-surface-700 text-steel hover:text-white'
-                  )}
-                >
-                  PCB
-                </button>
-              )}
-              {hasStep && (
-                <button
-                  onClick={() => loadPreview('3d')}
-                  className={clsx(
-                    'px-3 py-1 text-xs rounded transition-colors',
-                    previewType === '3d'
-                      ? 'bg-copper text-surface-900'
-                      : 'bg-surface-700 text-steel hover:text-white'
-                  )}
-                >
-                  3D Model
-                </button>
-              )}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-white">Preview</span>
+              <div className="flex gap-1">
+                {hasSchematic && (
+                  <button
+                    onClick={() => loadPreview('schematic')}
+                    className={clsx(
+                      'px-3 py-1 text-xs rounded transition-colors',
+                      previewType === 'schematic'
+                        ? 'bg-copper text-surface-900'
+                        : 'bg-surface-700 text-steel hover:text-white'
+                    )}
+                  >
+                    Schematic
+                  </button>
+                )}
+                {hasPcb && (
+                  <button
+                    onClick={() => loadPreview('pcb')}
+                    className={clsx(
+                      'px-3 py-1 text-xs rounded transition-colors',
+                      previewType === 'pcb'
+                        ? 'bg-copper text-surface-900'
+                        : 'bg-surface-700 text-steel hover:text-white'
+                    )}
+                  >
+                    PCB
+                  </button>
+                )}
+                {hasStep && (
+                  <button
+                    onClick={() => loadPreview('3d')}
+                    className={clsx(
+                      'px-3 py-1 text-xs rounded transition-colors',
+                      previewType === '3d'
+                        ? 'bg-copper text-surface-900'
+                        : 'bg-surface-700 text-steel hover:text-white'
+                    )}
+                  >
+                    3D Model
+                  </button>
+                )}
+                {hasBlockJson && (
+                  <button
+                    onClick={() => loadPreview('json')}
+                    className={clsx(
+                      'px-3 py-1 text-xs rounded transition-colors',
+                      previewType === 'json'
+                        ? 'bg-copper text-surface-900'
+                        : 'bg-surface-700 text-steel hover:text-white'
+                    )}
+                  >
+                    JSON
+                  </button>
+                )}
+              </div>
             </div>
+            {/* Save button for JSON editor */}
+            {previewType === 'json' && jsonEdited && (
+              <button
+                onClick={handleSaveJson}
+                disabled={!!jsonError || savingJson}
+                className={clsx(
+                  'flex items-center gap-1.5 px-3 py-1 text-xs rounded transition-colors',
+                  jsonError
+                    ? 'bg-surface-700 text-steel-dim cursor-not-allowed'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-500'
+                )}
+              >
+                <Save className="w-3 h-3" />
+                {savingJson ? 'Saving...' : 'Save'}
+              </button>
+            )}
           </div>
+          {/* JSON error message */}
+          {previewType === 'json' && jsonError && (
+            <div className="mb-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
+              {jsonError}
+            </div>
+          )}
           <div className="bg-surface-900 rounded-lg overflow-hidden" style={{ height: 400 }}>
             {loadingPreview ? (
               <div className="h-full flex items-center justify-center text-steel-dim">
@@ -755,6 +865,13 @@ function FilesTab({ block }: { block: PcbBlock }) {
               <StepViewer
                 url={`/api/blocks/${block.slug}/files/${files.stepModel}`}
                 className="h-full"
+              />
+            ) : previewType === 'json' && jsonContent !== null ? (
+              <textarea
+                value={jsonContent}
+                onChange={(e) => handleJsonChange(e.target.value)}
+                className="w-full h-full p-4 bg-surface-900 text-steel font-mono text-xs resize-none focus:outline-none focus:ring-1 focus:ring-copper/50"
+                spellCheck={false}
               />
             ) : previewContent ? (
               <KiCanvasViewer
