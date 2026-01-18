@@ -1,7 +1,7 @@
 /**
  * Build-time blog manifest generator
  *
- * Scans /blogs/*.md files and generates:
+ * Scans /blogs/blog[N]/blog.md files and generates:
  * 1. A manifest JSON with metadata and HTML content
  * 2. Copies images to public/blog-images/
  *
@@ -64,15 +64,15 @@ function extractDate(content: string): string {
   return new Date().toISOString().split('T')[0]
 }
 
-// Extract first image from markdown
-function extractFirstImage(content: string, slug: string): string | null {
+// Extract first image from markdown and copy to public folder
+function extractFirstImage(content: string, slug: string, blogDir: string): string | null {
   // Look for markdown images: ![alt](path)
   const match = content.match(/!\[([^\]]*)\]\(([^)]+)\)/)
   if (match) {
     const imagePath = match[2]
-    // Handle relative paths
+    // Handle relative paths (images in the same blog directory)
     if (!imagePath.startsWith('http')) {
-      const srcPath = path.join(BLOGS_DIR, imagePath)
+      const srcPath = path.join(blogDir, imagePath)
       if (fs.existsSync(srcPath)) {
         const ext = path.extname(imagePath)
         const destFilename = `${slug}-thumb${ext}`
@@ -86,9 +86,43 @@ function extractFirstImage(content: string, slug: string): string | null {
   return null
 }
 
+// Copy all images from blog directory to public folder and update HTML paths
+function copyBlogImages(blogDir: string, slug: string, html: string): string {
+  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']
+  let updatedHtml = html
+
+  try {
+    const files = fs.readdirSync(blogDir)
+    for (const file of files) {
+      const ext = path.extname(file).toLowerCase()
+      if (imageExtensions.includes(ext)) {
+        const srcPath = path.join(blogDir, file)
+        // Create a clean filename with the blog slug prefix
+        const destFilename = `${slug}-${file.replace(/\s+/g, '-')}`
+        const destPath = path.join(OUTPUT_IMAGES_DIR, destFilename)
+        fs.copyFileSync(srcPath, destPath)
+
+        // Update HTML references to this image
+        // Match both the original filename and URL-encoded versions
+        const escapedFile = file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const patterns = [
+          new RegExp(`src="[^"]*${escapedFile}"`, 'g'),
+          new RegExp(`src='[^']*${escapedFile}'`, 'g'),
+        ]
+        for (const pattern of patterns) {
+          updatedHtml = updatedHtml.replace(pattern, `src="/blog-images/${destFilename}"`)
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`  Warning: Could not copy images from ${blogDir}:`, error)
+  }
+
+  return updatedHtml
+}
+
 // Generate excerpt from content (first ~200 chars of non-heading text)
 function extractExcerpt(content: string): string {
-  // Remove title and date lines
   const lines = content.split('\n')
   const textLines: string[] = []
 
@@ -123,9 +157,9 @@ function calculateReadingTime(content: string): number {
   return Math.max(1, Math.ceil(words / 200))
 }
 
-// Parse blog number from filename
-function parseBlogNumber(filename: string): number {
-  const match = filename.match(/^(\d+)/)
+// Parse blog number from directory name (e.g., "blog0001" -> 1)
+function parseBlogNumber(dirName: string): number {
+  const match = dirName.match(/blog(\d+)/)
   return match ? parseInt(match[1], 10) : 0
 }
 
@@ -138,23 +172,35 @@ function stripTitleAndDate(html: string): string {
   return result.trim()
 }
 
-// Process a single blog file
-function processBlog(filename: string): BlogEntry | null {
-  const filePath = path.join(BLOGS_DIR, filename)
-  const content = fs.readFileSync(filePath, 'utf-8')
+// Process a single blog directory
+function processBlog(dirName: string): BlogEntry | null {
+  const blogDir = path.join(BLOGS_DIR, dirName)
+  const blogFile = path.join(blogDir, 'blog.md')
 
-  const slug = filename.replace('.md', '')
-  const number = parseBlogNumber(filename)
+  if (!fs.existsSync(blogFile)) {
+    console.error(`  Warning: No blog.md found in ${dirName}`)
+    return null
+  }
+
+  const content = fs.readFileSync(blogFile, 'utf-8')
+
+  const slug = dirName // e.g., "blog0001"
+  const number = parseBlogNumber(dirName)
 
   const title = extractTitle(content)
   const date = extractDate(content)
   const excerpt = extractExcerpt(content)
-  const thumbnailPath = extractFirstImage(content, slug)
+  const thumbnailPath = extractFirstImage(content, slug, blogDir)
   const readingTime = calculateReadingTime(content)
 
-  // Convert to HTML and strip duplicate title/date
-  const rawHtml = marked.parse(content) as string
-  const htmlContent = stripTitleAndDate(rawHtml)
+  // Convert to HTML
+  let rawHtml = marked.parse(content) as string
+
+  // Strip duplicate title/date
+  rawHtml = stripTitleAndDate(rawHtml)
+
+  // Copy images and update paths in HTML
+  const htmlContent = copyBlogImages(blogDir, slug, rawHtml)
 
   return {
     slug,
@@ -174,22 +220,27 @@ function buildManifest() {
 
   ensureDirectories()
 
-  // Get all markdown files
-  const files = fs.readdirSync(BLOGS_DIR).filter((f) => f.endsWith('.md'))
+  // Get all blog directories (blog0001, blog0004, etc.)
+  const dirs = fs
+    .readdirSync(BLOGS_DIR)
+    .filter((f) => {
+      const fullPath = path.join(BLOGS_DIR, f)
+      return fs.statSync(fullPath).isDirectory() && f.startsWith('blog')
+    })
 
-  console.log(`Found ${files.length} blog files`)
+  console.log(`Found ${dirs.length} blog directories`)
 
   const entries: BlogEntry[] = []
 
-  for (const file of files) {
+  for (const dir of dirs) {
     try {
-      const entry = processBlog(file)
+      const entry = processBlog(dir)
       if (entry) {
         entries.push(entry)
-        console.log(`  Processed: ${file} -> "${entry.title}"`)
+        console.log(`  Processed: ${dir} -> "${entry.title}"`)
       }
     } catch (error) {
-      console.error(`  Error processing ${file}:`, error)
+      console.error(`  Error processing ${dir}:`, error)
     }
   }
 
