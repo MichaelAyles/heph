@@ -28,3 +28,7 @@ CLAUDE_NOTES.md
 
 # Test coverage
 coverage/
+
+# Generated blog assets
+src/data/blog-manifest.json
+public/blog-images/

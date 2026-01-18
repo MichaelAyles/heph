@@ -16,6 +16,7 @@ import {
   X,
   Image as ImageIcon,
   CheckCircle,
+  FileText,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/stores/auth'
@@ -389,13 +390,22 @@ export function LandingPage() {
               </div>
             </div>
 
-            <a
-              href="mailto:contact@phaestus.app"
-              className="inline-flex items-center gap-2 text-steel-dim hover:text-copper transition-colors"
-            >
-              <Mail className="w-4 h-4" strokeWidth={1.5} />
-              contact@phaestus.app
-            </a>
+            <div className="flex items-center gap-6">
+              <Link
+                to="/blog"
+                className="inline-flex items-center gap-2 text-steel-dim hover:text-copper transition-colors"
+              >
+                <FileText className="w-4 h-4" strokeWidth={1.5} />
+                Dev Blog
+              </Link>
+              <a
+                href="mailto:contact@phaestus.app"
+                className="inline-flex items-center gap-2 text-steel-dim hover:text-copper transition-colors"
+              >
+                <Mail className="w-4 h-4" strokeWidth={1.5} />
+                contact@phaestus.app
+              </a>
+            </div>
           </div>
 
           <div className="mt-8 pt-8 border-t border-surface-800 text-center">

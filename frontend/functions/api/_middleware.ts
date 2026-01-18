@@ -16,6 +16,7 @@ const PUBLIC_ROUTES = [
   '/api/blocks',
   '/api/images',
   '/api/gallery',
+  '/api/blog',
 ]
 
 // Request size limits (in bytes)

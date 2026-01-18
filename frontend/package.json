@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "pnpm build && pnpm pages:dev",
-    "build": "tsc -b && vite build",
+    "build": "pnpm build:blogs && tsc -b && vite build",
+    "build:blogs": "tsx scripts/build-blog-manifest.ts",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -47,6 +48,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/marked": "^6.0.0",
+    "marked": "^15.0.0",
+    "tsx": "^4.19.0",
     "@tailwindcss/vite": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",

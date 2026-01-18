@@ -19,6 +19,9 @@ import { AdminBlocksPage } from '@/pages/AdminBlocksPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { GalleryPage } from '@/pages/GalleryPage'
 import { GalleryDetailPage } from '@/pages/GalleryDetailPage'
+import { BlogPage } from '@/pages/BlogPage'
+import { BlogPostPage } from '@/pages/BlogPostPage'
+import { AdminBlogPage } from '@/pages/AdminBlogPage'
 import {
   SpecStageView,
   PCBStageView,
@@ -63,6 +66,7 @@ function AuthenticatedApp() {
         <Route path="admin/blocks" element={<AdminBlocksPage />} />
         <Route path="admin/llms" element={<AdminLLMsPage />} />
         <Route path="admin/orchestrator" element={<AdminOrchestratorPage />} />
+        <Route path="admin/blog" element={<AdminBlogPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -78,7 +82,7 @@ function AppContent() {
   }, [checkAuth])
 
   // Public routes that don't require authentication
-  const isPublicRoute = location.pathname.startsWith('/gallery')
+  const isPublicRoute = location.pathname.startsWith('/gallery') || location.pathname.startsWith('/blog')
 
   if (isLoading && !isPublicRoute) {
     return (
@@ -88,12 +92,14 @@ function AppContent() {
     )
   }
 
-  // Handle public routes (gallery) regardless of auth state
+  // Handle public routes (gallery, blog) regardless of auth state
   if (isPublicRoute) {
     return (
       <Routes>
         <Route path="/gallery" element={<GalleryPage />} />
         <Route path="/gallery/:id" element={<GalleryDetailPage />} />
+        <Route path="/blog" element={<BlogPage />} />
+        <Route path="/blog/:slug" element={<BlogPostPage />} />
       </Routes>
     )
   }
