@@ -57,20 +57,16 @@ The codebase is mature and production-ready with solid engineering practices:
 | Blueprint placeholder images | Orchestrator now generates real images |
 | Blueprint URL validation | URLs validated before display |
 | No orchestrator prompt management | Admin UI with full CRUD for 8 agents |
+| Double execution in FeasibilityStep | Use ref instead of state for isRunning guard |
+| Double execution in FinalizationStep | Use ref instead of state for isRunning guard |
+| onComplete called multiple times (BlueprintStep) | Use refs for hasStarted/hasCompleted guards |
+| Unhandled rejection in handleBlueprintRegenerate | Added try-catch with error propagation |
+| Unsaved changes lost on file switch (FirmwareStageView) | Auto-save on file switch with isDirty tracking |
+| Race condition in generate/regenerate (EnclosureStageView) | AbortController for cancellation |
+| File upload failure silently ignored (BlockImportWizard) | Throw error on upload failure |
+| KiCanvasViewer loading timeout stale closure | Use ref for timeout, clear on load/error/unmount |
 
 ### Remaining Issues
-
-#### High Priority (Race Conditions & Data Loss)
-| Issue | Location | Risk | Effort |
-|-------|----------|------|--------|
-| Double execution in FeasibilityStep | `FeasibilityStep.tsx:14-69` | Duplicate LLM calls, wasted credits | 1h |
-| Double execution in FinalizationStep | `FinalizationStep.tsx:14-60` | Duplicate LLM calls | 1h |
-| onComplete called multiple times | `BlueprintStep.tsx:77-89` | Race with hasCompleted state | 1h |
-| Unhandled rejection in handleBlueprintRegenerate | `SpecPage.tsx:226-239` | Silent image failures | 30m |
-| Unsaved changes lost on file switch | `FirmwareStageView.tsx:365-375` | Data loss | 1h |
-| Race condition in generate/regenerate | `EnclosureStageView.tsx:227-411` | No cancellation logic | 2h |
-| File upload failure silently ignored | `BlockImportWizard.tsx:151-169` | Incomplete block state | 1h |
-| KiCanvasViewer loading timeout stale closure | `KiCanvasViewer.tsx:142-146` | Always fires after 5s | 30m |
 
 #### Medium Priority
 | Issue | Location | Risk | Effort |
@@ -209,38 +205,24 @@ The codebase is mature and production-ready with solid engineering practices:
 
 ## Remaining Work
 
-### High Priority (Fix These)
-1. **Fix race conditions in step components**
-   - Use refs instead of state for `isRunning` guards
-   - Add AbortController for cancellable async operations
-   - Proper cleanup in useEffect return functions
-
-2. **Fix data loss in FirmwareStageView**
-   - Auto-save on file switch
-   - Add unsaved changes warning before navigation
-
-3. **Fix file upload error handling in BlockImportWizard**
-   - Fail entire operation or clearly communicate partial success
-   - Don't report success if files failed to upload
-
 ### Medium Priority (Nice to Have)
-4. **Standardize error logging**
+1. **Standardize error logging**
    - Replace 68 console.error/warn calls with logger utility
    - Add structured logging throughout
 
-5. **Use extractAndValidateJson throughout**
+2. **Use extractAndValidateJson throughout**
    - Replace regex JSON extraction in step components and orchestrator tools
    - Add Zod schema validation for all LLM responses
 
-6. **Add `state.history` trimming to orchestrator**
+3. **Add `state.history` trimming to orchestrator**
    - Implement max size (e.g., 200 items) with FIFO eviction
    - Similar pattern to existing `trimConversationHistory()`
 
 ### Low Priority
-7. Add workspace stage view tests
-8. Fix incomplete I2C validation in firmware (regex-based, misses variable addresses)
-9. Add pagination bounds check (large offsets on expensive queries)
-10. Add message boundary awareness to trimConversationHistory (keep assistant+tool pairs together)
+4. Add workspace stage view tests
+5. Fix incomplete I2C validation in firmware (regex-based, misses variable addresses)
+6. Add pagination bounds check (large offsets on expensive queries)
+7. Add message boundary awareness to trimConversationHistory (keep assistant+tool pairs together)
 
 ---
 
@@ -259,4 +241,4 @@ The codebase is mature and production-ready with solid engineering practices:
 - New: TOKN KiCad parser replaces kicadts for KiCad 8 support
 - New: LLM-assisted block import wizard for automated block.json generation
 - New: CI workflow with GitHub Actions for PR checks
-- Code review completed January 18, 2026 - multiple race conditions and data loss issues identified
+- Code review completed January 18, 2026 - 8 high-priority race conditions and data loss issues identified and fixed
