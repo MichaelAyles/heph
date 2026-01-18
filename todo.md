@@ -1,7 +1,7 @@
 # PHAESTUS Code Review & Technical Debt
 
-**Last Review**: January 16, 2026
-**Overall Status**: Production-ready
+**Last Review**: January 18, 2026
+**Overall Status**: Production-ready with identified issues
 **Test Coverage**: 648 tests (all passing)
 
 ---
@@ -13,21 +13,26 @@ The codebase is mature and production-ready with solid engineering practices:
 - Multi-stage workspace (PCB, Enclosure, Firmware, Export)
 - Hardware orchestrator with 8 specialized agents and admin management UI
 - Comprehensive LLM integration with retry logic, streaming, and tool calling
-- 16 database migrations, WorkOS OAuth, user approval workflow
-- 35+ API endpoints operational including orchestrator admin API
+- 18 database migrations, WorkOS OAuth, user approval workflow
+- 40+ API endpoints operational including orchestrator admin API
+- New: BlockViewer component with KiCanvas integration
+- New: TOKN KiCad parser for robust file parsing
+- New: LLM-assisted block import wizard
 
-### Recent Changes (Jan 2026)
+### Recent Changes (Jan 17-18, 2026)
 
 | Change | Commit | Impact |
 |--------|--------|--------|
-| Add orchestrator editor admin page | 0e61f3f | Full CRUD for agent prompts |
-| Add orchestrator admin API endpoints | af582ca | prompts, edges, hooks management |
-| Add 4 new database migrations (0013-0016) | - | orchestrator_prompts, edges, hooks, context_tags |
-| Fix @/db/schema imports in admin handlers | 2c8697b | Build fixes for wrangler |
-| Add Orchestrator link to admin sidebar | 467ba21 | Admin navigation |
-| Fix finalSpec type in ProjectsPage | 14f4b74 | Type safety for spec interface |
-| Orchestrator generates real blueprints | e3f442f | No more placeholder images |
-| Validate blueprint URLs | 70bf9c1 | Prevent 404s in SpecStageView |
+| Add BlockViewer with admin integration | fb448fa | Block inspection UI with KiCanvas |
+| Add JSON repair for LLM bracket mistakes | ef3992e | Improved LLM output handling |
+| Return full block definition from /api/blocks | 4e3ef3a | DRC/solver support |
+| Add nofit field to component schema | 6e41bdc | Board interconnect configuration |
+| Fix KiCanvasViewer removeChild error | d8cca22 | Separate embed ref pattern |
+| Add wireless capabilities to block schema | cb88c7b | WiFi, BLE, Zigbee, etc. |
+| Add voltage limits and permanent connections | f08eaf7 | Enhanced block definitions |
+| Add CI workflow for PR checks | 3b22e90 | GitHub Actions integration |
+| Replace kicadts with TOKN parser | 7d99f5a | KiCad 8 support |
+| Add LLM-assisted block import | d03af50 | Automated block.json generation |
 
 ---
 
@@ -55,18 +60,43 @@ The codebase is mature and production-ready with solid engineering practices:
 
 ### Remaining Issues
 
+#### High Priority (Race Conditions & Data Loss)
+| Issue | Location | Risk | Effort |
+|-------|----------|------|--------|
+| Double execution in FeasibilityStep | `FeasibilityStep.tsx:14-69` | Duplicate LLM calls, wasted credits | 1h |
+| Double execution in FinalizationStep | `FinalizationStep.tsx:14-60` | Duplicate LLM calls | 1h |
+| onComplete called multiple times | `BlueprintStep.tsx:77-89` | Race with hasCompleted state | 1h |
+| Unhandled rejection in handleBlueprintRegenerate | `SpecPage.tsx:226-239` | Silent image failures | 30m |
+| Unsaved changes lost on file switch | `FirmwareStageView.tsx:365-375` | Data loss | 1h |
+| Race condition in generate/regenerate | `EnclosureStageView.tsx:227-411` | No cancellation logic | 2h |
+| File upload failure silently ignored | `BlockImportWizard.tsx:151-169` | Incomplete block state | 1h |
+| KiCanvasViewer loading timeout stale closure | `KiCanvasViewer.tsx:142-146` | Always fires after 5s | 30m |
+
 #### Medium Priority
 | Issue | Location | Risk | Effort |
 |-------|----------|------|--------|
-| Orchestrator complexity | `src/services/orchestrator.ts` (1641 lines) | Testability | 4-6h |
+| Orchestrator `state.history` unbounded growth | `orchestrator.ts:419` | Memory issues on long sessions | 1h |
+| Dual state update pattern creates inconsistency | `spec-tools.ts` (multiple) | Local/server state diverge | 2h |
+| JSON parsing without Zod validation | `spec-tools.ts`, `enclosure-tools.ts`, `firmware-tools.ts` | Parse failures | 2h |
+| Local/server state desync in RefinementStep | `RefinementStep.tsx:12-18` | Stale questions | 1h |
+| TOCTOU race in block creation | `functions/api/admin/blocks/index.ts:148-158` | 409 vs 500 error | 1h |
+| Direct state mutation in file tree | `FirmwareStageView.tsx:566-574` | React may miss updates | 30m |
+| useMemo used for side effects | `PCBStageView.tsx:44-48, 171-175` | Anti-pattern | 30m |
+| Silent failures in ExportStageView | `ExportStageView.tsx:310-387, 634-644` | No user feedback | 1h |
 | Standardize error logging | 68 console.error/warn calls | Debug difficulty | 2h |
 | Use extractAndValidateJson | `spec-steps/*.tsx` | Parse failures | 2h |
 
 #### Low Priority
 | Issue | Location | Risk | Effort |
 |-------|----------|------|--------|
+| suggestedRevisions lost on navigation | `SpecPage.tsx:121, 164-178` | UX issue on refresh | 1h |
+| No mutation pending check | `SpecPage.tsx:150-248` | Rapid click issues | 1h |
+| MAX_REFINEMENT_ROUNDS logic conflates decisions/rounds | `RefinementStep.tsx:26-29` | Early/late termination | 30m |
+| setTimeout leak in validation status | `EnclosureStageView.tsx:333, 403` | Memory warning | 30m |
+| Unhandled WASM load failure | `EnclosureStageView.tsx:102-106` | Generate button enabled despite failure | 30m |
 | Incomplete I2C validation | Firmware validation | Edge case bugs | 2h |
 | Missing pagination bounds | Projects list endpoint | Expensive queries | 1h |
+| trimConversationHistory may cut mid-exchange | `state.ts:20-50` | LLM confusion | 1h |
 
 ---
 
@@ -87,11 +117,14 @@ The codebase is mature and production-ready with solid engineering practices:
 | `BlueprintStep.tsx` | 162 | Good |
 | `SelectionStep.tsx` | 112 | Good |
 | `FinalizationStep.tsx` | 94 | Good |
-| `AdminOrchestratorPage.tsx` | ~200 | New - admin UI |
-| `PromptEditor.tsx` | ~300 | New - prompt editing |
-| `FlowVisualization.tsx` | ~200 | New - workflow graph |
+| `AdminOrchestratorPage.tsx` | ~200 | Admin orchestrator UI |
+| `PromptEditor.tsx` | ~300 | Prompt editing |
+| `FlowVisualization.tsx` | ~200 | Workflow graph |
+| `BlockImportWizard.tsx` | ~720 | Block import with KiCad parsing |
+| `BlockViewer.tsx` | ~400 | Block inspection with KiCanvas |
+| `KiCanvasViewer.tsx` | ~160 | KiCad schematic/PCB preview |
 
-### API Endpoints (35+ total)
+### API Endpoints (40+ total)
 
 | Category | Endpoints |
 |----------|-----------|
@@ -100,12 +133,13 @@ The codebase is mature and production-ready with solid engineering practices:
 | Auth | login, logout, me, callback, workos |
 | Admin | logs, users, cleanup-sessions |
 | Admin Orchestrator | prompts (list, create, update, reset), edges, hooks |
+| Admin Blocks | list, create, generate, upload, update, delete |
 | Orchestrator | prompts (runtime loading) |
-| Blocks | list, get, files |
+| Blocks | list, get, files (schematic, PCB, STEP, thumbnail) |
 | Gallery | index, get |
 | Settings | settings, usage |
 
-### Database (16 migrations)
+### Database (18 migrations)
 
 **Core Tables:**
 - `users` - id, username, password_hash, is_admin, control_mode, is_approved
@@ -121,6 +155,10 @@ The codebase is mature and production-ready with solid engineering practices:
 - `orchestrator_edges` - Workflow transition graph
 - `orchestrator_hooks` - Pre/post execution callbacks
 - `context_tags` - Dynamic context tagging
+
+**Block Tables (migrations 0017-0018):**
+- `pcb_blocks.definition` - JSON block.json schema with metadata, electrical, physical
+- `pcb_blocks.version` - Schema version tracking for block definitions
 
 ---
 
@@ -171,37 +209,54 @@ The codebase is mature and production-ready with solid engineering practices:
 
 ## Remaining Work
 
-### Medium Priority (Nice to Have)
-1. **Split Orchestrator.ts into modules**
-   - Extract tool handlers into separate files
-   - Separate state management
-   - Improve testability
-   - Note: Currently functional, split would improve maintainability
+### High Priority (Fix These)
+1. **Fix race conditions in step components**
+   - Use refs instead of state for `isRunning` guards
+   - Add AbortController for cancellable async operations
+   - Proper cleanup in useEffect return functions
 
-2. **Standardize error logging**
+2. **Fix data loss in FirmwareStageView**
+   - Auto-save on file switch
+   - Add unsaved changes warning before navigation
+
+3. **Fix file upload error handling in BlockImportWizard**
+   - Fail entire operation or clearly communicate partial success
+   - Don't report success if files failed to upload
+
+### Medium Priority (Nice to Have)
+4. **Standardize error logging**
    - Replace 68 console.error/warn calls with logger utility
    - Add structured logging throughout
 
-3. **Use extractAndValidateJson throughout**
-   - Replace regex JSON extraction in step components
-   - Add schema validation for all LLM responses
+5. **Use extractAndValidateJson throughout**
+   - Replace regex JSON extraction in step components and orchestrator tools
+   - Add Zod schema validation for all LLM responses
+
+6. **Add `state.history` trimming to orchestrator**
+   - Implement max size (e.g., 200 items) with FIFO eviction
+   - Similar pattern to existing `trimConversationHistory()`
 
 ### Low Priority
-4. Add workspace stage view tests
-5. Fix incomplete I2C validation in firmware (regex-based, misses variable addresses)
-6. Add pagination bounds check (large offsets on expensive queries)
+7. Add workspace stage view tests
+8. Fix incomplete I2C validation in firmware (regex-based, misses variable addresses)
+9. Add pagination bounds check (large offsets on expensive queries)
+10. Add message boundary awareness to trimConversationHistory (keep assistant+tool pairs together)
 
 ---
 
 ## Notes
 
-- All 648 tests pass (verified January 16, 2026)
+- All 648 tests pass (verified January 18, 2026)
 - TypeScript compiles without errors
 - Deploy pipeline is stable (GitHub Actions → Cloudflare Pages)
 - LLM costs dominated by image generation (~2000x text completions)
-- Architecture is sound; main remaining debt is orchestrator organization
 - WorkOS OAuth and user approval workflow active
 - Blueprint generation creates real images (not placeholders)
 - Orchestrator admin UI complete with prompt editing, flow visualization, and hook configuration
 - 8 specialized agents seeded and editable via admin interface
-- 16 database migrations supporting full orchestrator workflow management
+- 18 database migrations supporting full orchestrator workflow management
+- New: BlockViewer component for admin block inspection with KiCanvas preview
+- New: TOKN KiCad parser replaces kicadts for KiCad 8 support
+- New: LLM-assisted block import wizard for automated block.json generation
+- New: CI workflow with GitHub Actions for PR checks
+- Code review completed January 18, 2026 - multiple race conditions and data loss issues identified
