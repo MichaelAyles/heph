@@ -531,6 +531,7 @@ export function settingsFromRow(row: SettingsRow): SystemSettings {
 
 export type OrchestratorPromptCategory = 'agent' | 'generator' | 'reviewer'
 export type OrchestratorStageType = 'spec' | 'pcb' | 'enclosure' | 'firmware' | null
+export type OrchestratorOutputFormat = 'json' | 'code' | 'text' | 'image_prompt'
 
 export interface OrchestratorPrompt {
   id: string
@@ -546,6 +547,19 @@ export interface OrchestratorPrompt {
   contextTags: string[]
   createdAt: string
   updatedAt: string
+  // Enhanced fields (migration 0019)
+  inputSchema: Record<string, unknown> | null
+  outputSchema: Record<string, unknown> | null
+  contextSelector: string[] | null
+  iterationConfig: IterationConfig | null
+  userPromptTemplate: string | null
+  outputFormat: OrchestratorOutputFormat
+}
+
+export interface IterationConfig {
+  maxAttempts: number
+  exitCondition?: string
+  exitThreshold?: number
 }
 
 export interface OrchestratorPromptRow {
@@ -562,6 +576,13 @@ export interface OrchestratorPromptRow {
   context_tags: string | null
   created_at: string
   updated_at: string
+  // Enhanced fields (migration 0019)
+  input_schema: string | null
+  output_schema: string | null
+  context_selector: string | null
+  iteration_config: string | null
+  user_prompt_template: string | null
+  output_format: string | null
 }
 
 export function promptFromRow(row: OrchestratorPromptRow): OrchestratorPrompt {
@@ -579,6 +600,13 @@ export function promptFromRow(row: OrchestratorPromptRow): OrchestratorPrompt {
     contextTags: row.context_tags ? JSON.parse(row.context_tags) : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    // Enhanced fields
+    inputSchema: row.input_schema ? JSON.parse(row.input_schema) : null,
+    outputSchema: row.output_schema ? JSON.parse(row.output_schema) : null,
+    contextSelector: row.context_selector ? JSON.parse(row.context_selector) : null,
+    iterationConfig: row.iteration_config ? JSON.parse(row.iteration_config) : null,
+    userPromptTemplate: row.user_prompt_template,
+    outputFormat: (row.output_format || 'json') as OrchestratorOutputFormat,
   }
 }
 
@@ -597,6 +625,7 @@ export interface OrchestratorEdge {
   priority: number
   description: string | null
   isActive: boolean
+  maxLoops: number | null  // migration 0020
   createdAt: string
   updatedAt: string
 }
@@ -610,6 +639,7 @@ export interface OrchestratorEdgeRow {
   priority: number
   description: string | null
   is_active: number
+  max_loops: number | null  // migration 0020
   created_at: string
   updated_at: string
 }
@@ -624,6 +654,7 @@ export function edgeFromRow(row: OrchestratorEdgeRow): OrchestratorEdge {
     priority: row.priority,
     description: row.description,
     isActive: row.is_active === 1,
+    maxLoops: row.max_loops,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

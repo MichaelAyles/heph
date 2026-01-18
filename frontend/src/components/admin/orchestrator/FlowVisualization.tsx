@@ -2,9 +2,11 @@
  * FlowVisualization Component
  *
  * SVG-based visualization of the orchestrator node/edge graph.
+ * Shows loops as curved arrows with max loop counts,
+ * conditional edges with condition summaries.
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { OrchestratorPrompt, OrchestratorEdge } from '@/db/schema'
 
 interface FlowVisualizationProps {
@@ -12,6 +14,12 @@ interface FlowVisualizationProps {
   edges: OrchestratorEdge[]
   selectedNode: string | null
   onSelectNode: (nodeName: string) => void
+}
+
+interface EdgeTooltip {
+  x: number
+  y: number
+  edge: OrchestratorEdge
 }
 
 // Layout configuration
@@ -31,10 +39,10 @@ const STAGE_COLORS: Record<string, { bg: string; border: string; text: string }>
   export: { bg: '#71717a20', border: '#71717a', text: '#a1a1aa' },
 }
 
-const EDGE_TYPE_STYLES: Record<string, { stroke: string; dashArray?: string }> = {
+const EDGE_TYPE_STYLES: Record<string, { stroke: string; dashArray?: string; label?: string }> = {
   flow: { stroke: '#52525b' },
-  conditional: { stroke: '#52525b', dashArray: '4,4' },
-  loop: { stroke: '#52525b', dashArray: '2,2' },
+  conditional: { stroke: '#f59e0b', dashArray: '4,4', label: 'if' },
+  loop: { stroke: '#8b5cf6', dashArray: '2,2', label: 'loop' },
 }
 
 interface NodePosition {
@@ -43,12 +51,37 @@ interface NodePosition {
   stage: string
 }
 
+/**
+ * Format a condition for display as a short summary.
+ */
+function formatConditionSummary(condition: unknown): string {
+  if (!condition || typeof condition !== 'object') return ''
+  const cond = condition as Record<string, unknown>
+
+  // Simple condition
+  if (cond.field && cond.operator) {
+    const op = cond.operator === '==' ? '=' : cond.operator
+    return `${cond.field} ${op} ${cond.value}`
+  }
+
+  // Compound condition
+  if (cond.all && Array.isArray(cond.all)) {
+    return `all(${cond.all.length})`
+  }
+  if (cond.any && Array.isArray(cond.any)) {
+    return `any(${cond.any.length})`
+  }
+
+  return ''
+}
+
 export function FlowVisualization({
   prompts,
   edges,
   selectedNode,
   onSelectNode,
 }: FlowVisualizationProps) {
+  const [hoveredEdge, setHoveredEdge] = useState<EdgeTooltip | null>(null)
   // Calculate node positions
   const { nodes, width, height } = useMemo(() => {
     const positions: Record<string, NodePosition> = {}
@@ -109,7 +142,26 @@ export function FlowVisualization({
   }, [edges, nodes])
 
   return (
-    <div className="h-full overflow-auto bg-surface-900">
+    <div className="relative h-full overflow-auto bg-surface-900">
+      {/* Legend */}
+      <div className="absolute right-4 top-4 z-10 rounded border border-surface-700 bg-surface-800/90 p-2 text-xs">
+        <div className="mb-1 font-medium text-surface-300">Edge Types</div>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="h-0.5 w-6 bg-zinc-600" />
+            <span className="text-surface-400">Flow</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-0.5 w-6 bg-amber-500" style={{ background: 'repeating-linear-gradient(90deg, #f59e0b 0, #f59e0b 4px, transparent 4px, transparent 8px)' }} />
+            <span className="text-surface-400">Conditional</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-0.5 w-6 bg-purple-500" style={{ background: 'repeating-linear-gradient(90deg, #8b5cf6 0, #8b5cf6 2px, transparent 2px, transparent 4px)' }} />
+            <span className="text-surface-400">Loop</span>
+          </div>
+        </div>
+      </div>
+
       <svg width={width} height={height} className="block">
         {/* Stage backgrounds */}
         {Object.entries(STAGE_COLORS).map(([stage, colors], index) => (
@@ -150,28 +202,101 @@ export function FlowVisualization({
             const x2 = to.x + NODE_WIDTH / 2
             const y2 = to.y
 
-            // Simple straight line or curve for loops
+            // Calculate path based on edge type
             const isLoop = edge.edgeType === 'loop'
-            const path = isLoop
-              ? `M ${x1} ${y1} C ${x1 + 50} ${y1 + 30} ${x2 + 50} ${y2 - 30} ${x2} ${y2}`
-              : `M ${x1} ${y1} L ${x2} ${y2}`
+            const isConditional = edge.edgeType === 'conditional'
+            const isSameRow = Math.abs(from.y - to.y) < 20
+            const isBackward = y2 < y1 // Going up the graph
+
+            let path: string
+            let labelX: number
+            let labelY: number
+
+            if (isLoop || isBackward) {
+              // Curved path for loops - curve to the right side
+              const curveOffset = 60 + Math.abs(y1 - y2) * 0.3
+              path = `M ${x1} ${y1} C ${x1 + curveOffset} ${y1 + 20} ${x2 + curveOffset} ${y2 - 20} ${x2} ${y2}`
+              labelX = Math.max(x1, x2) + curveOffset - 10
+              labelY = (y1 + y2) / 2
+            } else if (isSameRow) {
+              // Horizontal edge with curve
+              const midX = (x1 + x2) / 2
+              const curveY = from.y - 30
+              path = `M ${x1} ${from.y} Q ${midX} ${curveY} ${x2} ${to.y}`
+              labelX = midX
+              labelY = curveY - 5
+            } else {
+              // Straight line for normal flow
+              path = `M ${x1} ${y1} L ${x2} ${y2}`
+              labelX = (x1 + x2) / 2
+              labelY = (y1 + y2) / 2 - 5
+            }
+
+            // Build label text
+            let labelText = ''
+            if (isConditional && edge.condition) {
+              labelText = formatConditionSummary(edge.condition)
+            }
+            if (isLoop && edge.maxLoops) {
+              labelText = `max: ${edge.maxLoops}`
+            }
+
+            const markerId = isLoop ? 'arrowhead-loop' : isConditional ? 'arrowhead-cond' : 'arrowhead'
 
             return (
-              <g key={edge.id}>
+              <g
+                key={edge.id}
+                onMouseEnter={(e) =>
+                  setHoveredEdge({ x: e.clientX, y: e.clientY, edge })
+                }
+                onMouseLeave={() => setHoveredEdge(null)}
+                className="cursor-pointer"
+              >
+                {/* Wider invisible path for easier hover */}
+                <path
+                  d={path}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={12}
+                />
+                {/* Visible edge */}
                 <path
                   d={path}
                   fill="none"
                   stroke={style.stroke}
                   strokeWidth={1.5}
                   strokeDasharray={style.dashArray}
-                  markerEnd="url(#arrowhead)"
+                  markerEnd={`url(#${markerId})`}
                 />
+                {/* Edge label */}
+                {labelText && (
+                  <g>
+                    <rect
+                      x={labelX - 25}
+                      y={labelY - 8}
+                      width={50}
+                      height={14}
+                      fill="#18181b"
+                      rx={2}
+                    />
+                    <text
+                      x={labelX}
+                      y={labelY + 3}
+                      fill={style.stroke}
+                      fontSize={9}
+                      textAnchor="middle"
+                      className="pointer-events-none"
+                    >
+                      {labelText.length > 12 ? labelText.slice(0, 10) + '..' : labelText}
+                    </text>
+                  </g>
+                )}
               </g>
             )
           })}
         </g>
 
-        {/* Arrowhead marker */}
+        {/* Arrowhead markers */}
         <defs>
           <marker
             id="arrowhead"
@@ -182,6 +307,26 @@ export function FlowVisualization({
             orient="auto"
           >
             <polygon points="0 0, 10 3.5, 0 7" fill="#52525b" />
+          </marker>
+          <marker
+            id="arrowhead-loop"
+            markerWidth="10"
+            markerHeight="7"
+            refX="9"
+            refY="3.5"
+            orient="auto"
+          >
+            <polygon points="0 0, 10 3.5, 0 7" fill="#8b5cf6" />
+          </marker>
+          <marker
+            id="arrowhead-cond"
+            markerWidth="10"
+            markerHeight="7"
+            refX="9"
+            refY="3.5"
+            orient="auto"
+          >
+            <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
           </marker>
         </defs>
 
@@ -227,6 +372,57 @@ export function FlowVisualization({
           })}
         </g>
       </svg>
+
+      {/* Edge tooltip */}
+      {hoveredEdge && (
+        <div
+          className="fixed z-50 max-w-xs rounded border border-surface-700 bg-surface-800 p-3 shadow-lg"
+          style={{
+            left: hoveredEdge.x + 10,
+            top: hoveredEdge.y + 10,
+          }}
+        >
+          <div className="mb-2 text-xs font-bold text-surface-200">
+            {hoveredEdge.edge.fromNode} → {hoveredEdge.edge.toNode}
+          </div>
+          <div className="space-y-1 text-xs text-surface-400">
+            <div>
+              <span className="text-surface-500">Type:</span>{' '}
+              <span
+                className={
+                  hoveredEdge.edge.edgeType === 'loop'
+                    ? 'text-purple-400'
+                    : hoveredEdge.edge.edgeType === 'conditional'
+                      ? 'text-amber-400'
+                      : 'text-surface-300'
+                }
+              >
+                {hoveredEdge.edge.edgeType}
+              </span>
+            </div>
+            {hoveredEdge.edge.maxLoops && (
+              <div>
+                <span className="text-surface-500">Max loops:</span>{' '}
+                {hoveredEdge.edge.maxLoops}
+              </div>
+            )}
+            {hoveredEdge.edge.condition && (
+              <div>
+                <span className="text-surface-500">Condition:</span>
+                <pre className="mt-1 overflow-auto rounded bg-surface-900 p-1 text-[10px]">
+                  {JSON.stringify(hoveredEdge.edge.condition, null, 2)}
+                </pre>
+              </div>
+            )}
+            {hoveredEdge.edge.description && (
+              <div>
+                <span className="text-surface-500">Description:</span>{' '}
+                {hoveredEdge.edge.description}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

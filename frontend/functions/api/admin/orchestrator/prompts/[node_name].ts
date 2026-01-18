@@ -128,6 +128,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     hasDefault: nodeName in HARDCODED_PROMPTS,
+    // Enhanced fields
+    inputSchema: row.input_schema ? JSON.parse(row.input_schema) : null,
+    outputSchema: row.output_schema ? JSON.parse(row.output_schema) : null,
+    contextSelector: row.context_selector ? JSON.parse(row.context_selector) : null,
+    iterationConfig: row.iteration_config ? JSON.parse(row.iteration_config) : null,
+    userPromptTemplate: row.user_prompt_template,
+    outputFormat: row.output_format || 'json',
   }
 
   return Response.json({ prompt })
@@ -155,6 +162,13 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     isActive?: boolean
     tokenEstimate?: number | null
     contextTags?: string[]
+    // Enhanced fields
+    inputSchema?: Record<string, unknown> | null
+    outputSchema?: Record<string, unknown> | null
+    contextSelector?: string[] | null
+    iterationConfig?: { maxAttempts: number; exitCondition?: string; exitThreshold?: number } | null
+    userPromptTemplate?: string | null
+    outputFormat?: 'json' | 'code' | 'text' | 'image_prompt'
   }
 
   // Check if prompt exists
@@ -201,6 +215,31 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   if (body.contextTags !== undefined) {
     updates.push('context_tags = ?')
     values.push(JSON.stringify(body.contextTags))
+  }
+  // Enhanced fields
+  if (body.inputSchema !== undefined) {
+    updates.push('input_schema = ?')
+    values.push(body.inputSchema ? JSON.stringify(body.inputSchema) : null)
+  }
+  if (body.outputSchema !== undefined) {
+    updates.push('output_schema = ?')
+    values.push(body.outputSchema ? JSON.stringify(body.outputSchema) : null)
+  }
+  if (body.contextSelector !== undefined) {
+    updates.push('context_selector = ?')
+    values.push(body.contextSelector ? JSON.stringify(body.contextSelector) : null)
+  }
+  if (body.iterationConfig !== undefined) {
+    updates.push('iteration_config = ?')
+    values.push(body.iterationConfig ? JSON.stringify(body.iterationConfig) : null)
+  }
+  if (body.userPromptTemplate !== undefined) {
+    updates.push('user_prompt_template = ?')
+    values.push(body.userPromptTemplate)
+  }
+  if (body.outputFormat !== undefined) {
+    updates.push('output_format = ?')
+    values.push(body.outputFormat)
   }
 
   if (updates.length === 0) {

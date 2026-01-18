@@ -2,7 +2,8 @@
  * Public Orchestrator Prompt API
  * GET /api/orchestrator/prompts/:node_name
  *
- * Returns the system prompt for a given node, used at runtime by the orchestrator.
+ * Returns the full prompt configuration for a given node, used at runtime by the orchestrator.
+ * Includes enhanced fields: inputSchema, outputSchema, contextSelector, iterationConfig, etc.
  * Falls back to hardcoded defaults if DB lookup fails.
  */
 
@@ -46,17 +47,41 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const nodeName = params.node_name as string
 
   try {
-    // Try to load from database first
-    const row = await env.DB.prepare(
-      'SELECT system_prompt FROM orchestrator_prompts WHERE node_name = ? AND is_active = 1'
-    )
+    // Try to load from database first - fetch all fields including enhanced ones
+    const row = await env.DB.prepare(`
+      SELECT
+        id, node_name, display_name, description, system_prompt, category, stage,
+        is_active, token_estimate, version, context_tags, created_at, updated_at,
+        input_schema, output_schema, context_selector, iteration_config,
+        user_prompt_template, output_format
+      FROM orchestrator_prompts
+      WHERE node_name = ? AND is_active = 1
+    `)
       .bind(nodeName)
-      .first<Pick<OrchestratorPromptRow, 'system_prompt'>>()
+      .first<OrchestratorPromptRow>()
 
     if (row) {
       return Response.json({
-        nodeName,
+        id: row.id,
+        nodeName: row.node_name,
+        displayName: row.display_name,
+        description: row.description,
         systemPrompt: row.system_prompt,
+        category: row.category,
+        stage: row.stage,
+        isActive: row.is_active === 1,
+        tokenEstimate: row.token_estimate,
+        version: row.version,
+        contextTags: row.context_tags ? JSON.parse(row.context_tags) : [],
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        // Enhanced fields
+        inputSchema: row.input_schema ? JSON.parse(row.input_schema) : null,
+        outputSchema: row.output_schema ? JSON.parse(row.output_schema) : null,
+        contextSelector: row.context_selector ? JSON.parse(row.context_selector) : null,
+        iterationConfig: row.iteration_config ? JSON.parse(row.iteration_config) : null,
+        userPromptTemplate: row.user_prompt_template,
+        outputFormat: row.output_format || 'json',
         source: 'database',
       })
     }
@@ -72,6 +97,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       nodeName,
       systemPrompt: hardcoded,
       source: 'hardcoded',
+      // Enhanced fields not available for hardcoded prompts
+      inputSchema: null,
+      outputSchema: null,
+      contextSelector: null,
+      iterationConfig: null,
+      userPromptTemplate: null,
+      outputFormat: 'json',
     })
   }
 

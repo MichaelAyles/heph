@@ -30,3 +30,8 @@ export { compressToolResult } from './helpers/compression'
 export { extractEnclosureDimensions, extractEnclosureFeatures } from './helpers/code-parsing'
 export { trimConversationHistory, persistState, buildDefaultStages } from './helpers/state'
 export { callLlmWithJson, callLlmWithCode } from './helpers/llm-helpers'
+
+// New edge-driven orchestration services
+export { loadPrompt, loadPrompts, invalidateCache, preloadPrompts } from './prompt-loader'
+export { EdgeExecutionEngine, createEdgeEngine, createInitializedEdgeEngine } from './edge-engine'
+export { buildContextFromSelector, renderPromptTemplate } from './context-builder'

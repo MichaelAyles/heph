@@ -3,6 +3,10 @@
  *
  * Marathon agent that autonomously drives hardware design from spec through
  * PCB, enclosure, firmware, and export stages using Gemini tool calling.
+ *
+ * Supports two modes:
+ * 1. LLM-driven (default): Uses Gemini tool calling with hardcoded prompts
+ * 2. Edge-driven (experimental): Uses DB-stored prompts and graph-based navigation
  */
 
 import { llm, type ChatMessage, type ToolCall } from '../llm'
@@ -28,6 +32,11 @@ import type {
 import { getTool } from './tools'
 import { compressToolResult } from './helpers/compression'
 import { trimConversationHistory, persistState, buildDefaultStages } from './helpers/state'
+
+// New edge-driven imports
+import { loadPrompt } from './prompt-loader'
+import { EdgeExecutionEngine } from './edge-engine'
+import { buildContextFromSelector, renderPromptTemplate } from './context-builder'
 
 // =============================================================================
 // ORCHESTRATOR CLASS
@@ -418,6 +427,127 @@ export class HardwareOrchestrator {
     }
     this.state.history.push(historyItem)
     this.callbacks.onStateChange(this.state)
+  }
+
+  // ===========================================================================
+  // EDGE-DRIVEN EXECUTION (EXPERIMENTAL)
+  // ===========================================================================
+
+  /**
+   * Execute a single prompt node using DB-loaded configuration.
+   * This is the building block for edge-driven execution.
+   *
+   * @param nodeName - The prompt node to execute
+   * @param additionalContext - Extra context to merge with selector-derived context
+   * @returns The result from the prompt execution
+   */
+  async executePromptNode(
+    nodeName: string,
+    additionalContext?: Record<string, unknown>
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+    try {
+      // Load the prompt from DB
+      const prompt = await loadPrompt(nodeName)
+      if (!prompt) {
+        return { success: false, error: `Prompt not found: ${nodeName}` }
+      }
+
+      // Build context from selector
+      const selectorContext = buildContextFromSelector(
+        this.currentSpec,
+        prompt.contextSelector || ['*']
+      )
+
+      // Merge with additional context
+      const context = { ...selectorContext, ...additionalContext }
+
+      // Render the user prompt template
+      const userPrompt = prompt.userPromptTemplate
+        ? renderPromptTemplate(prompt.userPromptTemplate, context)
+        : JSON.stringify(context, null, 2)
+
+      // Build messages for LLM
+      const messages: ChatMessage[] = [
+        { role: 'system', content: prompt.systemPrompt },
+        { role: 'user', content: userPrompt },
+      ]
+
+      this.addHistoryItem({
+        type: 'tool_call',
+        stage: this.state.currentStage,
+        action: `Executing: ${nodeName}`,
+        details: { nodeName, contextKeys: Object.keys(context) },
+      })
+
+      // Call LLM
+      const response = await llm.chat({
+        messages,
+        temperature: 0.3,
+        projectId: this.projectId,
+      })
+
+      // Parse response based on output format
+      let data: unknown
+      if (prompt.outputFormat === 'json') {
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          data = JSON.parse(jsonMatch[0])
+        } else {
+          return { success: false, error: 'No JSON found in response' }
+        }
+      } else if (prompt.outputFormat === 'code') {
+        // Extract code from markdown code blocks if present
+        const codeMatch = response.content.match(/```[\w]*\n([\s\S]*?)```/)
+        data = codeMatch ? codeMatch[1] : response.content
+      } else {
+        data = response.content
+      }
+
+      this.addHistoryItem({
+        type: 'tool_result',
+        stage: this.state.currentStage,
+        action: `${nodeName} completed`,
+        result: typeof data === 'string' ? data.slice(0, 200) : JSON.stringify(data).slice(0, 200),
+      })
+
+      return { success: true, data }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      this.addHistoryItem({
+        type: 'error',
+        stage: this.state.currentStage,
+        action: `${nodeName} failed`,
+        result: errorMessage,
+      })
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  /**
+   * Get the edge engine for this orchestrator instance.
+   * Used for advanced edge-driven navigation.
+   */
+  async getEdgeEngine(): Promise<EdgeExecutionEngine> {
+    const engine = new EdgeExecutionEngine()
+    await Promise.all([engine.loadEdges(), engine.loadHooks()])
+
+    // Initialize context from current state
+    engine.updateContext({
+      mode: this.mode,
+      spec: (this.currentSpec as unknown) as Record<string, unknown>,
+      currentStage: this.state.currentStage,
+      loopCount: {
+        spec: 0,
+        pcb: 0,
+        enclosure: 0,
+        firmware: 0,
+      },
+      lastResult: null,
+      lastValidation: null,
+      lastReview: null,
+    })
+
+    return engine
   }
 }
 

@@ -44,7 +44,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const stmt = env.DB.prepare(query)
   const result = await (params.length > 0 ? stmt.bind(...params) : stmt).all<OrchestratorPromptRow>()
 
-  // Transform to camelCase
+  // Transform to camelCase (including enhanced fields)
   const prompts = result.results.map((row) => ({
     id: row.id,
     nodeName: row.node_name,
@@ -59,6 +59,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     contextTags: row.context_tags ? JSON.parse(row.context_tags) : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    // Enhanced fields
+    inputSchema: row.input_schema ? JSON.parse(row.input_schema) : null,
+    outputSchema: row.output_schema ? JSON.parse(row.output_schema) : null,
+    contextSelector: row.context_selector ? JSON.parse(row.context_selector) : null,
+    iterationConfig: row.iteration_config ? JSON.parse(row.iteration_config) : null,
+    userPromptTemplate: row.user_prompt_template,
+    outputFormat: row.output_format || 'json',
   }))
 
   return Response.json({ prompts })
@@ -85,6 +92,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     stage?: string
     tokenEstimate?: number
     contextTags?: string[]
+    // Enhanced fields
+    inputSchema?: Record<string, unknown>
+    outputSchema?: Record<string, unknown>
+    contextSelector?: string[]
+    iterationConfig?: { maxAttempts: number; exitCondition?: string; exitThreshold?: number }
+    userPromptTemplate?: string
+    outputFormat?: 'json' | 'code' | 'text' | 'image_prompt'
   }
 
   if (!body.nodeName || !body.displayName || !body.systemPrompt || !body.category) {
@@ -101,8 +115,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const result = await env.DB.prepare(`
-    INSERT INTO orchestrator_prompts (node_name, display_name, description, system_prompt, category, stage, token_estimate, context_tags)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO orchestrator_prompts (
+      node_name, display_name, description, system_prompt, category, stage,
+      token_estimate, context_tags, input_schema, output_schema, context_selector,
+      iteration_config, user_prompt_template, output_format
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
   `)
     .bind(
@@ -113,7 +131,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.category,
       body.stage || null,
       body.tokenEstimate || null,
-      body.contextTags ? JSON.stringify(body.contextTags) : '[]'
+      body.contextTags ? JSON.stringify(body.contextTags) : '[]',
+      body.inputSchema ? JSON.stringify(body.inputSchema) : null,
+      body.outputSchema ? JSON.stringify(body.outputSchema) : null,
+      body.contextSelector ? JSON.stringify(body.contextSelector) : null,
+      body.iterationConfig ? JSON.stringify(body.iterationConfig) : null,
+      body.userPromptTemplate || null,
+      body.outputFormat || 'json'
     )
     .first<{ id: string }>()
 
