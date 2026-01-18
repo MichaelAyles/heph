@@ -66,6 +66,7 @@ export function KiCanvasViewer({
 }: KiCanvasViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const embedRef = useRef<HTMLElement | null>(null)
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -122,6 +123,11 @@ export function KiCanvasViewer({
         // Listen for load/error events
         embed.addEventListener('load', () => {
           if (mounted) {
+            // Clear the fallback timeout since we loaded successfully
+            if (loadingTimeoutRef.current) {
+              clearTimeout(loadingTimeoutRef.current)
+              loadingTimeoutRef.current = null
+            }
             setLoading(false)
             onLoad?.()
           }
@@ -129,6 +135,11 @@ export function KiCanvasViewer({
 
         embed.addEventListener('error', (e: Event) => {
           if (mounted) {
+            // Clear the fallback timeout since we got an error
+            if (loadingTimeoutRef.current) {
+              clearTimeout(loadingTimeoutRef.current)
+              loadingTimeoutRef.current = null
+            }
             const msg = (e as CustomEvent).detail?.message || 'Failed to load document'
             setError(msg)
             setLoading(false)
@@ -138,9 +149,9 @@ export function KiCanvasViewer({
 
         containerRef.current.appendChild(embed)
 
-        // Set a timeout for loading
-        setTimeout(() => {
-          if (mounted && loading) {
+        // Set a fallback timeout for loading - clear loading state if no event fires
+        loadingTimeoutRef.current = setTimeout(() => {
+          if (mounted) {
             setLoading(false)
           }
         }, 5000)
@@ -158,6 +169,11 @@ export function KiCanvasViewer({
 
     return () => {
       mounted = false
+      // Clear the loading timeout
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+        loadingTimeoutRef.current = null
+      }
       // Clean up embed on unmount
       if (embedRef.current && embedRef.current.parentNode) {
         embedRef.current.parentNode.removeChild(embedRef.current)

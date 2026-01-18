@@ -306,6 +306,7 @@ export function FirmwareStageView() {
 
   // Editor state
   const [editorContent, setEditorContent] = useState<string>('')
+  const [isDirty, setIsDirty] = useState(false)
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false)
@@ -362,16 +363,46 @@ export function FirmwareStageView() {
     return null
   }
 
+  // Helper to convert fileTree to FirmwareProject files format
+  const getFilesForSave = useCallback(
+    (currentFileTree: FileNode[], currentPath?: string, currentContent?: string): FirmwareProject['files'] => {
+      const files = flattenFiles(currentFileTree)
+      return files.map((f) => ({
+        path: f.path,
+        // Use current editor content for the active file
+        content: currentPath && f.path === currentPath ? (currentContent || '') : (f.content || ''),
+        language: (f.path.endsWith('.h') ? 'h' : f.path.endsWith('.ini') ? 'ini' : 'cpp') as
+          | 'cpp'
+          | 'h'
+          | 'ini'
+          | 'json',
+      }))
+    },
+    []
+  )
+
   const handleSelectFile = useCallback(
-    (node: FileNode) => {
-      // Save current file first
-      if (selectedFile && editorContent !== selectedFile.content) {
+    async (node: FileNode) => {
+      // Save current file first if dirty
+      if (selectedFile && isDirty && editorContent !== selectedFile.content) {
+        // Update local state
         updateFileContent(selectedFile.path, editorContent)
+
+        // Save to server with updated content
+        const filesToSave = getFilesForSave(fileTree, selectedFile.path, editorContent)
+        try {
+          await saveMutation.mutateAsync(filesToSave)
+        } catch (err) {
+          console.error('Failed to auto-save firmware:', err)
+          // Continue with file switch even if save failed - data is in local state
+        }
       }
+
       setSelectedFile(node)
       setEditorContent(node.content || '')
+      setIsDirty(false)
     },
-    [selectedFile, editorContent]
+    [selectedFile, editorContent, isDirty, fileTree, getFilesForSave, saveMutation]
   )
 
   const handleToggleFolder = useCallback((path: string) => {
@@ -406,6 +437,7 @@ export function FirmwareStageView() {
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
       setEditorContent(value)
+      setIsDirty(true)
     }
   }, [])
 
@@ -504,6 +536,7 @@ export function FirmwareStageView() {
       const tree = buildFileTree(result.files)
       setFileTree(tree)
       setSelectedFile(null) // Reset selection
+      setIsDirty(false)
 
       // Save to project
       await saveMutation.mutateAsync(result.files)
@@ -592,6 +625,7 @@ export function FirmwareStageView() {
           | 'json',
       }))
       await saveMutation.mutateAsync(allFiles)
+      setIsDirty(false)
 
       setChatInput('')
       setShowChat(false)

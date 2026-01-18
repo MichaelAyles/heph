@@ -228,14 +228,20 @@ export function SpecPage() {
     const originalPrompt = spec.blueprints[index].prompt
     const newPrompt = `${originalPrompt} User feedback: ${feedback}`
 
-    const newUrl = await generateImage(newPrompt)
+    try {
+      const newUrl = await generateImage(newPrompt)
 
-    // Add regenerated image as a new entry, keep original
-    const updatedBlueprints = [...spec.blueprints, { url: newUrl, prompt: newPrompt }]
+      // Add regenerated image as a new entry, keep original
+      const updatedBlueprints = [...spec.blueprints, { url: newUrl, prompt: newPrompt }]
 
-    updateMutation.mutate({
-      spec: { ...spec, blueprints: updatedBlueprints },
-    })
+      updateMutation.mutate({
+        spec: { ...spec, blueprints: updatedBlueprints },
+      })
+    } catch (err) {
+      console.error('Failed to regenerate blueprint:', err)
+      // Re-throw so SelectionStep can handle the error state
+      throw err
+    }
   }
 
   const handleFinalizeComplete = (finalSpec: FinalSpec) => {

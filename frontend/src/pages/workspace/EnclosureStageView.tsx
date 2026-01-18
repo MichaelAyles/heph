@@ -78,6 +78,9 @@ export function EnclosureStageView() {
   const [visualValidationResult, setVisualValidationResult] = useState<VisualValidationResult | null>(null)
   const [isVisualValidating, setIsVisualValidating] = useState(false)
 
+  // AbortController for cancelling in-flight operations
+  const abortControllerRef = useRef<AbortController | null>(null)
+
   // STL Viewer ref for screenshots
   const stlViewerRef = useRef<STLViewerRef>(null)
 
@@ -102,7 +105,19 @@ export function EnclosureStageView() {
   useEffect(() => {
     preloadOpenSCAD()
       .then(() => setWasmLoaded(true))
-      .catch((err) => console.error('Failed to preload OpenSCAD:', err))
+      .catch((err) => {
+        console.error('Failed to preload OpenSCAD:', err)
+        setRenderError('Failed to load OpenSCAD. Rendering will not be available.')
+      })
+  }, [])
+
+  // Cleanup AbortController on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
   }, [])
 
   // Initialize from existing enclosure data
@@ -227,6 +242,13 @@ export function EnclosureStageView() {
   const handleGenerate = useCallback(async () => {
     if (!project || !pcbArtifacts) return
 
+    // Cancel any in-flight operation
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
     setIsGenerating(true)
     setRenderError(null)
     setValidationStatus(null)
@@ -325,24 +347,41 @@ export function EnclosureStageView() {
         code = await fixCode(code, criticalIssues)
       }
 
+      // Check if aborted before updating state
+      if (signal.aborted) return
+
       setValidationStatus('Generation complete!')
       setOpenScadCode(code)
       setCurrentStep('edit')
       saveEnclosureMutation.mutate({ openScadCode: code })
 
-      // Clear status after a moment
-      setTimeout(() => setValidationStatus(null), 3000)
+      // Clear status after a moment (with cleanup)
+      const timeoutId = setTimeout(() => setValidationStatus(null), 3000)
+      // Clean up timeout if component unmounts
+      signal.addEventListener('abort', () => clearTimeout(timeoutId))
     } catch (error) {
+      // Don't show error if operation was aborted
+      if (signal.aborted) return
+
       console.error('Failed to generate enclosure:', error)
       setRenderError(error instanceof Error ? error.message : 'Failed to generate enclosure')
     } finally {
-      setIsGenerating(false)
+      if (!signal.aborted) {
+        setIsGenerating(false)
+      }
     }
   }, [project, spec, pcbArtifacts, finalSpec, saveEnclosureMutation, validateCode, fixCode])
 
   // Regenerate with feedback (includes validation loop)
   const handleRegenerate = useCallback(async () => {
     if (!project || !pcbArtifacts || !feedback.trim()) return
+
+    // Cancel any in-flight operation
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
 
     setIsGenerating(true)
     setRenderError(null)
@@ -395,18 +434,27 @@ export function EnclosureStageView() {
         code = await fixCode(code, criticalIssues)
       }
 
+      // Check if aborted before updating state
+      if (signal.aborted) return
+
       setValidationStatus('Regeneration complete!')
       setOpenScadCode(code)
       setFeedback('')
       saveEnclosureMutation.mutate({ openScadCode: code })
 
-      // Clear status after a moment
-      setTimeout(() => setValidationStatus(null), 3000)
+      // Clear status after a moment (with cleanup)
+      const timeoutId = setTimeout(() => setValidationStatus(null), 3000)
+      signal.addEventListener('abort', () => clearTimeout(timeoutId))
     } catch (error) {
+      // Don't show error if operation was aborted
+      if (signal.aborted) return
+
       console.error('Failed to regenerate enclosure:', error)
       setRenderError(error instanceof Error ? error.message : 'Failed to regenerate')
     } finally {
-      setIsGenerating(false)
+      if (!signal.aborted) {
+        setIsGenerating(false)
+      }
     }
   }, [project, spec, pcbArtifacts, finalSpec, openScadCode, feedback, saveEnclosureMutation, validateCode, fixCode])
 

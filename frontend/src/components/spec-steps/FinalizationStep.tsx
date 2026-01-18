@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
 import { llm } from '@/services/llm'
 import { FINAL_SPEC_SYSTEM_PROMPT, buildFinalSpecPrompt } from '@/prompts/finalSpec'
@@ -7,14 +7,16 @@ import type { FinalizationStepProps } from './types'
 
 export function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) {
   const [status, setStatus] = useState('Generating final specification...')
-  const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  // Use ref to prevent double execution - state updates are async and can race
+  const isRunningRef = useRef(false)
 
   useEffect(() => {
-    if (isRunning || spec.finalSpec) return
+    if (spec.finalSpec) return // Already done
+    if (isRunningRef.current) return
 
-    setIsRunning(true)
+    isRunningRef.current = true
     setError(null)
 
     const runFinalization = async () => {
@@ -52,15 +54,15 @@ export function FinalizationStep({ project, spec, onComplete }: FinalizationStep
       } catch (err) {
         console.error('Failed to generate final spec:', err)
         setError('Failed to generate specification. Please try again.')
-        setIsRunning(false)
+        isRunningRef.current = false
       }
     }
 
     runFinalization()
-  }, [project.id, spec, isRunning, onComplete, retryCount])
+  }, [project.id, spec.finalSpec, spec.description, spec.feasibility, spec.decisions, spec.selectedBlueprint, spec.blueprints, onComplete, retryCount])
 
   const handleRetry = () => {
-    setIsRunning(false)
+    isRunningRef.current = false
     setRetryCount((c) => c + 1)
   }
 

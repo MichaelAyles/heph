@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
 import { buildBlueprintPrompts } from '@/prompts/blueprint'
 import type { BlueprintStepProps } from './types'
@@ -33,13 +33,14 @@ export function BlueprintStep({ project: _project, spec, onComplete }: Blueprint
     null, null, null, null, null, null, null, null,
   ])
   const [errors, setErrors] = useState<string[]>([])
-  const [hasStarted, setHasStarted] = useState(false)
-  const [hasCompleted, setHasCompleted] = useState(false)
+  // Use refs to prevent double execution - state updates are async and can race
+  const hasStartedRef = useRef(false)
+  const hasCompletedRef = useRef(false)
 
   useEffect(() => {
-    if (hasStarted) return // Already started generation
+    if (hasStartedRef.current) return // Already started generation
 
-    setHasStarted(true)
+    hasStartedRef.current = true
 
     const prompts = buildBlueprintPrompts(
       spec.description,
@@ -71,11 +72,11 @@ export function BlueprintStep({ project: _project, spec, onComplete }: Blueprint
           })
         })
     })
-  }, [hasStarted, spec.description, spec.decisions, spec.feasibility])
+  }, [spec.description, spec.decisions, spec.feasibility])
 
   // Check if all done
   useEffect(() => {
-    if (hasCompleted) return
+    if (hasCompletedRef.current) return
 
     const allDone = generating.every((g) => !g)
     const validBlueprints = blueprints.filter(
@@ -83,10 +84,10 @@ export function BlueprintStep({ project: _project, spec, onComplete }: Blueprint
     )
 
     if (allDone && validBlueprints.length > 0) {
-      setHasCompleted(true)
+      hasCompletedRef.current = true
       onComplete(validBlueprints)
     }
-  }, [generating, blueprints, onComplete, hasCompleted])
+  }, [generating, blueprints, onComplete])
 
   const activeCount = generating.filter(Boolean).length
   const totalImages = 8

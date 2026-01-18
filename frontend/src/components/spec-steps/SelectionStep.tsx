@@ -7,15 +7,19 @@ export function SelectionStep({ blueprints, onSelect, onRegenerate }: SelectionS
   const [selected, setSelected] = useState<number | null>(null)
   const [feedback, setFeedback] = useState('')
   const [isRegenerating, setIsRegenerating] = useState(false)
+  const [regenerateError, setRegenerateError] = useState<string | null>(null)
 
   const handleRegenerate = async () => {
     if (selected === null || !feedback.trim()) return
 
     setIsRegenerating(true)
+    setRegenerateError(null)
     try {
       await onRegenerate(selected, feedback.trim())
       setFeedback('')
       setSelected(null) // Reset to show new image in grid
+    } catch (err) {
+      setRegenerateError(err instanceof Error ? err.message : 'Failed to regenerate image')
     } finally {
       setIsRegenerating(false)
     }
@@ -55,6 +59,12 @@ export function SelectionStep({ blueprints, onSelect, onRegenerate }: SelectionS
                 disabled={isRegenerating}
               />
             </div>
+
+            {regenerateError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                {regenerateError}
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button

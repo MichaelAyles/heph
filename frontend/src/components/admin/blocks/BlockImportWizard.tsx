@@ -164,7 +164,11 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
 
         if (!uploadRes.ok) {
           const uploadResult = await uploadRes.json()
-          console.warn('File upload warning:', uploadResult.error)
+          // Block was created but files failed to upload - this is a partial failure
+          throw new Error(
+            `Block definition saved, but file upload failed: ${uploadResult.error || 'Unknown error'}. ` +
+            `You may need to re-upload files manually.`
+          )
         }
       }
 

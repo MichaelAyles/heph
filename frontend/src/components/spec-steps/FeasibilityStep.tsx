@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
 import { llm } from '@/services/llm'
 import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '@/prompts/feasibility'
@@ -7,15 +7,16 @@ import type { FeasibilityStepProps } from './types'
 
 export function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilityStepProps) {
   const [status, setStatus] = useState('Analyzing your project...')
-  const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  // Use ref to prevent double execution - state updates are async and can race
+  const isRunningRef = useRef(false)
 
   useEffect(() => {
     if (spec.feasibility) return // Already done
-    if (isRunning) return
+    if (isRunningRef.current) return
 
-    setIsRunning(true)
+    isRunningRef.current = true
     setError(null)
 
     const runAnalysis = async () => {
@@ -61,15 +62,15 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
       } catch (err) {
         setError('Failed to analyze feasibility. Please try again.')
         console.error('Feasibility analysis error:', err)
-        setIsRunning(false)
+        isRunningRef.current = false
       }
     }
 
     runAnalysis()
-  }, [project.id, spec, isRunning, onComplete, onReject, retryCount])
+  }, [project.id, spec.feasibility, spec.description, onComplete, onReject, retryCount])
 
   const handleRetry = () => {
-    setIsRunning(false)
+    isRunningRef.current = false
     setRetryCount((c) => c + 1)
   }
 
