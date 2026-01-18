@@ -7,14 +7,6 @@
 
 import type { Env } from '../../env'
 
-// Import the manifest at build time
-let blogManifest: BlogManifest | null = null
-try {
-  blogManifest = await import('../../../src/data/blog-manifest.json')
-} catch {
-  // Manifest not yet generated
-}
-
 interface BlogEntry {
   slug: string
   number: number
@@ -52,9 +44,24 @@ interface FullBlogEntry {
   nextSlug: string | null
 }
 
+// Lazy load manifest to avoid top-level await
+let manifestCache: BlogManifest | null = null
+async function getManifest(): Promise<BlogManifest | null> {
+  if (manifestCache !== null) return manifestCache
+  try {
+    const module = await import('../../../src/data/blog-manifest.json')
+    manifestCache = module.default || module
+    return manifestCache
+  } catch {
+    return null
+  }
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, params } = context
   const slug = params.slug as string
+
+  const blogManifest = await getManifest()
 
   // If no manifest, return 404
   if (!blogManifest?.entries) {

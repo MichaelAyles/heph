@@ -7,16 +7,6 @@
 
 import type { Env } from '../../env'
 
-// Import the manifest at build time - this will be bundled by wrangler
-// We need to handle cases where the manifest doesn't exist during dev
-let blogManifest: BlogManifest | null = null
-try {
-  // This import will be resolved at build time
-  blogManifest = await import('../../../src/data/blog-manifest.json')
-} catch {
-  // Manifest not yet generated - will return empty list
-}
-
 interface BlogEntry {
   slug: string
   number: number
@@ -52,8 +42,23 @@ interface PublicBlogEntry {
   readingTime: number
 }
 
+// Lazy load manifest to avoid top-level await
+let manifestCache: BlogManifest | null = null
+async function getManifest(): Promise<BlogManifest | null> {
+  if (manifestCache !== null) return manifestCache
+  try {
+    const module = await import('../../../src/data/blog-manifest.json')
+    manifestCache = module.default || module
+    return manifestCache
+  } catch {
+    return null
+  }
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env } = context
+
+  const blogManifest = await getManifest()
 
   // If no manifest, return empty list
   if (!blogManifest?.entries) {
