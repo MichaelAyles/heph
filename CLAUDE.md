@@ -123,6 +123,54 @@ The feasibility prompt (`src/prompts/feasibility.ts`) defines what can be built:
 
 When creating example prompts, use ONLY these components or the project will be rejected.
 
+### Blog System
+
+Development blog documenting PHAESTUS progress. 37+ posts with images.
+
+**Structure**:
+- `frontend/public/blogs/blogXXXX/` - Blog directories (4-digit zero-padded)
+- `frontend/public/blogs/blogXXXX/blog.md` - Markdown content
+- `frontend/public/blogs/blogXXXX/*.png` - Images (referenced in markdown)
+- `frontend/src/data/blog-manifest.json` - Pre-generated index of all blogs
+
+**Manifest Schema** (`blog-manifest.json`):
+```json
+{
+  "generatedAt": "2026-01-18T17:23:55.048Z",
+  "entries": [
+    {
+      "slug": "blog0037",
+      "number": 37,
+      "title": "Blog 37: Edge-Driven Orchestration...",
+      "date": "January 18, 2026",
+      "excerpt": "First 200 chars of content...",
+      "thumbnailPath": "/blogs/blog0037/screenshot.png",  // null if no thumbnail
+      "markdownPath": "/blogs/blog0037/blog.md",
+      "readingTime": 7
+    }
+  ]
+}
+```
+
+**Components**:
+- `src/pages/BlogPage.tsx` - Blog listing with cards
+- `src/pages/BlogPostPage.tsx` - Individual post with client-side markdown rendering
+- `src/components/blog/BlogCard.tsx` - Card component with thumbnail
+- `src/pages/AdminBlogPage.tsx` - Admin blog management
+- `src/components/admin/BlogSettingsModal.tsx` - Blog settings
+
+**Adding a New Blog**:
+1. Create `frontend/public/blogs/blogXXXX/blog.md`
+2. Add images to the same directory (URL-encode spaces in markdown: `![alt](image%20name.png)`)
+3. Update `frontend/src/data/blog-manifest.json`:
+   - Add entry to `entries` array (newest first)
+   - Set `thumbnailPath` to image path or `null`
+   - Update `generatedAt` timestamp
+
+**Routes**:
+- `/blog` - Blog listing
+- `/blog/:slug` - Individual post (e.g., `/blog/blog0037`)
+
 ### Key Directories
 
 - `src/pages/` - Route components (SpecPage.tsx orchestrates the pipeline)
@@ -372,6 +420,10 @@ const data = result.data // Fully typed!
 | Block generation prompt | `src/prompts/block-generation.ts` |
 | Admin blocks API | `functions/api/admin/blocks/` |
 | Block file serving | `functions/api/blocks/[slug]/files/` |
+| Blog listing page | `src/pages/BlogPage.tsx` |
+| Blog post page | `src/pages/BlogPostPage.tsx` |
+| Blog manifest | `src/data/blog-manifest.json` |
+| Blog content | `public/blogs/blogXXXX/blog.md` |
 
 ## Cost Insights
 

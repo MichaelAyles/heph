@@ -10,7 +10,8 @@
   <a href="https://phaestus.app">Live Demo</a> •
   <a href="#features">Features</a> •
   <a href="#quick-start">Quick Start</a> •
-  <a href="#architecture">Architecture</a>
+  <a href="#architecture">Architecture</a> •
+  <a href="#development-blog">Blog</a>
 </p>
 
 ---
@@ -146,6 +147,30 @@ CI/CD via GitHub Actions on push to `main`.
 | Blocks | list, details, file serving |
 | Admin | logs, users, blocks, orchestrator |
 | Gallery | public list, public details |
+
+## Development Blog
+
+PHAESTUS includes a development blog documenting the build process with 37+ technical posts.
+
+**Live**: https://phaestus.app/blog
+
+**Structure**:
+```
+frontend/
+├── public/blogs/
+│   ├── blog0001/
+│   │   ├── blog.md          # Markdown content
+│   │   └── screenshot.png   # Images
+│   ├── blog0037/
+│   │   └── ...
+└── src/data/
+    └── blog-manifest.json   # Index of all posts
+```
+
+**Adding a Post**:
+1. Create `frontend/public/blogs/blogXXXX/blog.md`
+2. Add images to the same directory
+3. Update `frontend/src/data/blog-manifest.json` with entry metadata
 
 ## License
 
