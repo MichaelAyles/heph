@@ -63,6 +63,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   return new Response(object.body, {
     headers: {
       'Content-Type': contentType,
+      'Content-Length': object.size.toString(),
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
     },

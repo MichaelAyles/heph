@@ -13,7 +13,14 @@ import * as THREE from 'three'
 import { Loader2, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { PlacedBlock, PcbBlock, BlockCategory } from '@/db/schema'
-import occtimportjs from 'occt-import-js'
+// Dynamically import OCCT to avoid loading 1MB+ WASM on every page
+let occtPromise: Promise<typeof import('occt-import-js')> | null = null
+function getOcct() {
+  if (!occtPromise) {
+    occtPromise = import('occt-import-js')
+  }
+  return occtPromise
+}
 
 // Grid size in mm (standard 0.5" = 12.7mm)
 const GRID_SIZE = 12.7
@@ -65,8 +72,9 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
   }
 
   try {
-    // Initialize the OCCT library
-    const occt = await occtimportjs()
+    // Initialize the OCCT library (dynamically loaded)
+    const occtModule = await getOcct()
+    const occt = await occtModule.default()
 
     // Fetch the STEP file
     const response = await fetch(url)
