@@ -2,7 +2,7 @@
  * Build-time blog manifest generator
  *
  * Scans /public/blogs/blog[N]/blog.md files and generates a manifest JSON.
- * Images are served directly from /blogs/blogXXXX/ - no copying needed.
+ * Only metadata is stored - markdown is fetched and rendered client-side.
  *
  * Run with: pnpm build:blogs
  */
@@ -10,7 +10,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
-import { marked } from 'marked'
 
 // ESM equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url)
@@ -23,7 +22,7 @@ interface BlogEntry {
   date: string
   excerpt: string
   thumbnailPath: string | null
-  htmlContent: string
+  markdownPath: string
   readingTime: number
 }
 
@@ -93,33 +92,6 @@ function findThumbnail(content: string, slug: string, blogDir: string): string |
   return null
 }
 
-// Update image paths in HTML to reference /blogs/slug/
-function updateImagePaths(html: string, slug: string, blogDir: string): string {
-  let updatedHtml = html
-
-  try {
-    const files = fs.readdirSync(blogDir)
-    for (const file of files) {
-      const ext = path.extname(file).toLowerCase()
-      if (IMAGE_EXTENSIONS.includes(ext)) {
-        // Match both the original filename and URL-encoded versions
-        const escapedFile = file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const patterns = [
-          new RegExp(`src="[^"]*${escapedFile}"`, 'g'),
-          new RegExp(`src='[^']*${escapedFile}'`, 'g'),
-        ]
-        for (const pattern of patterns) {
-          updatedHtml = updatedHtml.replace(pattern, `src="/blogs/${slug}/${file}"`)
-        }
-      }
-    }
-  } catch {
-    // Directory read failed
-  }
-
-  return updatedHtml
-}
-
 // Generate excerpt from content (first ~200 chars of non-heading text)
 function extractExcerpt(content: string): string {
   const lines = content.split('\n')
@@ -162,15 +134,6 @@ function parseBlogNumber(dirName: string): number {
   return match ? parseInt(match[1], 10) : 0
 }
 
-// Strip the first h1 and date line from HTML to avoid duplicates with our header
-function stripTitleAndDate(html: string): string {
-  // Remove first <h1>...</h1>
-  let result = html.replace(/<h1[^>]*>.*?<\/h1>\s*/i, '')
-  // Remove the date paragraph (usually <p><strong>Date</strong>: ...</p>)
-  result = result.replace(/<p>\s*<strong>Date<\/strong>:?\s*[^<]*<\/p>\s*/i, '')
-  return result.trim()
-}
-
 // Process a single blog directory
 function processBlog(dirName: string): BlogEntry | null {
   const blogDir = path.join(BLOGS_DIR, dirName)
@@ -191,15 +154,7 @@ function processBlog(dirName: string): BlogEntry | null {
   const excerpt = extractExcerpt(content)
   const thumbnailPath = findThumbnail(content, slug, blogDir)
   const readingTime = calculateReadingTime(content)
-
-  // Convert to HTML
-  let rawHtml = marked.parse(content) as string
-
-  // Strip duplicate title/date
-  rawHtml = stripTitleAndDate(rawHtml)
-
-  // Update image paths to reference /blogs/slug/
-  const htmlContent = updateImagePaths(rawHtml, slug, blogDir)
+  const markdownPath = `/blogs/${slug}/blog.md`
 
   return {
     slug,
@@ -208,7 +163,7 @@ function processBlog(dirName: string): BlogEntry | null {
     date,
     excerpt,
     thumbnailPath,
-    htmlContent,
+    markdownPath,
     readingTime,
   }
 }

@@ -14,7 +14,7 @@ interface BlogEntry {
   date: string
   excerpt: string
   thumbnailPath: string | null
-  htmlContent: string
+  markdownPath: string
   readingTime: number
 }
 

@@ -1,12 +1,14 @@
 /**
  * Blog Post Page
  *
- * Displays a single blog post with full HTML content.
+ * Displays a single blog post with markdown rendered client-side.
  * Public access - no authentication required.
  */
 
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Loader2,
   ArrowLeft,
@@ -28,7 +30,7 @@ interface BlogPost {
   date: string
   excerpt: string
   thumbnailPath: string | null
-  htmlContent: string
+  markdownPath: string
   readingTime: number
   prevSlug: string | null
   nextSlug: string | null
@@ -47,6 +49,14 @@ async function fetchBlogPost(slug: string): Promise<BlogPost> {
     throw new Error('Failed to fetch blog post')
   }
   return response.json()
+}
+
+async function fetchMarkdown(path: string): Promise<string> {
+  const response = await fetch(path)
+  if (!response.ok) {
+    throw new Error('Failed to fetch markdown')
+  }
+  return response.text()
 }
 
 // =============================================================================
@@ -86,15 +96,23 @@ export function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
 
-  const { data: post, isLoading, error } = useQuery({
+  const { data: post, isLoading: postLoading, error: postError } = useQuery({
     queryKey: ['blog-post', slug],
     queryFn: () => fetchBlogPost(slug!),
     enabled: !!slug,
   })
 
-  const formattedDate = post?.date
-    ? formatDate(post.date)
-    : ''
+  const { data: markdown, isLoading: markdownLoading } = useQuery({
+    queryKey: ['blog-markdown', post?.markdownPath],
+    queryFn: () => fetchMarkdown(post!.markdownPath),
+    enabled: !!post?.markdownPath,
+  })
+
+  const isLoading = postLoading || (post && markdownLoading)
+  const formattedDate = post?.date ? formatDate(post.date) : ''
+
+  // Strip the title and date from markdown since we render them separately
+  const contentMarkdown = markdown ? stripTitleAndDate(markdown) : ''
 
   return (
     <div className="min-h-screen bg-ash">
@@ -135,9 +153,9 @@ export function BlogPostPage() {
 
         {isLoading && <LoadingState />}
 
-        {error && <NotFoundState />}
+        {postError && <NotFoundState />}
 
-        {!isLoading && !error && post && (
+        {!isLoading && !postError && post && (
           <>
             {/* Post Header */}
             <header className="mb-8">
@@ -171,8 +189,20 @@ export function BlogPostPage() {
                 prose-ul:text-steel-dim prose-ol:text-steel-dim
                 prose-li:marker:text-copper
                 prose-blockquote:border-l-copper prose-blockquote:text-steel-dim"
-              dangerouslySetInnerHTML={{ __html: post.htmlContent }}
-            />
+            >
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                urlTransform={(url) => {
+                  // Transform relative image paths to absolute paths
+                  if (url && !url.startsWith('http') && !url.startsWith('/')) {
+                    return `/blogs/${post.slug}/${url}`
+                  }
+                  return url
+                }}
+              >
+                {contentMarkdown}
+              </ReactMarkdown>
+            </article>
 
             {/* Navigation */}
             <nav className="mt-12 pt-8 border-t border-surface-700">
@@ -256,6 +286,29 @@ function formatDate(dateString: string): string {
   } catch {
     return dateString
   }
+}
+
+function stripTitleAndDate(markdown: string): string {
+  const lines = markdown.split('\n')
+  let result: string[] = []
+  let skippedTitle = false
+  let skippedDate = false
+
+  for (const line of lines) {
+    // Skip first h1 heading
+    if (!skippedTitle && line.match(/^#\s+/)) {
+      skippedTitle = true
+      continue
+    }
+    // Skip date line
+    if (!skippedDate && line.match(/^\*\*Date\*\*/)) {
+      skippedDate = true
+      continue
+    }
+    result.push(line)
+  }
+
+  return result.join('\n').trim()
 }
 
 export default BlogPostPage

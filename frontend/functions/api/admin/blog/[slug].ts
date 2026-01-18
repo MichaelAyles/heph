@@ -14,7 +14,7 @@ interface BlogEntry {
   date: string
   excerpt: string
   thumbnailPath: string | null
-  htmlContent: string
+  markdownPath: string
   readingTime: number
 }
 
@@ -87,7 +87,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     originalExcerpt: entry.excerpt,
     thumbnailPath: settings?.custom_thumbnail || entry.thumbnailPath,
     originalThumbnailPath: entry.thumbnailPath,
-    htmlContent: entry.htmlContent,
+    markdownPath: entry.markdownPath,
     readingTime: entry.readingTime,
     isPublished: settings?.is_published !== 0,
     sortOrder: settings?.sort_order ?? null,

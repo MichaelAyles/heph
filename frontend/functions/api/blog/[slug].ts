@@ -1,7 +1,7 @@
 /**
  * Single Blog API
  *
- * GET /api/blog/:slug - Get a single blog post with full content
+ * GET /api/blog/:slug - Get a single blog post metadata
  * Returns 404 if blog is not published
  */
 
@@ -14,7 +14,7 @@ interface BlogEntry {
   date: string
   excerpt: string
   thumbnailPath: string | null
-  htmlContent: string
+  markdownPath: string
   readingTime: number
 }
 
@@ -38,7 +38,7 @@ interface FullBlogEntry {
   date: string
   excerpt: string
   thumbnailPath: string | null
-  htmlContent: string
+  markdownPath: string
   readingTime: number
   prevSlug: string | null
   nextSlug: string | null
@@ -130,7 +130,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     date: entry.date,
     excerpt: settings?.custom_description || entry.excerpt,
     thumbnailPath: settings?.custom_thumbnail || entry.thumbnailPath,
-    htmlContent: entry.htmlContent,
+    markdownPath: entry.markdownPath,
     readingTime: entry.readingTime,
     prevSlug,
     nextSlug,
