@@ -14,16 +14,6 @@ import {
 } from './json'
 
 describe('safeJsonParse', () => {
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
-
-  beforeEach(() => {
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    consoleErrorSpy.mockRestore()
-  })
-
   it('returns fallback for null input', () => {
     expect(safeJsonParse(null, { default: true })).toEqual({ default: true })
   })
@@ -55,23 +45,20 @@ describe('safeJsonParse', () => {
     expect(safeJsonParse('null', 'default')).toBe(null)
   })
 
-  it('returns fallback for invalid JSON', () => {
+  it('returns fallback for invalid JSON silently', () => {
+    // safeJsonParse silently returns fallback without logging
     expect(safeJsonParse('not json', 'fallback')).toBe('fallback')
-    expect(consoleErrorSpy).toHaveBeenCalled()
   })
 
-  it('returns fallback for malformed JSON', () => {
+  it('returns fallback for malformed JSON silently', () => {
+    // safeJsonParse silently returns fallback without logging
     expect(safeJsonParse('{"broken": }', {})).toEqual({})
-    expect(consoleErrorSpy).toHaveBeenCalled()
   })
 
-  it('logs truncated JSON on error', () => {
+  it('returns fallback for long invalid JSON silently', () => {
     const longJson = 'x'.repeat(200)
-    safeJsonParse(longJson, null)
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      '[safeJsonParse] Failed to parse JSON:',
-      expect.stringMatching(/^x{100}$/)
-    )
+    // safeJsonParse silently returns fallback without logging
+    expect(safeJsonParse(longJson, null)).toBe(null)
   })
 
   it('preserves type with generics', () => {

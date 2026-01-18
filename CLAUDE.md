@@ -86,6 +86,12 @@ This runs `typecheck && test:run && build` which matches CI. The build step incl
 - Missing dependencies
 - Bundle size issues
 
+**CRITICAL: NEVER commit when `pnpm check` fails.** Even if you believe failures are "pre-existing" or "unrelated" to your changes:
+- CI will fail regardless, blocking deployment
+- If tests fail, you MUST fix them before committing
+- Do NOT assume failures are pre-existing without verifying `main` has the same failures
+- If you cannot fix a test, explicitly ask the user before proceeding
+
 **Common CI failures not caught by `pnpm typecheck` alone**:
 1. **`@/` aliases in functions-imported files** - wrangler can't resolve them
 2. **Missing exports** - TypeScript may pass but bundler fails
