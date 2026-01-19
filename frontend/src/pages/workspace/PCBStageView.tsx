@@ -38,6 +38,7 @@ import {
 import {
   validateGrid,
   fromPlacedBlocks,
+  calculateBoardSize,
   GRID_UNIT_MM,
 } from '../../services/pcb-grid'
 import { logger } from '../../lib/logger'
@@ -96,11 +97,14 @@ export function PCBStageView() {
     }
   }, [pcbArtifacts?.placedBlocks])
 
-  // Validate current placement
-  const validationResult = useMemo(() => {
-    if (selectedBlocks.length === 0) return null
+  // Validate current placement and calculate board size
+  const { validationResult, boardSize } = useMemo(() => {
+    if (selectedBlocks.length === 0) return { validationResult: null, boardSize: null }
     const gridState = fromPlacedBlocks(selectedBlocks, blockDefinitions, gridWidth, gridHeight)
-    return validateGrid(gridState)
+    return {
+      validationResult: validateGrid(gridState),
+      boardSize: calculateBoardSize(gridState),
+    }
   }, [selectedBlocks, blockDefinitions, gridWidth, gridHeight])
 
   // Generate documentation
@@ -505,9 +509,9 @@ export function PCBStageView() {
 
             <div className="flex items-center gap-2">
               {/* Board size info */}
-              {selectedBlocks.length > 0 && (
+              {boardSize && boardSize.width > 0 && (
                 <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded font-mono">
-                  {(gridWidth * GRID_UNIT_MM).toFixed(1)}×{(gridHeight * GRID_UNIT_MM).toFixed(1)}mm ({gridWidth}×{gridHeight}{' '}
+                  {boardSize.widthMm.toFixed(1)}×{boardSize.heightMm.toFixed(1)}mm ({boardSize.width}×{boardSize.height}{' '}
                   units)
                 </span>
               )}
