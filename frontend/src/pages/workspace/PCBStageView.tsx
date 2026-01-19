@@ -1,19 +1,50 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
-import { Cpu, ArrowRight, Loader2, CheckCircle2, XCircle, Grid3X3, Eye, Wand2, Box, FileCode2 } from 'lucide-react'
+import {
+  Cpu,
+  ArrowRight,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Grid3X3,
+  Eye,
+  Wand2,
+  Box,
+  FileCode2,
+  Download,
+  FileText,
+  Sparkles,
+  LayoutGrid,
+  Network,
+} from 'lucide-react'
 import { clsx } from 'clsx'
-import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
-import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
-import { BlockSelector } from '@/components/pcb/BlockSelector'
-import { PCB3DViewer } from '@/components/pcb/PCB3DViewer'
-import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
-import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
-import { mergeBlockSchematics } from '@/services/pcb-merge'
-import { logger } from '@/lib/logger'
-import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '@/db/schema'
+import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
+import { KiCanvasViewer } from '../../components/pcb/KiCanvasViewer'
+import { BlockSelector } from '../../components/pcb/BlockSelector'
+import { PCB3DViewer } from '../../components/pcb/PCB3DViewer'
+import { GridEditor } from '../../components/pcb/GridEditor'
+import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
+import { StageCompletionSummary } from '../../components/workspace/StageCompletionSummary'
+import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
+import { mergeBlockSchematics } from '../../services/pcb-merge'
+import { generatePCBDocument } from '../../services/pcb-document'
+import {
+  buildPCBSelectionMessages,
+  toBlockCatalogEntry,
+  parsePCBSuggestionResponse,
+  validatePCBSuggestion,
+} from '../../prompts/pcb-selection'
+import {
+  validateGrid,
+  fromPlacedBlocks,
+  GRID_UNIT_MM,
+} from '../../services/pcb-grid'
+import { logger } from '../../lib/logger'
+import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '../../db/schema'
+import type { BlockDefinition } from '../../schemas/block'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
-type ViewMode = 'schematic' | '3d'
+type ViewMode = 'schematic' | '3d' | 'grid' | 'bus' | 'docs'
 
 export function PCBStageView() {
   const { project } = useWorkspaceContext()
@@ -23,7 +54,10 @@ export function PCBStageView() {
   const [previewBlockSlug, setPreviewBlockSlug] = useState<string | null>(null)
   const [isMerging, setIsMerging] = useState(false)
   const [mergeError, setMergeError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<ViewMode>('schematic')
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [isAiSuggesting, setIsAiSuggesting] = useState(false)
+  const [gridWidth, setGridWidth] = useState(4)
+  const [gridHeight, setGridHeight] = useState(6)
 
   const specComplete = project?.status === 'complete'
   const spec = project?.spec
@@ -41,12 +75,47 @@ export function PCBStageView() {
     },
   })
 
+  // Build block definitions map
+  const blockDefinitions = useMemo(() => {
+    const map = new Map<string, BlockDefinition>()
+    if (blocksData?.blocks) {
+      for (const block of blocksData.blocks) {
+        if (block.definition) {
+          map.set(block.slug, block.definition)
+        }
+      }
+    }
+    return map
+  }, [blocksData?.blocks])
+
   // Initialize selected blocks from spec if available
   useMemo(() => {
     if (pcbArtifacts?.placedBlocks && selectedBlocks.length === 0) {
       setSelectedBlocks(pcbArtifacts.placedBlocks)
     }
   }, [pcbArtifacts?.placedBlocks])
+
+  // Validate current placement
+  const validationResult = useMemo(() => {
+    if (selectedBlocks.length === 0) return null
+    const gridState = fromPlacedBlocks(selectedBlocks, blockDefinitions, gridWidth, gridHeight)
+    return validateGrid(gridState)
+  }, [selectedBlocks, blockDefinitions, gridWidth, gridHeight])
+
+  // Generate documentation
+  const documentOutput = useMemo(() => {
+    if (selectedBlocks.length === 0 || !project?.name) return null
+    return generatePCBDocument({
+      projectName: project.name,
+      projectDescription: project.description || undefined,
+      finalSpec: spec?.finalSpec,
+      placedBlocks: selectedBlocks,
+      blockDefinitions,
+      gridWidth,
+      gridHeight,
+      schematicFilename: `${project.name.toLowerCase().replace(/\s+/g, '-')}.kicad_sch`,
+    })
+  }, [selectedBlocks, project?.name, project?.description, spec?.finalSpec, blockDefinitions, gridWidth, gridHeight])
 
   // Mutation to save PCB data
   const savePCBMutation = useMutation({
@@ -76,7 +145,7 @@ export function PCBStageView() {
     },
   })
 
-  // Handle block selection
+  // Handle block selection from sidebar
   const handleSelectBlock = (block: PcbBlock) => {
     // Auto-place on next available grid position
     const gridPositions = selectedBlocks.map((b) => `${b.gridX},${b.gridY}`)
@@ -86,14 +155,14 @@ export function PCBStageView() {
     // Simple auto-placement: find first available position in a row
     while (gridPositions.includes(`${gridX},${gridY}`)) {
       gridX++
-      if (gridX >= 4) {
+      if (gridX >= gridWidth) {
         gridX = 0
         gridY++
       }
     }
 
     const newBlock: PlacedBlock = {
-      blockId: block.id,
+      blockId: `${block.id}-${Date.now()}`,
       blockSlug: block.slug,
       gridX,
       gridY,
@@ -107,6 +176,15 @@ export function PCBStageView() {
     savePCBMutation.mutate({ placedBlocks: updatedBlocks })
   }
 
+  // Handle blocks change from GridEditor
+  const handleBlocksChange = useCallback(
+    (blocks: PlacedBlock[]) => {
+      setSelectedBlocks(blocks)
+      savePCBMutation.mutate({ placedBlocks: blocks })
+    },
+    [savePCBMutation]
+  )
+
   // Handle block removal
   const handleRemoveBlock = (blockId: string) => {
     const updatedBlocks = selectedBlocks.filter((b) => b.blockId !== blockId)
@@ -117,7 +195,76 @@ export function PCBStageView() {
   // Handle preview of a single block's schematic
   const handlePreviewBlock = (blockSlug: string) => {
     setPreviewBlockSlug(blockSlug)
+    setViewMode('schematic')
   }
+
+  // Handle AI suggestion
+  const handleAiSuggest = useCallback(async () => {
+    if (!blocksData?.blocks || !spec?.finalSpec) return
+
+    setIsAiSuggesting(true)
+    try {
+      // Build catalog entries
+      const catalogEntries = blocksData.blocks
+        .filter((b) => b.definition)
+        .map((b) => toBlockCatalogEntry(b.definition!))
+
+      // Build messages
+      const messages = buildPCBSelectionMessages({
+        projectName: project?.name || 'Untitled',
+        description: spec.finalSpec.summary || project?.description || '',
+        finalSpec: spec.finalSpec,
+        availableBlocks: catalogEntries,
+      })
+
+      // Call LLM
+      const res = await fetch('/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages,
+          temperature: 0.3,
+          projectId: project?.id,
+        }),
+      })
+
+      if (!res.ok) throw new Error('Failed to get AI suggestion')
+
+      const data = await res.json()
+      const suggestion = parsePCBSuggestionResponse(data.content)
+
+      if (!suggestion) {
+        throw new Error('Failed to parse AI suggestion')
+      }
+
+      // Validate suggestion
+      const validation = validatePCBSuggestion(suggestion, catalogEntries)
+      if (!validation.valid) {
+        logger.warn('pcb', 'AI suggestion has validation issues', { errors: validation.errors })
+      }
+
+      // Update grid size
+      setGridWidth(Math.max(2, suggestion.boardSize.width))
+      setGridHeight(Math.max(4, suggestion.boardSize.height))
+
+      // Convert to PlacedBlock format
+      const newBlocks: PlacedBlock[] = suggestion.blocks.map((b, idx) => ({
+        blockId: `${b.slug}-${Date.now()}-${idx}`,
+        blockSlug: b.slug,
+        gridX: b.gridX,
+        gridY: b.gridY,
+        rotation: b.rotation,
+      }))
+
+      setSelectedBlocks(newBlocks)
+      savePCBMutation.mutate({ placedBlocks: newBlocks })
+    } catch (error) {
+      logger.error('pcb', 'AI suggestion failed', { error })
+      setMergeError(error instanceof Error ? error.message : 'AI suggestion failed')
+    } finally {
+      setIsAiSuggesting(false)
+    }
+  }, [blocksData?.blocks, spec?.finalSpec, project, savePCBMutation])
 
   // Handle schematic merge - the critical integration!
   const handleMergeSchematic = useCallback(async () => {
@@ -132,19 +279,15 @@ export function PCBStageView() {
     try {
       // Filter to get only the blocks that are selected
       const selectedBlockData = blocksData.blocks.filter((b) =>
-        selectedBlocks.some((sb) => sb.blockId === b.id)
+        selectedBlocks.some((sb) => sb.blockSlug === b.slug)
       )
 
       // Call the merge function
-      const mergeResult = await mergeBlockSchematics(
-        selectedBlocks,
-        selectedBlockData,
-        project.name
-      )
+      const mergeResult = await mergeBlockSchematics(selectedBlocks, selectedBlockData, project.name)
 
       // Transform netList to match schema type
       const transformedNetList: NetAssignment[] = mergeResult.netList.map((n) => ({
-        net: n.localNet, // Map localNet to net
+        net: n.localNet,
         globalNet: n.globalNet,
         gpio: n.gpio,
       }))
@@ -159,14 +302,28 @@ export function PCBStageView() {
       })
 
       setCurrentStep('preview')
+      setViewMode('schematic')
     } catch (error) {
-      logger.pcb('Merge failed', { error })
+      logger.error('pcb', 'Merge failed', { error })
       setMergeError(error instanceof Error ? error.message : 'Failed to merge schematics')
       setCurrentStep('select_blocks')
     } finally {
       setIsMerging(false)
     }
   }, [selectedBlocks, blocksData?.blocks, project?.name, savePCBMutation])
+
+  // Handle documentation download
+  const handleDownloadDocs = useCallback(() => {
+    if (!documentOutput || !project?.name) return
+
+    const blob = new Blob([documentOutput.markdown], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project.name.toLowerCase().replace(/\s+/g, '-')}-pcb-design.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [documentOutput, project?.name])
 
   // Update currentStep based on existing data
   useMemo(() => {
@@ -209,8 +366,8 @@ export function PCBStageView() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            {/* Step indicators */}
             <div className="flex items-center gap-2">
-              {/* Step indicators */}
               <StepIndicator
                 step={1}
                 label="Select Blocks"
@@ -249,7 +406,7 @@ export function PCBStageView() {
         </div>
       </div>
 
-      {/* Previous stage summary - collapsed by default after initial view */}
+      {/* Previous stage summary */}
       {spec?.stages?.spec?.status === 'complete' && spec?.finalSpec && (
         <div className="px-4 pt-4">
           <StageCompletionSummary
@@ -266,6 +423,29 @@ export function PCBStageView() {
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left sidebar: Block selector */}
         <aside className="w-80 border-r border-surface-700 flex flex-col min-h-0 overflow-hidden">
+          <div className="px-3 py-2 border-b border-surface-700 flex items-center justify-between bg-surface-800/50">
+            <span className="text-xs font-medium text-steel-dim uppercase tracking-wider">
+              Block Catalog
+            </span>
+            <button
+              onClick={handleAiSuggest}
+              disabled={isAiSuggesting || !spec?.finalSpec}
+              className={clsx(
+                'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
+                isAiSuggesting
+                  ? 'bg-surface-700 text-steel-dim cursor-wait'
+                  : 'bg-copper/20 text-copper hover:bg-copper/30'
+              )}
+              title="Let AI suggest blocks based on your spec"
+            >
+              {isAiSuggesting ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              AI Suggest
+            </button>
+          </div>
           <BlockSelector
             selectedBlocks={selectedBlocks}
             onSelectBlock={handleSelectBlock}
@@ -277,79 +457,184 @@ export function PCBStageView() {
 
         {/* Main panel */}
         <main className="flex-1 flex flex-col min-h-0 p-4 gap-4">
-          {/* Schematic viewer */}
-          <div className="flex-1 bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0">
-            <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-medium text-steel">
-                  {previewBlockSlug
-                    ? `Preview: ${previewBlockSlug}`
-                    : viewMode === 'schematic'
-                      ? 'Schematic'
-                      : '3D Preview'}
-                </h3>
-                {pcbArtifacts?.boardSize && !previewBlockSlug && (
-                  <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded">
-                    {pcbArtifacts.boardSize.width} × {pcbArtifacts.boardSize.height} mm
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {/* View mode toggle */}
-                {selectedBlocks.length > 0 && !previewBlockSlug && (
-                  <div className="flex items-center bg-surface-800 rounded p-0.5">
+          {/* View mode toolbar */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1 bg-surface-800 rounded p-0.5">
+              <ViewModeButton
+                mode="grid"
+                currentMode={viewMode}
+                onClick={() => {
+                  setViewMode('grid')
+                  setPreviewBlockSlug(null)
+                }}
+                icon={LayoutGrid}
+                label="Grid"
+              />
+              <ViewModeButton
+                mode="bus"
+                currentMode={viewMode}
+                onClick={() => {
+                  setViewMode('bus')
+                  setPreviewBlockSlug(null)
+                }}
+                icon={Network}
+                label="Bus"
+              />
+              <ViewModeButton
+                mode="schematic"
+                currentMode={viewMode}
+                onClick={() => {
+                  setViewMode('schematic')
+                  setPreviewBlockSlug(null)
+                }}
+                icon={FileCode2}
+                label="Schematic"
+                disabled={!pcbArtifacts?.schematicData && !previewBlockSlug}
+              />
+              <ViewModeButton
+                mode="3d"
+                currentMode={viewMode}
+                onClick={() => {
+                  setViewMode('3d')
+                  setPreviewBlockSlug(null)
+                }}
+                icon={Box}
+                label="3D"
+                disabled={selectedBlocks.length === 0}
+              />
+              <ViewModeButton
+                mode="docs"
+                currentMode={viewMode}
+                onClick={() => {
+                  setViewMode('docs')
+                  setPreviewBlockSlug(null)
+                }}
+                icon={FileText}
+                label="Docs"
+                disabled={selectedBlocks.length === 0}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Board size info */}
+              {selectedBlocks.length > 0 && (
+                <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded font-mono">
+                  {gridWidth * GRID_UNIT_MM}×{gridHeight * GRID_UNIT_MM}mm ({gridWidth}×{gridHeight}{' '}
+                  units)
+                </span>
+              )}
+
+              {/* Validation status */}
+              {validationResult && (
+                <div
+                  className={clsx(
+                    'flex items-center gap-1 px-2 py-1 rounded text-xs',
+                    validationResult.valid
+                      ? 'bg-emerald-500/10 text-emerald-400'
+                      : 'bg-red-500/10 text-red-400'
+                  )}
+                >
+                  {validationResult.valid ? (
+                    <>
+                      <CheckCircle2 className="w-3 h-3" />
+                      Valid
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-3 h-3" />
+                      {validationResult.errors.length} error(s)
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Download docs button */}
+              {documentOutput && viewMode === 'docs' && (
+                <button
+                  onClick={handleDownloadDocs}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-steel rounded transition-colors"
+                >
+                  <Download className="w-3 h-3" />
+                  Download
+                </button>
+              )}
+
+              {/* Generate button */}
+              {selectedBlocks.length > 0 && currentStep === 'select_blocks' && (
+                <button
+                  onClick={handleMergeSchematic}
+                  disabled={isMerging || !validationResult?.valid}
+                  className={clsx(
+                    'flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors',
+                    isMerging
+                      ? 'bg-surface-700 text-steel-dim cursor-wait'
+                      : validationResult?.valid
+                        ? 'bg-copper text-surface-900 hover:bg-copper-light'
+                        : 'bg-surface-700 text-steel-dim cursor-not-allowed'
+                  )}
+                >
+                  {isMerging ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="w-4 h-4" />
+                      Generate Schematic
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Main viewer area */}
+          <div className="flex-1 bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
+            {/* View content */}
+            <div className="flex-1 min-h-0 overflow-auto">
+              {previewBlockSlug ? (
+                <div className="h-full flex flex-col">
+                  <div className="px-4 py-2 border-b border-surface-700 flex items-center justify-between bg-surface-800/50">
+                    <span className="text-sm text-steel">Preview: {previewBlockSlug}</span>
                     <button
-                      onClick={() => setViewMode('schematic')}
-                      className={clsx(
-                        'px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors',
-                        viewMode === 'schematic'
-                          ? 'bg-copper text-surface-900'
-                          : 'text-steel-dim hover:text-steel'
-                      )}
-                      title="View schematic"
+                      onClick={() => setPreviewBlockSlug(null)}
+                      className="text-xs text-copper hover:text-copper-light"
                     >
-                      <FileCode2 className="w-3 h-3" />
-                      Schematic
-                    </button>
-                    <button
-                      onClick={() => setViewMode('3d')}
-                      className={clsx(
-                        'px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors',
-                        viewMode === '3d'
-                          ? 'bg-copper text-surface-900'
-                          : 'text-steel-dim hover:text-steel'
-                      )}
-                      title="View 3D preview"
-                    >
-                      <Box className="w-3 h-3" />
-                      3D
+                      Clear Preview
                     </button>
                   </div>
-                )}
-                {previewBlockSlug && (
-                  <button
-                    onClick={() => setPreviewBlockSlug(null)}
-                    className="text-xs text-copper hover:text-copper-light"
-                  >
-                    Clear Preview
-                  </button>
-                )}
-                {pcbArtifacts?.schematicData && !previewBlockSlug && viewMode === 'schematic' && (
-                  <button
-                    onClick={handleMergeSchematic}
-                    disabled={isMerging}
-                    className="text-xs text-steel-dim hover:text-steel flex items-center gap-1"
-                  >
-                    <Wand2 className="w-3 h-3" />
-                    Regenerate
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="flex-1 min-h-0">
-              {previewBlockSlug ? (
+                  <div className="flex-1">
+                    <KiCanvasViewer
+                      src={`/api/blocks/${previewBlockSlug}/files/${previewBlockSlug}.kicad_sch`}
+                      type="schematic"
+                      controls="basic"
+                      className="w-full h-full"
+                    />
+                  </div>
+                </div>
+              ) : viewMode === 'grid' ? (
+                <div className="p-4 flex justify-center">
+                  <GridEditor
+                    placedBlocks={selectedBlocks}
+                    blockDefinitions={blockDefinitions}
+                    onBlocksChange={handleBlocksChange}
+                    gridWidth={gridWidth}
+                    gridHeight={gridHeight}
+                    disabled={currentStep === 'generating'}
+                  />
+                </div>
+              ) : viewMode === 'bus' ? (
+                <div className="p-4">
+                  <BusConnectionDiagram
+                    placedBlocks={selectedBlocks}
+                    blockDefinitions={blockDefinitions}
+                    variant="diagram"
+                  />
+                </div>
+              ) : viewMode === 'schematic' && pcbArtifacts?.schematicData ? (
                 <KiCanvasViewer
-                  src={`/api/blocks/${previewBlockSlug}/files/${previewBlockSlug}.kicad_sch`}
+                  src={`data:text/plain;base64,${btoa(pcbArtifacts.schematicData)}`}
                   type="schematic"
                   controls="basic"
                   className="w-full h-full"
@@ -361,69 +646,45 @@ export function PCBStageView() {
                   blocks={blocksData.blocks}
                   className="w-full h-full"
                 />
-              ) : pcbArtifacts?.schematicData ? (
-                <KiCanvasViewer
-                  src={`data:text/plain;base64,${btoa(pcbArtifacts.schematicData)}`}
-                  type="schematic"
-                  controls="basic"
-                  className="w-full h-full"
-                />
-              ) : pcbArtifacts?.schematicUrl ? (
-                <KiCanvasViewer
-                  src={pcbArtifacts.schematicUrl}
-                  type="schematic"
-                  controls="basic"
-                  className="w-full h-full"
-                />
+              ) : viewMode === 'docs' && documentOutput ? (
+                <div className="p-4 max-w-3xl mx-auto">
+                  <pre className="text-xs text-steel-dim whitespace-pre-wrap font-mono bg-surface-800 p-4 rounded-lg overflow-x-auto">
+                    {documentOutput.markdown}
+                  </pre>
+                </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center h-full">
                   <div className="text-center">
                     <Grid3X3 className="w-12 h-12 text-surface-600 mx-auto mb-3" strokeWidth={1} />
                     <p className="text-steel-dim text-sm mb-2">
                       {selectedBlocks.length > 0
-                        ? 'Ready to generate merged schematic'
+                        ? 'Select a view mode above'
                         : 'Select blocks to build your schematic'}
                     </p>
                     <p className="text-xs text-surface-500 mb-4">
                       {selectedBlocks.length} block{selectedBlocks.length !== 1 ? 's' : ''} selected
                     </p>
-                    {selectedBlocks.length > 0 && (
-                      <button
-                        onClick={handleMergeSchematic}
-                        disabled={isMerging || !blocksData?.blocks}
-                        className={clsx(
-                          'inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
-                          isMerging
-                            ? 'bg-surface-700 text-steel-dim cursor-wait'
-                            : 'bg-copper text-surface-900 hover:bg-copper-light'
-                        )}
-                      >
-                        {isMerging ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Generating...
-                          </>
-                        ) : (
-                          <>
-                            <Wand2 className="w-4 h-4" />
-                            Generate Schematic
-                          </>
-                        )}
-                      </button>
-                    )}
-                    {mergeError && (
-                      <p className="text-red-400 text-xs mt-2">{mergeError}</p>
-                    )}
+                    {mergeError && <p className="text-red-400 text-xs mt-2">{mergeError}</p>}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Selected blocks grid */}
+          {/* Selected blocks chips */}
           {selectedBlocks.length > 0 && (
             <div className="bg-surface-900 rounded-lg border border-surface-700 p-4">
-              <h3 className="text-sm font-medium text-steel mb-3">Selected Blocks</h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-steel">Selected Blocks</h3>
+                {documentOutput?.summary && (
+                  <span className="text-xs text-steel-dim">
+                    {documentOutput.summary.blockCount} blocks •{' '}
+                    {documentOutput.summary.i2cDevices.length} I2C •{' '}
+                    {documentOutput.summary.spiDevices.length} SPI •{' '}
+                    {documentOutput.summary.gpioUsage.length} GPIO
+                  </span>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {selectedBlocks.map((placed) => (
                   <div
@@ -431,7 +692,7 @@ export function PCBStageView() {
                     className="flex items-center gap-2 px-3 py-1.5 bg-surface-800 border border-surface-600 rounded"
                   >
                     <span className="text-sm text-steel">{placed.blockSlug}</span>
-                    <span className="text-xs text-steel-dim">
+                    <span className="text-xs text-steel-dim font-mono">
                       ({placed.gridX},{placed.gridY})
                     </span>
                     <button
@@ -458,6 +719,10 @@ export function PCBStageView() {
     </div>
   )
 }
+
+// =============================================================================
+// Sub-components
+// =============================================================================
 
 interface StepIndicatorProps {
   step: number
@@ -492,6 +757,42 @@ function StepIndicator({ step, label, active, complete, onClick, canClick }: Ste
         <span className="w-4 h-4 flex items-center justify-center text-xs">{step}</span>
       )}
       <span>{label}</span>
+    </button>
+  )
+}
+
+interface ViewModeButtonProps {
+  mode: ViewMode
+  currentMode: ViewMode
+  onClick: () => void
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  disabled?: boolean
+}
+
+function ViewModeButton({
+  mode,
+  currentMode,
+  onClick,
+  icon: Icon,
+  label,
+  disabled,
+}: ViewModeButtonProps) {
+  const isActive = mode === currentMode
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={clsx(
+        'px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors',
+        isActive ? 'bg-copper text-surface-900' : 'text-steel-dim hover:text-steel',
+        disabled && 'opacity-50 cursor-not-allowed'
+      )}
+      title={label}
+    >
+      <Icon className="w-3 h-3" />
+      {label}
     </button>
   )
 }

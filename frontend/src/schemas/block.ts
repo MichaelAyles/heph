@@ -268,12 +268,20 @@ export const OverhangSchema = z.object({
 })
 
 /**
+ * Edge mount direction - blocks with connectors that must be at board edge
+ */
+export const EdgeMountSchema = z.enum(['north', 'south', 'east', 'west'])
+
+export type EdgeMount = z.infer<typeof EdgeMountSchema>
+
+/**
  * Physical properties for enclosure generation
  */
 export const PhysicalPropertiesSchema = z.object({
   overhang: OverhangSchema.optional(),
   heightMm: z.number().positive().optional().describe('Total component height for clearance'),
   clearanceAboveMm: z.number().nonnegative().optional().describe('Required clearance (e.g., PIR dome)'),
+  edgeMount: EdgeMountSchema.optional().describe('Edge this block must be placed at (for USB connectors, etc.)'),
 })
 
 export type PhysicalProperties = z.infer<typeof PhysicalPropertiesSchema>
