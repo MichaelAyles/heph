@@ -854,29 +854,35 @@ export async function mergeBlockPCBs(
     generator: 'phaestus',
   })
 
+  // Use 'any' to access internal kicadts properties (getString() uses _sx* and _* arrays)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pcbAny = mergedPcb as any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const templateAny = templatePcb as any
+
   // Copy layers from template
-  if (templatePcb.layers) {
-    mergedPcb.layers = templatePcb.layers
+  if (templateAny._sxLayers) {
+    pcbAny._sxLayers = templateAny._sxLayers
   }
 
   // Copy setup from template
-  if (templatePcb.setup) {
-    mergedPcb.setup = templatePcb.setup
+  if (templateAny._sxSetup) {
+    pcbAny._sxSetup = templateAny._sxSetup
   }
 
   // Copy general settings from template
-  if (templatePcb.general) {
-    mergedPcb.general = templatePcb.general
+  if (templateAny._sxGeneral) {
+    pcbAny._sxGeneral = templateAny._sxGeneral
   }
 
-  // Build global net list
-  mergedPcb.nets = []
+  // Build global net list - use internal _nets array
+  pcbAny._nets = []
   for (const [name, id] of globalNets) {
-    mergedPcb.nets.push(new PcbNet(id, name))
+    pcbAny._nets.push(new PcbNet(id, name))
   }
 
-  // Merge footprints from all blocks
-  mergedPcb.footprints = []
+  // Merge footprints from all blocks - use internal _footprints array
+  pcbAny._footprints = []
   for (const loaded of loadedBlocks) {
     const footprints = loaded.pcb.footprints || []
     const localNets = loaded.pcb.nets || []
@@ -890,12 +896,12 @@ export async function mergeBlockPCBs(
         localNets,
         netMapping
       )
-      mergedPcb.footprints.push(transformed)
+      pcbAny._footprints.push(transformed)
     }
   }
 
-  // Merge segments (traces) from all blocks
-  mergedPcb.segments = []
+  // Merge segments (traces) from all blocks - use internal _segments array
+  pcbAny._segments = []
   for (const loaded of loadedBlocks) {
     const segments = loaded.pcb.segments || []
     const localNets = loaded.pcb.nets || []
@@ -909,12 +915,12 @@ export async function mergeBlockPCBs(
         localNets,
         netMapping
       )
-      mergedPcb.segments.push(transformed)
+      pcbAny._segments.push(transformed)
     }
   }
 
-  // Merge vias from all blocks
-  mergedPcb.vias = []
+  // Merge vias from all blocks - use internal _vias array
+  pcbAny._vias = []
   for (const loaded of loadedBlocks) {
     const vias = loaded.pcb.vias || []
     const localNets = loaded.pcb.nets || []
@@ -928,12 +934,12 @@ export async function mergeBlockPCBs(
         localNets,
         netMapping
       )
-      mergedPcb.vias.push(transformed)
+      pcbAny._vias.push(transformed)
     }
   }
 
-  // Merge graphic lines (except edge cuts - we'll regenerate those)
-  mergedPcb.graphicLines = []
+  // Merge graphic lines (except edge cuts - we'll regenerate those) - use internal _grLines array
+  pcbAny._grLines = []
   for (const loaded of loadedBlocks) {
     const graphicLines = loaded.pcb.graphicLines || []
 
@@ -942,14 +948,14 @@ export async function mergeBlockPCBs(
       if (line.layer?.names?.includes('Edge.Cuts')) continue
 
       const transformed = transformGrLine(line, loaded.offsetX, loaded.offsetY)
-      mergedPcb.graphicLines.push(transformed)
+      pcbAny._grLines.push(transformed)
     }
   }
 
   // Generate unified board outline
   const boardOutline = generateBoardOutline(maxX, maxY)
   for (const line of boardOutline) {
-    mergedPcb.graphicLines.push(line)
+    pcbAny._grLines.push(line)
   }
 
   // Note: Zones (copper pours) are complex to merge - skip for now
