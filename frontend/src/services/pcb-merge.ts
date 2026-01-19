@@ -658,6 +658,39 @@ function transformFootprint(
     }
   }
 
+  // Filter out silkscreen graphics from footprint
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fpAny = footprint as any
+
+  // Helper to check if a layer is silkscreen
+  const isSilkscreen = (layer: { names?: string[] } | undefined) =>
+    layer?.names?.some(n => n === 'F.SilkS' || n === 'B.SilkS') ?? false
+
+  // Filter fp_lines
+  if (fpAny._fpLines) {
+    fpAny._fpLines = fpAny._fpLines.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  // Filter fp_texts
+  if (fpAny._fpTexts) {
+    fpAny._fpTexts = fpAny._fpTexts.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  // Filter fp_circles
+  if (fpAny._fpCircles) {
+    fpAny._fpCircles = fpAny._fpCircles.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  // Filter fp_arcs
+  if (fpAny._fpArcs) {
+    fpAny._fpArcs = fpAny._fpArcs.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  // Filter fp_rects
+  if (fpAny._fpRects) {
+    fpAny._fpRects = fpAny._fpRects.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  // Filter fp_polys
+  if (fpAny._fpPolys) {
+    fpAny._fpPolys = fpAny._fpPolys.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+
   return footprint
 }
 
@@ -791,6 +824,57 @@ function generateBoardOutline(
   }))
 
   return lines
+}
+
+/**
+ * Generate GND copper pour zones for top and bottom copper layers
+ */
+function generateGndZones(boardWidth: number, boardHeight: number, gndNetId: number): string {
+  const uuid1 = crypto.randomUUID()
+  const uuid2 = crypto.randomUUID()
+
+  // Small margin inside board edge
+  const margin = 0.2
+  const x0 = margin
+  const y0 = margin
+  const x1 = boardWidth - margin
+  const y1 = boardHeight - margin
+
+  // Zone for front copper
+  const frontZone = `  (zone (net ${gndNetId}) (net_name "GND") (layer "F.Cu") (uuid "${uuid1}")
+    (hatch edge 0.5)
+    (connect_pads (clearance 0.3))
+    (min_thickness 0.2)
+    (filled_areas_thickness no)
+    (fill yes (thermal_gap 0.3) (thermal_bridge_width 0.5))
+    (polygon
+      (pts
+        (xy ${x0} ${y0})
+        (xy ${x1} ${y0})
+        (xy ${x1} ${y1})
+        (xy ${x0} ${y1})
+      )
+    )
+  )`
+
+  // Zone for back copper
+  const backZone = `  (zone (net ${gndNetId}) (net_name "GND") (layer "B.Cu") (uuid "${uuid2}")
+    (hatch edge 0.5)
+    (connect_pads (clearance 0.3))
+    (min_thickness 0.2)
+    (filled_areas_thickness no)
+    (fill yes (thermal_gap 0.3) (thermal_bridge_width 0.5))
+    (polygon
+      (pts
+        (xy ${x0} ${y0})
+        (xy ${x1} ${y0})
+        (xy ${x1} ${y1})
+        (xy ${x0} ${y1})
+      )
+    )
+  )`
+
+  return frontZone + '\n' + backZone
 }
 
 export interface PcbMergeResult {
@@ -966,7 +1050,7 @@ export async function mergeBlockPCBs(
     }
   }
 
-  // Merge graphic lines (except edge cuts - we'll regenerate those) - use internal _grLines array
+  // Merge graphic lines (except edge cuts and silkscreen - we'll regenerate outline)
   pcbAny._grLines = []
   for (const loaded of loadedBlocks) {
     const graphicLines = loaded.pcb.graphicLines || []
@@ -974,6 +1058,8 @@ export async function mergeBlockPCBs(
     for (const line of graphicLines) {
       // Skip edge cuts - we'll generate a unified board outline
       if (line.layer?.names?.includes('Edge.Cuts')) continue
+      // Skip silkscreen layers
+      if (line.layer?.names?.includes('F.SilkS') || line.layer?.names?.includes('B.SilkS')) continue
 
       const transformed = transformGrLine(line, loaded.offsetX, loaded.offsetY)
       pcbAny._grLines.push(transformed)
@@ -986,10 +1072,42 @@ export async function mergeBlockPCBs(
     pcbAny._grLines.push(line)
   }
 
-  // Note: Zones (copper pours) are complex to merge - skip for now
-  // They can be added manually in KiCad after merge
+  // Helper to check if layer is silkscreen
+  const isSilkscreen = (layer: { names?: string[] } | undefined) =>
+    layer?.names?.some(n => n === 'F.SilkS' || n === 'B.SilkS') ?? false
 
-  const pcbOutput = mergedPcb.getString()
+  // Filter other graphic elements from silkscreen
+  // Note: kicadts stores these in internal _gr* arrays
+  if (pcbAny._grTexts) {
+    pcbAny._grTexts = pcbAny._grTexts.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  if (pcbAny._grArcs) {
+    pcbAny._grArcs = pcbAny._grArcs.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  if (pcbAny._grCircles) {
+    pcbAny._grCircles = pcbAny._grCircles.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  if (pcbAny._grRects) {
+    pcbAny._grRects = pcbAny._grRects.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+  if (pcbAny._grPolys) {
+    pcbAny._grPolys = pcbAny._grPolys.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+  }
+
+  // Get base PCB output
+  let pcbOutput = mergedPcb.getString()
+
+  // Get GND net ID
+  const gndNetId = globalNets.get('GND') ?? 1
+
+  // Generate GND copper pour zones for top and bottom layers
+  const gndZones = generateGndZones(maxX, maxY, gndNetId)
+
+  // Insert zones before the closing parenthesis
+  const lastParen = pcbOutput.lastIndexOf(')')
+  if (lastParen !== -1) {
+    pcbOutput = pcbOutput.substring(0, lastParen) + '\n' + gndZones + '\n)'
+  }
   logger.info('pcb', 'Merged PCB output', {
     length: pcbOutput.length,
     startsWith: pcbOutput.substring(0, 200),
