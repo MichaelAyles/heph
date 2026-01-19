@@ -287,7 +287,7 @@ export function buildBlockGenerationUserPrompt(
   // Use TOKN if available (has pin-level net connections), otherwise use simplified format
   const schematicData = toknData || formattedExtract
 
-  let prompt = `Generate a block.json for this KiCad design.
+  const prompt = `Generate a block.json for this KiCad design.
 
 **Slug**: ${slug}
 ${suggestedCategory ? `**Suggested Category**: ${suggestedCategory}` : ''}

@@ -290,7 +290,7 @@ function formatDate(dateString: string): string {
 
 function stripTitleAndDate(markdown: string): string {
   const lines = markdown.split('\n')
-  let result: string[] = []
+  const result: string[] = []
   let skippedTitle = false
   let skippedDate = false
 

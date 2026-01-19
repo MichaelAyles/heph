@@ -248,7 +248,7 @@ function truncateToTokenLimit(
   context: Record<string, unknown>,
   maxTokens: number
 ): Record<string, unknown> {
-  let current = deepClone(context)
+  const current = deepClone(context)
   let tokens = estimateTokens(current)
 
   // If already under limit, return as-is
