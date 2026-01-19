@@ -826,57 +826,6 @@ function generateBoardOutline(
   return lines
 }
 
-/**
- * Generate GND copper pour zones for top and bottom copper layers
- */
-function generateGndZones(boardWidth: number, boardHeight: number, gndNetId: number): string {
-  const uuid1 = crypto.randomUUID()
-  const uuid2 = crypto.randomUUID()
-
-  // Small margin inside board edge
-  const margin = 0.2
-  const x0 = margin
-  const y0 = margin
-  const x1 = boardWidth - margin
-  const y1 = boardHeight - margin
-
-  // Zone for front copper
-  const frontZone = `  (zone (net ${gndNetId}) (net_name "GND") (layer "F.Cu") (uuid "${uuid1}")
-    (hatch edge 0.5)
-    (connect_pads (clearance 0.3))
-    (min_thickness 0.2)
-    (filled_areas_thickness no)
-    (fill yes (thermal_gap 0.3) (thermal_bridge_width 0.5))
-    (polygon
-      (pts
-        (xy ${x0} ${y0})
-        (xy ${x1} ${y0})
-        (xy ${x1} ${y1})
-        (xy ${x0} ${y1})
-      )
-    )
-  )`
-
-  // Zone for back copper
-  const backZone = `  (zone (net ${gndNetId}) (net_name "GND") (layer "B.Cu") (uuid "${uuid2}")
-    (hatch edge 0.5)
-    (connect_pads (clearance 0.3))
-    (min_thickness 0.2)
-    (filled_areas_thickness no)
-    (fill yes (thermal_gap 0.3) (thermal_bridge_width 0.5))
-    (polygon
-      (pts
-        (xy ${x0} ${y0})
-        (xy ${x1} ${y0})
-        (xy ${x1} ${y1})
-        (xy ${x0} ${y1})
-      )
-    )
-  )`
-
-  return frontZone + '\n' + backZone
-}
-
 export interface PcbMergeResult {
   pcb: string // KiCad PCB S-expression
   boardSize: { width: number; height: number }
@@ -1094,20 +1043,9 @@ export async function mergeBlockPCBs(
     pcbAny._grPolys = pcbAny._grPolys.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
   }
 
-  // Get base PCB output
-  let pcbOutput = mergedPcb.getString()
+  // Get PCB output
+  const pcbOutput = mergedPcb.getString()
 
-  // Get GND net ID
-  const gndNetId = globalNets.get('GND') ?? 1
-
-  // Generate GND copper pour zones for top and bottom layers
-  const gndZones = generateGndZones(maxX, maxY, gndNetId)
-
-  // Insert zones before the closing parenthesis
-  const lastParen = pcbOutput.lastIndexOf(')')
-  if (lastParen !== -1) {
-    pcbOutput = pcbOutput.substring(0, lastParen) + '\n' + gndZones + '\n)'
-  }
   logger.info('pcb', 'Merged PCB output', {
     length: pcbOutput.length,
     startsWith: pcbOutput.substring(0, 200),
