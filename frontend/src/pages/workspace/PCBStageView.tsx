@@ -589,14 +589,48 @@ export function PCBStageView() {
                 </div>
               )}
 
-              {/* Download docs button */}
+              {/* Download buttons */}
               {documentOutput && viewMode === 'docs' && (
                 <button
                   onClick={handleDownloadDocs}
                   className="flex items-center gap-1 px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-steel rounded transition-colors"
                 >
                   <Download className="w-3 h-3" />
-                  Download
+                  Download MD
+                </button>
+              )}
+              {pcbArtifacts?.schematicData && viewMode === 'schematic' && (
+                <button
+                  onClick={() => {
+                    const blob = new Blob([pcbArtifacts.schematicData!], { type: 'text/plain' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${project?.name?.toLowerCase().replace(/\s+/g, '-') || 'merged'}.kicad_sch`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-steel rounded transition-colors"
+                >
+                  <Download className="w-3 h-3" />
+                  Download .kicad_sch
+                </button>
+              )}
+              {pcbArtifacts?.pcbData && viewMode === 'pcb' && (
+                <button
+                  onClick={() => {
+                    const blob = new Blob([pcbArtifacts.pcbData!], { type: 'text/plain' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${project?.name?.toLowerCase().replace(/\s+/g, '-') || 'merged'}.kicad_pcb`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-steel rounded transition-colors"
+                >
+                  <Download className="w-3 h-3" />
+                  Download .kicad_pcb
                 </button>
               )}
 
