@@ -369,61 +369,6 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
 }
 
 /**
- * PCB board mesh component
- */
-function PCBBoard({ width, height }: { width: number; height: number }) {
-  return (
-    <Box
-      args={[width, PCB_THICKNESS, height]}
-      position={[width / 2, 0, height / 2]}
-    >
-      <meshStandardMaterial
-        color="#2d5a27" // Classic PCB green
-        metalness={0.1}
-        roughness={0.8}
-      />
-    </Box>
-  )
-}
-
-/**
- * Grid lines for visualizing placement
- */
-function GridLines({ width, height }: { width: number; height: number }) {
-  const gridWidth = Math.ceil(width / GRID_SIZE)
-  const gridHeight = Math.ceil(height / GRID_SIZE)
-
-  const geometry = useMemo(() => {
-    const points: THREE.Vector3[] = []
-
-    // Vertical lines
-    for (let i = 0; i <= gridWidth; i++) {
-      const x = i * GRID_SIZE
-      points.push(new THREE.Vector3(x, PCB_THICKNESS / 2 + 0.1, 0))
-      points.push(new THREE.Vector3(x, PCB_THICKNESS / 2 + 0.1, height))
-    }
-
-    // Horizontal lines
-    for (let j = 0; j <= gridHeight; j++) {
-      const z = j * GRID_SIZE
-      points.push(new THREE.Vector3(0, PCB_THICKNESS / 2 + 0.1, z))
-      points.push(new THREE.Vector3(width, PCB_THICKNESS / 2 + 0.1, z))
-    }
-
-    const geom = new THREE.BufferGeometry()
-    const positions = new Float32Array(points.flatMap((v) => [v.x, v.y, v.z]))
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    return geom
-  }, [width, height, gridWidth, gridHeight])
-
-  return (
-    <lineSegments geometry={geometry}>
-      <lineBasicMaterial color="#1a4d1a" opacity={0.5} transparent />
-    </lineSegments>
-  )
-}
-
-/**
  * Scene content
  */
 function Scene({
@@ -451,12 +396,6 @@ function Scene({
       <ambientLight intensity={0.4} />
       <directionalLight position={[10, 20, 10]} intensity={0.8} castShadow />
       <directionalLight position={[-10, 15, -10]} intensity={0.4} />
-
-      {/* PCB board */}
-      <PCBBoard width={boardSize.width} height={boardSize.height} />
-
-      {/* Grid lines */}
-      <GridLines width={boardSize.width} height={boardSize.height} />
 
       {/* Placed blocks */}
       {placedBlocks.map((placed) => {
