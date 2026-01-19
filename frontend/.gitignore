@@ -32,3 +32,6 @@ coverage/
 # Generated blog assets
 src/data/blog-manifest.json
 public/blog-images/
+
+# Test gerber files
+test-gerbers/
