@@ -26,7 +26,6 @@ import { BlockSelector } from '../../components/pcb/BlockSelector'
 import { PCB3DViewer } from '../../components/pcb/PCB3DViewer'
 import { GridEditor } from '../../components/pcb/GridEditor'
 import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
-import { StageCompletionSummary } from '../../components/workspace/StageCompletionSummary'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
 import { mergeBlockSchematics } from '../../services/pcb-merge'
 import { generatePCBDocument } from '../../services/pcb-document'
@@ -407,19 +406,6 @@ export function PCBStageView() {
           </div>
         </div>
       </div>
-
-      {/* Previous stage summary */}
-      {spec?.stages?.spec?.status === 'complete' && spec?.finalSpec && (
-        <div className="px-4 pt-4">
-          <StageCompletionSummary
-            stage="spec"
-            spec={spec}
-            projectId={project?.id || ''}
-            isExpanded={false}
-            currentStage="pcb"
-          />
-        </div>
-      )}
 
       {/* Main content area */}
       <div className="flex-1 flex min-h-0 overflow-hidden">

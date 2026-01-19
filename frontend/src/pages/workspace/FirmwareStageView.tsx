@@ -27,7 +27,6 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
-import { StageCompletionSummary } from '@/components/workspace/StageCompletionSummary'
 import { logger } from '@/lib/logger'
 import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import { llm } from '@/services/llm'
@@ -835,19 +834,6 @@ Upload this .bin file back to PHAESTUS for distribution.
           </div>
         )}
       </div>
-
-      {/* Previous stage summary - show enclosure completion */}
-      {spec?.stages?.enclosure?.status === 'complete' && spec?.enclosure && (
-        <div className="px-4 pt-4 flex-none">
-          <StageCompletionSummary
-            stage="enclosure"
-            spec={spec}
-            projectId={project?.id || ''}
-            isExpanded={false}
-            currentStage="firmware"
-          />
-        </div>
-      )}
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
