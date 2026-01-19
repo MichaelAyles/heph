@@ -78,7 +78,16 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
   try {
     // Initialize the OCCT library (dynamically loaded)
     const occtModule = await getOcct()
-    const occt = await occtModule.default()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const occt = await (occtModule.default as any)({
+      locateFile: (file: string) => {
+        // WASM file is served from public folder
+        if (file.endsWith('.wasm')) {
+          return '/occt-import-js.wasm'
+        }
+        return file
+      }
+    })
 
     // Fetch the STEP file
     const response = await fetch(url)
