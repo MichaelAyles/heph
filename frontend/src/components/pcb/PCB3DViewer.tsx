@@ -44,6 +44,11 @@ const CATEGORY_COLORS: Record<BlockCategory, string> = {
 // Cache for loaded STEP geometries
 const geometryCache = new Map<string, THREE.BufferGeometry | null>()
 
+/** Clear the geometry cache - call after uploading new files */
+export function clearGeometryCache() {
+  geometryCache.clear()
+}
+
 interface PCB3DViewerProps {
   /** Board dimensions in mm */
   boardSize?: { width: number; height: number }
@@ -89,8 +94,8 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
       }
     })
 
-    // Fetch the STEP file
-    const response = await fetch(url)
+    // Fetch the STEP file (no-store to avoid stale cached files)
+    const response = await fetch(url, { cache: 'no-store' })
     if (!response.ok) {
       console.warn('[PCB3DViewer] STEP file fetch failed:', url, response.status, response.statusText)
       geometryCache.set(url, null)

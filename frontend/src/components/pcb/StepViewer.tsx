@@ -48,7 +48,7 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
     })
     console.log('[StepViewer] OCCT initialized, fetching:', url)
 
-    const response = await fetch(url)
+    const response = await fetch(url, { cache: 'no-store' })
     if (!response.ok) {
       console.warn('[StepViewer] Fetch failed:', response.status, response.statusText)
       return null

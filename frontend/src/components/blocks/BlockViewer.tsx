@@ -36,6 +36,7 @@ import type { BlockDefinition, BusSignal } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { StepViewer } from '@/components/pcb/StepViewer'
+import { clearGeometryCache } from '@/components/pcb/PCB3DViewer'
 import type { LucideIcon } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
@@ -660,7 +661,8 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
         method: 'DELETE',
       })
       if (res.ok) {
-        // Reload the page to refresh block data
+        // Clear geometry cache and reload to refresh block data
+        clearGeometryCache()
         window.location.reload()
       } else {
         const err = await res.json()
@@ -695,7 +697,8 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
       })
 
       if (res.ok) {
-        // Reload the page to refresh block data
+        // Clear geometry cache and reload to refresh block data
+        clearGeometryCache()
         window.location.reload()
       } else {
         const err = await res.json()
