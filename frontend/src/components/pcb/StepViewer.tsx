@@ -70,18 +70,23 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
 
     for (const mesh of result.meshes) {
       const geometry = new THREE.BufferGeometry()
-      geometry.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3)
-      )
+      // Ensure arrays are typed arrays for Three.js
+      const positions = mesh.attributes.position.array instanceof Float32Array
+        ? mesh.attributes.position.array
+        : new Float32Array(mesh.attributes.position.array)
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+
       if (mesh.attributes.normal) {
-        geometry.setAttribute(
-          'normal',
-          new THREE.Float32BufferAttribute(mesh.attributes.normal.array, 3)
-        )
+        const normals = mesh.attributes.normal.array instanceof Float32Array
+          ? mesh.attributes.normal.array
+          : new Float32Array(mesh.attributes.normal.array)
+        geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
       }
       if (mesh.index) {
-        geometry.setIndex(new THREE.BufferAttribute(mesh.index.array, 1))
+        const indices = mesh.index.array instanceof Uint32Array
+          ? mesh.index.array
+          : new Uint32Array(mesh.index.array)
+        geometry.setIndex(new THREE.BufferAttribute(indices, 1))
       }
       geometries.push(geometry)
     }
