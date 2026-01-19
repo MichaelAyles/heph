@@ -20,7 +20,9 @@ import {
   FileCode,
   Eye,
   X,
+  Archive,
 } from 'lucide-react'
+import JSZip from 'jszip'
 import { clsx } from 'clsx'
 import type { BlockCategory } from '@/schemas/block'
 import type { PcbBlock } from '@/db/schema'
@@ -231,15 +233,20 @@ export function AdminBlocksPage() {
                         no definition
                       </span>
                     )}
-                    {block.fileStatus.missing.length === 0 ? (
-                      <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
-                        files complete
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400">
-                        {block.fileStatus.missing.length} files missing
-                      </span>
-                    )}
+                    {/* Show file count as x/5 */}
+                    {(() => {
+                      const total = block.fileStatus.required.length
+                      const present = block.fileStatus.present.length
+                      return present === total ? (
+                        <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
+                          {present}/{total} files
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400">
+                          {present}/{total} files
+                        </span>
+                      )
+                    })()}
                     {block.isValidated ? (
                       <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
                         validated
@@ -530,14 +537,57 @@ function BlockUploaderModal({
     step?: File
     thumbnail?: File
     blockJson?: string
+    gerberZip?: File
+    gerberFiles?: Map<string, ArrayBuffer>
   }>({})
   const [error, setError] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [isExtractingZip, setIsExtractingZip] = useState(false)
   const [uploadResult, setUploadResult] = useState<{
     success: boolean
     message: string
     fileStatus?: { missing: string[] }
   } | null>(null)
+
+  const handleGerberZipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsExtractingZip(true)
+    setError(null)
+
+    try {
+      const zip = await JSZip.loadAsync(file)
+      const gerberFiles = new Map<string, ArrayBuffer>()
+
+      // Extract all gerber/drill files from the ZIP
+      const validExtensions = ['.gtl', '.gbl', '.gto', '.gbo', '.gts', '.gbs', '.gm1', '.g1', '.g2', '.drl']
+
+      for (const [filename, zipEntry] of Object.entries(zip.files)) {
+        if (zipEntry.dir) continue
+
+        // Get just the filename without path
+        const baseName = filename.split('/').pop() || filename
+        const lowerName = baseName.toLowerCase()
+
+        if (validExtensions.some(ext => lowerName.endsWith(ext))) {
+          const content = await zipEntry.async('arraybuffer')
+          gerberFiles.set(baseName, content)
+        }
+      }
+
+      if (gerberFiles.size === 0) {
+        setError('No valid Gerber files found in ZIP. Expected .gtl, .gbl, .gto, .gbo, .gts, .gbs, .gm1, .g1, .g2, or .drl files.')
+        return
+      }
+
+      setFiles(prev => ({ ...prev, gerberZip: file, gerberFiles }))
+    } catch (err) {
+      setError(`Failed to read ZIP file: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setIsExtractingZip(false)
+    }
+  }
 
   const handleUpload = async () => {
     setError(null)
@@ -552,6 +602,13 @@ function BlockUploaderModal({
       if (files.step) formData.append('step', files.step)
       if (files.thumbnail) formData.append('thumbnail', files.thumbnail)
       if (files.blockJson) formData.append('blockJson', files.blockJson)
+
+      // Add extracted gerber files
+      if (files.gerberFiles) {
+        for (const [filename, content] of files.gerberFiles) {
+          formData.append(`gerber_${filename}`, new Blob([content]), filename)
+        }
+      }
 
       const res = await fetch('/api/admin/blocks/upload', {
         method: 'POST',
@@ -593,12 +650,21 @@ function BlockUploaderModal({
     }
   }
 
+  // Count how many required files are present vs missing
+  const requiredCount = 5 // kicad_sch, kicad_pcb, step, block.json, gerbers
+  const presentCount = requiredCount - block.fileStatus.missing.length
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-surface-900 border border-surface-700 w-full max-w-lg">
         {/* Header */}
         <div className="p-4 border-b border-surface-700 flex items-center justify-between">
-          <h2 className="text-lg font-medium text-steel">Upload Files for {block.name}</h2>
+          <div>
+            <h2 className="text-lg font-medium text-steel">Upload Files for {block.name}</h2>
+            <p className="text-xs text-steel-dim mt-1">
+              Files: {presentCount}/{requiredCount} present
+            </p>
+          </div>
           <button onClick={onClose} className="text-steel-dim hover:text-steel">
             &times;
           </button>
@@ -609,7 +675,7 @@ function BlockUploaderModal({
           {/* Missing files warning */}
           {block.fileStatus.missing.length > 0 && (
             <div className="p-3 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-sm">
-              Missing files: {block.fileStatus.missing.join(', ')}
+              Missing: {block.fileStatus.missing.join(', ')}
             </div>
           )}
 
@@ -633,6 +699,32 @@ function BlockUploaderModal({
               required={block.fileStatus.missing.includes(`${block.slug}.step`)}
               onChange={handleFileChange('step')}
             />
+
+            {/* Gerber ZIP upload */}
+            <div>
+              <label className="block text-sm font-medium text-steel mb-1">
+                Gerbers (.zip)
+                {block.fileStatus.missing.includes('gerbers/') && (
+                  <span className="text-amber-400 ml-1">*</span>
+                )}
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".zip"
+                  onChange={handleGerberZipChange}
+                  className="flex-1 text-sm text-steel-dim file:mr-4 file:py-2 file:px-4 file:border-0 file:bg-surface-800 file:text-steel file:cursor-pointer hover:file:bg-surface-700"
+                />
+                {isExtractingZip && <Loader2 className="w-4 h-4 text-copper animate-spin" />}
+              </div>
+              {files.gerberFiles && (
+                <p className="text-xs text-emerald-400 mt-1">
+                  <Archive className="w-3 h-3 inline mr-1" />
+                  {files.gerberFiles.size} gerber files extracted
+                </p>
+              )}
+            </div>
+
             <FileInput
               label="Block Definition (block.json)"
               accept=".json"
@@ -680,7 +772,7 @@ function BlockUploaderModal({
           {!uploadResult?.success && (
             <button
               onClick={handleUpload}
-              disabled={isUploading || Object.keys(files).length === 0}
+              disabled={isUploading || isExtractingZip || Object.keys(files).filter(k => k !== 'gerberFiles').length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors disabled:opacity-50"
             >
               {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}

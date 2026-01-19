@@ -52,6 +52,7 @@ export function getBlockFileRequirements(slug: string): BlockFileRequirements {
       `${slug}.kicad_pcb`, // Source for PCB merge
       `${slug}.step`, // 3D model for enclosure generation
       'block.json', // Structured metadata for DRC
+      'gerbers/', // Manufacturing files (Gerber + drill)
     ],
     optional: [
       `${slug}.png`, // Thumbnail for UI
@@ -59,6 +60,22 @@ export function getBlockFileRequirements(slug: string): BlockFileRequirements {
     ],
   }
 }
+
+/**
+ * Standard Gerber file extensions we expect in a gerbers/ folder
+ */
+export const GERBER_FILE_EXTENSIONS = [
+  '-F_Cu.gtl', // Front copper
+  '-In1_Cu.g1', // Inner copper 1
+  '-In2_Cu.g2', // Inner copper 2
+  '-B_Cu.gbl', // Back copper
+  '-F_Mask.gts', // Front solder mask
+  '-B_Mask.gbs', // Back solder mask
+  '-F_Silkscreen.gto', // Front silkscreen
+  '-B_Silkscreen.gbo', // Back silkscreen
+  '-Edge_Cuts.gm1', // Board outline
+  '.drl', // Drill file
+]
 
 /**
  * Check if a set of files meets the block requirements

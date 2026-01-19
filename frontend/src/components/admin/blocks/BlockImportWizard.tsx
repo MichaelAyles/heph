@@ -25,7 +25,9 @@ import {
   Eye,
   FileText,
   List,
+  Archive,
 } from 'lucide-react'
+import JSZip from 'jszip'
 import { clsx } from 'clsx'
 import type { BlockCategory } from '@/schemas/block'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
@@ -81,6 +83,8 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
   const [pcbFile, setPcbFile] = useState<File | null>(null)
   const [pcbContent, setPcbContent] = useState<string | null>(null)
   const [stepFile, setStepFile] = useState<File | null>(null)
+  const [gerberFiles, setGerberFiles] = useState<Map<string, ArrayBuffer> | null>(null)
+  const [isExtractingZip, setIsExtractingZip] = useState(false)
   const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null)
   const [editedJson, setEditedJson] = useState('')
   const [jsonError, setJsonError] = useState<string | null>(null)
@@ -149,13 +153,20 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
       }
 
       // Now upload the KiCad files
-      if (schematicFile || pcbFile || stepFile) {
+      if (schematicFile || pcbFile || stepFile || gerberFiles) {
         const uploadFormData = new FormData()
         uploadFormData.append('slug', slug)
         if (schematicFile) uploadFormData.append('schematic', schematicFile)
         if (pcbFile) uploadFormData.append('pcb', pcbFile)
         if (stepFile) uploadFormData.append('step', stepFile)
         uploadFormData.append('blockJson', editedJson)
+
+        // Add extracted gerber files
+        if (gerberFiles) {
+          for (const [filename, content] of gerberFiles) {
+            uploadFormData.append(`gerber_${filename}`, new Blob([content]), filename)
+          }
+        }
 
         const uploadRes = await fetch('/api/admin/blocks/upload', {
           method: 'POST',
@@ -224,7 +235,40 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
   }
 
   const isValidSlug = /^[a-z0-9-]+$/.test(slug) && slug.length >= 3 && slug.length <= 50
-  const canGenerate = schematicFile && isValidSlug
+  // All 4 file types are required for new imports
+  const canGenerate = schematicFile && pcbFile && stepFile && gerberFiles && isValidSlug
+
+  // Handle gerber ZIP extraction
+  const handleGerberZipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsExtractingZip(true)
+    try {
+      const zip = await JSZip.loadAsync(file)
+      const extractedFiles = new Map<string, ArrayBuffer>()
+
+      const validExtensions = ['.gtl', '.gbl', '.gto', '.gbo', '.gts', '.gbs', '.gm1', '.g1', '.g2', '.drl']
+
+      for (const [filename, zipEntry] of Object.entries(zip.files)) {
+        if (zipEntry.dir) continue
+        const baseName = filename.split('/').pop() || filename
+        const lowerName = baseName.toLowerCase()
+        if (validExtensions.some(ext => lowerName.endsWith(ext))) {
+          const content = await zipEntry.async('arraybuffer')
+          extractedFiles.set(baseName, content)
+        }
+      }
+
+      if (extractedFiles.size > 0) {
+        setGerberFiles(extractedFiles)
+      }
+    } catch {
+      // ZIP extraction failed - user will see no files extracted
+    } finally {
+      setIsExtractingZip(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -325,6 +369,25 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                 </div>
               </div>
 
+              {/* Required files status */}
+              <div className="p-3 bg-surface-800 border border-surface-700 text-sm">
+                <div className="text-steel-dim mb-2">All 4 file types are required:</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className={clsx(schematicFile ? 'text-emerald-400' : 'text-steel-dim')}>
+                    {schematicFile ? '✓' : '○'} Schematic (.kicad_sch)
+                  </div>
+                  <div className={clsx(pcbFile ? 'text-emerald-400' : 'text-steel-dim')}>
+                    {pcbFile ? '✓' : '○'} PCB Layout (.kicad_pcb)
+                  </div>
+                  <div className={clsx(stepFile ? 'text-emerald-400' : 'text-steel-dim')}>
+                    {stepFile ? '✓' : '○'} 3D Model (.step)
+                  </div>
+                  <div className={clsx(gerberFiles ? 'text-emerald-400' : 'text-steel-dim')}>
+                    {gerberFiles ? '✓' : '○'} Gerbers (.zip)
+                  </div>
+                </div>
+              </div>
+
               {/* File uploads */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -366,7 +429,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
 
                 <div>
                   <label className="block text-sm font-medium text-steel mb-2">
-                    PCB Layout (optional)
+                    PCB Layout *
                   </label>
                   <div
                     className={clsx(
@@ -394,7 +457,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                         <div className="flex flex-col items-center gap-2">
                           <Upload className="w-8 h-8 text-steel-dim" strokeWidth={1.5} />
                           <span className="text-sm text-steel-dim">.kicad_pcb file</span>
-                          <span className="text-xs text-steel-dim">Improves accuracy</span>
+                          <span className="text-xs text-steel-dim">Click to upload</span>
                         </div>
                       )}
                     </label>
@@ -402,44 +465,88 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                 </div>
               </div>
 
-              {/* STEP file upload */}
-              <div>
-                <label className="block text-sm font-medium text-steel mb-2">
-                  3D Model (optional)
-                </label>
-                <div
-                  className={clsx(
-                    'border-2 border-dashed p-4 text-center transition-colors',
-                    stepFile
-                      ? 'border-emerald-500/50 bg-emerald-500/10'
-                      : 'border-surface-700 hover:border-surface-600'
-                  )}
-                >
-                  <input
-                    type="file"
-                    accept=".step,.stp"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) setStepFile(file)
-                    }}
-                    className="hidden"
-                    id="step-upload"
-                  />
-                  <label htmlFor="step-upload" className="cursor-pointer">
-                    {stepFile ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <Box className="w-8 h-8 text-emerald-400" strokeWidth={1.5} />
-                        <span className="text-sm text-steel">{stepFile.name}</span>
-                        <span className="text-xs text-steel-dim">Click to change</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <Box className="w-8 h-8 text-steel-dim" strokeWidth={1.5} />
-                        <span className="text-sm text-steel-dim">.step/.stp file</span>
-                        <span className="text-xs text-steel-dim">Export from KiCad: File &gt; Export &gt; STEP</span>
-                      </div>
-                    )}
+              {/* STEP and Gerber upload row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-steel mb-2">
+                    3D Model *
                   </label>
+                  <div
+                    className={clsx(
+                      'border-2 border-dashed p-4 text-center transition-colors',
+                      stepFile
+                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                        : 'border-surface-700 hover:border-surface-600'
+                    )}
+                  >
+                    <input
+                      type="file"
+                      accept=".step,.stp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) setStepFile(file)
+                      }}
+                      className="hidden"
+                      id="step-upload"
+                    />
+                    <label htmlFor="step-upload" className="cursor-pointer">
+                      {stepFile ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Box className="w-8 h-8 text-emerald-400" strokeWidth={1.5} />
+                          <span className="text-sm text-steel">{stepFile.name}</span>
+                          <span className="text-xs text-steel-dim">Click to change</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <Box className="w-8 h-8 text-steel-dim" strokeWidth={1.5} />
+                          <span className="text-sm text-steel-dim">.step/.stp file</span>
+                          <span className="text-xs text-steel-dim">File &gt; Export &gt; STEP</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-steel mb-2">
+                    Gerbers *
+                  </label>
+                  <div
+                    className={clsx(
+                      'border-2 border-dashed p-4 text-center transition-colors',
+                      gerberFiles
+                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                        : 'border-surface-700 hover:border-surface-600'
+                    )}
+                  >
+                    <input
+                      type="file"
+                      accept=".zip"
+                      onChange={handleGerberZipChange}
+                      className="hidden"
+                      id="gerber-upload"
+                    />
+                    <label htmlFor="gerber-upload" className="cursor-pointer">
+                      {isExtractingZip ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="w-8 h-8 text-copper animate-spin" strokeWidth={1.5} />
+                          <span className="text-sm text-steel-dim">Extracting...</span>
+                        </div>
+                      ) : gerberFiles ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Archive className="w-8 h-8 text-emerald-400" strokeWidth={1.5} />
+                          <span className="text-sm text-steel">{gerberFiles.size} files</span>
+                          <span className="text-xs text-steel-dim">Click to change</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <Archive className="w-8 h-8 text-steel-dim" strokeWidth={1.5} />
+                          <span className="text-sm text-steel-dim">.zip file</span>
+                          <span className="text-xs text-steel-dim">File &gt; Fabrication &gt; Gerbers</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
                 </div>
               </div>
 
