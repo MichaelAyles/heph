@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Cpu,
   ArrowRight,
@@ -647,10 +649,29 @@ export function PCBStageView() {
                   className="w-full h-full"
                 />
               ) : viewMode === 'docs' && documentOutput ? (
-                <div className="p-4 max-w-3xl mx-auto">
-                  <pre className="text-xs text-steel-dim whitespace-pre-wrap font-mono bg-surface-800 p-4 rounded-lg overflow-x-auto">
-                    {documentOutput.markdown}
-                  </pre>
+                <div className="p-6 max-w-4xl mx-auto overflow-auto">
+                  <article
+                    className="prose prose-invert prose-sm max-w-none
+                      prose-headings:text-steel prose-headings:font-semibold
+                      prose-h1:text-2xl prose-h1:border-b prose-h1:border-surface-700 prose-h1:pb-2
+                      prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4
+                      prose-h3:text-lg prose-h3:mt-6 prose-h3:mb-3
+                      prose-p:text-steel-dim prose-p:leading-relaxed
+                      prose-a:text-copper prose-a:no-underline hover:prose-a:underline
+                      prose-strong:text-steel prose-strong:font-semibold
+                      prose-code:text-copper prose-code:bg-surface-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs
+                      prose-pre:bg-surface-800 prose-pre:border prose-pre:border-surface-700
+                      prose-table:border-collapse prose-table:w-full
+                      prose-th:bg-surface-800 prose-th:text-steel prose-th:text-left prose-th:px-3 prose-th:py-2 prose-th:border prose-th:border-surface-700 prose-th:text-sm
+                      prose-td:text-steel-dim prose-td:px-3 prose-td:py-2 prose-td:border prose-td:border-surface-700 prose-td:text-sm
+                      prose-ul:text-steel-dim prose-ol:text-steel-dim
+                      prose-li:marker:text-copper
+                      prose-hr:border-surface-700"
+                  >
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {documentOutput.markdown}
+                    </ReactMarkdown>
+                  </article>
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center h-full">

@@ -414,7 +414,7 @@ function Scene({
 
       {/* Placed blocks */}
       {placedBlocks.map((placed) => {
-        const block = blocks.find((b) => b.id === placed.blockId)
+        const block = blocks.find((b) => b.slug === placed.blockSlug)
         if (!block) return null
         return <BlockMesh key={placed.blockId} placed={placed} block={block} />
       })}
@@ -475,7 +475,7 @@ export function PCB3DViewer({
     let maxY = 0
 
     for (const placed of placedBlocks) {
-      const block = blocks.find((b) => b.id === placed.blockId)
+      const block = blocks.find((b) => b.slug === placed.blockSlug)
       if (block) {
         const endX = (placed.gridX + block.widthUnits) * GRID_SIZE
         const endY = (placed.gridY + block.heightUnits) * GRID_SIZE
