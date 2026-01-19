@@ -18,6 +18,7 @@ import {
   Sparkles,
   LayoutGrid,
   Network,
+  CircuitBoard,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
@@ -27,7 +28,7 @@ import { PCB3DViewer } from '../../components/pcb/PCB3DViewer'
 import { GridEditor } from '../../components/pcb/GridEditor'
 import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
-import { mergeBlockSchematics } from '../../services/pcb-merge'
+import { mergeBlockSchematics, mergeBlockPCBs } from '../../services/pcb-merge'
 import { generatePCBDocument } from '../../services/pcb-document'
 import {
   buildPCBSelectionMessages,
@@ -45,7 +46,7 @@ import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '../../d
 import type { BlockDefinition } from '../../schemas/block'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
-type ViewMode = 'schematic' | '3d' | 'grid' | 'bus' | 'docs'
+type ViewMode = 'schematic' | 'pcb' | '3d' | 'grid' | 'bus' | 'docs'
 
 export function PCBStageView() {
   const { project } = useWorkspaceContext()
@@ -270,7 +271,7 @@ export function PCBStageView() {
     }
   }, [blocksData?.blocks, spec?.finalSpec, project, savePCBMutation])
 
-  // Handle schematic merge - the critical integration!
+  // Handle schematic and PCB merge - the critical integration!
   const handleMergeSchematic = useCallback(async () => {
     if (selectedBlocks.length === 0) return
     if (!blocksData?.blocks) return
@@ -286,27 +287,38 @@ export function PCBStageView() {
         selectedBlocks.some((sb) => sb.blockSlug === b.slug)
       )
 
-      // Call the merge function
-      const mergeResult = await mergeBlockSchematics(selectedBlocks, selectedBlockData, project.name)
+      // Merge schematic
+      const schematicResult = await mergeBlockSchematics(selectedBlocks, selectedBlockData, project.name)
+
+      // Merge PCB layout
+      let pcbData: string | undefined
+      try {
+        const pcbResult = await mergeBlockPCBs(selectedBlocks, selectedBlockData, project.name)
+        pcbData = pcbResult.pcb
+      } catch (pcbError) {
+        // PCB merge is optional - some blocks may not have PCB files
+        logger.warn('pcb', 'PCB merge failed (continuing with schematic only)', { error: pcbError })
+      }
 
       // Transform netList to match schema type
-      const transformedNetList: NetAssignment[] = mergeResult.netList.map((n) => ({
+      const transformedNetList: NetAssignment[] = schematicResult.netList.map((n) => ({
         net: n.localNet,
         globalNet: n.globalNet,
         gpio: n.gpio,
       }))
 
-      // Save merged schematic data to the project
+      // Save merged schematic and PCB data to the project
       await savePCBMutation.mutateAsync({
         placedBlocks: selectedBlocks,
-        schematicData: mergeResult.schematic,
-        boardSize: { ...mergeResult.boardSize, unit: 'mm' as const },
+        schematicData: schematicResult.schematic,
+        pcbData,
+        boardSize: { ...schematicResult.boardSize, unit: 'mm' as const },
         netList: transformedNetList,
         mergedAt: new Date().toISOString(),
       })
 
       setCurrentStep('preview')
-      setViewMode('schematic')
+      setViewMode(pcbData ? 'pcb' : 'schematic')
     } catch (error) {
       logger.error('pcb', 'Merge failed', { error })
       setMergeError(error instanceof Error ? error.message : 'Failed to merge schematics')
@@ -483,6 +495,17 @@ export function PCBStageView() {
                 disabled={!pcbArtifacts?.schematicData && !previewBlockSlug}
               />
               <ViewModeButton
+                mode="pcb"
+                currentMode={viewMode}
+                onClick={() => {
+                  setViewMode('pcb')
+                  setPreviewBlockSlug(null)
+                }}
+                icon={CircuitBoard}
+                label="PCB"
+                disabled={!pcbArtifacts?.pcbData}
+              />
+              <ViewModeButton
                 mode="3d"
                 currentMode={viewMode}
                 onClick={() => {
@@ -627,6 +650,13 @@ export function PCBStageView() {
                 <KiCanvasViewer
                   src={`data:text/plain;base64,${btoa(pcbArtifacts.schematicData)}`}
                   type="schematic"
+                  controls="basic"
+                  className="w-full h-full"
+                />
+              ) : viewMode === 'pcb' && pcbArtifacts?.pcbData ? (
+                <KiCanvasViewer
+                  src={`data:text/plain;base64,${btoa(pcbArtifacts.pcbData)}`}
+                  type="pcb"
                   controls="basic"
                   className="w-full h-full"
                 />

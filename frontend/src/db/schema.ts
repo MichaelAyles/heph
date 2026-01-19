@@ -132,6 +132,8 @@ export interface PCBArtifacts {
   placedBlocks: PlacedBlock[]
   // Inline KiCad schematic content (for local preview)
   schematicData?: string
+  // Inline KiCad PCB content (for local preview)
+  pcbData?: string
   // Merged schematic URL (R2)
   schematicUrl?: string
   // Merged PCB layout URL (R2)
