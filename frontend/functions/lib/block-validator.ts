@@ -12,9 +12,7 @@ import {
   BlockDefinitionSchema,
   validateEdgeConnections,
   validateI2cAddresses,
-  BlockCategory,
 } from '../../src/schemas/block'
-import { z } from 'zod'
 
 // =============================================================================
 // Types

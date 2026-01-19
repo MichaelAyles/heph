@@ -262,7 +262,7 @@ export async function generatePcbFiles(
     try {
       const pcbResult = await mergeBlockPCBs(placedBlocks, selectedBlockData, projectName)
       pcbData = pcbResult.pcb
-    } catch (pcbError) {
+    } catch {
       // PCB merge is optional
       ctx.addHistoryItem({
         type: 'progress',

@@ -9,7 +9,7 @@
  */
 
 import type { Env } from '../../../env.d'
-import { parseKicadFiles, formatExtractForLLM, calculateGridSize } from '../../../../src/services/kicad-parser'
+import { parseKicadFiles, calculateGridSize } from '../../../../src/services/kicad-parser'
 import { buildBlockGenerationMessages } from '../../../../src/prompts/block-generation'
 import { parseBlockJson } from '../../../lib/block-validator'
 import type { BlockCategory } from '../../../../src/schemas/block'

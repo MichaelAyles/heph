@@ -7,16 +7,6 @@
 import type { Env } from '../../../../../env.d'
 import { createLogger } from '../../../../../lib/logger'
 
-// Map from file key to files object property
-const FILE_KEY_MAP: Record<string, string> = {
-  schematic: 'schematic',
-  pcb: 'pcb',
-  stepModel: 'stepModel',
-  step: 'stepModel',
-  thumbnail: 'thumbnail',
-  blockJson: 'blockJson',
-}
-
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { env, data, params } = context
   const user = data.user as { id: string; isAdmin: boolean } | undefined

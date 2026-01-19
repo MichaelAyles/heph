@@ -233,6 +233,7 @@ export function StepViewer({ url, className }: StepViewerProps) {
   const [autoRotate, setAutoRotate] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setLoading(true)
     setError(null)
@@ -248,6 +249,7 @@ export function StepViewer({ url, className }: StepViewerProps) {
       .catch(() => setError('Failed to load 3D model'))
       .finally(() => setLoading(false))
   }, [url])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (loading) {
     return (

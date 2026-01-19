@@ -12,7 +12,6 @@ import {
   validateBusContinuity,
   suggestPassthroughPlacements,
   calculatePowerBudget,
-  validatePowerBudget,
   checkI2cConflicts,
   checkGpioConflicts,
   checkSpiConflicts,
@@ -105,7 +104,7 @@ const createIoBlock = (): BlockDefinition =>
     },
   })
 
-const createPassthroughBlock = (): BlockDefinition =>
+const _createPassthroughBlock = (): BlockDefinition =>
   createMockBlock({
     slug: '1x1-passthrough',
     name: 'Passthrough',

@@ -93,7 +93,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       .bind(workosUser.id)
       .first<{ id: string; username: string; display_name: string | null; is_admin: number; is_approved: number }>()
 
-    let isNewUser = false
+    let _isNewUser = false
 
     if (!user) {
       // Check if user exists by email (for linking)
@@ -116,7 +116,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           .first()
       } else {
         // Create new user (not approved by default)
-        isNewUser = true
+        _isNewUser = true
         const userId = crypto.randomUUID().replace(/-/g, '')
         const displayName = [workosUser.first_name, workosUser.last_name]
           .filter(Boolean)
@@ -186,7 +186,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
 function redirectWithError(message: string): Response {
   // Redirect to login with error
-  const params = new URLSearchParams({ error: message })
   return new Response(null, {
     status: 302,
     headers: {

@@ -57,6 +57,7 @@ interface StepModelData {
 const geometryCache = new Map<string, StepModelData | null>()
 
 /** Clear the geometry cache - call after uploading new files */
+// eslint-disable-next-line react-refresh/only-export-components
 export function clearGeometryCache() {
   geometryCache.clear()
 }
@@ -257,6 +258,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
   }, [block.slug, block.files])
 
   // Load STEP model
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!stepUrl || stepFailed) return
 
@@ -271,6 +273,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
       })
       .finally(() => setLoadingStep(false))
   }, [stepUrl, stepFailed])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Pulse animation on hover
   useFrame(() => {
@@ -365,6 +368,7 @@ function Scene({
   blocks: PcbBlock[]
   autoRotate: boolean
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const controlsRef = useRef<any>(null)
 
   // Center the camera on the board

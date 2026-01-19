@@ -2,9 +2,9 @@
  * Tests for PCB Block Merge Service
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { suggestBlocksForSpec, autoPlaceBlocks } from './pcb-merge'
-import type { PcbBlock, PlacedBlock } from '@/db/schema'
+import type { PcbBlock } from '@/db/schema'
 
 // =============================================================================
 // TEST FIXTURES

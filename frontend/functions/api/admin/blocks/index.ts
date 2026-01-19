@@ -6,7 +6,7 @@
  */
 
 import type { Env } from '../../../env.d'
-import { parseBlockJson, validateBlockFiles, getBlockFileRequirements } from '../../../lib/block-validator'
+import { parseBlockJson, getBlockFileRequirements } from '../../../lib/block-validator'
 import { createLogger } from '../../../lib/logger'
 
 interface BlockRow {

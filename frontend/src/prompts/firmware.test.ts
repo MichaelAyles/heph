@@ -8,9 +8,6 @@ import {
   buildFirmwareModificationPrompt,
   buildFirmwareInputFromSpec,
   type FirmwareInput,
-  type PinAssignment,
-  type SensorConfig,
-  type OutputConfig,
   type FirmwareProject,
 } from './firmware'
 

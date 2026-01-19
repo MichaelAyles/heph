@@ -7,7 +7,7 @@
  */
 
 import type { Env } from '../../../env.d'
-import { parseBlockJson, validateBlockFiles, getBlockFileRequirements } from '../../../lib/block-validator'
+import { parseBlockJson, getBlockFileRequirements } from '../../../lib/block-validator'
 import type { BlockDefinition } from '../../../../src/schemas/block'
 import { createLogger } from '../../../lib/logger'
 

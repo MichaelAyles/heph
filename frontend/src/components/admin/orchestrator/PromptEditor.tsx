@@ -91,7 +91,8 @@ export function PromptEditor({ prompt, onSave }: PromptEditorProps) {
   const [iterationConfig, setIterationConfig] = useState('')
   const [outputFormat, setOutputFormat] = useState<'json' | 'code' | 'text' | 'image_prompt'>('json')
 
-  // Reset state when prompt changes
+  // Reset state when prompt changes - syncing external prop to internal state is valid
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (prompt) {
       setDisplayName(prompt.displayName)
@@ -106,6 +107,7 @@ export function PromptEditor({ prompt, onSave }: PromptEditorProps) {
       setIsDirty(false)
     }
   }, [prompt])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const saveMutation = useMutation({
     mutationFn: () => {

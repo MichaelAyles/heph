@@ -2,7 +2,7 @@
  * Tests for Safe JSON parsing utilities
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import {
   safeJsonParse,
@@ -10,7 +10,6 @@ import {
   findBalancedJson,
   safeJsonParseWithSchema,
   extractAndValidateJson,
-  type ParseResult,
 } from './json'
 
 describe('safeJsonParse', () => {
@@ -113,9 +112,9 @@ That's the output.`
 
   it('extracts array of objects when no object pattern present', () => {
     // Note: When both object and array patterns exist, object is tried first
-    const content = 'Results: [{"id": 1}, {"id": 2}]'
-    // The greedy object regex matches {"id": 1}, {"id": 2}] which is invalid
-    // Then findBalancedJson finds just {"id": 1} - this is a known limitation
+    // 'Results: [{"id": 1}, {"id": 2}]' - The greedy object regex matches
+    // {"id": 1}, {"id": 2}] which is invalid, then findBalancedJson finds
+    // just {"id": 1} - this is a known limitation.
     // For pure arrays without surrounding object braces, it works:
     const pureArray = '[{"id": 1}, {"id": 2}]'
     expect(extractJsonFromContent(pureArray)).toEqual([{ id: 1 }, { id: 2 }])
@@ -300,7 +299,7 @@ describe('safeJsonParseWithSchema', () => {
     email: z.string().email().optional(),
   })
 
-  type User = z.infer<typeof UserSchema>
+  type _User = z.infer<typeof UserSchema>
 
   it('returns error for null input', () => {
     const result = safeJsonParseWithSchema(null, UserSchema)
@@ -427,7 +426,7 @@ describe('extractAndValidateJson', () => {
     notes: z.string().optional(),
   })
 
-  type Feasibility = z.infer<typeof FeasibilitySchema>
+  type _Feasibility = z.infer<typeof FeasibilitySchema>
 
   it('returns error for empty content', () => {
     const result = extractAndValidateJson('', FeasibilitySchema)

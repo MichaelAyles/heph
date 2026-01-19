@@ -693,6 +693,7 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
   const [hasStarted, setHasStarted] = useState(false)
   const [hasCompleted, setHasCompleted] = useState(false)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (hasStarted) return
 
@@ -742,6 +743,7 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
       onComplete(validBlueprints)
     }
   }, [generating, blueprints, onComplete, hasCompleted])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const activeCount = generating.filter(Boolean).length
   const totalImages = 8

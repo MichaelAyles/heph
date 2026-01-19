@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { useOrchestratorStore } from './orchestrator'
+import type { OrchestratorCallbacks } from '@/services/orchestrator/types'
 
 // Mock the orchestrator service
 vi.mock('@/services/orchestrator', () => ({
@@ -284,7 +285,7 @@ describe('startOrchestrator', () => {
 
 describe('orchestrator callbacks', () => {
   it('onStateChange updates store state', () => {
-    let capturedCallbacks: any = null
+    let capturedCallbacks: OrchestratorCallbacks | null = null
     ;(createOrchestrator as Mock).mockImplementation((_projectId, _mode, callbacks) => {
       capturedCallbacks = callbacks
       return createMockOrchestrator()
@@ -312,7 +313,7 @@ describe('orchestrator callbacks', () => {
   })
 
   it('onComplete sets status to complete', () => {
-    let capturedCallbacks: any = null
+    let capturedCallbacks: OrchestratorCallbacks | null = null
     ;(createOrchestrator as Mock).mockImplementation((_projectId, _mode, callbacks) => {
       capturedCallbacks = callbacks
       return createMockOrchestrator()
@@ -337,7 +338,7 @@ describe('orchestrator callbacks', () => {
   })
 
   it('onError sets status to error', () => {
-    let capturedCallbacks: any = null
+    let capturedCallbacks: OrchestratorCallbacks | null = null
     ;(createOrchestrator as Mock).mockImplementation((_projectId, _mode, callbacks) => {
       capturedCallbacks = callbacks
       return createMockOrchestrator()
@@ -356,7 +357,7 @@ describe('orchestrator callbacks', () => {
   })
 
   it('onSpecUpdate calls provided callback', async () => {
-    let capturedCallbacks: any = null
+    let capturedCallbacks: OrchestratorCallbacks | null = null
     ;(createOrchestrator as Mock).mockImplementation((_projectId, _mode, callbacks) => {
       capturedCallbacks = callbacks
       return createMockOrchestrator()
@@ -374,7 +375,7 @@ describe('orchestrator callbacks', () => {
   })
 
   it('onSpecUpdate handles missing callback gracefully', async () => {
-    let capturedCallbacks: any = null
+    let capturedCallbacks: OrchestratorCallbacks | null = null
     ;(createOrchestrator as Mock).mockImplementation((_projectId, _mode, callbacks) => {
       capturedCallbacks = callbacks
       return createMockOrchestrator()
@@ -497,7 +498,7 @@ describe('resetOrchestrator', () => {
 
   it('clears history', () => {
     useOrchestratorStore.setState({
-      history: [{ type: 'message', content: 'test' } as any],
+      history: [{ id: '1', timestamp: new Date().toISOString(), type: 'progress', stage: 'spec', action: 'test' }],
     })
 
     const { resetOrchestrator } = useOrchestratorStore.getState()

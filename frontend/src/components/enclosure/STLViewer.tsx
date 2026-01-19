@@ -83,6 +83,7 @@ function STLDataModel({ data, color, onLoad }: STLDataModelProps) {
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null)
   const meshRef = useRef<THREE.Mesh>(null)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const loader = new STLLoader()
     // Create a regular ArrayBuffer copy to avoid SharedArrayBuffer issues
@@ -102,6 +103,7 @@ function STLDataModel({ data, color, onLoad }: STLDataModelProps) {
     setGeometry(geom)
     onLoad?.()
   }, [data, onLoad])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!geometry) return null
 

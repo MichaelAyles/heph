@@ -22,7 +22,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const logger = createLogger(env, user as any, requestId)
+  const logger = createLogger(env, user as { id: string; username: string; isAdmin: boolean }, requestId)
 
   try {
     // Get count of expired sessions before deletion
@@ -31,7 +31,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ).first<{ count: number }>()
 
     // Delete expired sessions
-    const result = await env.DB.prepare(
+    await env.DB.prepare(
       `DELETE FROM sessions WHERE expires_at <= datetime('now')`
     ).run()
 
@@ -93,7 +93,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         active: stats?.active || 0,
       },
     })
-  } catch (error) {
+  } catch {
     return Response.json(
       { error: 'Failed to get session stats' },
       { status: 500 }

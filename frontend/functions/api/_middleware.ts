@@ -100,7 +100,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // Log request for admin users
   if (isAdmin) {
-    const logger = createLogger(env, context.data.user as any, requestId)
+    const logger = createLogger(env, context.data.user as { id: string; username: string; isAdmin?: boolean }, requestId)
     await logger.api(`${method} ${path}`, {
       query: Object.fromEntries(url.searchParams),
     })

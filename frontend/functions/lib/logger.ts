@@ -156,8 +156,6 @@ export class Logger {
   private flushToFile(): void {
     if (logBuffer.length === 0) return
     try {
-      const logPath = '/tmp/phaestus-debug.log'
-      const content = logBuffer.join('\n') + '\n'
       // In Cloudflare Workers, we can't write to files
       // This is a no-op in production but useful concept for local dev
       logBuffer = []

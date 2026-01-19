@@ -7,7 +7,6 @@ import {
   buildBlockSelectionPrompt,
   autoSelectBlocks,
   validateBlockSelection,
-  type BlockPlacement,
   type BlockSelectionResult,
 } from './block-selection'
 import type { FinalSpec, PcbBlock } from '@/db/schema'
