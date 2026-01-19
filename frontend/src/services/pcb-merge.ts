@@ -55,6 +55,24 @@ interface LoadedBlock {
 }
 
 /**
+ * Preprocess KiCad content to handle tokens not supported by kicadts
+ * The kicadts library doesn't support some newer KiCad 8 tokens like 'hide'
+ */
+function preprocessKicadContent(content: string): string {
+  // Remove standalone 'hide' tokens (used for hidden properties/pins)
+  // Match 'hide' preceded by whitespace and followed by whitespace or ')'
+  let processed = content.replace(/(\s)hide(\s|\))/g, '$1$2')
+
+  // Remove 'unlocked' token (another KiCad 8 addition)
+  processed = processed.replace(/(\s)unlocked(\s|\))/g, '$1$2')
+
+  // Handle (hide yes) or (hide no) patterns
+  processed = processed.replace(/\(hide\s+(yes|no)\)/g, '')
+
+  return processed
+}
+
+/**
  * Fetch a block's schematic file from the API
  */
 async function fetchBlockSchematic(slug: string): Promise<string> {
@@ -62,7 +80,8 @@ async function fetchBlockSchematic(slug: string): Promise<string> {
   if (!response.ok) {
     throw new Error(`Failed to fetch schematic for block ${slug}: ${response.statusText}`)
   }
-  return response.text()
+  const text = await response.text()
+  return preprocessKicadContent(text)
 }
 
 /**
@@ -511,7 +530,8 @@ async function fetchBlockPcb(slug: string): Promise<string> {
   if (!response.ok) {
     throw new Error(`Failed to fetch PCB for block ${slug}: ${response.statusText}`)
   }
-  return response.text()
+  const text = await response.text()
+  return preprocessKicadContent(text)
 }
 
 /**
