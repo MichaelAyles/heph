@@ -6,12 +6,13 @@
 
 import { autoSelectBlocks } from '@/prompts/block-selection'
 import type { OrchestratorContext, ToolResult } from '../types'
-import type { PlacedBlock, PcbBlock } from '@/db/schema'
+import type { PlacedBlock, PcbBlock, NetAssignment } from '@/db/schema'
 import type { BlockDefinition } from '@/schemas/block'
 import {
   validateBlockCombination,
   type DRCResult,
 } from '@/services/block-drc'
+import { mergeBlockSchematics, mergeBlockPCBs } from '@/services/pcb-merge'
 
 const GRID_SIZE_MM = 12.7
 
@@ -210,5 +211,93 @@ export async function selectPcbBlocks(
       height: Math.max(maxY, 3) * GRID_SIZE_MM,
     },
     reasoning,
+  }
+}
+
+/**
+ * Generate PCB files (schematic and layout) from placed blocks
+ * Merges individual block files into unified design with proper net mapping
+ */
+export async function generatePcbFiles(
+  ctx: OrchestratorContext,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  const projectName = (args.projectName || args.project_name || 'Untitled') as string
+
+  // Get placed blocks from current spec
+  const placedBlocks = ctx.currentSpec?.pcb?.placedBlocks
+  if (!placedBlocks || placedBlocks.length === 0) {
+    return { error: 'No blocks placed. Use select_pcb_blocks first.' }
+  }
+
+  // Get block data from available blocks
+  const selectedBlockData = ctx.availableBlocks.filter((b) =>
+    placedBlocks.some((pb) => pb.blockSlug === b.slug)
+  )
+
+  if (selectedBlockData.length === 0) {
+    return { error: 'Could not find block data for placed blocks' }
+  }
+
+  ctx.addHistoryItem({
+    type: 'progress',
+    stage: 'pcb',
+    action: 'generate_pcb_files',
+    result: `Merging ${placedBlocks.length} blocks into unified PCB design`,
+  })
+
+  try {
+    // Merge schematic
+    const schematicResult = await mergeBlockSchematics(placedBlocks, selectedBlockData, projectName)
+
+    // Transform netList to match schema type
+    const transformedNetList: NetAssignment[] = schematicResult.netList.map((n) => ({
+      net: n.localNet,
+      globalNet: n.globalNet,
+      gpio: n.gpio,
+    }))
+
+    // Merge PCB layout (optional - some blocks may not have PCB files)
+    let pcbData: string | undefined
+    try {
+      const pcbResult = await mergeBlockPCBs(placedBlocks, selectedBlockData, projectName)
+      pcbData = pcbResult.pcb
+    } catch (pcbError) {
+      // PCB merge is optional
+      ctx.addHistoryItem({
+        type: 'progress',
+        stage: 'pcb',
+        action: 'pcb_merge_skipped',
+        result: 'PCB layout merge skipped (blocks may not have PCB files)',
+      })
+    }
+
+    // Update spec with merged data
+    if (ctx.currentSpec) {
+      ctx.currentSpec.pcb = {
+        ...ctx.currentSpec.pcb,
+        placedBlocks,
+        schematicData: schematicResult.schematic,
+        pcbData,
+        boardSize: { ...schematicResult.boardSize, unit: 'mm' as const },
+        netList: transformedNetList,
+        mergedAt: new Date().toISOString(),
+      }
+      ctx.updateSpec(ctx.currentSpec)
+      await ctx.setSpec({ pcb: ctx.currentSpec.pcb })
+    }
+
+    return {
+      success: true,
+      schematicGenerated: true,
+      pcbGenerated: !!pcbData,
+      boardSize: schematicResult.boardSize,
+      netCount: transformedNetList.length,
+      blockCount: placedBlocks.length,
+    }
+  } catch (error) {
+    return {
+      error: `PCB generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    }
   }
 }

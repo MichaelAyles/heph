@@ -18,7 +18,7 @@ import {
 } from './spec-tools'
 
 // PCB stage tools
-import { selectPcbBlocks } from './pcb-tools'
+import { selectPcbBlocks, generatePcbFiles } from './pcb-tools'
 
 // Enclosure stage tools
 import { generateEnclosure, reviewEnclosure } from './enclosure-tools'
@@ -51,6 +51,7 @@ export const toolRegistry: ToolRegistry = {
 
   // PCB stage
   select_pcb_blocks: selectPcbBlocks,
+  generate_pcb_files: generatePcbFiles,
 
   // Enclosure stage
   generate_enclosure: generateEnclosure,
