@@ -1,7 +1,7 @@
 /**
  * STEP File Viewer Component
  *
- * Displays a 3D visualization of a STEP/STP CAD file.
+ * Displays a 3D visualization of a STEP/STP CAD file with per-mesh colors.
  * Uses React Three Fiber and occt-import-js for parsing.
  */
 
@@ -21,6 +21,18 @@ function getOcct() {
   return occtPromise
 }
 
+// Mesh with color data from STEP file
+interface ColoredMesh {
+  geometry: THREE.BufferGeometry
+  color: string // hex color
+}
+
+// STEP model data with multiple colored meshes
+interface StepModelData {
+  meshes: ColoredMesh[]
+  boundingBox: THREE.Box3
+}
+
 interface StepViewerProps {
   /** URL to the STEP file */
   url: string
@@ -29,9 +41,17 @@ interface StepViewerProps {
 }
 
 /**
- * Load STEP file and convert to Three.js BufferGeometry
+ * Convert OCCT color array to hex string
  */
-async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | null> {
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+/**
+ * Load STEP file and convert to colored meshes
+ */
+async function loadStepModel(url: string): Promise<StepModelData | null> {
   try {
     console.log('[StepViewer] Loading OCCT module...')
     const occtModule = await getOcct()
@@ -65,11 +85,12 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
       return null
     }
 
-    // Combine all meshes into geometries
-    const geometries: THREE.BufferGeometry[] = []
+    // Process each mesh with its color
+    const coloredMeshes: ColoredMesh[] = []
 
     for (const mesh of result.meshes) {
       const geometry = new THREE.BufferGeometry()
+
       // Ensure arrays are typed arrays for Three.js
       const positions = mesh.attributes.position.array instanceof Float32Array
         ? mesh.attributes.position.array
@@ -82,99 +103,94 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
           : new Float32Array(mesh.attributes.normal.array)
         geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
       }
+
       if (mesh.index) {
         const indices = mesh.index.array instanceof Uint32Array
           ? mesh.index.array
           : new Uint32Array(mesh.index.array)
         geometry.setIndex(new THREE.BufferAttribute(indices, 1))
       }
-      geometries.push(geometry)
+
+      // Convert indexed to non-indexed for proper face rendering
+      const nonIndexed = geometry.index ? geometry.toNonIndexed() : geometry
+
+      // Compute normals if not present
+      if (!nonIndexed.attributes.normal) {
+        nonIndexed.computeVertexNormals()
+      }
+
+      // Extract color from mesh (OCCT provides RGB values 0-1)
+      let color = '#808080' // Default gray
+      if (mesh.color) {
+        color = rgbToHex(mesh.color[0], mesh.color[1], mesh.color[2])
+      }
+
+      coloredMeshes.push({ geometry: nonIndexed, color })
     }
 
-    // Merge geometries
-    const merged = geometries.length === 1 ? geometries[0] : mergeGeometries(geometries)
-
-    if (!merged.attributes.normal) {
-      merged.computeVertexNormals()
-    }
-
+    // Apply transformations to all meshes
     // STEP files are typically Z-up, Three.js is Y-up
-    // Rotate -90 degrees around X axis to convert
-    merged.rotateX(-Math.PI / 2)
+    const rotationMatrix = new THREE.Matrix4().makeRotationX(-Math.PI / 2)
 
-    // Compute bounding box after rotation
-    merged.computeBoundingBox()
+    // Compute combined bounding box
+    const combinedBox = new THREE.Box3()
+    for (const { geometry } of coloredMeshes) {
+      geometry.applyMatrix4(rotationMatrix)
+      geometry.computeBoundingBox()
+      if (geometry.boundingBox) {
+        combinedBox.union(geometry.boundingBox)
+      }
+    }
 
     // Center horizontally (X and Z) but align by bottom surface (min Y)
-    // This matches PCB3DViewer for consistent preview
-    const box = merged.boundingBox!
-    const centerX = (box.min.x + box.max.x) / 2
-    const centerZ = (box.min.z + box.max.z) / 2
-    const bottomY = box.min.y
+    const centerX = (combinedBox.min.x + combinedBox.max.x) / 2
+    const centerZ = (combinedBox.min.z + combinedBox.max.z) / 2
+    const bottomY = combinedBox.min.y
 
-    // Translate: center X/Z, move bottom to Y=0
-    merged.translate(-centerX, -bottomY, -centerZ)
+    const translationMatrix = new THREE.Matrix4().makeTranslation(-centerX, -bottomY, -centerZ)
 
-    // Recompute bounding box after translation
-    merged.computeBoundingBox()
+    // Apply translation and recompute bounding boxes
+    const finalBox = new THREE.Box3()
+    for (const { geometry } of coloredMeshes) {
+      geometry.applyMatrix4(translationMatrix)
+      geometry.computeBoundingBox()
+      if (geometry.boundingBox) {
+        finalBox.union(geometry.boundingBox)
+      }
+    }
 
-    console.log('[StepViewer] Success! Vertices:', merged.attributes.position.count)
-    return merged
+    console.log('[StepViewer] Success! Meshes:', coloredMeshes.length)
+    return { meshes: coloredMeshes, boundingBox: finalBox }
   } catch (error) {
     console.error('[StepViewer] Failed to load STEP file:', url, error)
     return null
   }
 }
 
-function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const merged = new THREE.BufferGeometry()
-  const positions: number[] = []
-  const normals: number[] = []
-
-  for (const geom of geometries) {
-    // Convert indexed geometry to non-indexed to preserve face definitions
-    const nonIndexed = geom.index ? geom.toNonIndexed() : geom
-
-    const pos = nonIndexed.attributes.position
-    for (let i = 0; i < pos.count; i++) {
-      positions.push(pos.getX(i), pos.getY(i), pos.getZ(i))
-    }
-    const norm = nonIndexed.attributes.normal
-    if (norm) {
-      for (let i = 0; i < norm.count; i++) {
-        normals.push(norm.getX(i), norm.getY(i), norm.getZ(i))
-      }
-    }
-  }
-
-  merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  if (normals.length > 0) {
-    merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
-  }
-  return merged
-}
-
-function StepModel({ geometry }: { geometry: THREE.BufferGeometry }) {
+function StepModel({ modelData }: { modelData: StepModelData }) {
   return (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial
-        color="#e5e5e5"
-        metalness={0.3}
-        roughness={0.5}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
+    <group>
+      {modelData.meshes.map((mesh, i) => (
+        <mesh key={i} geometry={mesh.geometry}>
+          <meshStandardMaterial
+            color={mesh.color}
+            metalness={0.3}
+            roughness={0.5}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      ))}
+    </group>
   )
 }
 
-function Scene({ geometry, autoRotate }: { geometry: THREE.BufferGeometry; autoRotate: boolean }) {
-  // Calculate camera distance based on geometry size
+function Scene({ modelData, autoRotate }: { modelData: StepModelData; autoRotate: boolean }) {
+  // Calculate camera distance based on model size
   const cameraDistance = useMemo(() => {
-    if (!geometry.boundingBox) return 100
     const size = new THREE.Vector3()
-    geometry.boundingBox.getSize(size)
+    modelData.boundingBox.getSize(size)
     return Math.max(size.x, size.y, size.z) * 2.5
-  }, [geometry])
+  }, [modelData])
 
   return (
     <>
@@ -182,7 +198,7 @@ function Scene({ geometry, autoRotate }: { geometry: THREE.BufferGeometry; autoR
       <directionalLight position={[10, 20, 10]} intensity={0.8} />
       <directionalLight position={[-10, -10, -10]} intensity={0.3} />
 
-      <StepModel geometry={geometry} />
+      <StepModel modelData={modelData} />
 
       <PerspectiveCamera
         makeDefault
@@ -211,7 +227,7 @@ function LoadingSpinner() {
 }
 
 export function StepViewer({ url, className }: StepViewerProps) {
-  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null)
+  const [modelData, setModelData] = useState<StepModelData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [autoRotate, setAutoRotate] = useState(true)
@@ -221,10 +237,10 @@ export function StepViewer({ url, className }: StepViewerProps) {
     setLoading(true)
     setError(null)
 
-    loadStepGeometry(url)
-      .then((geom) => {
-        if (geom) {
-          setGeometry(geom)
+    loadStepModel(url)
+      .then((data) => {
+        if (data) {
+          setModelData(data)
         } else {
           setError('Failed to load 3D model')
         }
@@ -244,7 +260,7 @@ export function StepViewer({ url, className }: StepViewerProps) {
     )
   }
 
-  if (error || !geometry) {
+  if (error || !modelData) {
     return (
       <div className={clsx('flex items-center justify-center bg-surface-900', className)}>
         <div className="text-center text-steel-dim">
@@ -291,7 +307,7 @@ export function StepViewer({ url, className }: StepViewerProps) {
 
       <Canvas gl={{ preserveDrawingBuffer: true, antialias: true }}>
         <Suspense fallback={<LoadingSpinner />}>
-          <Scene geometry={geometry} autoRotate={autoRotate} />
+          <Scene modelData={modelData} autoRotate={autoRotate} />
         </Suspense>
       </Canvas>
     </div>

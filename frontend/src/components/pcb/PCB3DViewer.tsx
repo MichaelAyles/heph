@@ -41,8 +41,20 @@ const CATEGORY_COLORS: Record<BlockCategory, string> = {
   utility: '#8b5cf6',  // Purple - Utility
 }
 
-// Cache for loaded STEP geometries
-const geometryCache = new Map<string, THREE.BufferGeometry | null>()
+// Mesh with color data from STEP file
+interface ColoredMesh {
+  geometry: THREE.BufferGeometry
+  color: string // hex color
+}
+
+// STEP model data with multiple colored meshes
+interface StepModelData {
+  meshes: ColoredMesh[]
+  boundingBox: THREE.Box3
+}
+
+// Cache for loaded STEP models
+const geometryCache = new Map<string, StepModelData | null>()
 
 /** Clear the geometry cache - call after uploading new files */
 export function clearGeometryCache() {
@@ -68,13 +80,21 @@ interface BlockMeshProps {
 }
 
 /**
- * Load STEP file and convert to Three.js BufferGeometry
+ * Convert OCCT color array to hex string
  */
-async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | null> {
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+/**
+ * Load STEP file and convert to colored meshes
+ */
+async function loadStepModel(url: string): Promise<StepModelData | null> {
   // Check cache first
   if (geometryCache.has(url)) {
     const cached = geometryCache.get(url)
-    console.log('[PCB3DViewer] Using cached geometry for:', url, cached ? 'found' : 'null')
+    console.log('[PCB3DViewer] Using cached model for:', url, cached ? 'found' : 'null')
     return cached || null
   }
 
@@ -113,8 +133,8 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
       return null
     }
 
-    // Combine all meshes into a single geometry
-    const geometries: THREE.BufferGeometry[] = []
+    // Process each mesh with its color
+    const coloredMeshes: ColoredMesh[] = []
 
     for (const mesh of result.meshes) {
       const geometry = new THREE.BufferGeometry()
@@ -133,7 +153,7 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
         geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
       }
 
-      // Set indices if available
+      // Set indices if available - convert to non-indexed for proper rendering
       if (mesh.index) {
         const indices = mesh.index.array instanceof Uint32Array
           ? mesh.index.array
@@ -141,83 +161,67 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
         geometry.setIndex(new THREE.BufferAttribute(indices, 1))
       }
 
-      geometries.push(geometry)
+      // Convert indexed to non-indexed for proper face rendering
+      const nonIndexed = geometry.index ? geometry.toNonIndexed() : geometry
+
+      // Compute normals if not present
+      if (!nonIndexed.attributes.normal) {
+        nonIndexed.computeVertexNormals()
+      }
+
+      // Extract color from mesh (OCCT provides RGB values 0-1)
+      let color = '#808080' // Default gray
+      if (mesh.color) {
+        color = rgbToHex(mesh.color[0], mesh.color[1], mesh.color[2])
+      }
+
+      coloredMeshes.push({ geometry: nonIndexed, color })
     }
 
-    // Merge all geometries
-    const mergedGeometry = geometries.length === 1
-      ? geometries[0]
-      : mergeGeometries(geometries)
-
-    // Compute normals if not present
-    if (!mergedGeometry.attributes.normal) {
-      mergedGeometry.computeVertexNormals()
-    }
-
+    // Apply transformations to all meshes
     // STEP files are typically Z-up, Three.js is Y-up
-    // Rotate -90 degrees around X axis to convert
-    mergedGeometry.rotateX(-Math.PI / 2)
+    const rotationMatrix = new THREE.Matrix4().makeRotationX(-Math.PI / 2)
 
-    // Compute bounding box after rotation
-    mergedGeometry.computeBoundingBox()
+    // Compute combined bounding box
+    const combinedBox = new THREE.Box3()
+    for (const { geometry } of coloredMeshes) {
+      geometry.applyMatrix4(rotationMatrix)
+      geometry.computeBoundingBox()
+      if (geometry.boundingBox) {
+        combinedBox.union(geometry.boundingBox)
+      }
+    }
 
     // Center horizontally (X and Z) but align by bottom surface (min Y)
-    // All PCBs have the same thickness - components are only on top
-    // So we align by the bottom to ensure consistent base plane
-    const box = mergedGeometry.boundingBox!
-    const centerX = (box.min.x + box.max.x) / 2
-    const centerZ = (box.min.z + box.max.z) / 2
-    const bottomY = box.min.y
+    const centerX = (combinedBox.min.x + combinedBox.max.x) / 2
+    const centerZ = (combinedBox.min.z + combinedBox.max.z) / 2
+    const bottomY = combinedBox.min.y
 
-    // Translate: center X/Z, move bottom to Y=0
-    mergedGeometry.translate(-centerX, -bottomY, -centerZ)
+    const translationMatrix = new THREE.Matrix4().makeTranslation(-centerX, -bottomY, -centerZ)
 
-    // Recompute bounding box after translation
-    mergedGeometry.computeBoundingBox()
+    // Apply translation and recompute bounding boxes
+    const finalBox = new THREE.Box3()
+    for (const { geometry } of coloredMeshes) {
+      geometry.applyMatrix4(translationMatrix)
+      geometry.computeBoundingBox()
+      if (geometry.boundingBox) {
+        finalBox.union(geometry.boundingBox)
+      }
+    }
 
-    console.log('[PCB3DViewer] STEP file loaded successfully:', url, 'vertices:', mergedGeometry.attributes.position.count)
-    geometryCache.set(url, mergedGeometry)
-    return mergedGeometry
+    const modelData: StepModelData = {
+      meshes: coloredMeshes,
+      boundingBox: finalBox,
+    }
+
+    console.log('[PCB3DViewer] STEP file loaded successfully:', url, 'meshes:', coloredMeshes.length)
+    geometryCache.set(url, modelData)
+    return modelData
   } catch (error) {
     console.warn('[PCB3DViewer] Failed to load STEP file:', url, error)
     geometryCache.set(url, null)
     return null
   }
-}
-
-/**
- * Merge multiple geometries into one
- */
-function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const merged = new THREE.BufferGeometry()
-
-  // Collect all positions and normals
-  const positions: number[] = []
-  const normals: number[] = []
-
-  for (const geom of geometries) {
-    // Convert indexed geometry to non-indexed to preserve face definitions
-    const nonIndexed = geom.index ? geom.toNonIndexed() : geom
-
-    const pos = nonIndexed.attributes.position
-    for (let i = 0; i < pos.count; i++) {
-      positions.push(pos.getX(i), pos.getY(i), pos.getZ(i))
-    }
-
-    const norm = nonIndexed.attributes.normal
-    if (norm) {
-      for (let i = 0; i < norm.count; i++) {
-        normals.push(norm.getX(i), norm.getY(i), norm.getZ(i))
-      }
-    }
-  }
-
-  merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  if (normals.length > 0) {
-    merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
-  }
-
-  return merged
 }
 
 /**
@@ -227,7 +231,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const groupRef = useRef<THREE.Group>(null)
   const [hovered, setHovered] = useState(false)
-  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null)
+  const [modelData, setModelData] = useState<StepModelData | null>(null)
   const [loadingStep, setLoadingStep] = useState(false)
   const [stepFailed, setStepFailed] = useState(false)
 
@@ -240,7 +244,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
   const z = placed.gridY * GRID_SIZE + depth / 2
   const y = PCB_THICKNESS / 2
 
-  // Get category color
+  // Get category color (used for fallback box)
   const color = CATEGORY_COLORS[block.category] || '#6b7280'
 
   // Get STEP file URL - try explicit file, then conventional naming
@@ -252,15 +256,15 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
     return url
   }, [block.slug, block.files])
 
-  // Load STEP geometry
+  // Load STEP model
   useEffect(() => {
     if (!stepUrl || stepFailed) return
 
     setLoadingStep(true)
-    loadStepGeometry(stepUrl)
-      .then((geom) => {
-        if (geom) {
-          setGeometry(geom)
+    loadStepModel(stepUrl)
+      .then((data) => {
+        if (data) {
+          setModelData(data)
         } else {
           setStepFailed(true)
         }
@@ -270,7 +274,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
 
   // Pulse animation on hover
   useFrame(() => {
-    const target = geometry ? groupRef.current : meshRef.current
+    const target = modelData ? groupRef.current : meshRef.current
     if (target && hovered) {
       target.scale.y = 1 + Math.sin(Date.now() * 0.005) * 0.05
     } else if (target) {
@@ -278,11 +282,11 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
     }
   })
 
-  // If we have loaded geometry, render it
+  // If we have loaded model data, render colored meshes
   // STEP files are already designed at correct scale (12.7mm per grid unit)
   // No scaling needed - just position at grid location
-  if (geometry && !stepFailed) {
-    const modelHeight = geometry.boundingBox?.max.y ?? BLOCK_HEIGHT
+  if (modelData && !stepFailed) {
+    const modelHeight = modelData.boundingBox?.max.y ?? BLOCK_HEIGHT
     return (
       <group>
         <group
@@ -291,13 +295,15 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
         >
-          <mesh geometry={geometry}>
-            <meshStandardMaterial
-              color={hovered ? '#f97316' : color}
-              metalness={0.3}
-              roughness={0.5}
-            />
-          </mesh>
+          {modelData.meshes.map((mesh, i) => (
+            <mesh key={i} geometry={mesh.geometry}>
+              <meshStandardMaterial
+                color={mesh.color}
+                metalness={0.3}
+                roughness={0.5}
+              />
+            </mesh>
+          ))}
         </group>
         {/* Block label - position above geometry */}
         {hovered && (
