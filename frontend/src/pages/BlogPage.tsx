@@ -5,7 +5,7 @@
  * Public access - no authentication required.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2, Search, FileText, ExternalLink, Rss } from 'lucide-react'
@@ -64,6 +64,19 @@ function LoadingState() {
 
 export function BlogPage() {
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Add RSS auto-discovery link to document head
+  useEffect(() => {
+    const link = document.createElement('link')
+    link.rel = 'alternate'
+    link.type = 'application/rss+xml'
+    link.title = 'PHAESTUS Development Blog RSS Feed'
+    link.href = '/feed.xml'
+    document.head.appendChild(link)
+    return () => {
+      document.head.removeChild(link)
+    }
+  }, [])
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['blog-list'],
@@ -125,10 +138,15 @@ export function BlogPage() {
               <span className="text-2xl font-bold">{data?.total || 0}</span>
               <span className="text-steel-dim text-sm">Posts</span>
             </div>
-            <div className="flex items-center gap-2 text-copper">
+            <a
+              href="/feed.xml"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-copper hover:text-copper-light transition-colors"
+            >
               <Rss className="w-5 h-5" strokeWidth={1.5} />
-              <span className="text-steel-dim text-sm">Regular Updates</span>
-            </div>
+              <span className="text-steel-dim text-sm hover:text-steel">RSS Feed</span>
+            </a>
           </div>
         </div>
       </div>
