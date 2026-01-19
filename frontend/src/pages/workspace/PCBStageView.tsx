@@ -573,8 +573,8 @@ export function PCBStageView() {
                 </button>
               )}
 
-              {/* Generate button */}
-              {selectedBlocks.length > 0 && currentStep === 'select_blocks' && (
+              {/* Generate button - always visible when blocks are selected */}
+              {selectedBlocks.length > 0 && (
                 <button
                   onClick={handleMergeSchematic}
                   disabled={isMerging || !validationResult?.valid}
@@ -592,10 +592,15 @@ export function PCBStageView() {
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Generating...
                     </>
+                  ) : pcbArtifacts?.schematicData ? (
+                    <>
+                      <Wand2 className="w-4 h-4" />
+                      Regenerate
+                    </>
                   ) : (
                     <>
                       <Wand2 className="w-4 h-4" />
-                      Generate Schematic
+                      Generate
                     </>
                   )}
                 </button>

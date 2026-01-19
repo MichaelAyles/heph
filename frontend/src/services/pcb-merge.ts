@@ -128,8 +128,8 @@ export async function mergeBlockSchematics(
   blockData: PcbBlock[],
   projectName: string
 ): Promise<MergeResult> {
-  // Create a map for quick block lookup
-  const blockMap = new Map(blockData.map((b) => [b.id, b]))
+  // Create a map for quick block lookup by slug
+  const blockMap = new Map(blockData.map((b) => [b.slug, b]))
 
   // Build global net list
   const globalNets = buildGlobalNetList(blockData)
@@ -140,7 +140,7 @@ export async function mergeBlockSchematics(
   let maxY = 0
 
   for (const placed of placedBlocks) {
-    const block = blockMap.get(placed.blockId)
+    const block = blockMap.get(placed.blockSlug)
     if (block) {
       const endX = (placed.gridX + block.widthUnits) * GRID_UNIT_MM
       const endY = (placed.gridY + block.heightUnits) * GRID_UNIT_MM
@@ -153,7 +153,7 @@ export async function mergeBlockSchematics(
   const loadedBlocks: LoadedBlock[] = []
 
   for (const placed of placedBlocks) {
-    const block = blockMap.get(placed.blockId)
+    const block = blockMap.get(placed.blockSlug)
     if (!block || !block.files?.schematic) {
       logger.warn('pcb', `Block ${placed.blockSlug} has no schematic file, skipping`)
       continue
@@ -762,14 +762,15 @@ export async function mergeBlockPCBs(
   blockData: PcbBlock[],
   _projectName: string
 ): Promise<PcbMergeResult> {
-  const blockMap = new Map(blockData.map((b) => [b.id, b]))
+  // Create a map for quick block lookup by slug
+  const blockMap = new Map(blockData.map((b) => [b.slug, b]))
 
   // Calculate board bounds
   let maxX = 0
   let maxY = 0
 
   for (const placed of placedBlocks) {
-    const block = blockMap.get(placed.blockId)
+    const block = blockMap.get(placed.blockSlug)
     if (block) {
       const endX = (placed.gridX + block.widthUnits) * GRID_UNIT_MM
       const endY = (placed.gridY + block.heightUnits) * GRID_UNIT_MM
@@ -782,7 +783,7 @@ export async function mergeBlockPCBs(
   const loadedBlocks: LoadedPcbBlock[] = []
 
   for (const placed of placedBlocks) {
-    const block = blockMap.get(placed.blockId)
+    const block = blockMap.get(placed.blockSlug)
     if (!block || !block.files?.pcb) {
       logger.warn('pcb', `Block ${placed.blockSlug} has no PCB file, skipping`)
       continue
