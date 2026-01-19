@@ -83,7 +83,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   const checkpointData = JSON.parse(checkpoint.checkpoint)
-  const metadata = JSON.parse(checkpoint.metadata)
+  const _metadata = JSON.parse(checkpoint.metadata) // Available for future use
 
   return Response.json({
     threadId,
