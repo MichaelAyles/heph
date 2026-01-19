@@ -33,17 +33,28 @@ interface StepViewerProps {
  */
 async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | null> {
   try {
+    console.log('[StepViewer] Loading OCCT module...')
     const occtModule = await getOcct()
+    console.log('[StepViewer] Initializing OCCT...')
     const occt = await occtModule.default()
+    console.log('[StepViewer] OCCT initialized, fetching:', url)
 
     const response = await fetch(url)
-    if (!response.ok) return null
+    if (!response.ok) {
+      console.warn('[StepViewer] Fetch failed:', response.status, response.statusText)
+      return null
+    }
 
     const buffer = await response.arrayBuffer()
     const fileBuffer = new Uint8Array(buffer)
+    console.log('[StepViewer] File loaded, size:', fileBuffer.length, 'bytes, parsing...')
 
     const result = occt.ReadStepFile(fileBuffer, null)
-    if (!result.success || result.meshes.length === 0) return null
+    console.log('[StepViewer] Parse result:', { success: result.success, meshCount: result.meshes?.length })
+    if (!result.success || result.meshes.length === 0) {
+      console.warn('[StepViewer] OCCT parse failed or no meshes')
+      return null
+    }
 
     // Combine all meshes into geometries
     const geometries: THREE.BufferGeometry[] = []
@@ -75,9 +86,10 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
     merged.computeBoundingBox()
     merged.center()
 
+    console.log('[StepViewer] Success! Vertices:', merged.attributes.position.count)
     return merged
   } catch (error) {
-    console.warn('Failed to load STEP file:', url, error)
+    console.error('[StepViewer] Failed to load STEP file:', url, error)
     return null
   }
 }
