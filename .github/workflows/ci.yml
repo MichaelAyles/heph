@@ -48,7 +48,6 @@ jobs:
 
       - name: Lint
         run: pnpm --filter phaestus lint
-        continue-on-error: true  # TODO: Fix pre-existing lint errors and remove this
 
       - name: Run tests
         run: pnpm --filter phaestus test:run
