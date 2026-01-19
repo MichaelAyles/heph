@@ -154,7 +154,15 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
       mergedGeometry.computeVertexNormals()
     }
 
-    // Center the geometry and get its bounding box for scaling
+    // Center the geometry at origin
+    mergedGeometry.computeBoundingBox()
+    mergedGeometry.center()
+
+    // STEP files are typically Z-up, Three.js is Y-up
+    // Rotate -90 degrees around X axis to convert
+    mergedGeometry.rotateX(-Math.PI / 2)
+
+    // Recompute bounding box after transformations
     mergedGeometry.computeBoundingBox()
 
     console.log('[PCB3DViewer] STEP file loaded successfully:', url, 'vertices:', mergedGeometry.attributes.position.count)
