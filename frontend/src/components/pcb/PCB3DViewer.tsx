@@ -293,7 +293,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
         >
           <mesh geometry={geometry}>
             <meshStandardMaterial
-              color={hovered ? '#f97316' : '#e5e5e5'}
+              color={hovered ? '#f97316' : color}
               metalness={0.3}
               roughness={0.5}
             />
