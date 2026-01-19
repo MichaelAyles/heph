@@ -6,7 +6,7 @@
  * - Block library (editable=false) for browsing available blocks
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { clsx } from 'clsx'
 import {
   Cpu,
@@ -28,6 +28,9 @@ import {
   Edit3,
   Save,
   X,
+  Trash2,
+  Upload,
+  Loader2,
 } from 'lucide-react'
 import type { BlockDefinition, BusSignal } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
@@ -231,7 +234,7 @@ export function BlockViewer({ block, editable = false, onSave, className }: Bloc
         {activeTab === 'bus' && <BusInterfaceTab definition={definition} />}
         {activeTab === 'edges' && <EdgesTab definition={definition} />}
         {activeTab === 'components' && <ComponentsTab definition={definition} />}
-        {activeTab === 'files' && <FilesTab block={block} />}
+        {activeTab === 'files' && <FilesTab block={block} editable={editable} />}
       </div>
     </div>
   )
@@ -620,7 +623,7 @@ function ComponentsTab({ definition }: { definition: BlockDefinition }) {
 // Files Tab
 // =============================================================================
 
-function FilesTab({ block }: { block: PcbBlock }) {
+function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boolean }) {
   const files: Partial<BlockFiles> = block.files || {}
   const hasSchematic = !!files.schematic
   const hasPcb = !!files.pcb
@@ -636,6 +639,83 @@ function FilesTab({ block }: { block: PcbBlock }) {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [savingJson, setSavingJson] = useState(false)
   const [jsonError, setJsonError] = useState<string | null>(null)
+  const [deletingFile, setDeletingFile] = useState<string | null>(null)
+  const [uploadingFile, setUploadingFile] = useState<string | null>(null)
+
+  // File input refs for replacement
+  const fileInputRefs = {
+    schematic: useRef<HTMLInputElement>(null),
+    pcb: useRef<HTMLInputElement>(null),
+    stepModel: useRef<HTMLInputElement>(null),
+    blockJson: useRef<HTMLInputElement>(null),
+    thumbnail: useRef<HTMLInputElement>(null),
+  }
+
+  const handleDeleteFile = async (fileKey: string, filename: string) => {
+    if (!confirm(`Delete ${filename}? This cannot be undone.`)) return
+
+    setDeletingFile(fileKey)
+    try {
+      const res = await fetch(`/api/admin/blocks/${block.slug}/files/${filename}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        // Reload the page to refresh block data
+        window.location.reload()
+      } else {
+        const err = await res.json()
+        alert(err.error || 'Failed to delete file')
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete file')
+    } finally {
+      setDeletingFile(null)
+    }
+  }
+
+  const handleReplaceFile = async (fileKey: string, file: File) => {
+    setUploadingFile(fileKey)
+    try {
+      const formData = new FormData()
+      formData.append('slug', block.slug)
+
+      // Map fileKey to the correct form field name
+      const fieldMap: Record<string, string> = {
+        schematic: 'schematic',
+        pcb: 'pcb',
+        stepModel: 'step',
+        blockJson: 'blockJson',
+        thumbnail: 'thumbnail',
+      }
+      formData.append(fieldMap[fileKey] || fileKey, file)
+
+      const res = await fetch('/api/admin/blocks/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (res.ok) {
+        // Reload the page to refresh block data
+        window.location.reload()
+      } else {
+        const err = await res.json()
+        alert(err.error || 'Failed to upload file')
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to upload file')
+    } finally {
+      setUploadingFile(null)
+    }
+  }
+
+  const handleFileInputChange = (fileKey: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleReplaceFile(fileKey, file)
+    }
+    // Reset input so same file can be selected again
+    e.target.value = ''
+  }
 
   const loadPreview = async (type: 'schematic' | 'pcb' | '3d' | 'json') => {
     // 3D preview doesn't need to load content - StepViewer fetches directly
@@ -733,43 +813,92 @@ function FilesTab({ block }: { block: PcbBlock }) {
   }
 
   const fileList = [
-    { key: 'schematic', label: 'Schematic', file: files.schematic, ext: '.kicad_sch' },
-    { key: 'pcb', label: 'PCB Layout', file: files.pcb, ext: '.kicad_pcb' },
-    { key: 'stepModel', label: '3D Model', file: files.stepModel, ext: '.step' },
-    { key: 'blockJson', label: 'Block Definition', file: files.blockJson, ext: '.json' },
-    { key: 'thumbnail', label: 'Thumbnail', file: files.thumbnail, ext: '.png' },
+    { key: 'schematic', label: 'Schematic', file: files.schematic, ext: '.kicad_sch', accept: '.kicad_sch' },
+    { key: 'pcb', label: 'PCB Layout', file: files.pcb, ext: '.kicad_pcb', accept: '.kicad_pcb' },
+    { key: 'stepModel', label: '3D Model', file: files.stepModel, ext: '.step', accept: '.step,.stp' },
+    { key: 'blockJson', label: 'Block Definition', file: files.blockJson, ext: '.json', accept: '.json' },
+    { key: 'thumbnail', label: 'Thumbnail', file: files.thumbnail, ext: '.png', accept: '.png,.jpg,.jpeg' },
   ]
 
   return (
     <div className="space-y-6">
+      {/* Hidden file inputs for replacement */}
+      {editable && fileList.map(({ key, accept }) => (
+        <input
+          key={`input-${key}`}
+          ref={fileInputRefs[key as keyof typeof fileInputRefs]}
+          type="file"
+          accept={accept}
+          onChange={handleFileInputChange(key)}
+          className="hidden"
+        />
+      ))}
+
       {/* File list */}
       <div className="grid grid-cols-2 gap-3">
-        {fileList.map(({ key, label, file, ext }) => (
-          <div
-            key={key}
-            className={clsx(
-              'flex items-center justify-between p-3 rounded-lg border',
-              file
-                ? 'bg-surface-700/30 border-surface-600'
-                : 'bg-surface-900/50 border-surface-700/50 opacity-50'
-            )}
-          >
-            <div>
-              <div className="text-sm text-white">{label}</div>
-              <div className="text-xs text-steel-dim font-mono">{file || `Missing ${ext}`}</div>
+        {fileList.map(({ key, label, file, ext }) => {
+          const isDeleting = deletingFile === key
+          const isUploading = uploadingFile === key
+          const isLoading = isDeleting || isUploading
+
+          return (
+            <div
+              key={key}
+              className={clsx(
+                'flex items-center justify-between p-3 rounded-lg border',
+                file
+                  ? 'bg-surface-700/30 border-surface-600'
+                  : 'bg-surface-900/50 border-surface-700/50'
+              )}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-white">{label}</div>
+                <div className="text-xs text-steel-dim font-mono truncate">
+                  {file || `Missing ${ext}`}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 ml-2">
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 text-copper animate-spin" strokeWidth={1.5} />
+                ) : (
+                  <>
+                    {/* Upload/Replace button */}
+                    {editable && (
+                      <button
+                        onClick={() => fileInputRefs[key as keyof typeof fileInputRefs].current?.click()}
+                        className="p-1.5 text-steel hover:text-copper transition-colors"
+                        title={file ? 'Replace' : 'Upload'}
+                      >
+                        <Upload className="w-4 h-4" strokeWidth={1.5} />
+                      </button>
+                    )}
+                    {/* Download button */}
+                    {file && (
+                      <a
+                        href={`/api/blocks/${block.slug}/files/${file}`}
+                        download
+                        className="p-1.5 text-steel hover:text-white transition-colors"
+                        title="Download"
+                      >
+                        <ExternalLink className="w-4 h-4" strokeWidth={1.5} />
+                      </a>
+                    )}
+                    {/* Delete button */}
+                    {editable && file && (
+                      <button
+                        onClick={() => handleDeleteFile(key, file)}
+                        className="p-1.5 text-steel hover:text-red-400 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-            {file && (
-              <a
-                href={`/api/blocks/${block.slug}/files/${file}`}
-                download
-                className="p-2 text-steel hover:text-white transition-colors"
-                title="Download"
-              >
-                <ExternalLink className="w-4 h-4" strokeWidth={1.5} />
-              </a>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Preview */}
