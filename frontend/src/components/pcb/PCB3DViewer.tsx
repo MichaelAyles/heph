@@ -278,39 +278,16 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
     }
   })
 
-  // Scale and position for STEP geometry
-  const stepScale = useMemo(() => {
-    if (!geometry?.boundingBox) return [1, 1, 1]
-
-    const box = geometry.boundingBox
-    const size = new THREE.Vector3()
-    box.getSize(size)
-
-    // Scale to fit within the block's grid area
-    // Leave 1mm margin on each side
-    const targetWidth = width - 2
-    const targetDepth = depth - 2
-    const targetHeight = BLOCK_HEIGHT
-
-    const scaleX = size.x > 0 ? targetWidth / size.x : 1
-    const scaleY = size.y > 0 ? targetHeight / size.y : 1
-    const scaleZ = size.z > 0 ? targetDepth / size.z : 1
-
-    // Use uniform scale to maintain proportions
-    const uniformScale = Math.min(scaleX, scaleY, scaleZ)
-
-    return [uniformScale, uniformScale, uniformScale]
-  }, [geometry, width, depth])
-
   // If we have loaded geometry, render it
-  // Geometry bottom is at Y=0, so position at PCB surface (y + PCB_THICKNESS/2)
+  // STEP files are already designed at correct scale (12.7mm per grid unit)
+  // No scaling needed - just position at grid location
   if (geometry && !stepFailed) {
+    const modelHeight = geometry.boundingBox?.max.y ?? BLOCK_HEIGHT
     return (
       <group>
         <group
           ref={groupRef}
-          position={[x, PCB_THICKNESS, z]}
-          scale={stepScale as [number, number, number]}
+          position={[x, 0, z]}
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
         >
@@ -322,9 +299,9 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
             />
           </mesh>
         </group>
-        {/* Block label - position above scaled geometry */}
+        {/* Block label - position above geometry */}
         {hovered && (
-          <Html position={[x, PCB_THICKNESS + (geometry.boundingBox?.max.y ?? BLOCK_HEIGHT) * (stepScale[1] as number) + 4, z]} center>
+          <Html position={[x, modelHeight + 4, z]} center>
             <div className="px-2 py-1 bg-surface-800 text-steel text-xs rounded shadow-lg whitespace-nowrap">
               {block.name}
             </div>
