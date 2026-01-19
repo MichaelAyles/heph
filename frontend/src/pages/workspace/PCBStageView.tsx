@@ -56,6 +56,7 @@ export function PCBStageView() {
   const [previewBlockSlug, setPreviewBlockSlug] = useState<string | null>(null)
   const [isMerging, setIsMerging] = useState(false)
   const [mergeError, setMergeError] = useState<string | null>(null)
+  const [pcbUnavailableReason, setPcbUnavailableReason] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [isAiSuggesting, setIsAiSuggesting] = useState(false)
   const [gridWidth, setGridWidth] = useState(4)
@@ -292,12 +293,36 @@ export function PCBStageView() {
 
       // Merge PCB layout
       let pcbData: string | undefined
+      let pcbMergeError: string | undefined
       try {
-        const pcbResult = await mergeBlockPCBs(selectedBlocks, selectedBlockData, project.name)
-        pcbData = pcbResult.pcb
+        // Check which blocks have PCB files before attempting merge
+        const blocksWithPcb = selectedBlockData.filter((b) => b.files?.pcb)
+        const blocksWithoutPcb = selectedBlockData.filter((b) => !b.files?.pcb)
+
+        if (blocksWithoutPcb.length > 0) {
+          logger.warn('pcb', 'Some blocks missing PCB files', {
+            missing: blocksWithoutPcb.map((b) => b.slug)
+          })
+        }
+
+        if (blocksWithPcb.length === 0) {
+          pcbMergeError = `No PCB files available. Missing: ${blocksWithoutPcb.map((b) => b.slug).join(', ')}`
+        } else {
+          const pcbResult = await mergeBlockPCBs(selectedBlocks, selectedBlockData, project.name)
+          pcbData = pcbResult.pcb
+        }
       } catch (pcbError) {
-        // PCB merge is optional - some blocks may not have PCB files
-        logger.warn('pcb', 'PCB merge failed (continuing with schematic only)', { error: pcbError })
+        const errorMsg = pcbError instanceof Error ? pcbError.message : 'PCB merge failed'
+        pcbMergeError = errorMsg
+        logger.warn('pcb', 'PCB merge failed', { error: pcbError })
+      }
+
+      // Show PCB merge error in the UI if there was one
+      if (pcbMergeError) {
+        logger.info('pcb', 'PCB preview unavailable', { reason: pcbMergeError })
+        setPcbUnavailableReason(pcbMergeError)
+      } else {
+        setPcbUnavailableReason(null)
       }
 
       // Transform netList to match schema type
@@ -504,6 +529,7 @@ export function PCBStageView() {
                 icon={CircuitBoard}
                 label="PCB"
                 disabled={!pcbArtifacts?.pcbData}
+                disabledReason={pcbUnavailableReason}
               />
               <ViewModeButton
                 mode="3d"
@@ -813,6 +839,7 @@ interface ViewModeButtonProps {
   icon: React.ComponentType<{ className?: string }>
   label: string
   disabled?: boolean
+  disabledReason?: string | null
 }
 
 function ViewModeButton({
@@ -822,8 +849,10 @@ function ViewModeButton({
   icon: Icon,
   label,
   disabled,
+  disabledReason,
 }: ViewModeButtonProps) {
   const isActive = mode === currentMode
+  const title = disabled && disabledReason ? `${label}: ${disabledReason}` : label
 
   return (
     <button
@@ -834,7 +863,7 @@ function ViewModeButton({
         isActive ? 'bg-copper text-surface-900' : 'text-steel-dim hover:text-steel',
         disabled && 'opacity-50 cursor-not-allowed'
       )}
-      title={label}
+      title={title}
     >
       <Icon className="w-3 h-3" />
       {label}
