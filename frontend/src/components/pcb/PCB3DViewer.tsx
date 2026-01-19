@@ -154,15 +154,25 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
       mergedGeometry.computeVertexNormals()
     }
 
-    // Center the geometry at origin
-    mergedGeometry.computeBoundingBox()
-    mergedGeometry.center()
-
     // STEP files are typically Z-up, Three.js is Y-up
     // Rotate -90 degrees around X axis to convert
     mergedGeometry.rotateX(-Math.PI / 2)
 
-    // Recompute bounding box after transformations
+    // Compute bounding box after rotation
+    mergedGeometry.computeBoundingBox()
+
+    // Center horizontally (X and Z) but align by bottom surface (min Y)
+    // All PCBs have the same thickness - components are only on top
+    // So we align by the bottom to ensure consistent base plane
+    const box = mergedGeometry.boundingBox!
+    const centerX = (box.min.x + box.max.x) / 2
+    const centerZ = (box.min.z + box.max.z) / 2
+    const bottomY = box.min.y
+
+    // Translate: center X/Z, move bottom to Y=0
+    mergedGeometry.translate(-centerX, -bottomY, -centerZ)
+
+    // Recompute bounding box after translation
     mergedGeometry.computeBoundingBox()
 
     console.log('[PCB3DViewer] STEP file loaded successfully:', url, 'vertices:', mergedGeometry.attributes.position.count)
@@ -293,12 +303,13 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
   }, [geometry, width, depth])
 
   // If we have loaded geometry, render it
+  // Geometry bottom is at Y=0, so position at PCB surface (y + PCB_THICKNESS/2)
   if (geometry && !stepFailed) {
     return (
       <group>
         <group
           ref={groupRef}
-          position={[x, y + BLOCK_HEIGHT / 2, z]}
+          position={[x, PCB_THICKNESS, z]}
           scale={stepScale as [number, number, number]}
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
@@ -311,9 +322,9 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
             />
           </mesh>
         </group>
-        {/* Block label */}
+        {/* Block label - position above scaled geometry */}
         {hovered && (
-          <Html position={[x, y + BLOCK_HEIGHT + 4, z]} center>
+          <Html position={[x, PCB_THICKNESS + (geometry.boundingBox?.max.y ?? BLOCK_HEIGHT) * (stepScale[1] as number) + 4, z]} center>
             <div className="px-2 py-1 bg-surface-800 text-steel text-xs rounded shadow-lg whitespace-nowrap">
               {block.name}
             </div>

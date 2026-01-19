@@ -7,7 +7,7 @@
 
 import { Suspense, useState, useEffect, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Html, PerspectiveCamera, Center } from '@react-three/drei'
+import { OrbitControls, Html, PerspectiveCamera } from '@react-three/drei'
 import * as THREE from 'three'
 import { Loader2, RotateCcw, Maximize2, Minimize2 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -97,8 +97,26 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
     if (!merged.attributes.normal) {
       merged.computeVertexNormals()
     }
+
+    // STEP files are typically Z-up, Three.js is Y-up
+    // Rotate -90 degrees around X axis to convert
+    merged.rotateX(-Math.PI / 2)
+
+    // Compute bounding box after rotation
     merged.computeBoundingBox()
-    merged.center()
+
+    // Center horizontally (X and Z) but align by bottom surface (min Y)
+    // This matches PCB3DViewer for consistent preview
+    const box = merged.boundingBox!
+    const centerX = (box.min.x + box.max.x) / 2
+    const centerZ = (box.min.z + box.max.z) / 2
+    const bottomY = box.min.y
+
+    // Translate: center X/Z, move bottom to Y=0
+    merged.translate(-centerX, -bottomY, -centerZ)
+
+    // Recompute bounding box after translation
+    merged.computeBoundingBox()
 
     console.log('[StepViewer] Success! Vertices:', merged.attributes.position.count)
     return merged
@@ -138,16 +156,14 @@ function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeomet
 
 function StepModel({ geometry }: { geometry: THREE.BufferGeometry }) {
   return (
-    <Center>
-      <mesh geometry={geometry}>
-        <meshStandardMaterial
-          color="#e5e5e5"
-          metalness={0.3}
-          roughness={0.5}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-    </Center>
+    <mesh geometry={geometry}>
+      <meshStandardMaterial
+        color="#e5e5e5"
+        metalness={0.3}
+        roughness={0.5}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
   )
 }
 
