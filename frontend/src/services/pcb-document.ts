@@ -11,6 +11,7 @@
  */
 
 import type { BlockDefinition } from '../schemas/block'
+import { BUS_PINOUT, type BusSignal } from '../schemas/block'
 import type { PlacedBlock, FinalSpec } from '../db/schema'
 import {
   calculateBoardSize,
@@ -224,7 +225,8 @@ function generateMarkdown(input: MarkdownInput): string {
     if (block.bus.i2c?.addresses) {
       signals.push(`I2C: ${block.bus.i2c.addresses.map((a) => `0x${a.toString(16)}`).join(',')}`)
     }
-    if (block.bus.spi?.csPin) {
+    // SPI - only show if it's a device (not master)
+    if (block.bus.spi?.csPin && !block.bus.spi?.master) {
       signals.push(`SPI: ${block.bus.spi.csPin}`)
     }
     if (block.bus.gpio?.claims) {
@@ -232,6 +234,44 @@ function generateMarkdown(input: MarkdownInput): string {
     }
 
     lines.push(`| ${block.name} | ${provides} | ${requires} | ${signals.join('; ') || '-'} |`)
+  }
+  lines.push('')
+
+  // 20-Pin Bus Pinout section
+  lines.push('### Bus Pinout (20-pin)')
+  lines.push('')
+  lines.push('| Pin | Signal | Block Taps (0R resistors) |')
+  lines.push('|-----|--------|---------------------------|')
+
+  // Build a map of signal -> list of blocks that tap into it
+  const signalTaps: Map<BusSignal, Array<{ blockName: string; reference: string; isolates: string }>> = new Map()
+  for (const signal of BUS_PINOUT) {
+    signalTaps.set(signal, [])
+  }
+
+  for (const block of input.blocks) {
+    if (block.bus.taps) {
+      for (const tap of block.bus.taps) {
+        const tapsForSignal = signalTaps.get(tap.signal)
+        if (tapsForSignal) {
+          tapsForSignal.push({
+            blockName: block.name,
+            reference: tap.reference,
+            isolates: tap.isolates.purpose,
+          })
+        }
+      }
+    }
+  }
+
+  // Generate table rows
+  for (let i = 0; i < BUS_PINOUT.length; i++) {
+    const signal = BUS_PINOUT[i]
+    const taps = signalTaps.get(signal) || []
+    const tapStr = taps.length > 0
+      ? taps.map((t) => `${t.blockName} (${t.reference})`).join(', ')
+      : '-'
+    lines.push(`| ${i + 1} | ${signal} | ${tapStr} |`)
   }
   lines.push('')
 

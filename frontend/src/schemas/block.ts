@@ -180,9 +180,13 @@ export const I2cDetailsSchema = z.object({
 
 /**
  * SPI interface details
+ * - If `master: true`, this block provides SPI (MCU) - csPin lists available CS outputs
+ * - If `master: false` or undefined, this block is a SPI device and uses the specified csPin
  */
 export const SpiDetailsSchema = z.object({
-  csPin: z.enum(['SPI0_CS0', 'SPI0_CS1']),
+  master: z.boolean().optional().describe('True if this block provides SPI (MCU), false if it consumes SPI (device)'),
+  csPin: z.enum(['SPI0_CS0', 'SPI0_CS1']).optional().describe('CS pin used by device, or available CS pins for master'),
+  csPins: z.array(z.enum(['SPI0_CS0', 'SPI0_CS1'])).optional().describe('Available CS pins (for master blocks)'),
 })
 
 /**

@@ -197,6 +197,7 @@ function BlockCard({ block, placement, isFirst, isLast }: BlockCardProps) {
   const provides: string[] = []
   const requires: string[] = []
   const signals: string[] = []
+  const taps: string[] = []
 
   // Power
   if (block.bus.power?.provides) {
@@ -215,11 +216,19 @@ function BlockCard({ block, placement, isFirst, isLast }: BlockCardProps) {
     const addrs = block.bus.i2c.addresses.map((a) => `0x${a.toString(16).padStart(2, '0')}`).join(', ')
     signals.push(`I2C: ${addrs}`)
   }
-  if (block.bus.spi?.csPin) {
+  // SPI - only show if it's a device (not master)
+  if (block.bus.spi?.csPin && !block.bus.spi?.master) {
     signals.push(`SPI: ${block.bus.spi.csPin}`)
   }
   if (block.bus.gpio?.claims) {
     signals.push(`GPIO: ${block.bus.gpio.claims.join(', ')}`)
+  }
+
+  // 0R isolation resistors (taps)
+  if (block.bus.taps && block.bus.taps.length > 0) {
+    for (const tap of block.bus.taps) {
+      taps.push(`${tap.reference}: ${tap.signal}`)
+    }
   }
 
   return (
@@ -258,7 +267,13 @@ function BlockCard({ block, placement, isFirst, isLast }: BlockCardProps) {
             <span className="text-steel-dim">{signals.join('; ')}</span>
           </div>
         )}
-        {provides.length === 0 && requires.length === 0 && signals.length === 0 && (
+        {taps.length > 0 && (
+          <div className="flex items-start gap-2">
+            <span className="text-purple-400 font-medium w-16 flex-shrink-0">0R Taps:</span>
+            <span className="text-steel-dim font-mono text-[10px]">{taps.join(', ')}</span>
+          </div>
+        )}
+        {provides.length === 0 && requires.length === 0 && signals.length === 0 && taps.length === 0 && (
           <span className="text-steel-dim italic">Passthrough only</span>
         )}
       </div>
@@ -414,11 +429,16 @@ function BusConnectionTable({ blocks, powerBudget, className }: BusConnectionTab
               if (block.bus.i2c?.addresses) {
                 signals.push(...block.bus.i2c.addresses.map((a) => `I2C:0x${a.toString(16)}`))
               }
-              if (block.bus.spi?.csPin) {
+              // SPI - only show if it's a device (not master)
+              if (block.bus.spi?.csPin && !block.bus.spi?.master) {
                 signals.push(`SPI:${block.bus.spi.csPin}`)
               }
               if (block.bus.gpio?.claims) {
                 signals.push(...block.bus.gpio.claims.map((g) => `GPIO:${g}`))
+              }
+              // 0R taps
+              if (block.bus.taps && block.bus.taps.length > 0) {
+                signals.push(...block.bus.taps.map((t) => `${t.reference}:${t.signal}`))
               }
 
               return (
