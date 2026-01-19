@@ -123,6 +123,19 @@ export function PCBStageView() {
     })
   }, [selectedBlocks, project?.name, project?.description, spec?.finalSpec, blockDefinitions, gridWidth, gridHeight])
 
+  // Create Blob URLs for KiCanvas viewer (handles large files better than btoa)
+  const schematicBlobUrl = useMemo(() => {
+    if (!pcbArtifacts?.schematicData) return null
+    const blob = new Blob([pcbArtifacts.schematicData], { type: 'application/x-kicad-schematic' })
+    return URL.createObjectURL(blob)
+  }, [pcbArtifacts?.schematicData])
+
+  const pcbBlobUrl = useMemo(() => {
+    if (!pcbArtifacts?.pcbData) return null
+    const blob = new Blob([pcbArtifacts.pcbData], { type: 'application/x-kicad-pcb' })
+    return URL.createObjectURL(blob)
+  }, [pcbArtifacts?.pcbData])
+
   // Mutation to save PCB data
   const savePCBMutation = useMutation({
     mutationFn: async (pcbData: Partial<PCBArtifacts> & { placedBlocks: PlacedBlock[] }) => {
@@ -677,16 +690,16 @@ export function PCBStageView() {
                     variant="diagram"
                   />
                 </div>
-              ) : viewMode === 'schematic' && pcbArtifacts?.schematicData ? (
+              ) : viewMode === 'schematic' && schematicBlobUrl ? (
                 <KiCanvasViewer
-                  src={`data:text/plain;base64,${btoa(pcbArtifacts.schematicData)}`}
+                  src={schematicBlobUrl}
                   type="schematic"
                   controls="basic"
                   className="w-full h-full"
                 />
-              ) : viewMode === 'pcb' && pcbArtifacts?.pcbData ? (
+              ) : viewMode === 'pcb' && pcbBlobUrl ? (
                 <KiCanvasViewer
-                  src={`data:text/plain;base64,${btoa(pcbArtifacts.pcbData)}`}
+                  src={pcbBlobUrl}
                   type="pcb"
                   controls="basic"
                   className="w-full h-full"
