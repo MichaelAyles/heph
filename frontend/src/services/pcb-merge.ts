@@ -961,8 +961,17 @@ export async function mergeBlockPCBs(
   // Note: Zones (copper pours) are complex to merge - skip for now
   // They can be added manually in KiCad after merge
 
+  const pcbOutput = mergedPcb.getString()
+  logger.info('pcb', 'Merged PCB output', {
+    length: pcbOutput.length,
+    startsWith: pcbOutput.substring(0, 200),
+    footprintCount: pcbAny._footprints?.length ?? 0,
+    segmentCount: pcbAny._segments?.length ?? 0,
+    netCount: pcbAny._nets?.length ?? 0,
+  })
+
   return {
-    pcb: mergedPcb.getString(),
+    pcb: pcbOutput,
     boardSize: { width: maxX, height: maxY },
     blockCount: loadedBlocks.length,
   }
