@@ -91,6 +91,27 @@ export function BusConnectionDiagram({
     })
   }, [placedBlocks, blockDefinitions])
 
+  // Group blocks by column for the diagram view
+  const blocksByColumn = useMemo(() => {
+    const columns = new Map<number, Array<{ placement: PlacedBlock; block: BlockDefinition }>>()
+
+    for (const item of sortedBlocks) {
+      const col = item.placement.gridX
+      if (!columns.has(col)) {
+        columns.set(col, [])
+      }
+      columns.get(col)!.push(item)
+    }
+
+    // Sort each column by gridY (top to bottom)
+    for (const blocks of columns.values()) {
+      blocks.sort((a, b) => a.placement.gridY - b.placement.gridY)
+    }
+
+    // Return sorted by column number
+    return Array.from(columns.entries()).sort((a, b) => a[0] - b[0])
+  }, [sortedBlocks])
+
   // Calculate power budget
   const powerBudget = useMemo(() => {
     const blocks = sortedBlocks.map((b) => b.block)
@@ -115,26 +136,38 @@ export function BusConnectionDiagram({
       {/* Header */}
       <div className="text-center">
         <h3 className="text-sm font-medium text-steel">Bus Topology</h3>
-        <p className="text-xs text-steel-dim mt-0.5">North → South signal flow</p>
+        <p className="text-xs text-steel-dim mt-0.5">North → South signal flow per column</p>
       </div>
 
-      {/* Block chain */}
-      <div className="flex flex-col items-center gap-1">
-        {sortedBlocks.map((item, index) => (
-          <div key={item.placement.blockId} className="flex flex-col items-center">
-            <BlockCard
-              block={item.block}
-              placement={item.placement}
-              isFirst={index === 0}
-              isLast={index === sortedBlocks.length - 1}
-            />
-            {index < sortedBlocks.length - 1 && (
-              <div className="flex flex-col items-center py-1">
-                <div className="w-0.5 h-3 bg-surface-600" />
-                <ArrowDown className="w-3 h-3 text-surface-500" />
-                <div className="text-[8px] text-surface-500 mt-0.5">ALL signals</div>
-              </div>
-            )}
+      {/* Columns side by side */}
+      <div className="flex gap-6 justify-center flex-wrap">
+        {blocksByColumn.map(([colNum, colBlocks]) => (
+          <div key={colNum} className="flex flex-col items-center">
+            {/* Column header */}
+            <div className="text-xs font-medium text-steel-dim mb-2 px-2 py-0.5 bg-surface-800 rounded">
+              Column {colNum}
+            </div>
+
+            {/* Block chain for this column */}
+            <div className="flex flex-col items-center gap-1">
+              {colBlocks.map((item, index) => (
+                <div key={item.placement.blockId} className="flex flex-col items-center">
+                  <BlockCard
+                    block={item.block}
+                    placement={item.placement}
+                    isFirst={index === 0}
+                    isLast={index === colBlocks.length - 1}
+                  />
+                  {index < colBlocks.length - 1 && (
+                    <div className="flex flex-col items-center py-1">
+                      <div className="w-0.5 h-3 bg-surface-600" />
+                      <ArrowDown className="w-3 h-3 text-surface-500" />
+                      <div className="text-[8px] text-surface-500 mt-0.5">ALL signals</div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
