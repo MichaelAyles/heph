@@ -549,11 +549,11 @@ export function GridEditor({
 
         {/* Grid dimensions */}
         <div className="absolute -right-16 top-1/2 -translate-y-1/2 text-xs text-steel-dim text-center">
-          <div>{gridHeight * GRID_UNIT_MM}mm</div>
+          <div>{(gridHeight * GRID_UNIT_MM).toFixed(1)}mm</div>
           <div className="text-[10px]">({gridHeight} units)</div>
         </div>
         <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-xs text-steel-dim text-center">
-          <span>{gridWidth * GRID_UNIT_MM}mm</span>
+          <span>{(gridWidth * GRID_UNIT_MM).toFixed(1)}mm</span>
           <span className="text-[10px] ml-1">({gridWidth} units)</span>
         </div>
       </div>

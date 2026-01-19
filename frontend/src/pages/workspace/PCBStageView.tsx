@@ -507,7 +507,7 @@ export function PCBStageView() {
               {/* Board size info */}
               {selectedBlocks.length > 0 && (
                 <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded font-mono">
-                  {gridWidth * GRID_UNIT_MM}×{gridHeight * GRID_UNIT_MM}mm ({gridWidth}×{gridHeight}{' '}
+                  {(gridWidth * GRID_UNIT_MM).toFixed(1)}×{(gridHeight * GRID_UNIT_MM).toFixed(1)}mm ({gridWidth}×{gridHeight}{' '}
                   units)
                 </span>
               )}
