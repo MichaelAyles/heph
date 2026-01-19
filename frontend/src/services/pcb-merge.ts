@@ -791,7 +791,13 @@ export async function mergeBlockPCBs(
 
     try {
       const pcbText = await fetchBlockPcb(placed.blockSlug)
+      logger.info('pcb', `Fetched PCB for ${placed.blockSlug}`, { length: pcbText.length })
       const pcb = parseKicadPcb(pcbText)
+      logger.info('pcb', `Parsed PCB for ${placed.blockSlug}`, {
+        footprints: pcb.footprints?.length,
+        nets: pcb.nets?.length,
+        segments: pcb.segments?.length
+      })
       const offset = calculateBlockOffset(placed.gridX, placed.gridY)
 
       loadedBlocks.push({
@@ -802,7 +808,14 @@ export async function mergeBlockPCBs(
         offsetY: offset.y,
       })
     } catch (error) {
-      logger.error('pcb', `Failed to load PCB for ${placed.blockSlug}`, { error })
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      const errorStack = error instanceof Error ? error.stack : undefined
+      logger.error('pcb', `Failed to load PCB for ${placed.blockSlug}`, {
+        error: errorMsg,
+        stack: errorStack
+      })
+      // Re-throw to propagate the error
+      throw new Error(`Failed to load PCB for ${placed.blockSlug}: ${errorMsg}`)
     }
   }
 
