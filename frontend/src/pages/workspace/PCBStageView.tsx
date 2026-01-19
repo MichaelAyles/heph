@@ -39,7 +39,6 @@ import {
   validateGrid,
   fromPlacedBlocks,
   calculateBoardSize,
-  GRID_UNIT_MM,
 } from '../../services/pcb-grid'
 import { logger } from '../../lib/logger'
 import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '../../db/schema'
