@@ -8,7 +8,7 @@
  * - Bus continuity visualization
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   AlertCircle,
   AlertTriangle,
@@ -98,6 +98,9 @@ export function GridEditor({
   onDragEnd,
   className,
 }: GridEditorProps) {
+  // Refs
+  const gridRef = useRef<HTMLDivElement>(null)
+
   // Local state for dragging
   const [dragState, setDragState] = useState<DragState>({
     blockId: null,
@@ -107,6 +110,31 @@ export function GridEditor({
   })
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Convert mouse position to grid cell
+  const mouseToCellPosition = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      if (!gridRef.current) return null
+
+      const rect = gridRef.current.getBoundingClientRect()
+      const padding = 8 // p-2 = 8px padding
+
+      const relX = clientX - rect.left - padding
+      const relY = clientY - rect.top - padding
+
+      const cellX = Math.floor(relX / (CELL_SIZE + GRID_GAP))
+      const cellY = Math.floor(relY / (CELL_SIZE + GRID_GAP))
+
+      // Check bounds
+      if (cellX < 0 || cellX >= gridWidth || cellY < 0 || cellY >= gridHeight) {
+        return null
+      }
+
+      return { x: cellX, y: cellY }
+    },
+    [gridWidth, gridHeight]
+  )
 
   // Build grid state from placed blocks
   const gridState = useMemo(() => {
@@ -147,20 +175,23 @@ export function GridEditor({
     return canPlaceBlock(checkGrid, activeDragBlock, hoverCell.x, hoverCell.y, 0)
   }, [hoverCell, activeDragBlock, gridState, dragState])
 
-  // Handle cell mouse enter for hover preview
+  // Handle cell mouse enter for hover preview (only used when not dragging)
   const handleCellHover = useCallback(
     (x: number, y: number) => {
-      if (activeDragBlock || draggedBlock) {
+      // Only set hover on enter if we have an external drag or click-to-place mode
+      if (!isDragging && (activeDragBlock || draggedBlock)) {
         setHoverCell({ x, y })
       }
     },
-    [activeDragBlock, draggedBlock]
+    [isDragging, activeDragBlock, draggedBlock]
   )
 
-  // Handle cell mouse leave
+  // Handle cell mouse leave (only used when not dragging)
   const handleCellLeave = useCallback(() => {
-    setHoverCell(null)
-  }, [])
+    if (!isDragging) {
+      setHoverCell(null)
+    }
+  }, [isDragging])
 
   // Handle dropping a block on the grid
   const handleDrop = useCallback(
@@ -223,16 +254,57 @@ export function GridEditor({
     (blockId: string, e: React.MouseEvent) => {
       if (disabled) return
       e.preventDefault()
+      e.stopPropagation()
+
       setDragState({
         blockId,
         isExternal: false,
         offsetX: 0,
         offsetY: 0,
       })
+      setIsDragging(true)
       setSelectedBlockId(blockId)
+
+      // Set initial hover position
+      const cellPos = mouseToCellPosition(e.clientX, e.clientY)
+      if (cellPos) {
+        setHoverCell(cellPos)
+      }
     },
-    [disabled]
+    [disabled, mouseToCellPosition]
   )
+
+  // Global mouse move handler for dragging
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const cellPos = mouseToCellPosition(e.clientX, e.clientY)
+      setHoverCell(cellPos)
+    }
+
+    const handleMouseUp = (e: MouseEvent) => {
+      const cellPos = mouseToCellPosition(e.clientX, e.clientY)
+      if (cellPos && hoverCell) {
+        // Try to drop at current position
+        handleDrop(cellPos.x, cellPos.y)
+      } else {
+        // Cancel drag
+        setDragState({ blockId: null, isExternal: false, offsetX: 0, offsetY: 0 })
+        setHoverCell(null)
+        onDragEnd?.()
+      }
+      setIsDragging(false)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, mouseToCellPosition, hoverCell, handleDrop, onDragEnd])
 
   // Handle removing a block
   const handleRemoveBlock = useCallback(
@@ -316,18 +388,18 @@ export function GridEditor({
     const [width, height] = getEffectiveSize(blockDef, placement.rotation)
     const colors = CATEGORY_COLORS[blockDef.category] || CATEGORY_COLORS.utility
     const isSelected = selectedBlockId === placement.blockId
-    const isDragging = dragState.blockId === placement.blockId
+    const isThisBlockDragging = dragState.blockId === placement.blockId
     const edgeMount = getEdgeMount(blockDef)
 
     return (
       <div
         key={placement.blockId}
         className={clsx(
-          'absolute rounded border-2 cursor-move transition-all',
+          'absolute rounded border-2 transition-all',
           colors.bg,
           colors.border,
           isSelected && 'ring-2 ring-copper ring-offset-1 ring-offset-surface-900',
-          isDragging && 'opacity-50'
+          isThisBlockDragging ? 'opacity-50 cursor-grabbing' : 'cursor-grab'
         )}
         style={{
           left: placement.gridX * (CELL_SIZE + GRID_GAP),
@@ -437,7 +509,11 @@ export function GridEditor({
       <div className="relative">
         {/* Grid container */}
         <div
-          className="relative bg-surface-900 rounded-lg p-2"
+          ref={gridRef}
+          className={clsx(
+            'relative bg-surface-900 rounded-lg p-2',
+            isDragging && 'cursor-grabbing'
+          )}
           style={{
             width: gridWidth * (CELL_SIZE + GRID_GAP) + GRID_GAP + 16,
             height: gridHeight * (CELL_SIZE + GRID_GAP) + GRID_GAP + 16,
