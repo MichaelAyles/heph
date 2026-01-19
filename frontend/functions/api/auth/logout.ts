@@ -33,7 +33,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('auth', 'Logout error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('auth', 'Logout error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

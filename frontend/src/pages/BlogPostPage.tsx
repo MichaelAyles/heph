@@ -96,7 +96,11 @@ export function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
 
-  const { data: post, isLoading: postLoading, error: postError } = useQuery({
+  const {
+    data: post,
+    isLoading: postLoading,
+    error: postError,
+  } = useQuery({
     queryKey: ['blog-post', slug],
     queryFn: () => fetchBlogPost(slug!),
     enabled: !!slug,
@@ -126,7 +130,10 @@ export function BlogPostPage() {
                 <span className="text-lg font-bold text-steel">PHAESTUS</span>
               </Link>
               <span className="text-surface-500">|</span>
-              <Link to="/blog" className="text-lg font-semibold text-steel hover:text-copper transition-colors">
+              <Link
+                to="/blog"
+                className="text-lg font-semibold text-steel hover:text-copper transition-colors"
+              >
                 Dev Blog
               </Link>
             </div>

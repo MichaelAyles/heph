@@ -138,10 +138,7 @@ export async function suggestPcbBlocks(
     return {
       status: 'error',
       error: error instanceof Error ? error.message : 'PCB block suggestion failed',
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -185,9 +182,7 @@ export async function confirmPcbBlocks(
         options: ['Accept suggestion', 'Modify placement'],
         allowCustom: true,
       },
-      history: [
-        createHistoryItem(nodeId, 'node_enter', { awaitingInput: true }),
-      ],
+      history: [createHistoryItem(nodeId, 'node_enter', { awaitingInput: true })],
     }
   }
 
@@ -203,9 +198,7 @@ export async function confirmPcbBlocks(
   return {
     placedBlocks,
     status: 'running',
-    history: [
-      createHistoryItem(nodeId, 'node_exit', { accepted: true }),
-    ],
+    history: [createHistoryItem(nodeId, 'node_exit', { accepted: true })],
   }
 }
 
@@ -244,9 +237,7 @@ export async function processPcbConfirmation(
       userInputRequest: null,
       userInputResponse: null,
       status: 'running',
-      history: [
-        createHistoryItem(nodeId, 'user_input', { action: 'accepted' }),
-      ],
+      history: [createHistoryItem(nodeId, 'user_input', { action: 'accepted' })],
     }
   }
 
@@ -265,9 +256,7 @@ export async function processPcbConfirmation(
     userInputRequest: null,
     userInputResponse: null,
     status: 'running',
-    history: [
-      createHistoryItem(nodeId, 'user_input', { action: 'modified', note: selection }),
-    ],
+    history: [createHistoryItem(nodeId, 'user_input', { action: 'modified', note: selection })],
   }
 }
 
@@ -346,10 +335,7 @@ export async function generateEnclosure(
     return {
       status: 'error',
       error: error instanceof Error ? error.message : 'Enclosure generation failed',
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -374,9 +360,11 @@ export async function reviewEnclosure(
   const historyEntry = createHistoryItem(nodeId, 'node_enter')
 
   try {
-    const hasOled = state.finalSpec?.outputs?.some((o) => o.type.toLowerCase().includes('oled')) ?? false
+    const hasOled =
+      state.finalSpec?.outputs?.some((o) => o.type.toLowerCase().includes('oled')) ?? false
     const hasUsb = state.finalSpec?.power?.source?.toLowerCase().includes('usb') ?? true
-    const hasButtons = state.finalSpec?.inputs?.some((i) => i.type.toLowerCase().includes('button')) ?? false
+    const hasButtons =
+      state.finalSpec?.inputs?.some((i) => i.type.toLowerCase().includes('button')) ?? false
 
     const validationPrompt = buildValidationPrompt(state.enclosureCode, {
       pcbWidth: state.gridSize?.width ?? 50,
@@ -405,7 +393,12 @@ export async function reviewEnclosure(
     const review: ReviewResult = {
       score,
       issues: validationResult.issues.map((i) => `[${i.severity}] ${i.description}`),
-      verdict: validationResult.isValid && criticalCount === 0 ? 'accept' : criticalCount > 0 ? 'reject' : 'revise',
+      verdict:
+        validationResult.isValid && criticalCount === 0
+          ? 'accept'
+          : criticalCount > 0
+            ? 'reject'
+            : 'revise',
       suggestions: validationResult.issues.filter((i) => i.fix).map((i) => i.fix),
     }
 
@@ -429,10 +422,7 @@ export async function reviewEnclosure(
         verdict: 'revise',
         suggestions: [],
       },
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -504,10 +494,7 @@ export async function fixEnclosure(
     }
   } catch (error) {
     return {
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -577,10 +564,7 @@ export async function generateFirmware(
     return {
       status: 'error',
       error: error instanceof Error ? error.message : 'Firmware generation failed',
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -661,10 +645,7 @@ export async function reviewFirmware(
         verdict: 'revise',
         suggestions: [],
       },
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -771,7 +752,8 @@ function parseFirmwareFiles(content: string): Array<{
   }> = []
 
   // Look for file markers like "=== filename ===" or "// filename"
-  const filePattern = /(?:===\s*([^\s=]+)\s*===|\/\/\s*File:\s*([^\n]+))\n([\s\S]*?)(?=(?:===|\/\/\s*File:)|$)/g
+  const filePattern =
+    /(?:===\s*([^\s=]+)\s*===|\/\/\s*File:\s*([^\n]+))\n([\s\S]*?)(?=(?:===|\/\/\s*File:)|$)/g
   let match
 
   while ((match = filePattern.exec(content)) !== null) {

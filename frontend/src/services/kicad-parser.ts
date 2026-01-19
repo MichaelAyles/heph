@@ -7,11 +7,11 @@
  * Uses tokn for parsing KiCad S-expression files.
  */
 
-import { parseSchematic, analyzeConnectivity } from '../lib/tokn';
-import type { SExpr } from '../lib/tokn/sexpr';
-import { parse, get, getAll } from '../lib/tokn/sexpr';
+import { parseSchematic, analyzeConnectivity } from '../lib/tokn'
+import type { SExpr } from '../lib/tokn/sexpr'
+import { parse, get, getAll } from '../lib/tokn/sexpr'
 // Note: Using relative import because this file is imported by functions code
-import type { BusSignal } from '../schemas/block';
+import type { BusSignal } from '../schemas/block'
 
 // All valid bus signals that can be detected from net names
 const BUS_SIGNAL_PATTERNS: { pattern: RegExp; signal: BusSignal }[] = [
@@ -49,16 +49,16 @@ const BUS_SIGNAL_PATTERNS: { pattern: RegExp; signal: BusSignal }[] = [
   { pattern: /^AUX_?4$/i, signal: 'AUX_4' },
   { pattern: /^AUX_?5$/i, signal: 'AUX_5' },
   { pattern: /^AUX_?6$/i, signal: 'AUX_6' },
-];
+]
 
 /**
  * Extracted component from KiCad schematic
  */
 export interface ExtractedComponent {
-  reference: string; // U1, R1, C1
-  value: string; // ESP32-C6, 10k, 100nF
-  footprint: string; // QFN-48, 0402, 0603
-  libraryId?: string; // Library reference
+  reference: string // U1, R1, C1
+  value: string // ESP32-C6, 10k, 100nF
+  footprint: string // QFN-48, 0402, 0603
+  libraryId?: string // Library reference
 }
 
 /**
@@ -66,49 +66,49 @@ export interface ExtractedComponent {
  */
 export interface KicadExtract {
   // From schematic
-  components: ExtractedComponent[];
+  components: ExtractedComponent[]
 
   // From PCB
-  nets: string[];
+  nets: string[]
   boardSize?: {
-    width: number; // mm
-    height: number; // mm
-  };
+    width: number // mm
+    height: number // mm
+  }
 
   // Inferred from net names
-  busSignals: BusSignal[];
-  i2cSignals: string[];
-  spiSignals: string[];
-  gpioSignals: string[];
-  powerRails: string[];
-  auxSignals: string[];
+  busSignals: BusSignal[]
+  i2cSignals: string[]
+  spiSignals: string[]
+  gpioSignals: string[]
+  powerRails: string[]
+  auxSignals: string[]
 
   // Raw data for debugging
-  projectName?: string;
+  projectName?: string
 }
 
 /**
  * Parse KiCad schematic and extract components
  */
 export function parseKicadSchematic(content: string): Partial<KicadExtract> {
-  const sch = parseSchematic(content);
-  const netlist = analyzeConnectivity(sch);
-  const components: ExtractedComponent[] = [];
+  const sch = parseSchematic(content)
+  const netlist = analyzeConnectivity(sch)
+  const components: ExtractedComponent[] = []
 
   // Extract components from parsed schematic
   for (const comp of netlist.components) {
-    const reference = comp.reference || '';
-    const value = comp.value || '';
-    const footprint = comp.footprint || '';
+    const reference = comp.reference || ''
+    const value = comp.value || ''
+    const footprint = comp.footprint || ''
 
     // Skip power symbols and test points
     if (reference.startsWith('#') || reference.startsWith('TP')) {
-      continue;
+      continue
     }
 
     // Skip symbols without a valid reference
     if (!reference || reference === '?') {
-      continue;
+      continue
     }
 
     components.push({
@@ -116,7 +116,7 @@ export function parseKicadSchematic(content: string): Partial<KicadExtract> {
       value,
       footprint: footprint.split(':').pop() || footprint, // Remove library prefix
       libraryId: comp.libId,
-    });
+    })
   }
 
   return {
@@ -124,102 +124,100 @@ export function parseKicadSchematic(content: string): Partial<KicadExtract> {
     projectName: sch.title || undefined,
     // Also extract nets from schematic connectivity
     nets: netlist.nets.map((n) => n.name),
-  };
+  }
 }
 
 /**
  * Check if an element is on Edge.Cuts layer
  */
 function isOnEdgeCuts(elem: SExpr[]): boolean {
-  const layer = get(elem, 'layer');
+  const layer = get(elem, 'layer')
   if (layer && layer.length >= 2) {
-    return layer[1] === 'Edge.Cuts';
+    return layer[1] === 'Edge.Cuts'
   }
-  return false;
+  return false
 }
 
 /**
  * Extract board dimensions from Edge.Cuts layer elements
  */
-function extractBoardOutline(
-  expr: SExpr
-): { width: number; height: number } | undefined {
-  if (!Array.isArray(expr)) return undefined;
+function extractBoardOutline(expr: SExpr): { width: number; height: number } | undefined {
+  if (!Array.isArray(expr)) return undefined
 
   let minX = Infinity,
     minY = Infinity,
     maxX = -Infinity,
-    maxY = -Infinity;
-  let foundEdgeCuts = false;
+    maxY = -Infinity
+  let foundEdgeCuts = false
 
   // Look for gr_rect on Edge.Cuts (most common for rectangular boards)
-  const grRects = getAll(expr, 'gr_rect');
+  const grRects = getAll(expr, 'gr_rect')
   for (const rectExpr of grRects) {
-    if (typeof rectExpr === 'string') continue;
-    const rect = rectExpr as SExpr[];
-    if (!isOnEdgeCuts(rect)) continue;
-    foundEdgeCuts = true;
+    if (typeof rectExpr === 'string') continue
+    const rect = rectExpr as SExpr[]
+    if (!isOnEdgeCuts(rect)) continue
+    foundEdgeCuts = true
 
-    const start = get(rect, 'start');
-    const end = get(rect, 'end');
+    const start = get(rect, 'start')
+    const end = get(rect, 'end')
     if (start && start.length >= 3 && end && end.length >= 3) {
-      const x1 = parseFloat(start[1] as string);
-      const y1 = parseFloat(start[2] as string);
-      const x2 = parseFloat(end[1] as string);
-      const y2 = parseFloat(end[2] as string);
+      const x1 = parseFloat(start[1] as string)
+      const y1 = parseFloat(start[2] as string)
+      const x2 = parseFloat(end[1] as string)
+      const y2 = parseFloat(end[2] as string)
       if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
-        minX = Math.min(minX, x1, x2);
-        minY = Math.min(minY, y1, y2);
-        maxX = Math.max(maxX, x1, x2);
-        maxY = Math.max(maxY, y1, y2);
+        minX = Math.min(minX, x1, x2)
+        minY = Math.min(minY, y1, y2)
+        maxX = Math.max(maxX, x1, x2)
+        maxY = Math.max(maxY, y1, y2)
       }
     }
   }
 
   // Look for gr_line segments on Edge.Cuts
-  const grLines = getAll(expr, 'gr_line');
+  const grLines = getAll(expr, 'gr_line')
   for (const lineExpr of grLines) {
-    if (typeof lineExpr === 'string') continue;
-    const line = lineExpr as SExpr[];
-    if (!isOnEdgeCuts(line)) continue;
-    foundEdgeCuts = true;
+    if (typeof lineExpr === 'string') continue
+    const line = lineExpr as SExpr[]
+    if (!isOnEdgeCuts(line)) continue
+    foundEdgeCuts = true
 
-    const start = get(line, 'start');
-    const end = get(line, 'end');
+    const start = get(line, 'start')
+    const end = get(line, 'end')
     if (start && start.length >= 3 && end && end.length >= 3) {
-      const x1 = parseFloat(start[1] as string);
-      const y1 = parseFloat(start[2] as string);
-      const x2 = parseFloat(end[1] as string);
-      const y2 = parseFloat(end[2] as string);
+      const x1 = parseFloat(start[1] as string)
+      const y1 = parseFloat(start[2] as string)
+      const x2 = parseFloat(end[1] as string)
+      const y2 = parseFloat(end[2] as string)
       if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
-        minX = Math.min(minX, x1, x2);
-        minY = Math.min(minY, y1, y2);
-        maxX = Math.max(maxX, x1, x2);
-        maxY = Math.max(maxY, y1, y2);
+        minX = Math.min(minX, x1, x2)
+        minY = Math.min(minY, y1, y2)
+        maxX = Math.max(maxX, x1, x2)
+        maxY = Math.max(maxY, y1, y2)
       }
     }
   }
 
   // Look for gr_poly on Edge.Cuts
-  const grPolys = getAll(expr, 'gr_poly');
+  const grPolys = getAll(expr, 'gr_poly')
   for (const polyExpr of grPolys) {
-    if (typeof polyExpr === 'string') continue;
-    const poly = polyExpr as SExpr[];
-    if (!isOnEdgeCuts(poly)) continue;
-    foundEdgeCuts = true;
+    if (typeof polyExpr === 'string') continue
+    const poly = polyExpr as SExpr[]
+    if (!isOnEdgeCuts(poly)) continue
+    foundEdgeCuts = true
 
-    const pts = get(poly, 'pts');
+    const pts = get(poly, 'pts')
     if (pts) {
-      const xyPoints = getAll(pts, 'xy');
+      const xyPoints = getAll(pts, 'xy')
       for (const xy of xyPoints) {
         if (Array.isArray(xy) && xy.length >= 3) {
-          const x = parseFloat(xy[1] as string);
-          const y = parseFloat(xy[2] as string);
+          const x = parseFloat(xy[1] as string)
+          const y = parseFloat(xy[2] as string)
           if (!isNaN(x) && !isNaN(y)) {
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            maxX = Math.max(maxX, x);
-            maxY = Math.max(maxY, y);
+            minX = Math.min(minX, x)
+            minY = Math.min(minY, y)
+            maxX = Math.max(maxX, x)
+            maxY = Math.max(maxY, y)
           }
         }
       }
@@ -230,67 +228,67 @@ function extractBoardOutline(
     return {
       width: Math.round((maxX - minX) * 100) / 100,
       height: Math.round((maxY - minY) * 100) / 100,
-    };
+    }
   }
 
-  return undefined;
+  return undefined
 }
 
 /**
  * Parse KiCad PCB and extract nets and board info
  */
 export function parseKicadPcbFile(content: string): Partial<KicadExtract> {
-  const expr = parse(content);
+  const expr = parse(content)
 
   if (!Array.isArray(expr) || expr[0] !== 'kicad_pcb') {
-    throw new Error('Not a valid KiCad PCB file');
+    throw new Error('Not a valid KiCad PCB file')
   }
 
   // Extract all net names
-  const nets: string[] = [];
-  const pcbNets = getAll(expr, 'net');
+  const nets: string[] = []
+  const pcbNets = getAll(expr, 'net')
   for (const net of pcbNets) {
     if (net.length >= 3 && typeof net[2] === 'string') {
-      const netName = net[2];
+      const netName = net[2]
       if (netName && netName !== '' && !netName.startsWith('unconnected-')) {
-        nets.push(netName);
+        nets.push(netName)
       }
     }
   }
 
   // Extract board dimensions from Edge.Cuts layer
-  let boardSize = extractBoardOutline(expr);
+  let boardSize = extractBoardOutline(expr)
 
   // Fallback: estimate from footprint positions if no Edge.Cuts found
   if (!boardSize) {
-    const footprints = getAll(expr, 'footprint');
+    const footprints = getAll(expr, 'footprint')
     if (footprints.length > 0) {
       let minX = Infinity,
         minY = Infinity,
         maxX = -Infinity,
-        maxY = -Infinity;
+        maxY = -Infinity
 
       for (const fp of footprints) {
-        const at = get(fp, 'at');
+        const at = get(fp, 'at')
         if (at && at.length >= 3) {
-          const x = parseFloat(at[1] as string);
-          const y = parseFloat(at[2] as string);
+          const x = parseFloat(at[1] as string)
+          const y = parseFloat(at[2] as string)
           if (!isNaN(x) && !isNaN(y)) {
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            maxX = Math.max(maxX, x);
-            maxY = Math.max(maxY, y);
+            minX = Math.min(minX, x)
+            minY = Math.min(minY, y)
+            maxX = Math.max(maxX, x)
+            maxY = Math.max(maxY, y)
           }
         }
       }
 
       if (minX !== Infinity) {
         // Add margin for component sizes (rough estimate)
-        const margin = 5;
+        const margin = 5
         boardSize = {
           width: Math.round((maxX - minX + margin * 2) * 10) / 10,
           height: Math.round((maxY - minY + margin * 2) * 10) / 10,
-        };
+        }
       }
     }
   }
@@ -298,34 +296,34 @@ export function parseKicadPcbFile(content: string): Partial<KicadExtract> {
   return {
     nets,
     boardSize,
-  };
+  }
 }
 
 /**
  * Classify a net name into bus signal category
  */
 function classifyNet(netName: string): {
-  busSignal?: BusSignal;
-  category: 'i2c' | 'spi' | 'gpio' | 'power' | 'aux' | 'other';
+  busSignal?: BusSignal
+  category: 'i2c' | 'spi' | 'gpio' | 'power' | 'aux' | 'other'
 } {
   // Check against known bus signal patterns
   for (const { pattern, signal } of BUS_SIGNAL_PATTERNS) {
     if (pattern.test(netName)) {
-      let category: 'i2c' | 'spi' | 'gpio' | 'power' | 'aux' | 'other' = 'other';
-      if (signal.startsWith('I2C')) category = 'i2c';
-      else if (signal.startsWith('SPI')) category = 'spi';
-      else if (signal.startsWith('GPIO')) category = 'gpio';
-      else if (['GND', '3V3', '5V0'].includes(signal)) category = 'power';
-      else if (signal.startsWith('AUX')) category = 'aux';
+      let category: 'i2c' | 'spi' | 'gpio' | 'power' | 'aux' | 'other' = 'other'
+      if (signal.startsWith('I2C')) category = 'i2c'
+      else if (signal.startsWith('SPI')) category = 'spi'
+      else if (signal.startsWith('GPIO')) category = 'gpio'
+      else if (['GND', '3V3', '5V0'].includes(signal)) category = 'power'
+      else if (signal.startsWith('AUX')) category = 'aux'
 
-      return { busSignal: signal, category };
+      return { busSignal: signal, category }
     }
   }
 
   // Infer category from patterns even if not exact bus signal match
-  const lower = netName.toLowerCase();
+  const lower = netName.toLowerCase()
   if (lower.includes('sda') || lower.includes('scl') || lower.includes('i2c')) {
-    return { category: 'i2c' };
+    return { category: 'i2c' }
   }
   if (
     lower.includes('mosi') ||
@@ -334,10 +332,10 @@ function classifyNet(netName: string): {
     lower.includes('spi') ||
     lower.includes('cs')
   ) {
-    return { category: 'spi' };
+    return { category: 'spi' }
   }
   if (lower.includes('gpio')) {
-    return { category: 'gpio' };
+    return { category: 'gpio' }
   }
   if (
     lower.includes('gnd') ||
@@ -348,13 +346,13 @@ function classifyNet(netName: string): {
     lower.includes('pwr') ||
     lower.includes('bat')
   ) {
-    return { category: 'power' };
+    return { category: 'power' }
   }
   if (lower.includes('aux')) {
-    return { category: 'aux' };
+    return { category: 'aux' }
   }
 
-  return { category: 'other' };
+  return { category: 'other' }
 }
 
 /**
@@ -365,39 +363,39 @@ export function mergeExtracts(
   pcbExtract: Partial<KicadExtract>
 ): KicadExtract {
   // Use nets from PCB if available, otherwise from schematic
-  const nets = pcbExtract.nets?.length ? pcbExtract.nets : schExtract.nets || [];
+  const nets = pcbExtract.nets?.length ? pcbExtract.nets : schExtract.nets || []
 
   // Classify nets and build signal lists
-  const busSignals = new Set<BusSignal>();
-  const i2cSignals: string[] = [];
-  const spiSignals: string[] = [];
-  const gpioSignals: string[] = [];
-  const powerRails: string[] = [];
-  const auxSignals: string[] = [];
+  const busSignals = new Set<BusSignal>()
+  const i2cSignals: string[] = []
+  const spiSignals: string[] = []
+  const gpioSignals: string[] = []
+  const powerRails: string[] = []
+  const auxSignals: string[] = []
 
   for (const net of nets) {
-    const { busSignal, category } = classifyNet(net);
+    const { busSignal, category } = classifyNet(net)
 
     if (busSignal) {
-      busSignals.add(busSignal);
+      busSignals.add(busSignal)
     }
 
     switch (category) {
       case 'i2c':
-        if (!i2cSignals.includes(net)) i2cSignals.push(net);
-        break;
+        if (!i2cSignals.includes(net)) i2cSignals.push(net)
+        break
       case 'spi':
-        if (!spiSignals.includes(net)) spiSignals.push(net);
-        break;
+        if (!spiSignals.includes(net)) spiSignals.push(net)
+        break
       case 'gpio':
-        if (!gpioSignals.includes(net)) gpioSignals.push(net);
-        break;
+        if (!gpioSignals.includes(net)) gpioSignals.push(net)
+        break
       case 'power':
-        if (!powerRails.includes(net)) powerRails.push(net);
-        break;
+        if (!powerRails.includes(net)) powerRails.push(net)
+        break
       case 'aux':
-        if (!auxSignals.includes(net)) auxSignals.push(net);
-        break;
+        if (!auxSignals.includes(net)) auxSignals.push(net)
+        break
     }
   }
 
@@ -412,38 +410,32 @@ export function mergeExtracts(
     powerRails,
     auxSignals,
     projectName: schExtract.projectName,
-  };
+  }
 }
 
 /**
  * Parse both schematic and PCB files and return merged extract
  */
-export function parseKicadFiles(
-  schematicContent: string,
-  pcbContent?: string
-): KicadExtract {
-  const schExtract = parseKicadSchematic(schematicContent);
-  const pcbExtract = pcbContent ? parseKicadPcbFile(pcbContent) : {};
-  return mergeExtracts(schExtract, pcbExtract);
+export function parseKicadFiles(schematicContent: string, pcbContent?: string): KicadExtract {
+  const schExtract = parseKicadSchematic(schematicContent)
+  const pcbExtract = pcbContent ? parseKicadPcbFile(pcbContent) : {}
+  return mergeExtracts(schExtract, pcbExtract)
 }
 
 /**
  * Calculate suggested grid size from board dimensions
  * Grid unit is 12.7mm (0.5")
  */
-export function calculateGridSize(boardSize?: {
-  width: number;
-  height: number;
-}): [number, number] {
+export function calculateGridSize(boardSize?: { width: number; height: number }): [number, number] {
   if (!boardSize) {
-    return [1, 1]; // Default to 1x1
+    return [1, 1] // Default to 1x1
   }
 
-  const GRID_UNIT_MM = 12.7;
-  const width = Math.max(1, Math.ceil(boardSize.width / GRID_UNIT_MM));
-  const height = Math.max(1, Math.ceil(boardSize.height / GRID_UNIT_MM));
+  const GRID_UNIT_MM = 12.7
+  const width = Math.max(1, Math.ceil(boardSize.width / GRID_UNIT_MM))
+  const height = Math.max(1, Math.ceil(boardSize.height / GRID_UNIT_MM))
 
-  return [width, height];
+  return [width, height]
 }
 
 /**
@@ -451,64 +443,64 @@ export function calculateGridSize(boardSize?: {
  * Reduces tokens while preserving essential information
  */
 export function formatExtractForLLM(extract: KicadExtract): string {
-  const lines: string[] = [];
+  const lines: string[] = []
 
   // Components
   if (extract.components.length > 0) {
-    lines.push('## Components');
+    lines.push('## Components')
     for (const c of extract.components) {
-      lines.push(`- ${c.reference}: ${c.value} (${c.footprint})`);
+      lines.push(`- ${c.reference}: ${c.value} (${c.footprint})`)
     }
-    lines.push('');
+    lines.push('')
   }
 
   // Board size
   if (extract.boardSize) {
-    lines.push(`## Board Size`);
-    lines.push(`${extract.boardSize.width}mm x ${extract.boardSize.height}mm`);
-    const gridSize = calculateGridSize(extract.boardSize);
-    lines.push(`Suggested grid: ${gridSize[0]}x${gridSize[1]}`);
-    lines.push('');
+    lines.push(`## Board Size`)
+    lines.push(`${extract.boardSize.width}mm x ${extract.boardSize.height}mm`)
+    const gridSize = calculateGridSize(extract.boardSize)
+    lines.push(`Suggested grid: ${gridSize[0]}x${gridSize[1]}`)
+    lines.push('')
   }
 
   // Nets
   if (extract.nets.length > 0) {
-    lines.push('## Nets');
-    lines.push(extract.nets.join(', '));
-    lines.push('');
+    lines.push('## Nets')
+    lines.push(extract.nets.join(', '))
+    lines.push('')
   }
 
   // Classified signals
   if (extract.busSignals.length > 0) {
-    lines.push('## Bus Signals Detected');
-    lines.push(extract.busSignals.join(', '));
-    lines.push('');
+    lines.push('## Bus Signals Detected')
+    lines.push(extract.busSignals.join(', '))
+    lines.push('')
   }
 
   if (extract.powerRails.length > 0) {
-    lines.push('### Power Rails');
-    lines.push(extract.powerRails.join(', '));
+    lines.push('### Power Rails')
+    lines.push(extract.powerRails.join(', '))
   }
 
   if (extract.i2cSignals.length > 0) {
-    lines.push('### I2C Signals');
-    lines.push(extract.i2cSignals.join(', '));
+    lines.push('### I2C Signals')
+    lines.push(extract.i2cSignals.join(', '))
   }
 
   if (extract.spiSignals.length > 0) {
-    lines.push('### SPI Signals');
-    lines.push(extract.spiSignals.join(', '));
+    lines.push('### SPI Signals')
+    lines.push(extract.spiSignals.join(', '))
   }
 
   if (extract.gpioSignals.length > 0) {
-    lines.push('### GPIO Signals');
-    lines.push(extract.gpioSignals.join(', '));
+    lines.push('### GPIO Signals')
+    lines.push(extract.gpioSignals.join(', '))
   }
 
   if (extract.auxSignals.length > 0) {
-    lines.push('### AUX Signals');
-    lines.push(extract.auxSignals.join(', '));
+    lines.push('### AUX Signals')
+    lines.push(extract.auxSignals.join(', '))
   }
 
-  return lines.join('\n');
+  return lines.join('\n')
 }

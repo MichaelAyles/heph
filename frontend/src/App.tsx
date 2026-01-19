@@ -82,7 +82,8 @@ function AppContent() {
   }, [checkAuth])
 
   // Public routes that don't require authentication
-  const isPublicRoute = location.pathname.startsWith('/gallery') || location.pathname.startsWith('/blog')
+  const isPublicRoute =
+    location.pathname.startsWith('/gallery') || location.pathname.startsWith('/blog')
 
   if (isLoading && !isPublicRoute) {
     return (

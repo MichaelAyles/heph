@@ -337,6 +337,9 @@ export function buildBlockGenerationMessages(
 ): { role: 'system' | 'user'; content: string }[] {
   return [
     { role: 'system', content: buildBlockGenerationSystemPrompt() },
-    { role: 'user', content: buildBlockGenerationUserPrompt(extract, slug, suggestedCategory, toknData) },
+    {
+      role: 'user',
+      content: buildBlockGenerationUserPrompt(extract, slug, suggestedCategory, toknData),
+    },
   ]
 }

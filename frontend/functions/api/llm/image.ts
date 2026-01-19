@@ -97,10 +97,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         .run()
 
       // Don't expose error details to client (may contain API keys or sensitive info)
-      return Response.json(
-        { error: 'Image generation failed' },
-        { status: 502 }
-      )
+      return Response.json({ error: 'Image generation failed' }, { status: 502 })
     }
 
     const result = await response.json()

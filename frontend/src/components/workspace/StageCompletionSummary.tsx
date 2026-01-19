@@ -482,10 +482,7 @@ export function MiniStageSummary({
   if (!summary) return null
 
   return (
-    <span
-      className="text-xs text-emerald-400/70 truncate max-w-[80px]"
-      title={summary}
-    >
+    <span className="text-xs text-emerald-400/70 truncate max-w-[80px]" title={summary}>
       {summary}
     </span>
   )

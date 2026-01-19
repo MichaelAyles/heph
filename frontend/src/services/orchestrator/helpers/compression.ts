@@ -93,7 +93,7 @@ export function compressToolResult(toolName: string, result: unknown): unknown {
     case 'validate_cross_stage':
       // Validation reports are already reasonably sized
       return {
-        valid: r.valid ?? (r.issueCount === 0),
+        valid: r.valid ?? r.issueCount === 0,
         issueCount: r.issueCount ?? 0,
         issues: r.issues ?? [],
         suggestions: r.suggestions ?? [],

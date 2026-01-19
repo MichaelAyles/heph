@@ -13,6 +13,7 @@ Build the foundation for the PCB stage: block manifest schema for KiCad file sto
 ## The Problem
 
 The PCB stage needs to:
+
 1. Store KiCad files (schematics, PCB layouts, 3D models) for each block
 2. Define how blocks connect via edge definitions for later merging
 3. Display schematics interactively in the browser
@@ -26,17 +27,17 @@ The PCB stage needs to:
 
 Added three new fields to `pcb_blocks`:
 
-| Field | Purpose |
-|-------|---------|
-| `edges` | Edge connection definitions for block merging |
-| `files` | R2 file references (schematic, PCB, STEP, thumbnail) |
-| `net_mappings` | Net name mappings for schematic merge |
+| Field          | Purpose                                              |
+| -------------- | ---------------------------------------------------- |
+| `edges`        | Edge connection definitions for block merging        |
+| `files`        | R2 file references (schematic, PCB, STEP, thumbnail) |
+| `net_mappings` | Net name mappings for schematic merge                |
 
 ```typescript
 // Edge connection on one side of a block
 interface EdgeConnection {
-  net: string        // e.g., "GND", "I2C0_SDA"
-  offsetMm: number   // Position along edge in mm
+  net: string // e.g., "GND", "I2C0_SDA"
+  offsetMm: number // Position along edge in mm
   layer: 'F.Cu' | 'B.Cu' | 'In1.Cu' | 'In2.Cu'
 }
 
@@ -49,10 +50,10 @@ interface BlockEdges {
 
 // File references in R2
 interface BlockFiles {
-  schematic: string   // "mcu-esp32c6.kicad_sch"
-  pcb: string         // "mcu-esp32c6.kicad_pcb"
-  stepModel?: string  // "mcu-esp32c6.step"
-  thumbnail?: string  // "mcu-esp32c6.png"
+  schematic: string // "mcu-esp32c6.kicad_sch"
+  pcb: string // "mcu-esp32c6.kicad_pcb"
+  stepModel?: string // "mcu-esp32c6.step"
+  thumbnail?: string // "mcu-esp32c6.png"
 }
 ```
 
@@ -98,6 +99,7 @@ function KiCanvasViewer({ src, controls = 'basic' }) {
 ```
 
 Features:
+
 - Lazy-loaded (~200KB) only when PCB stage is accessed
 - Supports pan, zoom, component inspection
 - Works with KiCad 6+ format files only
@@ -127,18 +129,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   // Upload files to R2
   const schematicFile = formData.get('schematic')
   if (schematicFile) {
-    await env.STORAGE.put(
-      `blocks/${slug}/${slug}.kicad_sch`,
-      await schematicFile.arrayBuffer()
-    )
+    await env.STORAGE.put(`blocks/${slug}/${slug}.kicad_sch`, await schematicFile.arrayBuffer())
   }
 
   // Update database with file references and edge definitions
-  await env.DB.prepare(`
+  await env.DB.prepare(
+    `
     UPDATE pcb_blocks
     SET files = ?, edges = ?, net_mappings = ?
     WHERE slug = ?
-  `).bind(filesJson, edgesJson, netMappingsJson, slug).run()
+  `
+  )
+    .bind(filesJson, edgesJson, netMappingsJson, slug)
+    .run()
 
   return Response.json({ success: true })
 }
@@ -160,8 +163,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   return new Response(object.body, {
     headers: {
       'Content-Type': 'application/x-kicad-schematic',
-      'Cache-Control': 'public, max-age=3600'
-    }
+      'Cache-Control': 'public, max-age=3600',
+    },
   })
 }
 ```
@@ -183,25 +186,23 @@ function PCBStageView() {
     <div className="flex-1 flex min-h-0">
       {/* Left: Block selector */}
       <aside className="w-80 border-r">
-        <BlockSelector
-          selectedBlocks={selectedBlocks}
-          onSelectBlock={handleSelectBlock}
-        />
+        <BlockSelector selectedBlocks={selectedBlocks} onSelectBlock={handleSelectBlock} />
       </aside>
 
       {/* Main: Schematic viewer */}
       <main className="flex-1 p-4">
         <KiCanvasViewer
-          src={previewBlockSlug
-            ? `/api/blocks/${previewBlockSlug}/files/${previewBlockSlug}.kicad_sch`
-            : pcbArtifacts?.schematicUrl
+          src={
+            previewBlockSlug
+              ? `/api/blocks/${previewBlockSlug}/files/${previewBlockSlug}.kicad_sch`
+              : pcbArtifacts?.schematicUrl
           }
           controls="basic"
         />
 
         {/* Selected blocks list */}
         <div className="flex flex-wrap gap-2">
-          {selectedBlocks.map(block => (
+          {selectedBlocks.map((block) => (
             <BlockChip
               key={block.blockId}
               block={block}
@@ -248,6 +249,7 @@ frontend/
 ### Why Store Files in R2, Not the Database?
 
 KiCad files can be large (100KB+ for complex schematics). R2 provides:
+
 - Direct URL access for KiCanvas
 - CDN caching
 - No database bloat
@@ -260,6 +262,7 @@ KiCanvas is ~200KB gzipped. Most users will never visit the PCB stage on their f
 ### Why Edge Definitions for Merging?
 
 Rather than autorouting between blocks (which fails unpredictably), we pre-define exactly where each block's signals appear on its edges. The merge algorithm can then:
+
 1. Place blocks on the 12.7mm grid
 2. Generate 1mm overlap traces between adjacent block edges
 3. Merge net names based on edge connections
@@ -282,14 +285,14 @@ The `kicadts` library for parsing/merging KiCad files will be added in Phase 4. 
 
 ## Summary
 
-| Component | Purpose |
-|-----------|---------|
-| `edges` column | Define where block signals appear on edges |
-| `files` column | Reference KiCad files in R2 |
-| `/api/admin/blocks/upload` | Upload block files to R2 |
-| `/api/blocks/:slug/files/*` | Serve block files from R2 |
-| `KiCanvasViewer` | Display KiCad schematics in browser |
-| `BlockSelector` | Browse and select blocks by category |
-| `PCBStageView` | Full PCB stage UI with viewer and selector |
+| Component                   | Purpose                                    |
+| --------------------------- | ------------------------------------------ |
+| `edges` column              | Define where block signals appear on edges |
+| `files` column              | Reference KiCad files in R2                |
+| `/api/admin/blocks/upload`  | Upload block files to R2                   |
+| `/api/blocks/:slug/files/*` | Serve block files from R2                  |
+| `KiCanvasViewer`            | Display KiCad schematics in browser        |
+| `BlockSelector`             | Browse and select blocks by category       |
+| `PCBStageView`              | Full PCB stage UI with viewer and selector |
 
 The PCB stage now has the foundation for block-based schematic editing. Users can browse blocks, preview their schematics, and select which ones to include in their design.

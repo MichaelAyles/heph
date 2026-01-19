@@ -93,8 +93,7 @@ export function ExportStageView() {
   })
 
   const visibilityMutation = useMutation({
-    mutationFn: (settings: Partial<VisibilitySettings>) =>
-      updateVisibility(project!.id, settings),
+    mutationFn: (settings: Partial<VisibilitySettings>) => updateVisibility(project!.id, settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['visibility', project?.id] })
     },
@@ -227,7 +226,14 @@ Edit the parameters at the top of the .scad file to adjust:
     if (!project?.spec?.finalSpec?.estimatedBOM) return
 
     const bom = project.spec.finalSpec.estimatedBOM
-    const headers = ['Item', 'Quantity', 'Unit Cost ($)', 'Total Cost ($)', 'Supplier', 'Part Number']
+    const headers = [
+      'Item',
+      'Quantity',
+      'Unit Cost ($)',
+      'Total Cost ($)',
+      'Supplier',
+      'Part Number',
+    ]
 
     const rows = bom.map((b) => [
       b.item,
@@ -349,10 +355,7 @@ After building, find the binary at:
         .map(([stage, convos]) => formatConversationsAsMarkdown(stage, convos))
         .join('\n\n---\n\n')
 
-      zip.file(
-        'all-conversations.md',
-        `# Complete Conversation History\n\n${allContent}`
-      )
+      zip.file('all-conversations.md', `# Complete Conversation History\n\n${allContent}`)
 
       // Add README
       zip.file(
@@ -363,7 +366,10 @@ This archive contains the AI conversation history for your project, organized by
 
 ## Files
 ${Object.keys(grouped)
-  .map((stage) => `- \`${stage}-chat.md\` - ${stage.charAt(0).toUpperCase() + stage.slice(1)} stage conversations`)
+  .map(
+    (stage) =>
+      `- \`${stage}-chat.md\` - ${stage.charAt(0).toUpperCase() + stage.slice(1)} stage conversations`
+  )
   .join('\n')}
 - \`all-conversations.md\` - Combined view of all conversations
 
@@ -387,7 +393,9 @@ These conversations document the design process and can be used for:
   }
 
   // Helper: Group conversations by inferred stage
-  function groupConversationsByStage(conversations: Conversation[]): Record<string, Conversation[]> {
+  function groupConversationsByStage(
+    conversations: Conversation[]
+  ): Record<string, Conversation[]> {
     const grouped: Record<string, Conversation[]> = {
       spec: [],
       pcb: [],
@@ -403,9 +411,7 @@ These conversations document the design process and can be used for:
     }
 
     // Remove empty stages
-    return Object.fromEntries(
-      Object.entries(grouped).filter(([, convos]) => convos.length > 0)
-    )
+    return Object.fromEntries(Object.entries(grouped).filter(([, convos]) => convos.length > 0))
   }
 
   // Helper: Infer which stage a conversation belongs to
@@ -420,7 +426,11 @@ These conversations document the design process and can be used for:
       .toLowerCase()
 
     // Match keywords to stages
-    if (allText.includes('feasibility') || allText.includes('refinement') || allText.includes('blueprint')) {
+    if (
+      allText.includes('feasibility') ||
+      allText.includes('refinement') ||
+      allText.includes('blueprint')
+    ) {
       return 'spec'
     }
     if (allText.includes('pcb') || allText.includes('schematic') || allText.includes('circuit')) {
@@ -429,7 +439,11 @@ These conversations document the design process and can be used for:
     if (allText.includes('enclosure') || allText.includes('openscad') || allText.includes('stl')) {
       return 'enclosure'
     }
-    if (allText.includes('firmware') || allText.includes('platformio') || allText.includes('esp32')) {
+    if (
+      allText.includes('firmware') ||
+      allText.includes('platformio') ||
+      allText.includes('esp32')
+    ) {
       return 'firmware'
     }
 
@@ -458,10 +472,12 @@ These conversations document the design process and can be used for:
 
       // Format messages
       for (const msg of conv.messagesIn) {
-        const roleLabel = msg.role === 'system' ? '**System**' : msg.role === 'user' ? '**User**' : '**Assistant**'
-        const content = typeof msg.content === 'string'
-          ? msg.content
-          : msg.content.map((c) => c.text || '').join('\n')
+        const roleLabel =
+          msg.role === 'system' ? '**System**' : msg.role === 'user' ? '**User**' : '**Assistant**'
+        const content =
+          typeof msg.content === 'string'
+            ? msg.content
+            : msg.content.map((c) => c.text || '').join('\n')
 
         md += `${roleLabel}:\n\n${content}\n\n`
       }
@@ -497,7 +513,14 @@ These conversations document the design process and can be used for:
     // Add BOM as CSV if available
     if (project.spec.finalSpec?.estimatedBOM?.length) {
       const bom = project.spec.finalSpec.estimatedBOM
-      const headers = ['Item', 'Quantity', 'Unit Cost ($)', 'Total Cost ($)', 'Supplier', 'Part Number']
+      const headers = [
+        'Item',
+        'Quantity',
+        'Unit Cost ($)',
+        'Total Cost ($)',
+        'Supplier',
+        'Part Number',
+      ]
       const rows = bom.map((b) => [
         b.item,
         b.quantity.toString(),
@@ -800,7 +823,8 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
             <div className="flex-1">
               <h3 className="text-sm font-medium text-steel mb-1">Share to Gallery</h3>
               <p className="text-xs text-steel-dim mb-4">
-                Make your project visible to the public. Others can view your specifications and design concepts.
+                Make your project visible to the public. Others can view your specifications and
+                design concepts.
               </p>
 
               {visibilityLoading ? (
@@ -841,7 +865,9 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
                         <span className="text-sm text-steel">Show my username</span>
                       </div>
                       <button
-                        onClick={() => visibilityMutation.mutate({ showAuthor: !visibility?.showAuthor })}
+                        onClick={() =>
+                          visibilityMutation.mutate({ showAuthor: !visibility?.showAuthor })
+                        }
                         disabled={visibilityMutation.isPending}
                         className={clsx(
                           'relative w-10 h-5 rounded-full transition-colors',

@@ -26,7 +26,8 @@ import manifest from '../src/data/blog-manifest.json'
 
 const SITE_URL = 'https://phaestus.app'
 const FEED_TITLE = 'PHAESTUS Development Blog'
-const FEED_DESCRIPTION = 'Development updates from PHAESTUS - an AI-powered hardware design platform that transforms natural language specifications into manufacturable hardware designs.'
+const FEED_DESCRIPTION =
+  'Development updates from PHAESTUS - an AI-powered hardware design platform that transforms natural language specifications into manufacturable hardware designs.'
 const FEED_LANGUAGE = 'en-us'
 
 /**

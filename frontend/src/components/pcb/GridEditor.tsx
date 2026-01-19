@@ -246,7 +246,16 @@ export function GridEditor({
       setHoverCell(null)
       onDragEnd?.()
     },
-    [disabled, draggedBlock, dragState, placedBlocks, blockDefinitions, gridState, onBlocksChange, onDragEnd]
+    [
+      disabled,
+      draggedBlock,
+      dragState,
+      placedBlocks,
+      blockDefinitions,
+      gridState,
+      onBlocksChange,
+      onDragEnd,
+    ]
   )
 
   // Handle starting an internal drag
@@ -354,7 +363,11 @@ export function GridEditor({
           isOccupied ? 'border-transparent' : 'border-surface-600 hover:border-surface-500',
           hasGap && !isOccupied && 'border-red-500/50 bg-red-500/10',
           isHovered && !isOccupied && canPlaceAtHover?.valid && 'bg-green-500/20 border-green-500',
-          isHovered && !isOccupied && canPlaceAtHover && !canPlaceAtHover.valid && 'bg-red-500/20 border-red-500'
+          isHovered &&
+            !isOccupied &&
+            canPlaceAtHover &&
+            !canPlaceAtHover.valid &&
+            'bg-red-500/20 border-red-500'
         )}
         style={{
           width: CELL_SIZE,
@@ -626,9 +639,7 @@ function ValidationPanel({ result }: ValidationPanelProps) {
               <li key={i}>• {fix.description}</li>
             ))}
             {result.suggestedFixes.length > 5 && (
-              <li className="text-steel-dim">
-                ...and {result.suggestedFixes.length - 5} more
-              </li>
+              <li className="text-steel-dim">...and {result.suggestedFixes.length - 5} more</li>
             )}
           </ul>
         </div>

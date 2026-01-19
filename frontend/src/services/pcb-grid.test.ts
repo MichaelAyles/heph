@@ -777,10 +777,7 @@ describe('calculatePowerBudget', () => {
 
 describe('checkI2cConflicts', () => {
   it('returns empty for no conflicts', () => {
-    const blocks = [
-      createI2cSensorBlock(0x76),
-      createI2cSensorBlock(0x48),
-    ]
+    const blocks = [createI2cSensorBlock(0x76), createI2cSensorBlock(0x48)]
 
     const errors = checkI2cConflicts(blocks)
 
@@ -788,10 +785,7 @@ describe('checkI2cConflicts', () => {
   })
 
   it('detects I2C address conflict', () => {
-    const blocks = [
-      createI2cSensorBlock(0x76),
-      createI2cSensorBlock(0x76),
-    ]
+    const blocks = [createI2cSensorBlock(0x76), createI2cSensorBlock(0x76)]
 
     const errors = checkI2cConflicts(blocks)
 
@@ -857,10 +851,7 @@ describe('checkGpioConflicts', () => {
 
 describe('checkSpiConflicts', () => {
   it('returns empty for no conflicts', () => {
-    const blocks = [
-      createSpiSensorBlock('SPI0_CS0'),
-      createSpiSensorBlock('SPI0_CS1'),
-    ]
+    const blocks = [createSpiSensorBlock('SPI0_CS0'), createSpiSensorBlock('SPI0_CS1')]
 
     const errors = checkSpiConflicts(blocks)
 
@@ -868,10 +859,7 @@ describe('checkSpiConflicts', () => {
   })
 
   it('detects SPI CS conflict', () => {
-    const blocks = [
-      createSpiSensorBlock('SPI0_CS0'),
-      createSpiSensorBlock('SPI0_CS0'),
-    ]
+    const blocks = [createSpiSensorBlock('SPI0_CS0'), createSpiSensorBlock('SPI0_CS0')]
 
     const errors = checkSpiConflicts(blocks)
 

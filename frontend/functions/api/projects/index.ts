@@ -104,7 +104,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return Response.json({ error: 'Name must be 100 characters or less' }, { status: 400 })
     }
     if (description.length > 2000) {
-      return Response.json({ error: 'Description must be 2000 characters or less' }, { status: 400 })
+      return Response.json(
+        { error: 'Description must be 2000 characters or less' },
+        { status: 400 }
+      )
     }
 
     const id = crypto.randomUUID().replace(/-/g, '')
@@ -144,7 +147,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     )
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('project', 'Create project error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('project', 'Create project error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json({ error: 'Failed to create project' }, { status: 500 })
   }
 }

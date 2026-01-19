@@ -272,7 +272,8 @@ export async function finalizeSpec(
   // Generate final spec from decisions
   // Use selected name from naming step, or fallback to description
   const finalSpec: FinalSpec = {
-    name: ctx.selectedProjectName || ctx.currentSpec?.description?.slice(0, 50) || 'Hardware Project',
+    name:
+      ctx.selectedProjectName || ctx.currentSpec?.description?.slice(0, 50) || 'Hardware Project',
     summary: ctx.currentSpec?.description || '',
     pcbSize: { width: 50.8, height: 38.1, unit: 'mm' },
     inputs: [],

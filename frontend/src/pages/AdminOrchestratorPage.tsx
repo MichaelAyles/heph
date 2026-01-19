@@ -78,9 +78,7 @@ export function AdminOrchestratorPage() {
       {/* Header */}
       <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700">
         <div className="flex items-center gap-4">
-          <h1 className="text-base font-semibold text-steel tracking-tight">
-            ORCHESTRATOR EDITOR
-          </h1>
+          <h1 className="text-base font-semibold text-steel tracking-tight">ORCHESTRATOR EDITOR</h1>
           <span className="text-xs text-steel-dim font-mono">
             {prompts.length} prompts, {edges.length} edges
           </span>
@@ -117,20 +115,13 @@ export function AdminOrchestratorPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar - Prompt list */}
         <div className="w-64 border-r border-surface-700 flex-shrink-0">
-          <PromptList
-            prompts={prompts}
-            selectedNode={selectedNode}
-            onSelect={setSelectedNode}
-          />
+          <PromptList prompts={prompts} selectedNode={selectedNode} onSelect={setSelectedNode} />
         </div>
 
         {/* Center - Editor or Flow visualization */}
         <div className="flex-1 flex flex-col min-w-0">
           {viewMode === 'editor' ? (
-            <PromptEditor
-              prompt={selectedPrompt}
-              onSave={() => promptsQuery.refetch()}
-            />
+            <PromptEditor prompt={selectedPrompt} onSave={() => promptsQuery.refetch()} />
           ) : (
             <FlowVisualization
               prompts={prompts}

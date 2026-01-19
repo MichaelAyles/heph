@@ -7,7 +7,10 @@
 
 import { useState } from 'react'
 import type { OrchestratorPrompt } from '../../../db/schema'
-import { buildContextFromSelector, renderPromptTemplate } from '../../../services/orchestrator/context-builder'
+import {
+  buildContextFromSelector,
+  renderPromptTemplate,
+} from '../../../services/orchestrator/context-builder'
 import type { ProjectSpec } from '../../../db/schema'
 
 interface NodeTestRunnerProps {
@@ -17,10 +20,15 @@ interface NodeTestRunnerProps {
 
 // Sample spec data for testing - matches the actual ProjectSpec schema
 const SAMPLE_SPEC: ProjectSpec = {
-  description: 'A smart plant watering system that monitors soil moisture and waters automatically.',
+  description:
+    'A smart plant watering system that monitors soil moisture and waters automatically.',
   feasibility: {
     communication: { type: 'WiFi', confidence: 90, notes: 'ESP32-C6 has built-in WiFi' },
-    processing: { level: 'medium', confidence: 85, notes: 'Simple logic with periodic sensor reads' },
+    processing: {
+      level: 'medium',
+      confidence: 85,
+      notes: 'Simple logic with periodic sensor reads',
+    },
     power: { options: ['USB', 'Battery'], confidence: 95, notes: 'Can run on either power source' },
     inputs: { items: ['Soil moisture sensor', 'Button'], confidence: 90 },
     outputs: { items: ['Relay for water pump', 'Status LED'], confidence: 90 },
@@ -28,14 +36,21 @@ const SAMPLE_SPEC: ProjectSpec = {
     manufacturable: true,
   },
   openQuestions: [
-    { id: '1', question: 'How large is the plant?', options: ['Small (under 15cm)', 'Medium (15-30cm)', 'Large (over 30cm)'] },
+    {
+      id: '1',
+      question: 'How large is the plant?',
+      options: ['Small (under 15cm)', 'Medium (15-30cm)', 'Large (over 30cm)'],
+    },
   ],
   decisions: [
-    { questionId: '1', question: 'Power source?', answer: 'USB powered', timestamp: new Date().toISOString() },
+    {
+      questionId: '1',
+      question: 'Power source?',
+      answer: 'USB powered',
+      timestamp: new Date().toISOString(),
+    },
   ],
-  blueprints: [
-    { url: '/sample.png', prompt: 'Compact box design for plant watering system' },
-  ],
+  blueprints: [{ url: '/sample.png', prompt: 'Compact box design for plant watering system' }],
   selectedBlueprint: 0,
   finalSpec: {
     name: 'PlantPal Pro',
@@ -107,7 +122,12 @@ export function NodeTestRunner({ prompt, onClose }: NodeTestRunnerProps) {
             className="rounded p-1 text-surface-400 hover:bg-surface-700 hover:text-surface-200"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -124,7 +144,11 @@ export function NodeTestRunner({ prompt, onClose }: NodeTestRunnerProps) {
                   : 'text-surface-400 hover:text-surface-200'
               }`}
             >
-              {tab === 'input' ? 'Sample Data' : tab === 'context' ? 'Built Context' : 'Rendered Prompt'}
+              {tab === 'input'
+                ? 'Sample Data'
+                : tab === 'context'
+                  ? 'Built Context'
+                  : 'Rendered Prompt'}
             </button>
           ))}
         </div>
@@ -150,7 +174,9 @@ export function NodeTestRunner({ prompt, onClose }: NodeTestRunnerProps) {
               </div>
 
               <div className="rounded bg-surface-700/50 p-3">
-                <div className="mb-2 text-sm font-medium text-surface-300">Prompt Configuration</div>
+                <div className="mb-2 text-sm font-medium text-surface-300">
+                  Prompt Configuration
+                </div>
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
                     <span className="text-surface-500">Context Selector:</span>

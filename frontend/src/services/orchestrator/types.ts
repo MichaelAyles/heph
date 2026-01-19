@@ -4,11 +4,7 @@
  * Type definitions for the hardware design orchestrator service.
  */
 
-import type {
-  ProjectSpec,
-  PcbBlock,
-  PersistedOrchestratorState,
-} from '@/db/schema'
+import type { ProjectSpec, PcbBlock, PersistedOrchestratorState } from '@/db/schema'
 import type { ChatMessage } from '../llm'
 import type { ValidationResult } from '@/prompts/validation'
 

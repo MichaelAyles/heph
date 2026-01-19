@@ -294,7 +294,9 @@ export async function fetchImageAsBase64(url: string): Promise<string> {
 /**
  * Get the MIME type from a URL or default to png
  */
-export function getMimeTypeFromUrl(url: string): 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' {
+export function getMimeTypeFromUrl(
+  url: string
+): 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' {
   const lowercaseUrl = url.toLowerCase()
   if (lowercaseUrl.includes('.jpg') || lowercaseUrl.includes('.jpeg')) {
     return 'image/jpeg'

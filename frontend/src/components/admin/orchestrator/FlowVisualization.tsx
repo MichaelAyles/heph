@@ -152,11 +152,23 @@ export function FlowVisualization({
             <span className="text-surface-400">Flow</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-0.5 w-6 bg-amber-500" style={{ background: 'repeating-linear-gradient(90deg, #f59e0b 0, #f59e0b 4px, transparent 4px, transparent 8px)' }} />
+            <div
+              className="h-0.5 w-6 bg-amber-500"
+              style={{
+                background:
+                  'repeating-linear-gradient(90deg, #f59e0b 0, #f59e0b 4px, transparent 4px, transparent 8px)',
+              }}
+            />
             <span className="text-surface-400">Conditional</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-0.5 w-6 bg-purple-500" style={{ background: 'repeating-linear-gradient(90deg, #8b5cf6 0, #8b5cf6 2px, transparent 2px, transparent 4px)' }} />
+            <div
+              className="h-0.5 w-6 bg-purple-500"
+              style={{
+                background:
+                  'repeating-linear-gradient(90deg, #8b5cf6 0, #8b5cf6 2px, transparent 2px, transparent 4px)',
+              }}
+            />
             <span className="text-surface-400">Loop</span>
           </div>
         </div>
@@ -241,24 +253,21 @@ export function FlowVisualization({
               labelText = `max: ${edge.maxLoops}`
             }
 
-            const markerId = isLoop ? 'arrowhead-loop' : isConditional ? 'arrowhead-cond' : 'arrowhead'
+            const markerId = isLoop
+              ? 'arrowhead-loop'
+              : isConditional
+                ? 'arrowhead-cond'
+                : 'arrowhead'
 
             return (
               <g
                 key={edge.id}
-                onMouseEnter={(e) =>
-                  setHoveredEdge({ x: e.clientX, y: e.clientY, edge })
-                }
+                onMouseEnter={(e) => setHoveredEdge({ x: e.clientX, y: e.clientY, edge })}
                 onMouseLeave={() => setHoveredEdge(null)}
                 className="cursor-pointer"
               >
                 {/* Wider invisible path for easier hover */}
-                <path
-                  d={path}
-                  fill="none"
-                  stroke="transparent"
-                  strokeWidth={12}
-                />
+                <path d={path} fill="none" stroke="transparent" strokeWidth={12} />
                 {/* Visible edge */}
                 <path
                   d={path}
@@ -402,8 +411,7 @@ export function FlowVisualization({
             </div>
             {hoveredEdge.edge.maxLoops && (
               <div>
-                <span className="text-surface-500">Max loops:</span>{' '}
-                {hoveredEdge.edge.maxLoops}
+                <span className="text-surface-500">Max loops:</span> {hoveredEdge.edge.maxLoops}
               </div>
             )}
             {hoveredEdge.edge.condition && (

@@ -295,9 +295,7 @@ export function OrchestratorSidebar({
 
             <h3 className="text-lg font-semibold text-steel mb-2">PHAESTUS AI</h3>
             <p className="text-sm text-steel-dim mb-4">
-              {isFullyComplete
-                ? 'Ask questions or request changes'
-                : config.description}
+              {isFullyComplete ? 'Ask questions or request changes' : config.description}
             </p>
 
             {/* Progress info */}
@@ -305,13 +303,27 @@ export function OrchestratorSidebar({
               <div className="mb-4 text-xs text-steel-dim">
                 {progressInfo.current ? (
                   <span>
-                    Currently on <span className="text-copper font-medium capitalize">{progressInfo.current}</span> stage
+                    Currently on{' '}
+                    <span className="text-copper font-medium capitalize">
+                      {progressInfo.current}
+                    </span>{' '}
+                    stage
                   </span>
                 ) : progressInfo.lastComplete ? (
                   <span>
-                    <span className="text-emerald-400 font-medium capitalize">{progressInfo.lastComplete}</span> complete
+                    <span className="text-emerald-400 font-medium capitalize">
+                      {progressInfo.lastComplete}
+                    </span>{' '}
+                    complete
                     {progressInfo.next && (
-                      <> → <span className="text-copper font-medium capitalize">{progressInfo.next}</span> next</>
+                      <>
+                        {' '}
+                        →{' '}
+                        <span className="text-copper font-medium capitalize">
+                          {progressInfo.next}
+                        </span>{' '}
+                        next
+                      </>
                     )}
                   </span>
                 ) : null}
@@ -319,9 +331,7 @@ export function OrchestratorSidebar({
             )}
 
             {isFullyComplete && (
-              <div className="mb-4 text-xs text-emerald-400/70">
-                All stages complete
-              </div>
+              <div className="mb-4 text-xs text-emerald-400/70">All stages complete</div>
             )}
 
             {canStart || canResume ? (
@@ -367,7 +377,12 @@ export function OrchestratorSidebar({
                     >
                       <Check className="w-4 h-4" />
                       Mark Stage Complete
-                      <ChevronDown className={clsx('w-3 h-3 transition-transform', showStageMenu && 'rotate-180')} />
+                      <ChevronDown
+                        className={clsx(
+                          'w-3 h-3 transition-transform',
+                          showStageMenu && 'rotate-180'
+                        )}
+                      />
                     </button>
                     {showStageMenu && (
                       <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-surface-800 border border-surface-600 rounded-lg shadow-lg py-1 z-10 min-w-[140px]">
@@ -496,7 +511,9 @@ export function OrchestratorSidebar({
                   title="Mark a stage as complete"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <ChevronDown className={clsx('w-3 h-3 transition-transform', showStageMenu && 'rotate-180')} />
+                  <ChevronDown
+                    className={clsx('w-3 h-3 transition-transform', showStageMenu && 'rotate-180')}
+                  />
                 </button>
                 {showStageMenu && (
                   <div className="absolute bottom-full right-0 mb-1 bg-surface-800 border border-surface-600 rounded-lg shadow-lg py-1 z-10 min-w-[140px]">
@@ -587,11 +604,11 @@ function HistoryItem({ item }: { item: OrchestratorHistoryItem }) {
         <span className={`${color} mt-0.5 flex-shrink-0`}>{icon}</span>
         <div className="flex-1 min-w-0">
           <div className="text-steel leading-relaxed">{item.action}</div>
-          {item.result && (
-            <div className="text-steel-dim mt-0.5 truncate">{item.result}</div>
-          )}
+          {item.result && <div className="text-steel-dim mt-0.5 truncate">{item.result}</div>}
         </div>
-        <span className="text-steel-dim/50 text-[10px] flex-shrink-0">{formatTime(item.timestamp)}</span>
+        <span className="text-steel-dim/50 text-[10px] flex-shrink-0">
+          {formatTime(item.timestamp)}
+        </span>
       </div>
 
       {isExpanded && item.details && (

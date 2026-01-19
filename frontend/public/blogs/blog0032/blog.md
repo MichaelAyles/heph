@@ -9,6 +9,7 @@ When we started building PHAESTUS's AI orchestrator - a multi-agent system that 
 The obvious answer: build a custom admin page.
 
 So we did. `AdminOrchestratorPage.tsx` grew to 619 lines:
+
 - ReactFlow integration for graph visualization
 - Custom node/edge layout algorithms
 - Stage-based color coding (spec, PCB, enclosure, firmware, export)
@@ -20,9 +21,10 @@ It looked professional. Nodes colored by stage, edges showing the flow, a panel 
 
 ## What We Actually Needed
 
-But when we started using it for real debugging, the gap became obvious. Our visualization showed us *what* the graph looked like - not *how* it was executing.
+But when we started using it for real debugging, the gap became obvious. Our visualization showed us _what_ the graph looked like - not _how_ it was executing.
 
 For debugging an agent orchestrator, we needed:
+
 1. **Step-by-step execution tracking** - Which node is running right now?
 2. **State inspection** - What's in the state object at each step?
 3. **Time-travel debugging** - Go back to a previous state and retry
@@ -34,15 +36,15 @@ Our custom visualization provided exactly zero of these features.
 
 ## The Comparison
 
-| Feature | Our Implementation | LangGraph Studio |
-|---------|-------------------|------------------|
-| Graph visualization | Static layout | Live updating |
-| State inspection | None | Full state tree |
-| Time-travel | None | Step back/forward |
-| Breakpoints | None | Interrupt any node |
-| State editing | None | Modify mid-run |
-| Hot reload | None | Automatic |
-| Prompt editing | Yes (D1 integration) | No |
+| Feature             | Our Implementation   | LangGraph Studio   |
+| ------------------- | -------------------- | ------------------ |
+| Graph visualization | Static layout        | Live updating      |
+| State inspection    | None                 | Full state tree    |
+| Time-travel         | None                 | Step back/forward  |
+| Breakpoints         | None                 | Interrupt any node |
+| State editing       | None                 | Modify mid-run     |
+| Hot reload          | None                 | Automatic          |
+| Prompt editing      | Yes (D1 integration) | No                 |
 
 We were comparing a screenshot to Chrome DevTools.
 
@@ -132,17 +134,20 @@ Set `LLM_MODE=direct` in `.dev.vars`, and Studio's graph can make real LLM calls
 We kept both approaches, but separated concerns:
 
 **Custom Admin Page (now 449 lines)**:
+
 - Prompt editing (needs D1 integration)
 - Feature flag toggle
 - Link to Studio
 
 **LangGraph Studio**:
+
 - Graph debugging
 - State inspection
 - Time-travel
 - Breakpoints
 
 We deleted:
+
 - ReactFlow visualization (~170 lines)
 - Custom layout algorithms (~80 lines)
 - Node/edge state management (~50 lines)

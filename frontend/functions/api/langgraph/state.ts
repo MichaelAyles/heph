@@ -39,9 +39,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   // Verify user owns the project (thread_id is project_id)
-  const project = await env.DB.prepare(
-    'SELECT id, user_id, spec FROM projects WHERE id = ?'
-  )
+  const project = await env.DB.prepare('SELECT id, user_id, spec FROM projects WHERE id = ?')
     .bind(threadId)
     .first<{ id: string; user_id: string; spec: string | null }>()
 

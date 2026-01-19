@@ -7,6 +7,7 @@ Sometimes the most impactful fixes are the simplest: calling code that already e
 ## The Problem: Orphaned Integration Code
 
 The PCB merge function was complete and tested. It could:
+
 - Take an array of placed blocks with grid positions
 - Merge their KiCad schematics into a single document
 - Calculate board dimensions from the grid layout
@@ -50,11 +51,7 @@ const handleMergeSchematic = useCallback(async () => {
       selectedBlocks.some((sb) => sb.blockId === b.id)
     )
 
-    const mergeResult = await mergeBlockSchematics(
-      selectedBlocks,
-      selectedBlockData,
-      project.name
-    )
+    const mergeResult = await mergeBlockSchematics(selectedBlocks, selectedBlockData, project.name)
 
     await savePCBMutation.mutateAsync({
       placedBlocks: selectedBlocks,
@@ -93,6 +90,7 @@ KiCanvas accepts URLs, but we now have inline schematic data. The solution: data
 ### UI Enhancements
 
 Added:
+
 - "Generate Schematic" button in empty state
 - Board dimensions display in header (e.g., "76.2 × 50.8 mm")
 - "Regenerate" button when schematic exists
@@ -106,11 +104,11 @@ Extended `PCBArtifacts` to store the new data:
 ```typescript
 export interface PCBArtifacts {
   placedBlocks: PlacedBlock[]
-  schematicData?: string    // NEW: Inline KiCad content
-  schematicUrl?: string     // Existing: R2 URL
+  schematicData?: string // NEW: Inline KiCad content
+  schematicUrl?: string // Existing: R2 URL
   boardSize?: { width: number; height: number; unit: 'mm' }
   netList?: NetAssignment[]
-  mergedAt?: string         // NEW: Timestamp
+  mergedAt?: string // NEW: Timestamp
 }
 ```
 
@@ -120,7 +118,7 @@ The merge function's `NetAssignment` used `localNet`, but schema used `net`. Qui
 
 ```typescript
 const transformedNetList = mergeResult.netList.map((n) => ({
-  net: n.localNet,  // Rename for schema compatibility
+  net: n.localNet, // Rename for schema compatibility
   globalNet: n.globalNet,
   gpio: n.gpio,
 }))
@@ -129,12 +127,14 @@ const transformedNetList = mergeResult.netList.map((n) => ({
 ## Collateral Fixes
 
 While fixing the build, I also:
+
 - Fixed `ToolParameter` type to support nested object schemas in array items
 - Removed unused `handleRenderWithValidation` from EnclosureStageView
 
 ## Result
 
 Users can now:
+
 1. Select PCB blocks from the library
 2. Click "Generate Schematic"
 3. See the merged schematic instantly in KiCanvasViewer

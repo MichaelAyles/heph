@@ -36,11 +36,7 @@ import {
   parsePCBSuggestionResponse,
   validatePCBSuggestion,
 } from '../../prompts/pcb-selection'
-import {
-  validateGrid,
-  fromPlacedBlocks,
-  calculateBoardSize,
-} from '../../services/pcb-grid'
+import { validateGrid, fromPlacedBlocks, calculateBoardSize } from '../../services/pcb-grid'
 import { logger } from '../../lib/logger'
 import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '../../db/schema'
 import type { BlockDefinition } from '../../schemas/block'
@@ -121,8 +117,15 @@ export function PCBStageView() {
       gridHeight,
       schematicFilename: `${project.name.toLowerCase().replace(/\s+/g, '-')}.kicad_sch`,
     })
-  }, [selectedBlocks, project?.name, project?.description, spec?.finalSpec, blockDefinitions, gridWidth, gridHeight])
-
+  }, [
+    selectedBlocks,
+    project?.name,
+    project?.description,
+    spec?.finalSpec,
+    blockDefinitions,
+    gridWidth,
+    gridHeight,
+  ])
 
   // Mutation to save PCB data
   const savePCBMutation = useMutation({
@@ -290,7 +293,11 @@ export function PCBStageView() {
       )
 
       // Merge schematic
-      const schematicResult = await mergeBlockSchematics(selectedBlocks, selectedBlockData, project.name)
+      const schematicResult = await mergeBlockSchematics(
+        selectedBlocks,
+        selectedBlockData,
+        project.name
+      )
 
       // Merge PCB layout
       let pcbData: string | undefined
@@ -302,7 +309,7 @@ export function PCBStageView() {
 
         if (blocksWithoutPcb.length > 0) {
           logger.warn('pcb', 'Some blocks missing PCB files', {
-            missing: blocksWithoutPcb.map((b) => b.slug)
+            missing: blocksWithoutPcb.map((b) => b.slug),
           })
         }
 
@@ -560,8 +567,8 @@ export function PCBStageView() {
               {/* Board size info */}
               {boardSize && boardSize.width > 0 && (
                 <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded font-mono">
-                  {boardSize.widthMm.toFixed(1)}×{boardSize.heightMm.toFixed(1)}mm ({boardSize.width}×{boardSize.height}{' '}
-                  units)
+                  {boardSize.widthMm.toFixed(1)}×{boardSize.heightMm.toFixed(1)}mm (
+                  {boardSize.width}×{boardSize.height} units)
                 </span>
               )}
 

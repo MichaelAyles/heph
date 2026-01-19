@@ -11,6 +11,7 @@ PHAESTUS has an orchestrator - a multi-agent system that guides users through ha
 3. **Runtime state** - The LLM decides what to do next based on conversation history
 
 For debugging, you needed to:
+
 - Read the hardcoded prompt to understand the schema
 - Check the database to see if an override exists
 - Watch the conversation history to understand flow
@@ -46,6 +47,7 @@ What if the entire orchestration graph lived in the database?
 ```
 
 Now admins can:
+
 - Add new nodes without deployment
 - Edit transition conditions in the UI
 - Set iteration limits on review loops
@@ -79,17 +81,21 @@ ALTER TABLE orchestrator_edges ADD COLUMN max_loops INTEGER;
 The `context_selector` field specifies what data from `ProjectSpec` gets passed to each prompt. Patterns supported:
 
 ```typescript
-buildContextFromSelector(spec, ['*'])                    // All fields
-buildContextFromSelector(spec, ['description'])          // Single field
-buildContextFromSelector(spec, ['feasibility.score'])    // Nested path
-buildContextFromSelector(spec, ['decisions[*].answer'])  // Array extraction
-buildContextFromSelector(spec, ['*', '!stages'])         // Exclude field
+buildContextFromSelector(spec, ['*']) // All fields
+buildContextFromSelector(spec, ['description']) // Single field
+buildContextFromSelector(spec, ['feasibility.score']) // Nested path
+buildContextFromSelector(spec, ['decisions[*].answer']) // Array extraction
+buildContextFromSelector(spec, ['*', '!stages']) // Exclude field
 ```
 
 The implementation walks the spec object and builds a context:
 
 ```typescript
-function extractAndSet(source: Record<string, unknown>, pattern: string, target: Record<string, unknown>) {
+function extractAndSet(
+  source: Record<string, unknown>,
+  pattern: string,
+  target: Record<string, unknown>
+) {
   const arrayMatch = pattern.match(/^([^[]+)\[([^\]]+)\](.*)$/)
 
   if (arrayMatch) {
@@ -98,7 +104,7 @@ function extractAndSet(source: Record<string, unknown>, pattern: string, target:
 
     if (indexPattern === '*') {
       // Extract from all elements
-      const extracted = array.map(item => getByPath(item, remainder))
+      const extracted = array.map((item) => getByPath(item, remainder))
       setByPath(target, `${arrayPath}_extracted`, extracted)
     }
   } else {
@@ -118,11 +124,14 @@ Analyze this project:
 {{description}}
 
 {{#if feasibility}}
-Previous analysis scored {{feasibility.overallScore}}/100.
+  Previous analysis scored
+  {{feasibility.overallScore}}/100.
 {{/if}}
 
 {{#each decisions}}
-- {{this.question}}: {{this.answer}}
+  -
+  {{this.question}}:
+  {{this.answer}}
 {{/each}}
 ```
 
@@ -138,11 +147,14 @@ export function renderPromptTemplate(template: string, context: Record<string, u
     (_, path, innerTemplate) => {
       const array = getByPath(context, path)
       if (!Array.isArray(array)) return ''
-      return array.map(item => {
-        return innerTemplate.replace(/\{\{this\.(\w+)\}\}/g, (_, field) =>
-          getByPath(item, field) ?? ''
-        )
-      }).join('')
+      return array
+        .map((item) => {
+          return innerTemplate.replace(
+            /\{\{this\.(\w+)\}\}/g,
+            (_, field) => getByPath(item, field) ?? ''
+          )
+        })
+        .join('')
     }
   )
 
@@ -163,7 +175,7 @@ class EdgeExecutionEngine {
 
   getNextNodes(): string[] {
     const outgoing = this.edges
-      .filter(e => e.fromNode === this.state.currentNode && e.isActive)
+      .filter((e) => e.fromNode === this.state.currentNode && e.isActive)
       .sort((a, b) => b.priority - a.priority)
 
     const valid: string[] = []
@@ -184,10 +196,10 @@ class EdgeExecutionEngine {
 
   evaluateCondition(condition: CompoundCondition): boolean {
     if ('all' in condition) {
-      return condition.all.every(c => this.evaluateCondition(c))
+      return condition.all.every((c) => this.evaluateCondition(c))
     }
     if ('any' in condition) {
-      return condition.any.some(c => this.evaluateCondition(c))
+      return condition.any.some((c) => this.evaluateCondition(c))
     }
     // Simple condition: { field, operator, value }
     const actual = this.getContextValue(condition.field)
@@ -257,12 +269,14 @@ Paste sample JSON, click "Run Test", see exactly what context gets built and how
 ## What Changed
 
 **Before**: Adding a review loop meant:
+
 1. Edit `orchestrator.ts` to add the loop logic
 2. Edit the prompt file to handle feedback
 3. Deploy and test
 4. Hope the LLM understands when to loop
 
 **After**: Adding a review loop means:
+
 1. Create an edge from `review` to `generate` in the admin UI
 2. Set condition: `lastReview.verdict == "revise"`
 3. Set max_loops: 3
@@ -274,6 +288,7 @@ No deployment. No code changes. The graph navigates itself.
 ## The Code
 
 72 new tests covering:
+
 - Context selector patterns (wildcards, nested paths, array extraction)
 - Template rendering (variables, conditionals, loops)
 - Edge condition evaluation (simple, AND, OR)
@@ -285,6 +300,7 @@ Test Files  25 passed (25)
 ```
 
 4,315 lines added across 20 files:
+
 - 3 migrations
 - 4 new services (context-builder, prompt-loader, edge-engine, orchestrator-node schema)
 - 1 new component (NodeTestRunner)

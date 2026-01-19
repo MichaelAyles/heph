@@ -114,15 +114,11 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   // Delete all checkpoints for this thread
-  await env.DB.prepare(
-    'DELETE FROM langgraph_checkpoints_writes WHERE thread_id = ?'
-  )
+  await env.DB.prepare('DELETE FROM langgraph_checkpoints_writes WHERE thread_id = ?')
     .bind(threadId)
     .run()
 
-  const result = await env.DB.prepare(
-    'DELETE FROM langgraph_checkpoints WHERE thread_id = ?'
-  )
+  const result = await env.DB.prepare('DELETE FROM langgraph_checkpoints WHERE thread_id = ?')
     .bind(threadId)
     .run()
 

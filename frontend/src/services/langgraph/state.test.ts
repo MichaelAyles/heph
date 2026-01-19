@@ -34,13 +34,7 @@ describe('createInitialState', () => {
   ]
 
   it('creates state with required fields', () => {
-    const state = createInitialState(
-      'proj-123',
-      'user-456',
-      'fix_it',
-      null,
-      mockBlocks
-    )
+    const state = createInitialState('proj-123', 'user-456', 'fix_it', null, mockBlocks)
 
     expect(state.projectId).toBe('proj-123')
     expect(state.userId).toBe('user-456')
@@ -71,13 +65,7 @@ describe('createInitialState', () => {
       finalSpec: null,
     }
 
-    const state = createInitialState(
-      'proj-123',
-      'user-456',
-      'vibe_it',
-      existingSpec,
-      []
-    )
+    const state = createInitialState('proj-123', 'user-456', 'vibe_it', existingSpec, [])
 
     expect(state.description).toBe('Test device')
     expect(state.feasibility).toBeTruthy()
@@ -92,27 +80,33 @@ describe('createInitialState', () => {
     expect(emptyState.currentStage).toBe('spec')
 
     // With final spec -> pcb stage
-    const withFinalSpec = createInitialState('p1', 'u1', 'fix_it', {
-      description: 'test',
-      feasibility: null,
-      openQuestions: [],
-      decisions: [],
-      blueprints: [],
-      selectedBlueprint: null,
-      finalSpec: {
-        name: 'Test',
-        summary: '',
-        pcbSize: { width: 50, height: 50, unit: 'mm' },
-        inputs: [],
-        outputs: [],
-        power: { source: 'LiPo', voltage: '3.7V', current: '100mA' },
-        communication: { type: 'WiFi', protocol: 'MQTT' },
-        enclosure: { style: 'box', width: 60, height: 60, depth: 30 },
-        estimatedBOM: [],
-        locked: true,
-        lockedAt: '2024-01-01',
+    const withFinalSpec = createInitialState(
+      'p1',
+      'u1',
+      'fix_it',
+      {
+        description: 'test',
+        feasibility: null,
+        openQuestions: [],
+        decisions: [],
+        blueprints: [],
+        selectedBlueprint: null,
+        finalSpec: {
+          name: 'Test',
+          summary: '',
+          pcbSize: { width: 50, height: 50, unit: 'mm' },
+          inputs: [],
+          outputs: [],
+          power: { source: 'LiPo', voltage: '3.7V', current: '100mA' },
+          communication: { type: 'WiFi', protocol: 'MQTT' },
+          enclosure: { style: 'box', width: 60, height: 60, depth: 30 },
+          estimatedBOM: [],
+          locked: true,
+          lockedAt: '2024-01-01',
+        },
       },
-    }, [])
+      []
+    )
     expect(withFinalSpec.currentStage).toBe('pcb')
   })
 })
@@ -213,9 +207,7 @@ describe('stateToProjectSpec', () => {
 
   it('includes firmware artifacts when present', () => {
     const state = createInitialState('p1', 'u1', 'fix_it', null, [])
-    state.firmwareFiles = [
-      { path: 'src/main.cpp', content: 'void setup() {}', language: 'cpp' },
-    ]
+    state.firmwareFiles = [{ path: 'src/main.cpp', content: 'void setup() {}', language: 'cpp' }]
 
     const spec = stateToProjectSpec(state)
 

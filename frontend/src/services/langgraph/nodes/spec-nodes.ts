@@ -125,10 +125,7 @@ export async function analyzeFeasibility(
         feasibility: result.analysis,
         status: 'rejected',
         error: result.rejection_reason ?? 'Project not manufacturable with available components',
-        history: [
-          historyEntry,
-          createHistoryItem(nodeId, 'node_exit', { rejected: true }),
-        ],
+        history: [historyEntry, createHistoryItem(nodeId, 'node_exit', { rejected: true })],
       }
     }
 
@@ -154,10 +151,7 @@ export async function analyzeFeasibility(
     return {
       status: 'error',
       error: error instanceof Error ? error.message : 'Feasibility analysis failed',
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -190,9 +184,7 @@ export async function collectAnswers(
         options: state.openQuestions[0]?.options ?? [],
         allowCustom: true,
       },
-      history: [
-        createHistoryItem(nodeId, 'node_enter', { awaitingInput: true }),
-      ],
+      history: [createHistoryItem(nodeId, 'node_enter', { awaitingInput: true })],
     }
   }
 
@@ -225,10 +217,7 @@ export async function collectAnswers(
     return {
       status: 'error',
       error: error instanceof Error ? error.message : 'Failed to collect answers',
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -340,10 +329,7 @@ export async function checkMoreQuestions(
       // No JSON means no more questions needed
       return {
         openQuestions: [],
-        history: [
-          historyEntry,
-          createHistoryItem(nodeId, 'node_exit', { complete: true }),
-        ],
+        history: [historyEntry, createHistoryItem(nodeId, 'node_exit', { complete: true })],
       }
     }
 
@@ -452,10 +438,7 @@ export async function generateBlueprints(
     return {
       status: 'error',
       error: error instanceof Error ? error.message : 'Blueprint generation failed',
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -482,9 +465,7 @@ export async function selectBlueprint(
         options: state.blueprints.map((_, i) => `Blueprint ${i + 1}`),
         allowCustom: false,
       },
-      history: [
-        createHistoryItem(nodeId, 'node_enter', { awaitingInput: true }),
-      ],
+      history: [createHistoryItem(nodeId, 'node_enter', { awaitingInput: true })],
     }
   }
 
@@ -529,9 +510,7 @@ export async function processBlueprintSelection(
     userInputRequest: null,
     userInputResponse: null,
     status: 'running',
-    history: [
-      createHistoryItem(nodeId, 'user_input', { selected: index }),
-    ],
+    history: [createHistoryItem(nodeId, 'user_input', { selected: index })],
   }
 }
 
@@ -562,11 +541,7 @@ export async function generateNames(
           ],
         }
       : {}
-    const userPrompt = buildNamingPrompt(
-      state.description,
-      feasibilityForNaming,
-      state.decisions
-    )
+    const userPrompt = buildNamingPrompt(state.description, feasibilityForNaming, state.decisions)
 
     const response = await llm.chat({
       messages: [
@@ -581,9 +556,7 @@ export async function generateNames(
     if (!jsonMatch) {
       // Fallback to generic name
       return {
-        generatedNames: [
-          { name: 'HardwareProject', style: 'generic', reasoning: 'Fallback name' },
-        ],
+        generatedNames: [{ name: 'HardwareProject', style: 'generic', reasoning: 'Fallback name' }],
         history: [
           historyEntry,
           createHistoryItem(nodeId, 'node_exit', { count: 1, fallback: true }),
@@ -605,13 +578,8 @@ export async function generateNames(
     }
   } catch (error) {
     return {
-      generatedNames: [
-        { name: 'HardwareProject', style: 'generic', reasoning: 'Error fallback' },
-      ],
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      generatedNames: [{ name: 'HardwareProject', style: 'generic', reasoning: 'Error fallback' }],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }
@@ -635,9 +603,7 @@ export async function selectName(
         options: state.generatedNames.map((n) => n.name),
         allowCustom: true,
       },
-      history: [
-        createHistoryItem(nodeId, 'node_enter', { awaitingInput: true }),
-      ],
+      history: [createHistoryItem(nodeId, 'node_enter', { awaitingInput: true })],
     }
   }
 
@@ -678,9 +644,7 @@ export async function processNameSelection(
     userInputRequest: null,
     userInputResponse: null,
     status: 'running',
-    history: [
-      createHistoryItem(nodeId, 'user_input', { selected: selection }),
-    ],
+    history: [createHistoryItem(nodeId, 'user_input', { selected: selection })],
   }
 }
 
@@ -746,10 +710,7 @@ export async function finalizeSpec(
     return {
       status: 'error',
       error: error instanceof Error ? error.message : 'Spec finalization failed',
-      history: [
-        historyEntry,
-        createHistoryItem(nodeId, 'error', { error: String(error) }),
-      ],
+      history: [historyEntry, createHistoryItem(nodeId, 'error', { error: String(error) })],
     }
   }
 }

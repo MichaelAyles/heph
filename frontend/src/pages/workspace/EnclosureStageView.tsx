@@ -74,7 +74,8 @@ export function EnclosureStageView() {
   // Visual validation state
   const [showComparison, setShowComparison] = useState(false)
   const [renderScreenshot, setRenderScreenshot] = useState<string | null>(null)
-  const [visualValidationResult, setVisualValidationResult] = useState<VisualValidationResult | null>(null)
+  const [visualValidationResult, setVisualValidationResult] =
+    useState<VisualValidationResult | null>(null)
   const [isVisualValidating, setIsVisualValidating] = useState(false)
 
   // AbortController for cancelling in-flight operations
@@ -176,13 +177,13 @@ export function EnclosureStageView() {
       const pcbHeight = pcbArtifacts?.boardSize?.height ?? 40
 
       // Check for components
-      const hasOled = finalSpec?.outputs?.some((o) =>
-        o.type.toLowerCase().includes('oled') || o.type.toLowerCase().includes('display')
-      ) ?? false
+      const hasOled =
+        finalSpec?.outputs?.some(
+          (o) => o.type.toLowerCase().includes('oled') || o.type.toLowerCase().includes('display')
+        ) ?? false
       const hasUsb = true // Always has USB-C
-      const hasButtons = finalSpec?.inputs?.some((i) =>
-        i.type.toLowerCase().includes('button')
-      ) ?? false
+      const hasButtons =
+        finalSpec?.inputs?.some((i) => i.type.toLowerCase().includes('button')) ?? false
 
       const validationPrompt = buildValidationPrompt(code, {
         pcbWidth,
@@ -312,7 +313,9 @@ export function EnclosureStageView() {
       // Step 2: Validation loop
       for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
         setValidationIteration(iteration)
-        setValidationStatus(`Validating design (iteration ${iteration}/${MAX_VALIDATION_ITERATIONS})...`)
+        setValidationStatus(
+          `Validating design (iteration ${iteration}/${MAX_VALIDATION_ITERATIONS})...`
+        )
 
         const issues = await validateCode(code)
         const criticalIssues = issues.filter((i) => i.severity === 'critical')
@@ -400,7 +403,9 @@ export function EnclosureStageView() {
       // Step 2: Validation loop
       for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
         setValidationIteration(iteration)
-        setValidationStatus(`Validating regenerated design (iteration ${iteration}/${MAX_VALIDATION_ITERATIONS})...`)
+        setValidationStatus(
+          `Validating regenerated design (iteration ${iteration}/${MAX_VALIDATION_ITERATIONS})...`
+        )
 
         const issues = await validateCode(code)
         const criticalIssues = issues.filter((i) => i.severity === 'critical')
@@ -444,7 +449,17 @@ export function EnclosureStageView() {
         setIsGenerating(false)
       }
     }
-  }, [project, spec, pcbArtifacts, finalSpec, openScadCode, feedback, saveEnclosureMutation, validateCode, fixCode])
+  }, [
+    project,
+    spec,
+    pcbArtifacts,
+    finalSpec,
+    openScadCode,
+    feedback,
+    saveEnclosureMutation,
+    validateCode,
+    fixCode,
+  ])
 
   // Perform visual validation by comparing render to blueprint
   const performVisualValidation = useCallback(async () => {
@@ -510,14 +525,11 @@ export function EnclosureStageView() {
   }, [])
 
   // Handle regenerating with visual validation feedback
-  const handleRegenerateFromComparison = useCallback(
-    (feedbackFromValidation: string) => {
-      setShowComparison(false)
-      setFeedback(feedbackFromValidation)
-      // User can then click "Regenerate" with the pre-filled feedback
-    },
-    []
-  )
+  const handleRegenerateFromComparison = useCallback((feedbackFromValidation: string) => {
+    setShowComparison(false)
+    setFeedback(feedbackFromValidation)
+    // User can then click "Regenerate" with the pre-filled feedback
+  }, [])
 
   // Render OpenSCAD to STL
   const handleRender = useCallback(async () => {

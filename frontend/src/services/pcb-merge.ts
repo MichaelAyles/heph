@@ -538,9 +538,9 @@ async function fetchBlockPcb(slug: string): Promise<string> {
  * Net mapping result with both ID and name
  */
 interface NetMappingResult {
-  globalNets: Map<string, number>       // globalNetName -> globalNetId
-  netMapping: Map<string, number>       // "blockSlug:localNetName" -> globalNetId
-  netNameMapping: Map<string, string>   // "blockSlug:localNetName" -> globalNetName
+  globalNets: Map<string, number> // globalNetName -> globalNetId
+  netMapping: Map<string, number> // "blockSlug:localNetName" -> globalNetId
+  netNameMapping: Map<string, string> // "blockSlug:localNetName" -> globalNetName
 }
 
 /**
@@ -548,18 +548,39 @@ interface NetMappingResult {
  * Returns maps for both ID and name lookups
  */
 function buildPcbNetMapping(loadedBlocks: LoadedPcbBlock[]): NetMappingResult {
-  const globalNets = new Map<string, number>()       // globalNetName -> globalNetId
-  const netMapping = new Map<string, number>()       // "blockSlug:localNetName" -> globalNetId
-  const netNameMapping = new Map<string, string>()   // "blockSlug:localNetName" -> globalNetName
+  const globalNets = new Map<string, number>() // globalNetName -> globalNetId
+  const netMapping = new Map<string, number>() // "blockSlug:localNetName" -> globalNetId
+  const netNameMapping = new Map<string, string>() // "blockSlug:localNetName" -> globalNetName
   let nextNetId = 1
 
   // Standard bus signals that should be shared across all blocks
   const busSignals = [
-    'GND', 'V3V3', '3V3', 'VBUS', '5V0',
-    'I2C0_SDA', 'I2C0_SCL', 'I2C1_SDA', 'I2C1_SCL',
-    'SPI0_MOSI', 'SPI0_MISO', 'SPI0_SCK', 'SPI0_CS',
-    'GPIO_0', 'GPIO_1', 'GPIO_2', 'GPIO_3', 'GPIO_4', 'GPIO_5', 'GPIO_6', 'GPIO_7',
-    'AUX_0', 'AUX_1', 'AUX_2', 'AUX_3', 'AUX_4',
+    'GND',
+    'V3V3',
+    '3V3',
+    'VBUS',
+    '5V0',
+    'I2C0_SDA',
+    'I2C0_SCL',
+    'I2C1_SDA',
+    'I2C1_SCL',
+    'SPI0_MOSI',
+    'SPI0_MISO',
+    'SPI0_SCK',
+    'SPI0_CS',
+    'GPIO_0',
+    'GPIO_1',
+    'GPIO_2',
+    'GPIO_3',
+    'GPIO_4',
+    'GPIO_5',
+    'GPIO_6',
+    'GPIO_7',
+    'AUX_0',
+    'AUX_1',
+    'AUX_2',
+    'AUX_3',
+    'AUX_4',
   ]
 
   // Reserve net 0 for unconnected
@@ -610,7 +631,7 @@ function getGlobalNet(
   netMapping: Map<string, number>,
   netNameMapping: Map<string, string>
 ): { id: number; name: string } {
-  const localNet = localNets.find(n => n.id === localNetId)
+  const localNet = localNets.find((n) => n.id === localNetId)
   const localNetName = localNet?.name || ''
   const key = `${blockSlug}:${localNetName}`
   return {
@@ -641,7 +662,7 @@ function transformFootprint(
   }
 
   // Update reference designator to be unique
-  const refProp = footprint.properties?.find(p => p.key === 'Reference')
+  const refProp = footprint.properties?.find((p) => p.key === 'Reference')
   if (refProp && refProp.value) {
     refProp.value = `${refProp.value}_${blockSlug}`
   }
@@ -664,31 +685,43 @@ function transformFootprint(
 
   // Helper to check if a layer is silkscreen
   const isSilkscreen = (layer: { names?: string[] } | undefined) =>
-    layer?.names?.some(n => n === 'F.SilkS' || n === 'B.SilkS') ?? false
+    layer?.names?.some((n) => n === 'F.SilkS' || n === 'B.SilkS') ?? false
 
   // Filter fp_lines
   if (fpAny._fpLines) {
-    fpAny._fpLines = fpAny._fpLines.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    fpAny._fpLines = fpAny._fpLines.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   // Filter fp_texts
   if (fpAny._fpTexts) {
-    fpAny._fpTexts = fpAny._fpTexts.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    fpAny._fpTexts = fpAny._fpTexts.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   // Filter fp_circles
   if (fpAny._fpCircles) {
-    fpAny._fpCircles = fpAny._fpCircles.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    fpAny._fpCircles = fpAny._fpCircles.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   // Filter fp_arcs
   if (fpAny._fpArcs) {
-    fpAny._fpArcs = fpAny._fpArcs.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    fpAny._fpArcs = fpAny._fpArcs.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   // Filter fp_rects
   if (fpAny._fpRects) {
-    fpAny._fpRects = fpAny._fpRects.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    fpAny._fpRects = fpAny._fpRects.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   // Filter fp_polys
   if (fpAny._fpPolys) {
-    fpAny._fpPolys = fpAny._fpPolys.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    fpAny._fpPolys = fpAny._fpPolys.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
 
   return footprint
@@ -726,7 +759,7 @@ function transformSegment(
     segment.net.id = globalNet.id
     // Segments also have net name in some versions
     if ('name' in segment.net) {
-      (segment.net as { id?: number; name?: string }).name = globalNet.name
+      ;(segment.net as { id?: number; name?: string }).name = globalNet.name
     }
   }
 
@@ -759,7 +792,7 @@ function transformVia(
     via.net.id = globalNet.id
     // Vias also have net name in some versions
     if ('name' in via.net) {
-      (via.net as { id?: number; name?: string }).name = globalNet.name
+      ;(via.net as { id?: number; name?: string }).name = globalNet.name
     }
   }
 
@@ -788,40 +821,45 @@ function transformGrLine(line: GrLine, offsetX: number, offsetY: number): GrLine
 /**
  * Generate board outline for merged PCB
  */
-function generateBoardOutline(
-  boardWidth: number,
-  boardHeight: number
-): GrLine[] {
+function generateBoardOutline(boardWidth: number, boardHeight: number): GrLine[] {
   const lines: GrLine[] = []
   const layer = 'Edge.Cuts'
 
   // Top edge
-  lines.push(new GrLine({
-    start: new Xy(0, 0),
-    end: new Xy(boardWidth, 0),
-    layer,
-  }))
+  lines.push(
+    new GrLine({
+      start: new Xy(0, 0),
+      end: new Xy(boardWidth, 0),
+      layer,
+    })
+  )
 
   // Right edge
-  lines.push(new GrLine({
-    start: new Xy(boardWidth, 0),
-    end: new Xy(boardWidth, boardHeight),
-    layer,
-  }))
+  lines.push(
+    new GrLine({
+      start: new Xy(boardWidth, 0),
+      end: new Xy(boardWidth, boardHeight),
+      layer,
+    })
+  )
 
   // Bottom edge
-  lines.push(new GrLine({
-    start: new Xy(boardWidth, boardHeight),
-    end: new Xy(0, boardHeight),
-    layer,
-  }))
+  lines.push(
+    new GrLine({
+      start: new Xy(boardWidth, boardHeight),
+      end: new Xy(0, boardHeight),
+      layer,
+    })
+  )
 
   // Left edge
-  lines.push(new GrLine({
-    start: new Xy(0, boardHeight),
-    end: new Xy(0, 0),
-    layer,
-  }))
+  lines.push(
+    new GrLine({
+      start: new Xy(0, boardHeight),
+      end: new Xy(0, 0),
+      layer,
+    })
+  )
 
   return lines
 }
@@ -874,7 +912,7 @@ export async function mergeBlockPCBs(
       logger.info('pcb', `Parsed PCB for ${placed.blockSlug}`, {
         footprints: pcb.footprints?.length,
         nets: pcb.nets?.length,
-        segments: pcb.segments?.length
+        segments: pcb.segments?.length,
       })
       const offset = calculateBlockOffset(placed.gridX, placed.gridY)
 
@@ -890,7 +928,7 @@ export async function mergeBlockPCBs(
       const errorStack = error instanceof Error ? error.stack : undefined
       logger.error('pcb', `Failed to load PCB for ${placed.blockSlug}`, {
         error: errorMsg,
-        stack: errorStack
+        stack: errorStack,
       })
       // Re-throw to propagate the error
       throw new Error(`Failed to load PCB for ${placed.blockSlug}: ${errorMsg}`)
@@ -1023,24 +1061,34 @@ export async function mergeBlockPCBs(
 
   // Helper to check if layer is silkscreen
   const isSilkscreen = (layer: { names?: string[] } | undefined) =>
-    layer?.names?.some(n => n === 'F.SilkS' || n === 'B.SilkS') ?? false
+    layer?.names?.some((n) => n === 'F.SilkS' || n === 'B.SilkS') ?? false
 
   // Filter other graphic elements from silkscreen
   // Note: kicadts stores these in internal _gr* arrays
   if (pcbAny._grTexts) {
-    pcbAny._grTexts = pcbAny._grTexts.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    pcbAny._grTexts = pcbAny._grTexts.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   if (pcbAny._grArcs) {
-    pcbAny._grArcs = pcbAny._grArcs.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    pcbAny._grArcs = pcbAny._grArcs.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   if (pcbAny._grCircles) {
-    pcbAny._grCircles = pcbAny._grCircles.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    pcbAny._grCircles = pcbAny._grCircles.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   if (pcbAny._grRects) {
-    pcbAny._grRects = pcbAny._grRects.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    pcbAny._grRects = pcbAny._grRects.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
   if (pcbAny._grPolys) {
-    pcbAny._grPolys = pcbAny._grPolys.filter((el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer))
+    pcbAny._grPolys = pcbAny._grPolys.filter(
+      (el: { layer?: { names?: string[] } }) => !isSilkscreen(el.layer)
+    )
   }
 
   // Get PCB output

@@ -175,12 +175,10 @@ function buildManifest() {
   ensureDirectories()
 
   // Get all blog directories (blog0001, blog0004, etc.)
-  const dirs = fs
-    .readdirSync(BLOGS_DIR)
-    .filter((f) => {
-      const fullPath = path.join(BLOGS_DIR, f)
-      return fs.statSync(fullPath).isDirectory() && f.startsWith('blog')
-    })
+  const dirs = fs.readdirSync(BLOGS_DIR).filter((f) => {
+    const fullPath = path.join(BLOGS_DIR, f)
+    return fs.statSync(fullPath).isDirectory() && f.startsWith('blog')
+  })
 
   console.log(`Found ${dirs.length} blog directories`)
 

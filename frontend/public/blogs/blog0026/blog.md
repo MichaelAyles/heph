@@ -9,14 +9,14 @@ The orchestrator treated stages as isolated button presses. You'd complete the P
 
 ## The Solution
 
-**StageCompletionSummary** - a collapsible inline panel that appears at the top of each stage view, showing what the *previous* stage produced.
+**StageCompletionSummary** - a collapsible inline panel that appears at the top of each stage view, showing what the _previous_ stage produced.
 
-| Stage | Shows |
-|-------|-------|
-| PCB | Spec summary, blueprint, I/O count |
+| Stage     | Shows                                    |
+| --------- | ---------------------------------------- |
+| PCB       | Spec summary, blueprint, I/O count       |
 | Enclosure | PCB layout, board dimensions, block list |
-| Firmware | Enclosure model, iteration count |
-| Export | Firmware file list, line count |
+| Firmware  | Enclosure model, iteration count         |
+| Export    | Firmware file list, line count           |
 
 ## Key Design Decisions
 
@@ -29,7 +29,7 @@ The summary panel is **collapsed by default** and doesn't block navigation:
   stage="spec"
   spec={spec}
   projectId={project?.id || ''}
-  isExpanded={false}  // Start collapsed
+  isExpanded={false} // Start collapsed
 />
 ```
 
@@ -41,30 +41,36 @@ Each summary includes actual artifact previews where possible:
 
 ```tsx
 // For PCB stage showing spec summary
-{preview.type === 'image' && preview.url && (
-  <img src={preview.url} alt={preview.label} className="w-full h-full object-cover" />
-)}
+{
+  preview.type === 'image' && preview.url && (
+    <img src={preview.url} alt={preview.label} className="w-full h-full object-cover" />
+  )
+}
 
 // For enclosure stage showing PCB
-{preview.type === 'pcb3d' && blocks && spec.pcb?.placedBlocks && (
-  <PCB3DViewer
-    boardSize={spec.pcb?.boardSize}
-    placedBlocks={spec.pcb.placedBlocks}
-    blocks={blocks}
-    className="w-full h-full"
-  />
-)}
+{
+  preview.type === 'pcb3d' && blocks && spec.pcb?.placedBlocks && (
+    <PCB3DViewer
+      boardSize={spec.pcb?.boardSize}
+      placedBlocks={spec.pcb.placedBlocks}
+      blocks={blocks}
+      className="w-full h-full"
+    />
+  )
+}
 
 // For firmware stage showing enclosure
-{preview.type === 'stl' && preview.url && (
-  <STLViewer
-    src={preview.url}
-    className="w-full h-full"
-    color="#8B7355"
-    showGrid={false}
-    autoRotate={true}
-  />
-)}
+{
+  preview.type === 'stl' && preview.url && (
+    <STLViewer
+      src={preview.url}
+      className="w-full h-full"
+      color="#8B7355"
+      showGrid={false}
+      autoRotate={true}
+    />
+  )
+}
 ```
 
 ### Dynamic Summary Generation
@@ -98,18 +104,20 @@ case 'pcb': {
 The summary header includes a "Continue to X" button:
 
 ```tsx
-{nextStage && (
-  <button
-    onClick={(e) => {
-      e.stopPropagation()
-      navigate(`/project/${projectId}/${nextStage}`)
-    }}
-    className="text-xs text-copper hover:text-copper-light flex items-center gap-1"
-  >
-    Continue to {getStageLabel(nextStage)}
-    <ArrowRight className="w-3 h-3" />
-  </button>
-)}
+{
+  nextStage && (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        navigate(`/project/${projectId}/${nextStage}`)
+      }}
+      className="text-xs text-copper hover:text-copper-light flex items-center gap-1"
+    >
+      Continue to {getStageLabel(nextStage)}
+      <ArrowRight className="w-3 h-3" />
+    </button>
+  )
+}
 ```
 
 ## Integration Pattern
@@ -118,29 +126,35 @@ Each stage view conditionally renders the summary:
 
 ```tsx
 // PCBStageView.tsx - shows spec summary
-{spec?.stages?.spec?.status === 'complete' && spec?.finalSpec && (
-  <div className="px-4 pt-4">
-    <StageCompletionSummary stage="spec" spec={spec} projectId={project?.id || ''} />
-  </div>
-)}
+{
+  spec?.stages?.spec?.status === 'complete' && spec?.finalSpec && (
+    <div className="px-4 pt-4">
+      <StageCompletionSummary stage="spec" spec={spec} projectId={project?.id || ''} />
+    </div>
+  )
+}
 
 // EnclosureStageView.tsx - shows PCB summary (needs blocks data)
 const { data: blocksData } = useQuery({
   queryKey: ['blocks'],
-  queryFn: async () => { /* ... */ },
+  queryFn: async () => {
+    /* ... */
+  },
   enabled: pcbComplete,
 })
 
-{spec?.stages?.pcb?.status === 'complete' && spec?.pcb && (
-  <div className="px-4 pt-4">
-    <StageCompletionSummary
-      stage="pcb"
-      spec={spec}
-      projectId={project?.id || ''}
-      blocks={blocksData?.blocks}
-    />
-  </div>
-)}
+{
+  spec?.stages?.pcb?.status === 'complete' && spec?.pcb && (
+    <div className="px-4 pt-4">
+      <StageCompletionSummary
+        stage="pcb"
+        spec={spec}
+        projectId={project?.id || ''}
+        blocks={blocksData?.blocks}
+      />
+    </div>
+  )
+}
 ```
 
 ## UI Styling
@@ -159,13 +173,13 @@ This contrasts with copper (in-progress) and surface colors (pending).
 
 ## Files Changed
 
-| File | Changes |
-|------|---------|
-| `StageCompletionSummary.tsx` | New 380-line component |
-| `PCBStageView.tsx` | +import, +summary section |
-| `EnclosureStageView.tsx` | +import, +blocks query, +summary |
-| `FirmwareStageView.tsx` | +import, +spec variable, +summary |
-| `ExportStageView.tsx` | +import, +spec variable, +summary |
+| File                         | Changes                           |
+| ---------------------------- | --------------------------------- |
+| `StageCompletionSummary.tsx` | New 380-line component            |
+| `PCBStageView.tsx`           | +import, +summary section         |
+| `EnclosureStageView.tsx`     | +import, +blocks query, +summary  |
+| `FirmwareStageView.tsx`      | +import, +spec variable, +summary |
+| `ExportStageView.tsx`        | +import, +spec variable, +summary |
 
 ## What's Next
 

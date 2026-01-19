@@ -76,9 +76,13 @@ export function convertToGeminiFormat(messages: ChatMessage[]): GeminiContent[] 
     if (msg.role === 'system') {
       // Gemini doesn't support system role, prepend as user message with model acknowledgment
       // System messages are always text-only
-      const systemText = typeof msg.content === 'string'
-        ? msg.content
-        : msg.content.filter(p => p.type === 'text').map(p => (p as TextContent).text).join('\n')
+      const systemText =
+        typeof msg.content === 'string'
+          ? msg.content
+          : msg.content
+              .filter((p) => p.type === 'text')
+              .map((p) => (p as TextContent).text)
+              .join('\n')
       result.unshift({ role: 'user', parts: [{ text: systemText }] })
       result.splice(1, 0, { role: 'model', parts: [{ text: 'Understood.' }] })
     } else {

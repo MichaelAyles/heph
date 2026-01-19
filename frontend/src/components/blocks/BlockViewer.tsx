@@ -70,12 +70,36 @@ const WIRELESS_CONFIG: Record<string, { icon: LucideIcon; label: string; color: 
   wifi4: { icon: Wifi, label: 'WiFi 4', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   wifi5: { icon: Wifi, label: 'WiFi 5', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   wifi6: { icon: Wifi, label: 'WiFi 6', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  ble4: { icon: Bluetooth, label: 'BLE 4', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
-  ble5: { icon: Bluetooth, label: 'BLE 5', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
-  zigbee: { icon: Radio, label: 'Zigbee', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  thread: { icon: Radio, label: 'Thread', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  lora: { icon: Radio, label: 'LoRa', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  nfc: { icon: Radio, label: 'NFC', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  ble4: {
+    icon: Bluetooth,
+    label: 'BLE 4',
+    color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  },
+  ble5: {
+    icon: Bluetooth,
+    label: 'BLE 5',
+    color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  },
+  zigbee: {
+    icon: Radio,
+    label: 'Zigbee',
+    color: 'bg-green-500/20 text-green-400 border-green-500/30',
+  },
+  thread: {
+    icon: Radio,
+    label: 'Thread',
+    color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  },
+  lora: {
+    icon: Radio,
+    label: 'LoRa',
+    color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  },
+  nfc: {
+    icon: Radio,
+    label: 'NFC',
+    color: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  },
   uwb: { icon: Radio, label: 'UWB', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
 }
 
@@ -135,7 +159,9 @@ export function BlockViewer({ block, editable = false, onSave, className }: Bloc
               <span className="text-steel-dim text-sm">v{definition.version}</span>
               <div className="flex items-center gap-1 text-steel-dim text-sm">
                 <Grid3X3 className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span>{definition.gridSize[0]}×{definition.gridSize[1]}</span>
+                <span>
+                  {definition.gridSize[0]}×{definition.gridSize[1]}
+                </span>
               </div>
             </div>
 
@@ -246,7 +272,9 @@ export function BlockViewer({ block, editable = false, onSave, className }: Bloc
 // =============================================================================
 
 function BusInterfaceTab({ definition }: { definition: BlockDefinition }) {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['taps', 'permanent', 'power']))
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(['taps', 'permanent', 'power'])
+  )
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => {
@@ -305,7 +333,12 @@ function BusInterfaceTab({ definition }: { definition: BlockDefinition }) {
                     </td>
                     <td className="py-2">
                       {tap.voltage?.direction && (
-                        <span className={clsx('text-xs font-medium', DIRECTION_LABELS[tap.voltage.direction]?.color)}>
+                        <span
+                          className={clsx(
+                            'text-xs font-medium',
+                            DIRECTION_LABELS[tap.voltage.direction]?.color
+                          )}
+                        >
                           {DIRECTION_LABELS[tap.voltage.direction]?.label}
                         </span>
                       )}
@@ -354,7 +387,12 @@ function BusInterfaceTab({ definition }: { definition: BlockDefinition }) {
                     </td>
                     <td className="py-2">
                       {conn.voltage?.direction && (
-                        <span className={clsx('text-xs font-medium', DIRECTION_LABELS[conn.voltage.direction]?.color)}>
+                        <span
+                          className={clsx(
+                            'text-xs font-medium',
+                            DIRECTION_LABELS[conn.voltage.direction]?.color
+                          )}
+                        >
                           {DIRECTION_LABELS[conn.voltage.direction]?.label}
                         </span>
                       )}
@@ -468,10 +506,7 @@ function EdgesTab({ definition }: { definition: BlockDefinition }) {
       <h4 className="text-sm font-medium text-white mb-3 capitalize">{direction} Edge</h4>
       <div className="flex gap-2">
         {connections.map((conn, i) => (
-          <div
-            key={i}
-            className="flex-1 bg-surface-800 rounded-lg p-3 border border-surface-600"
-          >
+          <div key={i} className="flex-1 bg-surface-800 rounded-lg p-3 border border-surface-600">
             <div className="text-xs text-steel-dim mb-1">Column {i + 1}</div>
             {conn.connector && (
               <div className="font-mono text-copper text-sm">{conn.connector}</div>
@@ -816,26 +851,51 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
   }
 
   const fileList = [
-    { key: 'schematic', label: 'Schematic', file: files.schematic, ext: '.kicad_sch', accept: '.kicad_sch' },
+    {
+      key: 'schematic',
+      label: 'Schematic',
+      file: files.schematic,
+      ext: '.kicad_sch',
+      accept: '.kicad_sch',
+    },
     { key: 'pcb', label: 'PCB Layout', file: files.pcb, ext: '.kicad_pcb', accept: '.kicad_pcb' },
-    { key: 'stepModel', label: '3D Model', file: files.stepModel, ext: '.step', accept: '.step,.stp' },
-    { key: 'blockJson', label: 'Block Definition', file: files.blockJson, ext: '.json', accept: '.json' },
-    { key: 'thumbnail', label: 'Thumbnail', file: files.thumbnail, ext: '.png', accept: '.png,.jpg,.jpeg' },
+    {
+      key: 'stepModel',
+      label: '3D Model',
+      file: files.stepModel,
+      ext: '.step',
+      accept: '.step,.stp',
+    },
+    {
+      key: 'blockJson',
+      label: 'Block Definition',
+      file: files.blockJson,
+      ext: '.json',
+      accept: '.json',
+    },
+    {
+      key: 'thumbnail',
+      label: 'Thumbnail',
+      file: files.thumbnail,
+      ext: '.png',
+      accept: '.png,.jpg,.jpeg',
+    },
   ]
 
   return (
     <div className="space-y-6">
       {/* Hidden file inputs for replacement */}
-      {editable && fileList.map(({ key, accept }) => (
-        <input
-          key={`input-${key}`}
-          ref={fileInputRefs[key as keyof typeof fileInputRefs]}
-          type="file"
-          accept={accept}
-          onChange={handleFileInputChange(key)}
-          className="hidden"
-        />
-      ))}
+      {editable &&
+        fileList.map(({ key, accept }) => (
+          <input
+            key={`input-${key}`}
+            ref={fileInputRefs[key as keyof typeof fileInputRefs]}
+            type="file"
+            accept={accept}
+            onChange={handleFileInputChange(key)}
+            className="hidden"
+          />
+        ))}
 
       {/* File list */}
       <div className="grid grid-cols-2 gap-3">
@@ -868,7 +928,9 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
                     {/* Upload/Replace button */}
                     {editable && (
                       <button
-                        onClick={() => fileInputRefs[key as keyof typeof fileInputRefs].current?.click()}
+                        onClick={() =>
+                          fileInputRefs[key as keyof typeof fileInputRefs].current?.click()
+                        }
                         className="p-1.5 text-steel hover:text-copper transition-colors"
                         title={file ? 'Replace' : 'Upload'}
                       >

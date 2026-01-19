@@ -68,15 +68,16 @@ function buildProjectTree(spec: ProjectSpec): ProjectFileNode[] {
 
 The preview panel intelligently switches viewers based on file type:
 
-| Extension | Preview Type | Component |
-|-----------|--------------|-----------|
-| `.kicad_sch` | KiCanvas | Interactive schematic viewer |
-| `.stl` | STLViewer | 3D model with orbit controls |
-| `.png`, `.jpg` | Image | Standard img tag |
-| `.scad`, `.json`, `.csv` | Code | Syntax-highlighted block |
-| `.md` | Markdown | Formatted prose |
+| Extension                | Preview Type | Component                    |
+| ------------------------ | ------------ | ---------------------------- |
+| `.kicad_sch`             | KiCanvas     | Interactive schematic viewer |
+| `.stl`                   | STLViewer    | 3D model with orbit controls |
+| `.png`, `.jpg`           | Image        | Standard img tag             |
+| `.scad`, `.json`, `.csv` | Code         | Syntax-highlighted block     |
+| `.md`                    | Markdown     | Formatted prose              |
 
 The KiCanvas integration uses data URLs for inline content:
+
 ```typescript
 const dataUrl = `data:text/plain;base64,${btoa(content)}`
 <KiCanvasViewer url={dataUrl} />
@@ -85,6 +86,7 @@ const dataUrl = `data:text/plain;base64,${btoa(content)}`
 ### Smart Actions
 
 Each file gets contextual actions:
+
 - **Copy** - One-click clipboard copy for text content
 - **Download** - Browser download with proper MIME type
 - **Open in Viewer** - Deep link to full-screen preview (future)
@@ -109,8 +111,11 @@ getStageStatus: (stage, spec) => {
 ```
 
 And in the tab bar, we skip the status indicator entirely:
+
 ```tsx
-{stage !== 'files' && <StageStatusIndicator status={status} />}
+{
+  stage !== 'files' && <StageStatusIndicator status={status} />
+}
 ```
 
 ## Technical Details

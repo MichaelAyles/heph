@@ -88,7 +88,9 @@ function StageProgressIndicator({ project }: { project: Project }) {
     // For spec stage, also check project status for backwards compatibility
     if (stageKey === 'spec') {
       if (project.status === 'complete') return 'complete'
-      if (['analyzing', 'refining', 'generating', 'selecting', 'finalizing'].includes(project.status)) {
+      if (
+        ['analyzing', 'refining', 'generating', 'selecting', 'finalizing'].includes(project.status)
+      ) {
         return 'current'
       }
       if (project.status === 'draft') return 'current'
@@ -323,7 +325,8 @@ export function ProjectsPage() {
                 {deleteConfirm === project.id ? (
                   <div className="bg-red-500/10 border border-red-500/30 p-4">
                     <p className="text-steel mb-3">
-                      Delete "{project.spec?.finalSpec?.name || project.name || 'Untitled Project'}"?
+                      Delete "{project.spec?.finalSpec?.name || project.name || 'Untitled Project'}
+                      "?
                     </p>
                     <div className="flex gap-2">
                       <button

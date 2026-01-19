@@ -441,9 +441,7 @@ describe('HardwareOrchestrator', () => {
       mockChatWithTools.mockResolvedValueOnce({
         content: 'Done',
         finishReason: 'tool_calls',
-        toolCalls: [
-          { id: 'call-1', name: 'mark_stage_complete', arguments: { stage: 'spec' } },
-        ],
+        toolCalls: [{ id: 'call-1', name: 'mark_stage_complete', arguments: { stage: 'spec' } }],
         usage: { inputTokens: 100, outputTokens: 50 },
       })
 
@@ -547,7 +545,11 @@ describe('HardwareOrchestrator', () => {
         content: 'Progress 1',
         finishReason: 'tool_calls',
         toolCalls: [
-          { id: 'call-1', name: 'report_progress', arguments: { message: 'Step 1', stage: 'spec', percentage: 25 } },
+          {
+            id: 'call-1',
+            name: 'report_progress',
+            arguments: { message: 'Step 1', stage: 'spec', percentage: 25 },
+          },
         ],
         usage: { inputTokens: 100, outputTokens: 50 },
       })
@@ -556,7 +558,11 @@ describe('HardwareOrchestrator', () => {
         content: 'Progress 2',
         finishReason: 'tool_calls',
         toolCalls: [
-          { id: 'call-2', name: 'report_progress', arguments: { message: 'Step 2', stage: 'spec', percentage: 50 } },
+          {
+            id: 'call-2',
+            name: 'report_progress',
+            arguments: { message: 'Step 2', stage: 'spec', percentage: 50 },
+          },
         ],
         usage: { inputTokens: 100, outputTokens: 50 },
       })
@@ -592,7 +598,9 @@ describe('HardwareOrchestrator', () => {
           return {
             content: 'Done',
             finishReason: 'tool_calls',
-            toolCalls: [{ id: 'call-x', name: 'mark_stage_complete', arguments: { stage: 'export' } }],
+            toolCalls: [
+              { id: 'call-x', name: 'mark_stage_complete', arguments: { stage: 'export' } },
+            ],
             usage: { inputTokens: 100, outputTokens: 50 },
           }
         }

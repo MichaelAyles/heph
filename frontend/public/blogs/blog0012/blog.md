@@ -316,6 +316,7 @@ frontend/
 ### Why Nested Routes?
 
 React Router's nested routes with `<Outlet>` provide:
+
 - Shared layout (header + tabs) without re-rendering
 - URL-based navigation history
 - Easy deep linking to any stage
@@ -329,6 +330,7 @@ React Router's nested routes with `<Outlet>` provide:
 ### Why Context Over Props Drilling?
 
 The `useWorkspaceContext()` hook gives any stage view access to:
+
 - Current project data
 - Loading state
 - Avoids passing project through every component
@@ -346,13 +348,13 @@ The `useWorkspaceContext()` hook gives any stage view access to:
 
 ## Summary
 
-| Component | Purpose |
-|-----------|---------|
-| WorkspaceLayout | Wraps all stage views with header + tabs |
-| WorkspaceStageTabs | Navigation between 5 pipeline stages |
-| WorkspaceHeader | Project name, back button, status badge |
-| useWorkspaceStore | Stage navigation state and gating logic |
-| SpecStageView | Refactored spec generation pipeline |
-| Stage placeholders | PCB, Enclosure, Firmware, Export views |
+| Component          | Purpose                                  |
+| ------------------ | ---------------------------------------- |
+| WorkspaceLayout    | Wraps all stage views with header + tabs |
+| WorkspaceStageTabs | Navigation between 5 pipeline stages     |
+| WorkspaceHeader    | Project name, back button, status badge  |
+| useWorkspaceStore  | Stage navigation state and gating logic  |
+| SpecStageView      | Refactored spec generation pipeline      |
+| Stage placeholders | PCB, Enclosure, Firmware, Export views   |
 
 The workspace UI shell is complete. Users can now navigate between stages with clear visual feedback on progress. Next up: user control modes for different levels of automation.

@@ -627,7 +627,7 @@ export interface OrchestratorEdge {
   priority: number
   description: string | null
   isActive: boolean
-  maxLoops: number | null  // migration 0020
+  maxLoops: number | null // migration 0020
   createdAt: string
   updatedAt: string
 }
@@ -641,7 +641,7 @@ export interface OrchestratorEdgeRow {
   priority: number
   description: string | null
   is_active: number
-  max_loops: number | null  // migration 0020
+  max_loops: number | null // migration 0020
   created_at: string
   updated_at: string
 }

@@ -214,10 +214,7 @@ export function AdminBlogPage() {
         {!isLoading && !error && filteredBlogs && filteredBlogs.length > 0 && (
           <div className="divide-y divide-surface-700">
             {filteredBlogs.map((blog) => (
-              <div
-                key={blog.slug}
-                className="px-6 py-4 hover:bg-surface-900/50 transition-colors"
-              >
+              <div key={blog.slug} className="px-6 py-4 hover:bg-surface-900/50 transition-colors">
                 <div className="flex items-start gap-4">
                   {/* Thumbnail */}
                   <div className="w-24 h-16 flex-shrink-0 bg-surface-800 overflow-hidden">
@@ -244,9 +241,7 @@ export function AdminBlogPage() {
                             <span className="ml-2 text-xs text-copper">(customized)</span>
                           )}
                         </h3>
-                        <p className="text-sm text-steel-dim truncate mt-0.5">
-                          {blog.excerpt}
-                        </p>
+                        <p className="text-sm text-steel-dim truncate mt-0.5">{blog.excerpt}</p>
                       </div>
 
                       {/* Actions */}
@@ -265,7 +260,11 @@ export function AdminBlogPage() {
                               ? 'text-emerald-400 hover:bg-emerald-400/10'
                               : 'text-surface-500 hover:bg-surface-700'
                           }`}
-                          title={blog.isPublished ? 'Published (click to hide)' : 'Hidden (click to publish)'}
+                          title={
+                            blog.isPublished
+                              ? 'Published (click to hide)'
+                              : 'Hidden (click to publish)'
+                          }
                         >
                           {blog.isPublished ? (
                             <Eye className="w-4 h-4" strokeWidth={1.5} />
@@ -320,9 +319,7 @@ export function AdminBlogPage() {
       </div>
 
       {/* Edit Modal */}
-      {editingBlog && (
-        <BlogSettingsModal blog={editingBlog} onClose={() => setEditingBlog(null)} />
-      )}
+      {editingBlog && <BlogSettingsModal blog={editingBlog} onClose={() => setEditingBlog(null)} />}
     </div>
   )
 }

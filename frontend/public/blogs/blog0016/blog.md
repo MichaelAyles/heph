@@ -13,6 +13,7 @@ Implement AI-generated parametric enclosures using OpenSCAD, with browser-based 
 ## The Problem
 
 When users complete their PCB design, they need an enclosure that:
+
 1. Fits the PCB dimensions with proper clearance
 2. Has cutouts for USB ports, displays, LEDs, and buttons
 3. Is 3D-printable without supports
@@ -30,9 +31,9 @@ A detailed system prompt teaches the LLM how to write valid OpenSCAD code:
 // src/prompts/enclosure.ts
 export interface EnclosureInput {
   pcb: {
-    width: number      // mm
-    height: number     // mm
-    thickness: number  // typically 1.6mm
+    width: number // mm
+    height: number // mm
+    thickness: number // typically 1.6mm
     mountingHoles?: { x: number; y: number; diameter: number }[]
   }
   components: ComponentPlacement[]
@@ -43,6 +44,7 @@ export interface EnclosureInput {
 ```
 
 The prompt includes:
+
 - Standard cutout templates (USB-C, OLED, LED, buttons, vents)
 - PCB mounting patterns (screw bosses, edge rails)
 - Best practices for 3D printability
@@ -75,11 +77,7 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
   module.FS.writeFile('/input.scad', code)
 
   // Run OpenSCAD with Manifold backend for speed
-  const exitCode = module.callMain([
-    '-o', '/output.stl',
-    '--enable=manifold',
-    '/input.scad',
-  ])
+  const exitCode = module.callMain(['-o', '/output.stl', '--enable=manifold', '/input.scad'])
 
   // Read output STL
   const stl = module.FS.readFile('/output.stl')
@@ -90,6 +88,7 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
 ### React Three Fiber STL Viewer
 
 The `STLViewer` component provides:
+
 - Orbit controls for rotation/zoom/pan
 - Grid overlay for scale reference
 - Auto-rotate toggle
@@ -154,13 +153,13 @@ The feedback is appended to the original code and spec, generating updated OpenS
 
 ## Key Dependencies
 
-| Package | Size | Purpose |
-|---------|------|---------|
-| `openscad-wasm` | 14MB | OpenSCAD engine (lazy-loaded) |
-| `@react-three/fiber` | - | React renderer for Three.js |
-| `@react-three/drei` | - | Three.js helpers (OrbitControls, Center) |
-| `three` | - | 3D graphics library |
-| `@monaco-editor/react` | - | Code editor with syntax highlighting |
+| Package                | Size | Purpose                                  |
+| ---------------------- | ---- | ---------------------------------------- |
+| `openscad-wasm`        | 14MB | OpenSCAD engine (lazy-loaded)            |
+| `@react-three/fiber`   | -    | React renderer for Three.js              |
+| `@react-three/drei`    | -    | Three.js helpers (OrbitControls, Center) |
+| `three`                | -    | 3D graphics library                      |
+| `@monaco-editor/react` | -    | Code editor with syntax highlighting     |
 
 ---
 
@@ -201,6 +200,7 @@ frontend/
 ### Why Lazy Loading?
 
 At 14MB, `openscad-wasm` would significantly impact initial page load. By lazy-loading only when users navigate to the enclosure stage:
+
 - Initial bundle stays small (~400KB)
 - Users who don't need enclosures never download it
 - Preloading starts when entering the stage
@@ -223,11 +223,11 @@ At 14MB, `openscad-wasm` would significantly impact initial page load. By lazy-l
 
 ## Summary
 
-| Component | Purpose |
-|-----------|---------|
-| `enclosure.ts` | Prompt templates for OpenSCAD generation |
-| `openscadRenderer.ts` | WASM wrapper with lazy loading |
-| `STLViewer.tsx` | React Three Fiber 3D preview |
-| `EnclosureStageView.tsx` | Full enclosure workflow UI |
+| Component                | Purpose                                  |
+| ------------------------ | ---------------------------------------- |
+| `enclosure.ts`           | Prompt templates for OpenSCAD generation |
+| `openscadRenderer.ts`    | WASM wrapper with lazy loading           |
+| `STLViewer.tsx`          | React Three Fiber 3D preview             |
+| `EnclosureStageView.tsx` | Full enclosure workflow UI               |
 
 The enclosure stage now generates parametric OpenSCAD from PCB specs, renders to STL in the browser, and displays interactive 3D previews with iteration support.

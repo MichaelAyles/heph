@@ -44,7 +44,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     return Response.json({ success: true, controlMode })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('api', 'Update control mode error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('api', 'Update control mode error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

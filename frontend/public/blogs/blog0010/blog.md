@@ -7,6 +7,7 @@
 ## The Problem
 
 When PHAESTUS generates product blueprints, users see 4 different design variations. Previously, if a design was close but not quite right, the only options were:
+
 - Accept it as-is
 - Regenerate all 4 images and hope for better results
 
@@ -17,6 +18,7 @@ Neither option allowed for targeted iteration on a promising design.
 ## The Solution
 
 Users can now click on any blueprint to enter a detail view where they can:
+
 1. See a larger preview of the selected design
 2. Provide natural language feedback about what to change
 3. Regenerate just that one image with their feedback incorporated
@@ -50,30 +52,28 @@ When no design is selected, users see the 4-image grid. When selected, they see 
 ### Detail View
 
 ```tsx
-{selected !== null && (
-  <div className="space-y-4">
-    <button onClick={() => setSelected(null)}>
-      ← Back to all designs
-    </button>
+{
+  selected !== null && (
+    <div className="space-y-4">
+      <button onClick={() => setSelected(null)}>← Back to all designs</button>
 
-    <img src={bp.url} alt={`Design ${selected + 1}`} />
+      <img src={bp.url} alt={`Design ${selected + 1}`} />
 
-    <textarea
-      value={feedback}
-      onChange={(e) => setFeedback(e.target.value)}
-      placeholder="e.g., Make it more rounded, add a visible antenna..."
-    />
+      <textarea
+        value={feedback}
+        onChange={(e) => setFeedback(e.target.value)}
+        placeholder="e.g., Make it more rounded, add a visible antenna..."
+      />
 
-    <div className="flex gap-3">
-      <button onClick={handleRegenerate} disabled={!feedback.trim()}>
-        Regenerate with Changes
-      </button>
-      <button onClick={() => onSelect(selected)}>
-        I'm Happy - Continue
-      </button>
+      <div className="flex gap-3">
+        <button onClick={handleRegenerate} disabled={!feedback.trim()}>
+          Regenerate with Changes
+        </button>
+        <button onClick={() => onSelect(selected)}>I'm Happy - Continue</button>
+      </div>
     </div>
-  </div>
-)}
+  )
+}
 ```
 
 ### Regeneration Handler
@@ -133,6 +133,7 @@ With feedback: "3D product render: A smart plant monitor. Compact handheld gadge
 ### State Management
 
 The regeneration uses React Query's mutation to update the project:
+
 - Only the modified blueprint is replaced in the array
 - Other blueprints remain unchanged
 - UI resets to grid view after successful regeneration

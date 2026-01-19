@@ -130,7 +130,11 @@ function extractAndSet(
         // Extract specific field from each element
         const fieldPath = remainder.startsWith('.') ? remainder.slice(1) : remainder
         const extracted = array
-          .map((item) => (typeof item === 'object' && item !== null ? getByPath(item as Record<string, unknown>, fieldPath) : undefined))
+          .map((item) =>
+            typeof item === 'object' && item !== null
+              ? getByPath(item as Record<string, unknown>, fieldPath)
+              : undefined
+          )
           .filter((v) => v !== undefined)
         setByPath(target, `${arrayPath}_extracted`, extracted)
       } else {
@@ -315,10 +319,7 @@ function truncateToTokenLimit(
  * @param context - Values to substitute
  * @returns Rendered string
  */
-export function renderPromptTemplate(
-  template: string,
-  context: Record<string, unknown>
-): string {
+export function renderPromptTemplate(template: string, context: Record<string, unknown>): string {
   if (!template) {
     return ''
   }
@@ -339,10 +340,13 @@ export function renderPromptTemplate(
           let itemResult = innerTemplate
           if (typeof item === 'object' && item !== null) {
             // Replace {{this.field}} patterns
-            itemResult = itemResult.replace(/\{\{this\.(\w+(?:\.\w+)*)\}\}/g, (_: string, field: string) => {
-              const value = getByPath(item as Record<string, unknown>, field)
-              return value !== undefined ? String(value) : ''
-            })
+            itemResult = itemResult.replace(
+              /\{\{this\.(\w+(?:\.\w+)*)\}\}/g,
+              (_: string, field: string) => {
+                const value = getByPath(item as Record<string, unknown>, field)
+                return value !== undefined ? String(value) : ''
+              }
+            )
             // Replace {{this}} with JSON of the whole object
             itemResult = itemResult.replace(/\{\{this\}\}/g, JSON.stringify(item))
           } else {

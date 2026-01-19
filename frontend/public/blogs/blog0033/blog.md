@@ -41,9 +41,7 @@ Every block now has a `block.json` that formally describes:
     "south": [{ "connector": "J2", "signals": "ALL" }]
   },
 
-  "components": [
-    { "reference": "U1", "value": "BME280", "footprint": "LGA-8", "quantity": 1 }
-  ]
+  "components": [{ "reference": "U1", "value": "BME280", "footprint": "LGA-8", "quantity": 1 }]
 }
 ```
 
@@ -137,7 +135,7 @@ function checkI2cConflict(block1: BlockDefinition, block2: BlockDefinition): str
   const addresses1 = block1.bus.i2c?.addresses || []
   const addresses2 = block2.bus.i2c?.addresses || []
 
-  const conflicts = addresses1.filter(a => addresses2.includes(a))
+  const conflicts = addresses1.filter((a) => addresses2.includes(a))
 
   for (const addr of conflicts) {
     if (block1.bus.i2c?.addressConfigurable || block2.bus.i2c?.addressConfigurable) {
@@ -152,6 +150,7 @@ function checkI2cConflict(block1: BlockDefinition, block2: BlockDefinition): str
 ```
 
 The system checks:
+
 - **I2C address conflicts** - Two BME280s at 0x76? Error. But if one has a configurable address, it's a warning with resolution steps.
 - **GPIO conflicts** - Button block claiming GPIO_0 while the LED strip also uses it? Caught.
 - **SPI chip select conflicts** - Two SPI devices on CS0? Flagged.
@@ -163,7 +162,11 @@ The full specification lives in `src/schemas/block.ts` using Zod for runtime val
 
 ```typescript
 export const BlockDefinitionSchema = z.object({
-  slug: z.string().min(3).max(50).regex(/^[a-z0-9-]+$/),
+  slug: z
+    .string()
+    .min(3)
+    .max(50)
+    .regex(/^[a-z0-9-]+$/),
   name: z.string().min(1).max(100),
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
   category: BlockCategorySchema,
@@ -211,6 +214,7 @@ Block management moved from "upload some files and hope" to a proper admin panel
 - Run DRC against existing blocks
 
 The "validated" flag only goes green when:
+
 - `block.json` passes schema validation
 - Schematic file exists (`.kicad_sch`)
 - PCB file exists (`.kicad_pcb`)
@@ -238,4 +242,4 @@ Implement formal PCB block system with DRC validation
 - Update admin blocks page with validation status
 ```
 
-Next up: getting these blocks *into* the system without hand-writing JSON.
+Next up: getting these blocks _into_ the system without hand-writing JSON.

@@ -147,9 +147,7 @@ describe('startOrchestrator', () => {
 
   it('resets history', () => {
     useOrchestratorStore.setState({
-      history: [
-        { type: 'tool_call', timestamp: new Date(), toolName: 'test', args: {} },
-      ],
+      history: [{ type: 'tool_call', timestamp: new Date(), toolName: 'test', args: {} }],
     })
 
     const mockOrchestrator = createMockOrchestrator()
@@ -190,11 +188,7 @@ describe('startOrchestrator', () => {
     const { startOrchestrator } = useOrchestratorStore.getState()
     startOrchestrator('project-1', 'fix_it', 'Fix the sensor', existingSpec)
 
-    expect(mockOrchestrator.run).toHaveBeenCalledWith(
-      'Fix the sensor',
-      existingSpec,
-      undefined
-    )
+    expect(mockOrchestrator.run).toHaveBeenCalledWith('Fix the sensor', existingSpec, undefined)
   })
 
   it('passes blocks to orchestrator', () => {
@@ -226,11 +220,7 @@ describe('startOrchestrator', () => {
     const { startOrchestrator } = useOrchestratorStore.getState()
     startOrchestrator('project-1', 'design_it', 'Design with blocks', undefined, blocks)
 
-    expect(mockOrchestrator.run).toHaveBeenCalledWith(
-      'Design with blocks',
-      undefined,
-      blocks
-    )
+    expect(mockOrchestrator.run).toHaveBeenCalledWith('Design with blocks', undefined, blocks)
   })
 
   it('does not start if already running', () => {
@@ -498,7 +488,15 @@ describe('resetOrchestrator', () => {
 
   it('clears history', () => {
     useOrchestratorStore.setState({
-      history: [{ id: '1', timestamp: new Date().toISOString(), type: 'progress', stage: 'spec', action: 'test' }],
+      history: [
+        {
+          id: '1',
+          timestamp: new Date().toISOString(),
+          type: 'progress',
+          stage: 'spec',
+          action: 'test',
+        },
+      ],
     })
 
     const { resetOrchestrator } = useOrchestratorStore.getState()

@@ -60,7 +60,17 @@ export function FinalizationStep({ project, spec, onComplete }: FinalizationStep
     }
 
     runFinalization()
-  }, [project.id, spec.finalSpec, spec.description, spec.feasibility, spec.decisions, spec.selectedBlueprint, spec.blueprints, onComplete, retryCount])
+  }, [
+    project.id,
+    spec.finalSpec,
+    spec.description,
+    spec.feasibility,
+    spec.decisions,
+    spec.selectedBlueprint,
+    spec.blueprints,
+    onComplete,
+    retryCount,
+  ])
 
   const handleRetry = () => {
     isRunningRef.current = false

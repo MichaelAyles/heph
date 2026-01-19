@@ -170,7 +170,9 @@ export function buildPCBSelectionUserPrompt(request: PCBSuggestionRequest): stri
     if (spec.inputs && spec.inputs.length > 0) {
       lines.push('**Inputs:**')
       for (const input of spec.inputs) {
-        lines.push(`- ${input.type}${input.count > 1 ? ` (×${input.count})` : ''}${input.notes ? `: ${input.notes}` : ''}`)
+        lines.push(
+          `- ${input.type}${input.count > 1 ? ` (×${input.count})` : ''}${input.notes ? `: ${input.notes}` : ''}`
+        )
       }
       lines.push('')
     }
@@ -179,7 +181,9 @@ export function buildPCBSelectionUserPrompt(request: PCBSuggestionRequest): stri
     if (spec.outputs && spec.outputs.length > 0) {
       lines.push('**Outputs:**')
       for (const output of spec.outputs) {
-        lines.push(`- ${output.type}${output.count > 1 ? ` (×${output.count})` : ''}${output.notes ? `: ${output.notes}` : ''}`)
+        lines.push(
+          `- ${output.type}${output.count > 1 ? ` (×${output.count})` : ''}${output.notes ? `: ${output.notes}` : ''}`
+        )
       }
       lines.push('')
     }
@@ -264,7 +268,11 @@ export function parsePCBSuggestionResponse(content: string): PCBSuggestionRespon
     }
 
     // Validate board size
-    if (!parsed.boardSize || typeof parsed.boardSize.width !== 'number' || typeof parsed.boardSize.height !== 'number') {
+    if (
+      !parsed.boardSize ||
+      typeof parsed.boardSize.width !== 'number' ||
+      typeof parsed.boardSize.height !== 'number'
+    ) {
       // Calculate from blocks if not provided
       let maxX = 0
       let maxY = 0

@@ -166,7 +166,13 @@ describe('buildEnclosurePrompt', () => {
   })
 
   it('handles all enclosure types', () => {
-    const types: EnclosureStyle['type'][] = ['box', 'rounded_box', 'handheld', 'wall_mount', 'desktop']
+    const types: EnclosureStyle['type'][] = [
+      'box',
+      'rounded_box',
+      'handheld',
+      'wall_mount',
+      'desktop',
+    ]
 
     for (const type of types) {
       const input = createBaseInput()

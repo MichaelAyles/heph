@@ -121,7 +121,10 @@ async function loadKiCanvas(): Promise<void> {
     const script = document.createElement('script')
     script.type = 'module'
     script.src = 'https://kicanvas.mikeayles.com/kicanvas/kicanvas.js'
-    script.onload = () => { kicanvasLoaded = true; resolve() }
+    script.onload = () => {
+      kicanvasLoaded = true
+      resolve()
+    }
     script.onerror = () => reject(new Error('Failed to load KiCanvas'))
     document.head.appendChild(script)
   })
@@ -279,19 +282,21 @@ The AdminBlocksPage now has a "View" button for each block:
 Clicking it opens a modal with the BlockViewer:
 
 ```tsx
-{viewingBlock && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-    <div className="relative w-full max-w-4xl max-h-[90vh] overflow-auto">
-      <button
-        onClick={() => setViewingBlock(null)}
-        className="absolute top-4 right-4 z-10 p-2 bg-surface-800 rounded-full"
-      >
-        <X className="w-5 h-5 text-steel" />
-      </button>
-      <BlockViewer block={viewingBlock} />
+{
+  viewingBlock && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-auto">
+        <button
+          onClick={() => setViewingBlock(null)}
+          className="absolute top-4 right-4 z-10 p-2 bg-surface-800 rounded-full"
+        >
+          <X className="w-5 h-5 text-steel" />
+        </button>
+        <BlockViewer block={viewingBlock} />
+      </div>
     </div>
-  </div>
-)}
+  )
+}
 ```
 
 ## What We Shipped

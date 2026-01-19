@@ -48,8 +48,7 @@ export class HardwareOrchestrator {
       }
 
       // Check for completion
-      if (this.state.currentStage === 'export' &&
-          this.state.status === 'complete') {
+      if (this.state.currentStage === 'export' && this.state.status === 'complete') {
         break
       }
     }
@@ -104,7 +103,7 @@ export function validateCrossStage(
   }
 
   return {
-    valid: issues.filter(i => i.severity === 'error').length === 0,
+    valid: issues.filter((i) => i.severity === 'error').length === 0,
     issues,
     suggestions,
   }
@@ -197,9 +196,7 @@ export function OrchestratorPanel() {
       </div>
 
       {/* Current action */}
-      {currentAction && (
-        <div className="text-sm text-steel-dim">{currentAction}</div>
-      )}
+      {currentAction && <div className="text-sm text-steel-dim">{currentAction}</div>}
 
       {/* Activity history */}
       <div className="max-h-48 overflow-y-auto">
@@ -221,12 +218,11 @@ When in Vibe It mode, the orchestrator can be started from any stage:
 
 ```tsx
 // src/pages/workspace/SpecStageView.tsx
-{currentStep === 0 && project.status !== 'rejected' && (
-  <OrchestratorTrigger
-    project={project}
-    onSpecUpdate={handleOrchestratorSpecUpdate}
-  />
-)}
+{
+  currentStep === 0 && project.status !== 'rejected' && (
+    <OrchestratorTrigger project={project} onSpecUpdate={handleOrchestratorSpecUpdate} />
+  )
+}
 ```
 
 ---
@@ -286,6 +282,7 @@ When in Vibe It mode, the orchestrator can be started from any stage:
 ### Why Cross-Stage Validation?
 
 Hardware design has physical constraints:
+
 - PCB must fit inside enclosure (with clearance)
 - Firmware GPIO pins must match PCB net assignments
 - I2C addresses must match placed sensor blocks
@@ -333,13 +330,13 @@ frontend/
 
 ## Summary
 
-| Component | Purpose |
-|-----------|---------|
+| Component              | Purpose                                  |
+| ---------------------- | ---------------------------------------- |
 | `HardwareOrchestrator` | Marathon agent class with tool execution |
-| `ORCHESTRATOR_TOOLS` | 12 tools for all pipeline actions |
-| `validateCrossStage` | Catch mismatches between stages |
-| `useOrchestratorStore` | Reactive state for UI |
-| `OrchestratorPanel` | Real-time progress display |
-| `OrchestratorTrigger` | Mode-aware start button |
+| `ORCHESTRATOR_TOOLS`   | 12 tools for all pipeline actions        |
+| `validateCrossStage`   | Catch mismatches between stages          |
+| `useOrchestratorStore` | Reactive state for UI                    |
+| `OrchestratorPanel`    | Real-time progress display               |
+| `OrchestratorTrigger`  | Mode-aware start button                  |
 
 The PHAESTUS Orchestrator transforms hardware design from a manual, error-prone process into an autonomous pipeline that validates itself. In "Vibe It" mode, users describe what they want and get a complete, validated design package.

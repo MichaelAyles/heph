@@ -31,12 +31,7 @@ module pill_shape(w, l, h, r) {
 Our renderer used `openscad-wasm` version 0.0.4 from npm. I tried adding `--enable=manifold` to use the faster Manifold geometry kernel:
 
 ```typescript
-const exitCode = callMain([
-  '/input.scad',
-  '--enable=manifold',
-  '-o',
-  '/output.stl',
-])
+const exitCode = callMain(['/input.scad', '--enable=manifold', '-o', '/output.stl'])
 ```
 
 Still slow. Checked when the npm package was published: 2022. Manifold wasn't integrated into OpenSCAD until late 2024. The flag was being silently ignored.
@@ -59,13 +54,15 @@ They're using a 2025 build, not the ancient npm package. And in their `actions.t
 ```typescript
 const args = [
   scadPath,
-  "-o", outFile,
-  "--backend=manifold",  // Not --enable=manifold
-  "--export-format=binstl",
+  '-o',
+  outFile,
+  '--backend=manifold', // Not --enable=manifold
+  '--export-format=binstl',
 ]
 ```
 
 Two key differences:
+
 1. **Recent WASM build** with Manifold compiled in
 2. **`--backend=manifold`** flag (the 2024+ syntax, not `--enable=manifold`)
 

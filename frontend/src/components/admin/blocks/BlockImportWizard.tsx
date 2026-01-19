@@ -167,7 +167,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
           // Block was created but files failed to upload - this is a partial failure
           throw new Error(
             `Block definition saved, but file upload failed: ${uploadResult.error || 'Unknown error'}. ` +
-            `You may need to re-upload files manually.`
+              `You may need to re-upload files manually.`
           )
         }
       }
@@ -436,7 +436,9 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                       <div className="flex flex-col items-center gap-2">
                         <Box className="w-8 h-8 text-steel-dim" strokeWidth={1.5} />
                         <span className="text-sm text-steel-dim">.step/.stp file</span>
-                        <span className="text-xs text-steel-dim">Export from KiCad: File &gt; Export &gt; STEP</span>
+                        <span className="text-xs text-steel-dim">
+                          Export from KiCad: File &gt; Export &gt; STEP
+                        </span>
                       </div>
                     )}
                   </label>
@@ -559,7 +561,10 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                           <div className="text-xs text-steel-dim mb-1">Bus Signals</div>
                           <div className="flex flex-wrap gap-1">
                             {generateResult.extract.busSignals.map((sig) => (
-                              <span key={sig} className="px-1.5 py-0.5 text-xs bg-copper/20 text-copper">
+                              <span
+                                key={sig}
+                                className="px-1.5 py-0.5 text-xs bg-copper/20 text-copper"
+                              >
                                 {sig}
                               </span>
                             ))}
@@ -614,9 +619,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                   {/* Preview tab - KiCanvas */}
                   {leftPanelTab === 'preview' && pcbContent && (
                     <div className="h-full flex flex-col">
-                      <div className="text-xs text-steel-dim mb-2">
-                        PCB Preview via KiCanvas
-                      </div>
+                      <div className="text-xs text-steel-dim mb-2">PCB Preview via KiCanvas</div>
                       <div className="flex-1 rounded overflow-hidden">
                         <KiCanvasViewer
                           content={pcbContent}
@@ -665,10 +668,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
             )}
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-steel-dim hover:text-steel text-sm"
-            >
+            <button onClick={onClose} className="px-4 py-2 text-steel-dim hover:text-steel text-sm">
               Cancel
             </button>
 

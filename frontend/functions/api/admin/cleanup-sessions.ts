@@ -22,7 +22,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const logger = createLogger(env, user as { id: string; username: string; isAdmin: boolean }, requestId)
+  const logger = createLogger(
+    env,
+    user as { id: string; username: string; isAdmin: boolean },
+    requestId
+  )
 
   try {
     // Get count of expired sessions before deletion
@@ -31,14 +35,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ).first<{ count: number }>()
 
     // Delete expired sessions
-    await env.DB.prepare(
-      `DELETE FROM sessions WHERE expires_at <= datetime('now')`
-    ).run()
+    await env.DB.prepare(`DELETE FROM sessions WHERE expires_at <= datetime('now')`).run()
 
     // Get remaining session count
-    const afterCount = await env.DB.prepare(
-      'SELECT COUNT(*) as count FROM sessions'
-    ).first<{ count: number }>()
+    const afterCount = await env.DB.prepare('SELECT COUNT(*) as count FROM sessions').first<{
+      count: number
+    }>()
 
     const cleanupResult: CleanupResult = {
       deletedCount: beforeCount?.count || 0,
@@ -57,10 +59,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       error: error instanceof Error ? error.message : String(error),
     })
 
-    return Response.json(
-      { error: 'Failed to clean up sessions' },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Failed to clean up sessions' }, { status: 500 })
   }
 }
 
@@ -78,13 +77,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    const stats = await env.DB.prepare(`
+    const stats = await env.DB.prepare(
+      `
       SELECT
         COUNT(*) as total,
         SUM(CASE WHEN expires_at <= datetime('now') THEN 1 ELSE 0 END) as expired,
         SUM(CASE WHEN expires_at > datetime('now') THEN 1 ELSE 0 END) as active
       FROM sessions
-    `).first<{ total: number; expired: number; active: number }>()
+    `
+    ).first<{ total: number; expired: number; active: number }>()
 
     return Response.json({
       sessions: {
@@ -94,9 +95,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       },
     })
   } catch {
-    return Response.json(
-      { error: 'Failed to get session stats' },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Failed to get session stats' }, { status: 500 })
   }
 }

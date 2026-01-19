@@ -39,11 +39,13 @@ Conversations don't have explicit stage tags, so we infer from content:
 ```typescript
 function inferStageFromConversation(conv: Conversation): string {
   const allText = [
-    ...conv.messagesIn.map(m => typeof m.content === 'string'
-      ? m.content
-      : m.content.map(c => c.text || '').join(' ')),
+    ...conv.messagesIn.map((m) =>
+      typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' ')
+    ),
     conv.messageOut || '',
-  ].join(' ').toLowerCase()
+  ]
+    .join(' ')
+    .toLowerCase()
 
   // Match keywords to stages
   if (allText.includes('feasibility') || allText.includes('refinement')) {
@@ -76,9 +78,8 @@ function formatConversationsAsMarkdown(stage: string, conversations: Conversatio
     if (conv.model) md += `*Model: ${conv.model}*\n\n`
 
     for (const msg of conv.messagesIn) {
-      const roleLabel = msg.role === 'system' ? '**System**'
-        : msg.role === 'user' ? '**User**'
-        : '**Assistant**'
+      const roleLabel =
+        msg.role === 'system' ? '**System**' : msg.role === 'user' ? '**User**' : '**Assistant**'
       md += `${roleLabel}:\n\n${content}\n\n`
     }
 
@@ -114,16 +115,17 @@ Added as a new export option in the grid:
 ## Output Example
 
 **spec-chat.md**:
+
 ```markdown
 # Spec Stage Conversations
 
-*3 conversations recorded*
+_3 conversations recorded_
 
 ---
 
 ## 1/7/2025, 12:30:45 PM
 
-*Model: google/gemini-3-flash-preview*
+_Model: google/gemini-3-flash-preview_
 
 **System**:
 You are a hardware design assistant...
@@ -133,12 +135,12 @@ Build me a temperature sensor with WiFi connectivity
 
 **Assistant**:
 {
-  "manufacturable": true,
-  "overallScore": 85,
-  ...
+"manufacturable": true,
+"overallScore": 85,
+...
 }
 
-*Tokens: 1250 in, 890 out*
+_Tokens: 1250 in, 890 out_
 
 ---
 
@@ -162,6 +164,7 @@ Based on your requirements, I recommend...
 ## Access Control
 
 Currently admin-only since conversations may contain sensitive prompt content. Future versions could:
+
 - Allow project owners to export their own conversations
 - Filter sensitive system prompts
 - Redact API keys or credentials
@@ -170,13 +173,13 @@ Currently admin-only since conversations may contain sensitive prompt content. F
 
 This completes the 5-phase pipeline coordination implementation:
 
-| Phase | Feature | Status |
-|-------|---------|--------|
-| 1 | PCB Merge Integration | ✅ |
-| 2 | PCB 3D Viewer | ✅ |
-| 3 | Project File Manager | ✅ |
-| 4 | Stage Completion Summaries | ✅ |
-| 5 | Conversation Export | ✅ |
+| Phase | Feature                    | Status |
+| ----- | -------------------------- | ------ |
+| 1     | PCB Merge Integration      | ✅     |
+| 2     | PCB 3D Viewer              | ✅     |
+| 3     | Project File Manager       | ✅     |
+| 4     | Stage Completion Summaries | ✅     |
+| 5     | Conversation Export        | ✅     |
 
 ## Artifacts
 

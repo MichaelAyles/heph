@@ -5,6 +5,7 @@
 ## The Challenge: Making PCB Design Accessible
 
 Traditional PCB design requires:
+
 - Learning KiCad or Altium (weeks of tutorials)
 - Understanding schematic symbols and footprints
 - Manual routing (hours per board)
@@ -33,16 +34,19 @@ Each block has a size in grid units. A 2×2 block occupies four cells. Blocks co
 The grid editor provides:
 
 **Visual Placement**
+
 - Drag blocks from catalog to grid
 - Ghost preview shows valid/invalid positions
 - Click to select, rotate, or remove
 
 **Real-Time Validation**
+
 - Bus continuity checking (every column needs an unbroken path)
 - Power budget warnings ("Multiple blocks provide 5V0")
 - Edge-mount constraints (USB-C must be at board edge)
 
 **Dimension Display**
+
 - Grid size in mm and units
 - NORTH/SOUTH orientation labels
 - Per-block size indicators
@@ -81,6 +85,7 @@ Why does this work without routing?
 **Standardized Bus Interface**
 
 Every block connects to the same 20-signal bus:
+
 - Power rails: 5V0, 3V3, GND
 - Communication: I2C (SDA, SCL), SPI (MOSI, MISO, SCK, CS)
 - GPIO: 8 general-purpose pins
@@ -89,6 +94,7 @@ Every block connects to the same 20-signal bus:
 **Pre-Routed Modules**
 
 Each block is a complete, tested circuit:
+
 - Internal routing done by humans in KiCad
 - Edge castellations connect to bus signals
 - No inter-block routing needed
@@ -96,6 +102,7 @@ Each block is a complete, tested circuit:
 **Grid Alignment**
 
 The 12.7mm (0.5") grid ensures:
+
 - Predictable board dimensions
 - Consistent mounting hole positions
 - Compatible enclosure generation
@@ -104,13 +111,13 @@ The 12.7mm (0.5") grid ensures:
 
 The grid editor enforces:
 
-| Rule | What It Checks |
-|------|----------------|
+| Rule           | What It Checks                                   |
+| -------------- | ------------------------------------------------ |
 | Bus Continuity | Every column has blocks from north to south edge |
-| Power Budget | Total consumption ≤ total supply per rail |
-| Edge Mount | USB-C, antennas placed at board edges |
-| No Overlap | Blocks don't occupy same cells |
-| I2C Addresses | No conflicts on shared bus |
+| Power Budget   | Total consumption ≤ total supply per rail        |
+| Edge Mount     | USB-C, antennas placed at board edges            |
+| No Overlap     | Blocks don't occupy same cells                   |
+| I2C Addresses  | No conflicts on shared bus                       |
 
 Warnings appear inline. Errors block generation.
 
@@ -125,21 +132,21 @@ USB-C rechargeable wireless presentation remote with ESP32-C6...
 
 ### Overview
 
-| Property | Value |
-|----------|-------|
-| Board size | 25.4mm × 50.8mm |
-| Grid units | 2 × 4 |
-| Grid pitch | 12.7mm (0.5") |
-| Total blocks | 4 |
+| Property     | Value           |
+| ------------ | --------------- |
+| Board size   | 25.4mm × 50.8mm |
+| Grid units   | 2 × 4           |
+| Grid pitch   | 12.7mm (0.5")   |
+| Total blocks | 4               |
 
 ### Block Layout
 
-| Position | Block | Size | Category |
-|----------|-------|------|----------|
-| (0,0) | ESP32-C6 MCU Block | 2×2 | mcu |
-| (0,2) | JST-PH Battery Connector | 1×1 | power |
-| (1,2) | 1x1 IO Connector Block | 1×1 | connector |
-| (0,3) | USB-C Power Input | 2×1 | power |
+| Position | Block                    | Size | Category  |
+| -------- | ------------------------ | ---- | --------- |
+| (0,0)    | ESP32-C6 MCU Block       | 2×2  | mcu       |
+| (0,2)    | JST-PH Battery Connector | 1×1  | power     |
+| (1,2)    | 1x1 IO Connector Block   | 1×1  | connector |
+| (0,3)    | USB-C Power Input        | 2×1  | power     |
 ```
 
 One click downloads everything as a ZIP.
@@ -147,12 +154,14 @@ One click downloads everything as a ZIP.
 ## What's Next
 
 The PCB stage now handles:
+
 - ✅ Block selection and placement
 - ✅ Grid validation with warnings/errors
 - ✅ 3D preview with real STEP models
 - ✅ Documentation generation
 
 Still coming:
+
 - Schematic merging (KiCad file generation)
 - PCB layout export
 - Gerber generation

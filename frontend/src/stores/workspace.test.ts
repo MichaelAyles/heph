@@ -3,12 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  useWorkspaceStore,
-  STAGE_ORDER,
-  STAGE_LABELS,
-  type WorkspaceStage,
-} from './workspace'
+import { useWorkspaceStore, STAGE_ORDER, STAGE_LABELS, type WorkspaceStage } from './workspace'
 import type { ProjectSpec } from '@/db/schema'
 
 // Reset store before each test
@@ -409,9 +404,15 @@ describe('getStageStatus', () => {
     stages: {
       spec: { status: (stageStatuses.spec as 'pending' | 'in_progress' | 'complete') ?? 'pending' },
       pcb: { status: (stageStatuses.pcb as 'pending' | 'in_progress' | 'complete') ?? 'pending' },
-      enclosure: { status: (stageStatuses.enclosure as 'pending' | 'in_progress' | 'complete') ?? 'pending' },
-      firmware: { status: (stageStatuses.firmware as 'pending' | 'in_progress' | 'complete') ?? 'pending' },
-      export: { status: (stageStatuses.export as 'pending' | 'in_progress' | 'complete') ?? 'pending' },
+      enclosure: {
+        status: (stageStatuses.enclosure as 'pending' | 'in_progress' | 'complete') ?? 'pending',
+      },
+      firmware: {
+        status: (stageStatuses.firmware as 'pending' | 'in_progress' | 'complete') ?? 'pending',
+      },
+      export: {
+        status: (stageStatuses.export as 'pending' | 'in_progress' | 'complete') ?? 'pending',
+      },
     },
   })
 

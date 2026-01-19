@@ -19,13 +19,17 @@ const LOCKOUT_DURATION_MS = 30 * 60 * 1000 // 30 minute lockout after max attemp
 
 // In-memory rate limiting (resets on worker restart, but good enough for basic protection)
 // For production, consider using Cloudflare's Rate Limiting or D1
-const loginAttempts = new Map<string, { count: number; firstAttempt: number; lockedUntil?: number }>()
+const loginAttempts = new Map<
+  string,
+  { count: number; firstAttempt: number; lockedUntil?: number }
+>()
 
 function getClientIdentifier(request: Request): string {
   // Use CF-Connecting-IP header (set by Cloudflare) or fall back to a hash of user-agent
-  const ip = request.headers.get('CF-Connecting-IP') ||
-             request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
-             'unknown'
+  const ip =
+    request.headers.get('CF-Connecting-IP') ||
+    request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
+    'unknown'
   return ip
 }
 
@@ -84,7 +88,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         status: 429,
         headers: {
           'Retry-After': String(rateLimit.retryAfter || 1800),
-        }
+        },
       }
     )
   }
@@ -172,7 +176,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('auth', 'Login error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('auth', 'Login error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

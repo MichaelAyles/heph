@@ -8,7 +8,7 @@ describe('spec-steps types', () => {
     })
 
     it('should have correct step ids in order', () => {
-      expect(STEPS.map(s => s.id)).toEqual([
+      expect(STEPS.map((s) => s.id)).toEqual([
         'feasibility',
         'refine',
         'blueprints',
@@ -18,7 +18,7 @@ describe('spec-steps types', () => {
     })
 
     it('should have correct step names', () => {
-      expect(STEPS.map(s => s.name)).toEqual([
+      expect(STEPS.map((s) => s.name)).toEqual([
         'Feasibility',
         'Refine',
         'Blueprints',

@@ -13,6 +13,7 @@ Implement a fully functional Export stage that lets users download all their pro
 ## The Problem
 
 After completing all design stages, users need to:
+
 1. Download specification documents for manufacturing quotes
 2. Export OpenSCAD files to render STL for 3D printing
 3. Get firmware source ready for PlatformIO compilation
@@ -68,9 +69,9 @@ ${spec.finalSpec.summary}
 ### Bill of Materials
 | Item | Quantity | Unit Cost |
 |------|----------|-----------|
-${spec.finalSpec.estimatedBOM.map(b =>
-  `| ${b.item} | ${b.quantity} | $${b.unitCost.toFixed(2)} |`
-).join('\n')}
+${spec.finalSpec.estimatedBOM
+  .map((b) => `| ${b.item} | ${b.quantity} | $${b.unitCost.toFixed(2)} |`)
+  .join('\n')}
 
 **Total:** $${totalCost.toFixed(2)}
 `
@@ -237,6 +238,7 @@ The PHAESTUS workspace pipeline is now feature-complete for the MVP:
 5. **Export Stage** - Download all artifacts for manufacturing
 
 Future enhancements:
+
 - Gerber generation from PCB layouts
 - PDF export of specifications
 - Cloud storage integration (R2)
@@ -246,13 +248,13 @@ Future enhancements:
 
 ## Summary
 
-| Feature | Implementation |
-|---------|----------------|
-| Spec download | Markdown with BOM, decisions, all specs |
-| Enclosure download | ZIP with OpenSCAD + iteration history |
-| Firmware download | ZIP with PlatformIO project structure |
-| Complete package | All files in one ZIP with master README |
-| Visual feedback | Loading spinner, success checkmark |
-| Manufacturing links | JLCPCB, PCBWay |
+| Feature             | Implementation                          |
+| ------------------- | --------------------------------------- |
+| Spec download       | Markdown with BOM, decisions, all specs |
+| Enclosure download  | ZIP with OpenSCAD + iteration history   |
+| Firmware download   | ZIP with PlatformIO project structure   |
+| Complete package    | All files in one ZIP with master README |
+| Visual feedback     | Loading spinner, success checkmark      |
+| Manufacturing links | JLCPCB, PCBWay                          |
 
 The Export stage completes the hardware design pipeline, giving users everything they need to manufacture their AI-designed hardware.

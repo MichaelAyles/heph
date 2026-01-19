@@ -277,11 +277,7 @@ export class EdgeExecutionEngine {
   /**
    * Compare two values with an operator.
    */
-  private compareValues(
-    actual: unknown,
-    operator: string,
-    expected: unknown
-  ): boolean {
+  private compareValues(actual: unknown, operator: string, expected: unknown): boolean {
     switch (operator) {
       case '==':
         return actual === expected
@@ -329,12 +325,7 @@ export class EdgeExecutionEngine {
     hookType: 'on_enter' | 'on_exit' | 'on_result' | 'on_error'
   ): Promise<void> {
     const nodeHooks = this.hooks
-      .filter(
-        (h) =>
-          h.nodeName === nodeName &&
-          h.hookType === hookType &&
-          h.isActive
-      )
+      .filter((h) => h.nodeName === nodeName && h.hookType === hookType && h.isActive)
       .sort((a, b) => a.priority - b.priority)
 
     for (const hook of nodeHooks) {
@@ -353,7 +344,10 @@ export class EdgeExecutionEngine {
   private async executeHook(hook: OrchestratorHook): Promise<void> {
     // Hook functions are defined as strings that reference built-in functions
     // or custom functions defined in the hook config
-    const builtInHooks: Record<string, (config: Record<string, unknown>, ctx: EdgeExecutionContext) => Promise<void>> = {
+    const builtInHooks: Record<
+      string,
+      (config: Record<string, unknown>, ctx: EdgeExecutionContext) => Promise<void>
+    > = {
       log: async (config) => {
         console.log(`[Hook] ${hook.nodeName}:${hook.hookType}`, config.message || '')
       },

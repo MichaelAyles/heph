@@ -107,7 +107,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('project', 'Error fetching conversations', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('project', 'Error fetching conversations', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json({ error: 'Failed to fetch conversations' }, { status: 500 })
   }
 }

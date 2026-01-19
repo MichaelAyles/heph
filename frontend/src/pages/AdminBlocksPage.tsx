@@ -106,7 +106,15 @@ export function AdminBlocksPage() {
 
   const blocks = data?.blocks || []
 
-  const categories: CategoryFilter[] = ['all', 'mcu', 'power', 'sensor', 'output', 'connector', 'utility']
+  const categories: CategoryFilter[] = [
+    'all',
+    'mcu',
+    'power',
+    'sensor',
+    'output',
+    'connector',
+    'utility',
+  ]
 
   return (
     <div className="min-h-screen bg-ash p-8">
@@ -119,7 +127,9 @@ export function AdminBlocksPage() {
             </Link>
             <div>
               <h1 className="text-2xl font-semibold text-steel">PCB Block Library</h1>
-              <p className="text-steel-dim text-sm">Manage hardware blocks with formal definitions</p>
+              <p className="text-steel-dim text-sm">
+                Manage hardware blocks with formal definitions
+              </p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -216,7 +226,9 @@ export function AdminBlocksPage() {
                     <span>
                       {block.widthUnits}x{block.heightUnits} grid
                     </span>
-                    <span>{block.widthUnits * 12.7}mm x {block.heightUnits * 12.7}mm</span>
+                    <span>
+                      {block.widthUnits * 12.7}mm x {block.heightUnits * 12.7}mm
+                    </span>
                   </div>
 
                   {/* Status badges */}
@@ -252,9 +264,7 @@ export function AdminBlocksPage() {
                   </div>
 
                   {/* Version */}
-                  {block.version && (
-                    <p className="text-xs text-steel-dim mt-2">v{block.version}</p>
-                  )}
+                  {block.version && <p className="text-xs text-steel-dim mt-2">v{block.version}</p>}
                 </div>
               )
             })}
@@ -353,10 +363,7 @@ export function AdminBlocksPage() {
 
         {/* Block Viewer Modal */}
         {isViewerOpen && selectedBlock && (
-          <BlockViewerModal
-            slug={selectedBlock.slug}
-            onClose={() => setIsViewerOpen(false)}
-          />
+          <BlockViewerModal slug={selectedBlock.slug} onClose={() => setIsViewerOpen(false)} />
         )}
       </div>
     </div>
@@ -364,13 +371,7 @@ export function AdminBlocksPage() {
 }
 
 // Block Editor Modal Component
-function BlockEditorModal({
-  block,
-  onClose,
-}: {
-  block: BlockSummary | null
-  onClose: () => void
-}) {
+function BlockEditorModal({ block, onClose }: { block: BlockSummary | null; onClose: () => void }) {
   const [jsonContent, setJsonContent] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -517,13 +518,7 @@ function BlockEditorModal({
 }
 
 // Block Uploader Modal Component
-function BlockUploaderModal({
-  block,
-  onClose,
-}: {
-  block: BlockSummary
-  onClose: () => void
-}) {
+function BlockUploaderModal({ block, onClose }: { block: BlockSummary; onClose: () => void }) {
   const [files, setFiles] = useState<{
     schematic?: File
     pcb?: File
@@ -577,21 +572,22 @@ function BlockUploaderModal({
     }
   }
 
-  const handleFileChange = (type: keyof typeof files) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (type === 'blockJson') {
-        // Read as text for block.json
-        const reader = new FileReader()
-        reader.onload = (event) => {
-          setFiles((prev) => ({ ...prev, blockJson: event.target?.result as string }))
+  const handleFileChange =
+    (type: keyof typeof files) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file) {
+        if (type === 'blockJson') {
+          // Read as text for block.json
+          const reader = new FileReader()
+          reader.onload = (event) => {
+            setFiles((prev) => ({ ...prev, blockJson: event.target?.result as string }))
+          }
+          reader.readAsText(file)
+        } else {
+          setFiles((prev) => ({ ...prev, [type]: file }))
         }
-        reader.readAsText(file)
-      } else {
-        setFiles((prev) => ({ ...prev, [type]: file }))
       }
     }
-  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -722,13 +718,7 @@ function FileInput({
 }
 
 // Block Viewer Modal Component
-function BlockViewerModal({
-  slug,
-  onClose,
-}: {
-  slug: string
-  onClose: () => void
-}) {
+function BlockViewerModal({ slug, onClose }: { slug: string; onClose: () => void }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-block', slug],
     queryFn: async () => {
@@ -743,9 +733,7 @@ function BlockViewerModal({
       <div className="bg-surface-900 border border-surface-700 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col rounded-lg">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-surface-700">
-          <h2 className="text-lg font-medium text-white">
-            {data?.block?.name || 'Block Details'}
-          </h2>
+          <h2 className="text-lg font-medium text-white">{data?.block?.name || 'Block Details'}</h2>
           <button
             onClick={onClose}
             className="p-2 text-steel-dim hover:text-white transition-colors rounded-lg hover:bg-surface-700"
@@ -761,19 +749,11 @@ function BlockViewerModal({
               <Loader2 className="w-8 h-8 text-copper animate-spin" strokeWidth={1.5} />
             </div>
           ) : error ? (
-            <div className="p-8 text-center text-red-400">
-              Failed to load block details
-            </div>
+            <div className="p-8 text-center text-red-400">Failed to load block details</div>
           ) : data?.block ? (
-            <BlockViewer
-              block={data.block}
-              editable={true}
-              className="rounded-none border-0"
-            />
+            <BlockViewer block={data.block} editable={true} className="rounded-none border-0" />
           ) : (
-            <div className="p-8 text-center text-steel-dim">
-              Block not found
-            </div>
+            <div className="p-8 text-center text-steel-dim">Block not found</div>
           )}
         </div>
       </div>

@@ -128,7 +128,9 @@ export function BusConnectionDiagram({
   }
 
   if (variant === 'table') {
-    return <BusConnectionTable blocks={sortedBlocks} powerBudget={powerBudget} className={className} />
+    return (
+      <BusConnectionTable blocks={sortedBlocks} powerBudget={powerBudget} className={className} />
+    )
   }
 
   return (
@@ -213,7 +215,9 @@ function BlockCard({ block, placement, isFirst, isLast }: BlockCardProps) {
 
   // Interfaces
   if (block.bus.i2c?.addresses) {
-    const addrs = block.bus.i2c.addresses.map((a) => `0x${a.toString(16).padStart(2, '0')}`).join(', ')
+    const addrs = block.bus.i2c.addresses
+      .map((a) => `0x${a.toString(16).padStart(2, '0')}`)
+      .join(', ')
     signals.push(`I2C: ${addrs}`)
   }
   // SPI - only show if it's a device (not master)
@@ -273,9 +277,10 @@ function BlockCard({ block, placement, isFirst, isLast }: BlockCardProps) {
             <span className="text-steel-dim font-mono text-[10px]">{taps.join(', ')}</span>
           </div>
         )}
-        {provides.length === 0 && requires.length === 0 && signals.length === 0 && taps.length === 0 && (
-          <span className="text-steel-dim italic">Passthrough only</span>
-        )}
+        {provides.length === 0 &&
+          requires.length === 0 &&
+          signals.length === 0 &&
+          taps.length === 0 && <span className="text-steel-dim italic">Passthrough only</span>}
       </div>
 
       {/* Edge indicators */}
@@ -298,9 +303,7 @@ interface PowerBudgetSummaryProps {
 function PowerBudgetSummary({ budget }: PowerBudgetSummaryProps) {
   const rails = ['3V3', '5V0', 'V3V3', 'VBUS', 'VBAT'] as const
 
-  const railsWithData = rails.filter(
-    (rail) => budget.provides[rail] || budget.requires[rail]
-  )
+  const railsWithData = rails.filter((rail) => budget.provides[rail] || budget.requires[rail])
 
   if (railsWithData.length === 0) {
     return null
@@ -315,7 +318,11 @@ function PowerBudgetSummary({ budget }: PowerBudgetSummaryProps) {
       <div
         className={clsx(
           'flex items-center gap-2 px-3 py-2 text-sm font-medium',
-          hasErrors ? 'bg-red-500/10 text-red-400' : hasWarnings ? 'bg-yellow-500/10 text-yellow-400' : 'bg-surface-700/50 text-steel'
+          hasErrors
+            ? 'bg-red-500/10 text-red-400'
+            : hasWarnings
+              ? 'bg-yellow-500/10 text-yellow-400'
+              : 'bg-surface-700/50 text-steel'
         )}
       >
         <Zap className="w-4 h-4" />

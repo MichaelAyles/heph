@@ -13,6 +13,7 @@ Create a public gallery page that showcases completed PHAESTUS projects without 
 ## The Problem
 
 For the Gemini 3 hackathon submission:
+
 1. Requiring login to see any content creates a barrier to entry
 2. Judges need to see the product without creating accounts
 3. The hackathon rules suggest avoiding paywalls and login requirements where possible
@@ -33,7 +34,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env } = context
 
   // Get completed projects - no auth required
-  const result = await env.DB.prepare(`
+  const result = await env.DB.prepare(
+    `
     SELECT
       p.id, p.name, p.description, p.status, p.spec,
       p.created_at, p.updated_at,
@@ -43,10 +45,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     WHERE p.status = 'complete'
     ORDER BY p.updated_at DESC
     LIMIT ? OFFSET ?
-  `).bind(limit, offset).all()
+  `
+  )
+    .bind(limit, offset)
+    .all()
 
   // Extract safe fields (summary, thumbnail)
-  const projects = result.results.map(row => ({
+  const projects = result.results.map((row) => ({
     id: row.id,
     name: row.name,
     thumbnailUrl: extractThumbnail(row.spec),
@@ -68,27 +73,29 @@ const project = {
   id: result.id,
   name: result.name,
   authorUsername: result.author_username,
-  spec: spec ? {
-    // Only expose safe fields
-    finalSpec: spec.finalSpec,
-    blueprints: spec.blueprints,
-    feasibility: {
-      overallScore: spec.feasibility.overallScore,
-      communication: spec.feasibility.communication,
-      // ... other public fields
-    },
-    pcb: {
-      boardSize: spec.pcb.boardSize,
-      placedBlocks: spec.pcb.placedBlocks,
-    },
-    enclosure: {
-      style: spec.enclosure.style,
-    },
-    firmware: {
-      language: spec.firmware.language,
-      files: spec.firmware.files?.map(f => ({ path: f.path })),
-    },
-  } : null,
+  spec: spec
+    ? {
+        // Only expose safe fields
+        finalSpec: spec.finalSpec,
+        blueprints: spec.blueprints,
+        feasibility: {
+          overallScore: spec.feasibility.overallScore,
+          communication: spec.feasibility.communication,
+          // ... other public fields
+        },
+        pcb: {
+          boardSize: spec.pcb.boardSize,
+          placedBlocks: spec.pcb.placedBlocks,
+        },
+        enclosure: {
+          style: spec.enclosure.style,
+        },
+        firmware: {
+          language: spec.firmware.language,
+          files: spec.firmware.files?.map((f) => ({ path: f.path })),
+        },
+      }
+    : null,
 }
 ```
 
@@ -104,7 +111,7 @@ const PUBLIC_ROUTES = [
   '/api/auth/me',
   '/api/blocks',
   '/api/images',
-  '/api/gallery',  // NEW: Public gallery access
+  '/api/gallery', // NEW: Public gallery access
 ]
 ```
 
@@ -123,7 +130,7 @@ export function GalleryPage() {
   })
 
   const filteredProjects = data?.projects.filter(
-    project =>
+    (project) =>
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.authorUsername.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -147,7 +154,7 @@ export function GalleryPage() {
       <main>
         <SearchInput value={searchQuery} onChange={setSearchQuery} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProjects?.map(project => (
+          {filteredProjects?.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}
         </div>
@@ -166,10 +173,7 @@ function ProjectCard({ project }: { project: GalleryProject }) {
       {/* Thumbnail */}
       <div className="aspect-video relative overflow-hidden">
         {project.thumbnailUrl ? (
-          <img
-            src={project.thumbnailUrl}
-            className="group-hover:scale-105 transition-transform"
-          />
+          <img src={project.thumbnailUrl} className="group-hover:scale-105 transition-transform" />
         ) : (
           <ImageIcon className="text-surface-600" />
         )}
@@ -265,6 +269,7 @@ function AppContent() {
 ### Why Limit Exposed Fields?
 
 Some spec data shouldn't be public:
+
 - User's original prompt (privacy)
 - Full firmware code (IP protection)
 - Detailed error logs (security)
@@ -311,13 +316,13 @@ frontend/
 
 ## Summary
 
-| Feature | Implementation |
-|---------|----------------|
-| Public API | `/api/gallery` and `/api/gallery/:id` |
-| No auth required | Added to middleware PUBLIC_ROUTES |
-| Safe field exposure | Only public-safe spec data |
-| Search | Client-side filter on name/author |
-| Responsive grid | 1/2/3 columns based on viewport |
-| CTA integration | "Sign In to Create" links throughout |
+| Feature             | Implementation                        |
+| ------------------- | ------------------------------------- |
+| Public API          | `/api/gallery` and `/api/gallery/:id` |
+| No auth required    | Added to middleware PUBLIC_ROUTES     |
+| Safe field exposure | Only public-safe spec data            |
+| Search              | Client-side filter on name/author     |
+| Responsive grid     | 1/2/3 columns based on viewport       |
+| CTA integration     | "Sign In to Create" links throughout  |
 
 The gallery provides a showcase for PHAESTUS designs while keeping the creation pipeline behind authentication, satisfying both hackathon requirements and API cost protection.

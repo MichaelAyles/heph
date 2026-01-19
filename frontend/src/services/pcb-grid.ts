@@ -149,9 +149,7 @@ export function getEdgeMount(block: BlockDefinition): EdgeMount {
     { edge: 'west' as EdgeMount, value: overhang.west ?? 0 },
   ]
 
-  const maxOverhang = overhangs.reduce((max, curr) =>
-    curr.value > max.value ? curr : max
-  )
+  const maxOverhang = overhangs.reduce((max, curr) => (curr.value > max.value ? curr : max))
 
   // Only consider it edge-mounted if overhang is significant (> 5mm)
   return maxOverhang.value > 5 ? maxOverhang.edge : null
@@ -178,7 +176,9 @@ export function canPlaceBlock(
     errors.push(`Block extends beyond grid right edge (needs ${x + width}, grid is ${grid.width})`)
   }
   if (y + height > grid.height) {
-    errors.push(`Block extends beyond grid bottom edge (needs ${y + height}, grid is ${grid.height})`)
+    errors.push(
+      `Block extends beyond grid bottom edge (needs ${y + height}, grid is ${grid.height})`
+    )
   }
 
   // Check for overlaps
@@ -315,7 +315,10 @@ export function removeBlock(grid: GridState, blockId: string): GridState {
  * Check if a column has continuous bus coverage between blocks.
  * Only gaps BETWEEN blocks matter - gaps at the top or bottom are fine.
  */
-export function checkColumnContinuity(grid: GridState, column: number): {
+export function checkColumnContinuity(
+  grid: GridState,
+  column: number
+): {
   continuous: boolean
   gaps: Array<{ startRow: number; endRow: number }>
 } {
@@ -394,7 +397,9 @@ export function validateBusContinuity(grid: GridState): {
         if (gap.startRow === gap.endRow) {
           errors.push(`Bus discontinuity in column ${column} at row ${gap.startRow}`)
         } else {
-          errors.push(`Bus discontinuity in column ${column} from row ${gap.startRow} to ${gap.endRow}`)
+          errors.push(
+            `Bus discontinuity in column ${column} from row ${gap.startRow} to ${gap.endRow}`
+          )
         }
       }
     }
@@ -486,9 +491,7 @@ export function calculatePowerBudget(blocks: BlockDefinition[]): PowerBudget {
       errors.push(`No block provides ${rail} rail, but ${req.max}mA max required`)
       marginPercent[rail] = -100
     } else if (req.max > available) {
-      errors.push(
-        `${rail} rail budget exceeded: ${req.max}mA required, ${available}mA available`
-      )
+      errors.push(`${rail} rail budget exceeded: ${req.max}mA required, ${available}mA available`)
       marginPercent[rail] = ((available - req.max) / available) * 100
     } else {
       marginPercent[rail] = ((available - req.max) / available) * 100
@@ -651,7 +654,12 @@ export function validateGrid(grid: GridState): PlacementResult {
 /**
  * Calculate the minimum board size to fit all placed blocks
  */
-export function calculateBoardSize(grid: GridState): { width: number; height: number; widthMm: number; heightMm: number } {
+export function calculateBoardSize(grid: GridState): {
+  width: number
+  height: number
+  widthMm: number
+  heightMm: number
+} {
   if (grid.placedBlocks.length === 0) {
     return { width: 0, height: 0, widthMm: 0, heightMm: 0 }
   }

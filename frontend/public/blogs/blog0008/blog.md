@@ -7,6 +7,7 @@
 ## The Problem
 
 Debugging production issues was painful:
+
 - No visibility into what the API was doing
 - console.log statements disappeared after requests ended
 - No way to correlate logs across a single request
@@ -15,6 +16,7 @@ Debugging production issues was painful:
 ## The Solution
 
 A comprehensive debug logging system that:
+
 - Logs to console with color coding (dev)
 - Stores logs in D1 database (admin users only)
 - Tracks request IDs for correlation
@@ -75,12 +77,14 @@ await logger.auth('Login attempt', { username })
 ```
 
 ### Log Levels
+
 - `debug` - Detailed diagnostic info
 - `info` - General operational info
 - `warn` - Warning conditions
 - `error` - Error conditions
 
 ### Categories
+
 - `general` - Uncategorized
 - `api` - API endpoint activity
 - `auth` - Authentication events
@@ -92,16 +96,17 @@ await logger.auth('Login attempt', { username })
 
 ### Behavior
 
-| Environment | Console | Database |
-|-------------|---------|----------|
+| Environment | Console          | Database             |
+| ----------- | ---------------- | -------------------- |
 | Development | Always (colored) | Admin users + errors |
-| Production | Errors only | Admin users + errors |
+| Production  | Errors only      | Admin users + errors |
 
 ---
 
 ## Middleware Integration
 
 The auth middleware (`functions/api/_middleware.ts`) now:
+
 1. Fetches `is_admin` flag from database
 2. Attaches `isAdmin` to user context
 3. Logs all API requests for admin users
@@ -127,6 +132,7 @@ GET /api/admin/logs
 ```
 
 Query parameters:
+
 - `limit` - Max results (default 100, max 500)
 - `offset` - Pagination offset
 - `level` - Filter by level (debug/info/warn/error)
@@ -134,6 +140,7 @@ Query parameters:
 - `requestId` - Filter by request ID
 
 Response:
+
 ```json
 {
   "logs": [
@@ -163,6 +170,7 @@ DELETE /api/admin/logs?olderThanDays=7
 ```
 
 Response:
+
 ```json
 {
   "deleted": 42,
@@ -176,13 +184,14 @@ Response:
 
 Logging was added to all LLM endpoints:
 
-| Endpoint | Events Logged |
-|----------|---------------|
-| `/api/llm/chat` | Request received, API errors, completion |
-| `/api/llm/stream` | Request received, stream started, errors |
-| `/api/llm/image` | Request received, generation complete, errors |
+| Endpoint          | Events Logged                                 |
+| ----------------- | --------------------------------------------- |
+| `/api/llm/chat`   | Request received, API errors, completion      |
+| `/api/llm/stream` | Request received, stream started, errors      |
+| `/api/llm/image`  | Request received, generation complete, errors |
 
 Each log includes:
+
 - Model used
 - Latency (ms)
 - Token counts

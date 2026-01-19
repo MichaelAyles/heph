@@ -16,7 +16,14 @@ export interface BlogCardProps {
   readingTime: number
 }
 
-export function BlogCard({ slug, title, date, excerpt, thumbnailPath, readingTime }: BlogCardProps) {
+export function BlogCard({
+  slug,
+  title,
+  date,
+  excerpt,
+  thumbnailPath,
+  readingTime,
+}: BlogCardProps) {
   const formattedDate = formatDate(date)
 
   return (

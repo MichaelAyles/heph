@@ -56,11 +56,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     } as VisibilityResponse)
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('project', 'Get visibility error', { error: error instanceof Error ? error.message : String(error) })
-    return Response.json(
-      { error: 'Failed to get visibility settings' },
-      { status: 500 }
-    )
+    await logger.error('project', 'Get visibility error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return Response.json({ error: 'Failed to get visibility settings' }, { status: 500 })
   }
 }
 
@@ -108,25 +107,18 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     }
 
     if (updates.length === 0) {
-      return Response.json(
-        { error: 'No valid fields to update' },
-        { status: 400 }
-      )
+      return Response.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
-    updates.push('updated_at = datetime(\'now\')')
+    updates.push("updated_at = datetime('now')")
     values.push(projectId, user.id)
 
-    await env.DB.prepare(
-      `UPDATE projects SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`
-    )
+    await env.DB.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`)
       .bind(...values)
       .run()
 
     // Return updated values
-    const updated = await env.DB.prepare(
-      'SELECT is_public, show_author FROM projects WHERE id = ?'
-    )
+    const updated = await env.DB.prepare('SELECT is_public, show_author FROM projects WHERE id = ?')
       .bind(projectId)
       .first()
 
@@ -136,10 +128,9 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     } as VisibilityResponse)
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('project', 'Update visibility error', { error: error instanceof Error ? error.message : String(error) })
-    return Response.json(
-      { error: 'Failed to update visibility settings' },
-      { status: 500 }
-    )
+    await logger.error('project', 'Update visibility error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return Response.json({ error: 'Failed to update visibility settings' }, { status: 500 })
   }
 }

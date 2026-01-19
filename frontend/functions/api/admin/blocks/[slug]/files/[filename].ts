@@ -48,9 +48,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
     // Update files in database
     delete files[fileKey]
-    await env.DB.prepare(
-      'UPDATE pcb_blocks SET files = ?, updated_at = ? WHERE slug = ?'
-    )
+    await env.DB.prepare('UPDATE pcb_blocks SET files = ?, updated_at = ? WHERE slug = ?')
       .bind(JSON.stringify(files), new Date().toISOString(), slug)
       .run()
 

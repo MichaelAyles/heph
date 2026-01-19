@@ -5,36 +5,31 @@
  */
 
 import type { Env } from '../../../../../env'
-import {
-  ORCHESTRATOR_SYSTEM_PROMPT,
-} from '../../../../../../src/prompts/orchestrator'
-import {
-  FEASIBILITY_SYSTEM_PROMPT,
-} from '../../../../../../src/prompts/feasibility'
+import { ORCHESTRATOR_SYSTEM_PROMPT } from '../../../../../../src/prompts/orchestrator'
+import { FEASIBILITY_SYSTEM_PROMPT } from '../../../../../../src/prompts/feasibility'
 import {
   ENCLOSURE_SYSTEM_PROMPT,
   ENCLOSURE_VISION_SYSTEM_PROMPT,
 } from '../../../../../../src/prompts/enclosure'
-import {
-  FIRMWARE_SYSTEM_PROMPT,
-} from '../../../../../../src/prompts/firmware'
+import { FIRMWARE_SYSTEM_PROMPT } from '../../../../../../src/prompts/firmware'
 import {
   ENCLOSURE_REVIEW_PROMPT,
   FIRMWARE_REVIEW_PROMPT,
 } from '../../../../../../src/prompts/review'
-import {
-  NAMING_SYSTEM_PROMPT,
-} from '../../../../../../src/prompts/naming'
+import { NAMING_SYSTEM_PROMPT } from '../../../../../../src/prompts/naming'
 
 // Map node_name to hardcoded prompts
-const HARDCODED_PROMPTS: Record<string, {
-  displayName: string
-  description: string
-  systemPrompt: string
-  category: string
-  stage: string | null
-  tokenEstimate: number
-}> = {
+const HARDCODED_PROMPTS: Record<
+  string,
+  {
+    displayName: string
+    description: string
+    systemPrompt: string
+    category: string
+    stage: string | null
+    tokenEstimate: number
+  }
+> = {
   orchestrator: {
     displayName: 'Orchestrator Agent',
     description: 'Main orchestrator that coordinates the entire hardware design pipeline',
@@ -45,7 +40,8 @@ const HARDCODED_PROMPTS: Record<string, {
   },
   feasibility: {
     displayName: 'Feasibility Analyzer',
-    description: 'Analyzes user description to determine if the project is within system capabilities',
+    description:
+      'Analyzes user description to determine if the project is within system capabilities',
     systemPrompt: FEASIBILITY_SYSTEM_PROMPT,
     category: 'agent',
     stage: 'spec',
@@ -116,7 +112,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   // Get current version
-  const existing = await env.DB.prepare('SELECT version FROM orchestrator_prompts WHERE node_name = ?')
+  const existing = await env.DB.prepare(
+    'SELECT version FROM orchestrator_prompts WHERE node_name = ?'
+  )
     .bind(nodeName)
     .first<{ version: number }>()
 
@@ -124,12 +122,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Prompt not found' }, { status: 404 })
   }
 
-  await env.DB.prepare(`
+  await env.DB.prepare(
+    `
     UPDATE orchestrator_prompts
     SET display_name = ?, description = ?, system_prompt = ?, category = ?, stage = ?,
         token_estimate = ?, version = ?, updated_at = datetime('now')
     WHERE node_name = ?
-  `)
+  `
+  )
     .bind(
       defaultPrompt.displayName,
       defaultPrompt.description,

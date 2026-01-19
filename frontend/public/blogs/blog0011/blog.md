@@ -39,6 +39,7 @@ if (!user.password_hash.startsWith('$2')) {
 ```
 
 This approach:
+
 - Works immediately with no migration script needed
 - Upgrades passwords transparently on next login
 - Uses cost factor 10 (industry standard)
@@ -90,6 +91,7 @@ async function withRetry<T>(
 ```
 
 Retry behavior:
+
 - **Attempt 1**: Immediate
 - **Attempt 2**: Wait 1 second
 - **Attempt 3**: Wait 2 seconds
@@ -109,20 +111,23 @@ Add retry buttons to error states:
 
 ```tsx
 // FeasibilityStep error state
-{error && (
-  <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
-    <p className="text-red-400">Failed to analyze feasibility</p>
-    <button
-      onClick={() => runAnalysis()}
-      className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-500 rounded"
-    >
-      Try Again
-    </button>
-  </div>
-)}
+{
+  error && (
+    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
+      <p className="text-red-400">Failed to analyze feasibility</p>
+      <button
+        onClick={() => runAnalysis()}
+        className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-500 rounded"
+      >
+        Try Again
+      </button>
+    </div>
+  )
+}
 ```
 
 Also added to:
+
 - `FinalizationStep` - retry final spec generation
 - `RejectionDisplay` - includes "Use Revised Specification" for suggested changes
 
@@ -156,6 +161,7 @@ Now sessions are sliding windows—you stay logged in as long as you're active.
 ### The Problem
 
 No limits on input length could lead to:
+
 - Excessive token usage (and cost)
 - LLM context overflow
 - Potential abuse
@@ -224,8 +230,17 @@ Estimate tokens based on character count:
 const estimatedCompletionTokens = Math.ceil(fullContent.length / 4)
 const estimatedPromptTokens = Math.ceil(JSON.stringify(messages).length / 4)
 
-await logLlmRequest(env, userId, projectId, model,
-  estimatedPromptTokens, estimatedCompletionTokens, latencyMs, 'success', null)
+await logLlmRequest(
+  env,
+  userId,
+  projectId,
+  model,
+  estimatedPromptTokens,
+  estimatedCompletionTokens,
+  latencyMs,
+  'success',
+  null
+)
 ```
 
 This gives us cost visibility for streaming requests, enabling budget tracking and alerts.
@@ -288,9 +303,7 @@ const IMAGE_TIMEOUT_MS = 60000
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(message)), ms)
-    ),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
   ])
 }
 
@@ -350,16 +363,16 @@ frontend/
 
 ## Summary
 
-| Category | Change | Impact |
-|----------|--------|--------|
-| Security | Bcrypt password hashing | Credentials protected at rest |
-| Resilience | LLM retry with backoff | Survives transient API failures |
-| UX | Retry buttons on errors | Users can recover from failures |
-| Sessions | Activity-based extension | No surprise logouts |
-| Validation | Input length limits | Controlled costs, no overflow |
-| Guardrails | Max refinement rounds | Process always completes |
-| Observability | Streaming token estimation | Full cost visibility |
-| Code Quality | Shared Gemini utility | DRY, 100% tested |
+| Category      | Change                     | Impact                          |
+| ------------- | -------------------------- | ------------------------------- |
+| Security      | Bcrypt password hashing    | Credentials protected at rest   |
+| Resilience    | LLM retry with backoff     | Survives transient API failures |
+| UX            | Retry buttons on errors    | Users can recover from failures |
+| Sessions      | Activity-based extension   | No surprise logouts             |
+| Validation    | Input length limits        | Controlled costs, no overflow   |
+| Guardrails    | Max refinement rounds      | Process always completes        |
+| Observability | Streaming token estimation | Full cost visibility            |
+| Code Quality  | Shared Gemini utility      | DRY, 100% tested                |
 
 ---
 

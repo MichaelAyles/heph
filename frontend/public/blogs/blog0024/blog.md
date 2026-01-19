@@ -7,6 +7,7 @@ The enclosure stage needs to know what the PCB looks like to generate accurate e
 ## The Goal
 
 Show a 3D preview of the PCB layout so users can:
+
 1. Verify block placement makes sense
 2. Estimate board size visually
 3. Provide input to enclosure generation
@@ -20,9 +21,9 @@ For the hackathon, placeholder boxes are fine. STEP models can come later.
 PHAESTUS uses a 12.7mm (0.5") grid system. Blocks occupy one or more grid cells based on their size:
 
 ```typescript
-const GRID_SIZE = 12.7  // mm
-const PCB_THICKNESS = 1.6  // mm
-const BLOCK_HEIGHT = 8  // mm (component standoff)
+const GRID_SIZE = 12.7 // mm
+const PCB_THICKNESS = 1.6 // mm
+const BLOCK_HEIGHT = 8 // mm (component standoff)
 ```
 
 ### Category Colors
@@ -31,12 +32,12 @@ Each block category gets a distinct color:
 
 ```typescript
 const CATEGORY_COLORS: Record<BlockCategory, string> = {
-  mcu: '#4f46e5',      // Indigo - ESP32/MCU
-  power: '#dc2626',    // Red - Power management
-  sensor: '#16a34a',   // Green - Sensors
-  output: '#f59e0b',   // Amber - LEDs, displays
+  mcu: '#4f46e5', // Indigo - ESP32/MCU
+  power: '#dc2626', // Red - Power management
+  sensor: '#16a34a', // Green - Sensors
+  output: '#f59e0b', // Amber - LEDs, displays
   connector: '#6b7280', // Gray - Connectors
-  utility: '#8b5cf6',  // Purple - Utility
+  utility: '#8b5cf6', // Purple - Utility
 }
 ```
 
@@ -95,10 +96,7 @@ Simple green rectangle:
 ```tsx
 function PCBBoard({ width, height }: { width: number; height: number }) {
   return (
-    <Box
-      args={[width, PCB_THICKNESS, height]}
-      position={[width / 2, 0, height / 2]}
-    >
+    <Box args={[width, PCB_THICKNESS, height]} position={[width / 2, 0, height / 2]}>
       <meshStandardMaterial
         color="#2d5a27" // Classic PCB green
         metalness={0.1}
@@ -126,7 +124,7 @@ function GridLines({ width, height }: { width: number; height: number }) {
     // ... horizontal lines too
 
     const geom = new THREE.BufferGeometry()
-    const positions = new Float32Array(points.flatMap(v => [v.x, v.y, v.z]))
+    const positions = new Float32Array(points.flatMap((v) => [v.x, v.y, v.z]))
     geom.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     return geom
   }, [width, height])
@@ -177,6 +175,7 @@ const [viewMode, setViewMode] = useState<'schematic' | '3d'>('schematic')
 ## Features
 
 The viewer includes:
+
 - **Orbit controls** - rotate, zoom, pan
 - **Auto-rotate toggle** - spin slowly for presentation
 - **Fullscreen mode** - expand for detailed inspection
@@ -192,9 +191,10 @@ If no explicit board size is provided, calculate from blocks:
 const calculatedBoardSize = useMemo(() => {
   if (boardSize) return boardSize
 
-  let maxX = 0, maxY = 0
+  let maxX = 0,
+    maxY = 0
   for (const placed of placedBlocks) {
-    const block = blocks.find(b => b.id === placed.blockId)
+    const block = blocks.find((b) => b.id === placed.blockId)
     if (block) {
       maxX = Math.max(maxX, (placed.gridX + block.widthUnits) * GRID_SIZE)
       maxY = Math.max(maxY, (placed.gridY + block.heightUnits) * GRID_SIZE)
@@ -208,6 +208,7 @@ const calculatedBoardSize = useMemo(() => {
 ## Result
 
 Users can now toggle between schematic view and 3D preview:
+
 - **Schematic**: Technical KiCad schematic for circuit review
 - **3D Preview**: Spatial visualization for layout understanding
 
@@ -216,6 +217,7 @@ The 3D view makes it obvious if blocks are clustered weirdly or if the board is 
 ## Future Enhancements
 
 For production, I'd add:
+
 1. STEP model loading for accurate block shapes
 2. Silkscreen layer overlay
 3. Copper trace visualization

@@ -519,7 +519,11 @@ export function stateToProjectSpec(state: OrchestratorState): Partial<ProjectSpe
         completedAt: state.finalSpec?.lockedAt,
       },
       pcb: {
-        status: state.schematicData ? 'complete' : state.placedBlocks.length ? 'in_progress' : 'pending',
+        status: state.schematicData
+          ? 'complete'
+          : state.placedBlocks.length
+            ? 'in_progress'
+            : 'pending',
       },
       enclosure: {
         status: state.stlUrl ? 'complete' : state.enclosureCode ? 'in_progress' : 'pending',
@@ -534,7 +538,12 @@ export function stateToProjectSpec(state: OrchestratorState): Partial<ProjectSpe
     orchestratorState: {
       conversationHistory: [], // Not storing full conversation in new model
       iteration: state.iterationCount,
-      status: state.status === 'complete' ? 'completed' : state.status === 'paused' ? 'paused' : 'running',
+      status:
+        state.status === 'complete'
+          ? 'completed'
+          : state.status === 'paused'
+            ? 'paused'
+            : 'running',
       currentStage: state.currentStage,
       updatedAt: new Date().toISOString(),
     },
@@ -587,11 +596,7 @@ export function requiresUserInput(mode: OrchestratorMode, nodeId: string): boole
 
   // design_it mode requires user confirmation for generated artifacts
   if (mode === 'design_it') {
-    const designModeNodes = [
-      'reviewEnclosure',
-      'reviewFirmware',
-      'confirmGeneration',
-    ]
+    const designModeNodes = ['reviewEnclosure', 'reviewFirmware', 'confirmGeneration']
     return designModeNodes.includes(nodeId)
   }
 

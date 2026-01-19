@@ -97,11 +97,11 @@ export type BlockCategory = z.infer<typeof BlockCategorySchema>
  * Pin direction for DRC validation
  */
 export const PinDirectionSchema = z.enum([
-  'input',       // Input only (e.g., ADC input)
-  'output',      // Output only (e.g., power supply output)
+  'input', // Input only (e.g., ADC input)
+  'output', // Output only (e.g., power supply output)
   'bidirectional', // GPIO, I2C, etc.
-  'power',       // Power rail (GND, 3V3, 5V0)
-  'open-drain',  // Requires external pull-up
+  'power', // Power rail (GND, 3V3, 5V0)
+  'open-drain', // Requires external pull-up
 ])
 
 export type PinDirection = z.infer<typeof PinDirectionSchema>
@@ -184,18 +184,25 @@ export const I2cDetailsSchema = z.object({
  * - If `master: false` or undefined, this block is a SPI device and uses the specified csPin
  */
 export const SpiDetailsSchema = z.object({
-  master: z.boolean().optional().describe('True if this block provides SPI (MCU), false if it consumes SPI (device)'),
-  csPin: z.enum(['SPI0_CS0', 'SPI0_CS1']).optional().describe('CS pin used by device, or available CS pins for master'),
-  csPins: z.array(z.enum(['SPI0_CS0', 'SPI0_CS1'])).optional().describe('Available CS pins (for master blocks)'),
+  master: z
+    .boolean()
+    .optional()
+    .describe('True if this block provides SPI (MCU), false if it consumes SPI (device)'),
+  csPin: z
+    .enum(['SPI0_CS0', 'SPI0_CS1'])
+    .optional()
+    .describe('CS pin used by device, or available CS pins for master'),
+  csPins: z
+    .array(z.enum(['SPI0_CS0', 'SPI0_CS1']))
+    .optional()
+    .describe('Available CS pins (for master blocks)'),
 })
 
 /**
  * GPIO claims (prevents conflicts)
  */
 export const GpioClaimsSchema = z.object({
-  claims: z.array(
-    z.enum(['GPIO0', 'GPIO1', 'GPIO2', 'GPIO3', 'GPIO4', 'GPIO5', 'GPIO6', 'GPIO7'])
-  ),
+  claims: z.array(z.enum(['GPIO0', 'GPIO1', 'GPIO2', 'GPIO3', 'GPIO4', 'GPIO5', 'GPIO6', 'GPIO7'])),
 })
 
 /**
@@ -238,10 +245,9 @@ export type BusInterface = z.infer<typeof BusInterfaceSchema>
  */
 export const BusConnectionSchema = z.object({
   connector: z.string().optional().describe('e.g., "J3" - KiCad connector reference'),
-  signals: z.union([
-    z.literal('ALL'),
-    z.array(BusSignalSchema),
-  ]).describe('Which signals are routed through this column'),
+  signals: z
+    .union([z.literal('ALL'), z.array(BusSignalSchema)])
+    .describe('Which signals are routed through this column'),
 })
 
 export type BusConnection = z.infer<typeof BusConnectionSchema>
@@ -284,8 +290,14 @@ export type EdgeMount = z.infer<typeof EdgeMountSchema>
 export const PhysicalPropertiesSchema = z.object({
   overhang: OverhangSchema.optional(),
   heightMm: z.number().positive().optional().describe('Total component height for clearance'),
-  clearanceAboveMm: z.number().nonnegative().optional().describe('Required clearance (e.g., PIR dome)'),
-  edgeMount: EdgeMountSchema.optional().describe('Edge this block must be placed at (for USB connectors, etc.)'),
+  clearanceAboveMm: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe('Required clearance (e.g., PIR dome)'),
+  edgeMount: EdgeMountSchema.optional().describe(
+    'Edge this block must be placed at (for USB connectors, etc.)'
+  ),
 })
 
 export type PhysicalProperties = z.infer<typeof PhysicalPropertiesSchema>
@@ -326,7 +338,10 @@ export const BlockComponentSchema = z.object({
   manufacturer: z.string().optional(),
   mpn: z.string().optional().describe('Manufacturer part number'),
   quantity: z.number().int().positive(),
-  nofit: z.boolean().optional().describe('True if component should not be populated (e.g., board interconnects)'),
+  nofit: z
+    .boolean()
+    .optional()
+    .describe('True if component should not be populated (e.g., board interconnects)'),
 })
 
 export type BlockComponentDef = z.infer<typeof BlockComponentSchema>
@@ -339,16 +354,16 @@ export type BlockComponentDef = z.infer<typeof BlockComponentSchema>
  * Wireless protocol capabilities (primarily for MCU blocks)
  */
 export const WirelessCapabilitySchema = z.enum([
-  'wifi4',      // 802.11n
-  'wifi5',      // 802.11ac
-  'wifi6',      // 802.11ax
-  'ble4',       // Bluetooth Low Energy 4.x
-  'ble5',       // Bluetooth Low Energy 5.x
-  'zigbee',     // Zigbee 3.0
-  'thread',     // Thread / Matter
-  'lora',       // LoRa
-  'nfc',        // NFC
-  'uwb',        // Ultra-Wideband
+  'wifi4', // 802.11n
+  'wifi5', // 802.11ac
+  'wifi6', // 802.11ax
+  'ble4', // Bluetooth Low Energy 4.x
+  'ble5', // Bluetooth Low Energy 5.x
+  'zigbee', // Zigbee 3.0
+  'thread', // Thread / Matter
+  'lora', // LoRa
+  'nfc', // NFC
+  'uwb', // Ultra-Wideband
 ])
 
 export type WirelessCapability = z.infer<typeof WirelessCapabilitySchema>
@@ -378,9 +393,7 @@ export const BlockDefinitionSchema = z.object({
     .min(3)
     .max(50),
   name: z.string().min(1).max(100),
-  version: z
-    .string()
-    .regex(/^\d+\.\d+\.\d+$/, 'Version must be semver format (e.g., 1.0.0)'),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/, 'Version must be semver format (e.g., 1.0.0)'),
   category: BlockCategorySchema,
   description: z.string().min(10).max(500),
 
@@ -405,7 +418,10 @@ export const BlockDefinitionSchema = z.object({
   components: z.array(BlockComponentSchema),
 
   // Wireless capabilities (for MCU blocks)
-  wireless: z.array(WirelessCapabilitySchema).optional().describe('e.g., ["wifi6", "ble5", "thread", "zigbee"]'),
+  wireless: z
+    .array(WirelessCapabilitySchema)
+    .optional()
+    .describe('e.g., ["wifi6", "ble5", "thread", "zigbee"]'),
 
   // Firmware hints for code generation
   firmware: FirmwareHintsSchema.optional(),

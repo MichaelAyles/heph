@@ -102,12 +102,7 @@ export const useLangGraphOrchestratorStore = create<LangGraphOrchestratorStore>(
     const checkpointer = new MemoryCheckpointer()
     const newGraph = createOrchestratorGraph({
       checkpointer,
-      interruptBefore: [
-        'collectAnswers',
-        'selectBlueprint',
-        'selectName',
-        'confirmPcbBlocks',
-      ],
+      interruptBefore: ['collectAnswers', 'selectBlueprint', 'selectName', 'confirmPcbBlocks'],
     })
 
     set({ graph: newGraph, checkpointer })
@@ -392,5 +387,4 @@ export const useLangGraphActions = () =>
 /**
  * Select current orchestrator state (for components that need full state)
  */
-export const useLangGraphState = () =>
-  useLangGraphOrchestratorStore((s) => s.state)
+export const useLangGraphState = () => useLangGraphOrchestratorStore((s) => s.state)
