@@ -114,11 +114,14 @@ function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeomet
   const normals: number[] = []
 
   for (const geom of geometries) {
-    const pos = geom.attributes.position
+    // Convert indexed geometry to non-indexed to preserve face definitions
+    const nonIndexed = geom.index ? geom.toNonIndexed() : geom
+
+    const pos = nonIndexed.attributes.position
     for (let i = 0; i < pos.count; i++) {
       positions.push(pos.getX(i), pos.getY(i), pos.getZ(i))
     }
-    const norm = geom.attributes.normal
+    const norm = nonIndexed.attributes.normal
     if (norm) {
       for (let i = 0; i < norm.count; i++) {
         normals.push(norm.getX(i), norm.getY(i), norm.getZ(i))
