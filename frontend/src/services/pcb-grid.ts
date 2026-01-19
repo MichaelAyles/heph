@@ -312,17 +312,37 @@ export function removeBlock(grid: GridState, blockId: string): GridState {
 // =============================================================================
 
 /**
- * Check if a column has continuous bus coverage from top to bottom
+ * Check if a column has continuous bus coverage between blocks.
+ * Only gaps BETWEEN blocks matter - gaps at the top or bottom are fine.
  */
 export function checkColumnContinuity(grid: GridState, column: number): {
   continuous: boolean
   gaps: Array<{ startRow: number; endRow: number }>
 } {
+  // Find all rows that have blocks in this column
+  const blockRows: number[] = []
+  for (let row = 0; row < grid.height; row++) {
+    const cell = getCell(grid, column, row)
+    if (cell?.blockId !== null) {
+      blockRows.push(row)
+    }
+  }
+
+  // If 0 or 1 blocks, no continuity needed
+  if (blockRows.length <= 1) {
+    return { continuous: true, gaps: [] }
+  }
+
+  // Find gaps between blocks (not at edges)
   const gaps: Array<{ startRow: number; endRow: number }> = []
+  const firstBlock = blockRows[0]
+  const lastBlock = blockRows[blockRows.length - 1]
+
   let inGap = false
   let gapStart = 0
 
-  for (let row = 0; row < grid.height; row++) {
+  // Only check from first block to last block
+  for (let row = firstBlock; row <= lastBlock; row++) {
     const cell = getCell(grid, column, row)
     const hasBlock = cell?.blockId !== null
 
@@ -331,15 +351,10 @@ export function checkColumnContinuity(grid: GridState, column: number): {
       inGap = true
       gapStart = row
     } else if (hasBlock && inGap) {
-      // Ending a gap
+      // Ending a gap - this is a real discontinuity between blocks
       inGap = false
       gaps.push({ startRow: gapStart, endRow: row - 1 })
     }
-  }
-
-  // Check if gap extends to bottom
-  if (inGap) {
-    gaps.push({ startRow: gapStart, endRow: grid.height - 1 })
   }
 
   return {

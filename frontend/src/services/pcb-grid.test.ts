@@ -496,6 +496,18 @@ describe('checkColumnContinuity', () => {
     expect(result.gaps).toHaveLength(0)
   })
 
+  it('returns continuous for single isolated block', () => {
+    let grid = createGridState(4, 6)
+    // Just one block in the middle - nothing to connect to
+    grid = placeBlock(grid, createMockBlock({ slug: 'lonely-block' }), 1, 2)
+
+    const result = checkColumnContinuity(grid, 1)
+
+    // Single block has nothing to connect to, so it's continuous
+    expect(result.continuous).toBe(true)
+    expect(result.gaps).toHaveLength(0)
+  })
+
   it('detects single-row gap', () => {
     let grid = createGridState(2, 4)
     // Fill column 0 except row 2
@@ -540,30 +552,32 @@ describe('checkColumnContinuity', () => {
     expect(result.gaps).toHaveLength(2)
   })
 
-  it('detects gap at start of column', () => {
+  it('ignores gap at start of column (no block to connect to)', () => {
     let grid = createGridState(2, 4)
-    // Gap at row 0
+    // Gap at row 0, but nothing above to connect to
     grid = placeBlock(grid, createMockBlock({ slug: 'block-1' }), 0, 1)
     grid = placeBlock(grid, createMockBlock({ slug: 'block-2' }), 0, 2)
     grid = placeBlock(grid, createMockBlock({ slug: 'block-3' }), 0, 3)
 
     const result = checkColumnContinuity(grid, 0)
 
-    expect(result.continuous).toBe(false)
-    expect(result.gaps[0].startRow).toBe(0)
+    // Should be continuous - gap at top doesn't disconnect anything
+    expect(result.continuous).toBe(true)
+    expect(result.gaps).toHaveLength(0)
   })
 
-  it('detects gap at end of column', () => {
+  it('ignores gap at end of column (no block to connect to)', () => {
     let grid = createGridState(2, 4)
     grid = placeBlock(grid, createMockBlock({ slug: 'block-0' }), 0, 0)
     grid = placeBlock(grid, createMockBlock({ slug: 'block-1' }), 0, 1)
     grid = placeBlock(grid, createMockBlock({ slug: 'block-2' }), 0, 2)
-    // Gap at row 3
+    // Gap at row 3, but nothing below to connect to
 
     const result = checkColumnContinuity(grid, 0)
 
-    expect(result.continuous).toBe(false)
-    expect(result.gaps[0].endRow).toBe(3)
+    // Should be continuous - gap at bottom doesn't disconnect anything
+    expect(result.continuous).toBe(true)
+    expect(result.gaps).toHaveLength(0)
   })
 })
 
