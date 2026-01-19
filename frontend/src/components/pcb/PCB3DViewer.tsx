@@ -199,12 +199,13 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
   // Get category color
   const color = CATEGORY_COLORS[block.category] || '#6b7280'
 
-  // Get STEP file URL if available
+  // Get STEP file URL - try explicit file, then conventional naming
   const stepUrl = useMemo(() => {
     if (block.files?.stepModel) {
       return `/api/blocks/${block.slug}/files/${block.files.stepModel}`
     }
-    return null
+    // Try conventional naming pattern as fallback
+    return `/api/blocks/${block.slug}/files/${block.slug}.step`
   }, [block.slug, block.files?.stepModel])
 
   // Load STEP geometry
