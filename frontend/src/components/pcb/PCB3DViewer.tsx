@@ -68,8 +68,12 @@ interface BlockMeshProps {
 async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | null> {
   // Check cache first
   if (geometryCache.has(url)) {
-    return geometryCache.get(url) || null
+    const cached = geometryCache.get(url)
+    console.log('[PCB3DViewer] Using cached geometry for:', url, cached ? 'found' : 'null')
+    return cached || null
   }
+
+  console.log('[PCB3DViewer] Loading STEP file:', url)
 
   try {
     // Initialize the OCCT library (dynamically loaded)
@@ -79,6 +83,7 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
     // Fetch the STEP file
     const response = await fetch(url)
     if (!response.ok) {
+      console.warn('[PCB3DViewer] STEP file fetch failed:', url, response.status, response.statusText)
       geometryCache.set(url, null)
       return null
     }
@@ -135,10 +140,11 @@ async function loadStepGeometry(url: string): Promise<THREE.BufferGeometry | nul
     // Center the geometry and get its bounding box for scaling
     mergedGeometry.computeBoundingBox()
 
+    console.log('[PCB3DViewer] STEP file loaded successfully:', url, 'vertices:', mergedGeometry.attributes.position.count)
     geometryCache.set(url, mergedGeometry)
     return mergedGeometry
   } catch (error) {
-    console.warn('Failed to load STEP file:', url, error)
+    console.warn('[PCB3DViewer] Failed to load STEP file:', url, error)
     geometryCache.set(url, null)
     return null
   }
@@ -201,12 +207,12 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
 
   // Get STEP file URL - try explicit file, then conventional naming
   const stepUrl = useMemo(() => {
-    if (block.files?.stepModel) {
-      return `/api/blocks/${block.slug}/files/${block.files.stepModel}`
-    }
-    // Try conventional naming pattern as fallback
-    return `/api/blocks/${block.slug}/files/${block.slug}.step`
-  }, [block.slug, block.files?.stepModel])
+    const url = block.files?.stepModel
+      ? `/api/blocks/${block.slug}/files/${block.files.stepModel}`
+      : `/api/blocks/${block.slug}/files/${block.slug}.step`
+    console.log('[PCB3DViewer] Block', block.slug, 'files:', block.files, '→ stepUrl:', url)
+    return url
+  }, [block.slug, block.files])
 
   // Load STEP geometry
   useEffect(() => {
