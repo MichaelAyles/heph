@@ -535,14 +535,22 @@ async function fetchBlockPcb(slug: string): Promise<string> {
 }
 
 /**
- * Build global net list from all blocks for PCB merging
- * Returns a map of (blockSlug, localNetName) -> globalNetId
+ * Net mapping result with both ID and name
  */
-function buildPcbNetMapping(
-  loadedBlocks: LoadedPcbBlock[]
-): { globalNets: Map<string, number>; netMapping: Map<string, number> } {
-  const globalNets = new Map<string, number>()
-  const netMapping = new Map<string, number>() // "blockSlug:localNetName" -> globalNetId
+interface NetMappingResult {
+  globalNets: Map<string, number>       // globalNetName -> globalNetId
+  netMapping: Map<string, number>       // "blockSlug:localNetName" -> globalNetId
+  netNameMapping: Map<string, string>   // "blockSlug:localNetName" -> globalNetName
+}
+
+/**
+ * Build global net list from all blocks for PCB merging
+ * Returns maps for both ID and name lookups
+ */
+function buildPcbNetMapping(loadedBlocks: LoadedPcbBlock[]): NetMappingResult {
+  const globalNets = new Map<string, number>()       // globalNetName -> globalNetId
+  const netMapping = new Map<string, number>()       // "blockSlug:localNetName" -> globalNetId
+  const netNameMapping = new Map<string, string>()   // "blockSlug:localNetName" -> globalNetName
   let nextNetId = 1
 
   // Standard bus signals that should be shared across all blocks
@@ -572,9 +580,11 @@ function buildPcbNetMapping(
       if (netName === '') {
         // Unconnected net
         netMapping.set(localKey, 0)
+        netNameMapping.set(localKey, '')
       } else if (globalNets.has(netName)) {
-        // Bus signal - use existing global ID
+        // Bus signal - use existing global ID and name
         netMapping.set(localKey, globalNets.get(netName)!)
+        netNameMapping.set(localKey, netName)
       } else {
         // Block-local signal - create new global ID with block prefix
         const globalName = `${loaded.block.slug}_${netName}`
@@ -582,26 +592,31 @@ function buildPcbNetMapping(
           globalNets.set(globalName, nextNetId++)
         }
         netMapping.set(localKey, globalNets.get(globalName)!)
+        netNameMapping.set(localKey, globalName)
       }
     }
   }
 
-  return { globalNets, netMapping }
+  return { globalNets, netMapping, netNameMapping }
 }
 
 /**
- * Get the global net ID for a local net in a block
+ * Get the global net ID and name for a local net in a block
  */
-function getGlobalNetId(
+function getGlobalNet(
   blockSlug: string,
   localNetId: number,
   localNets: PcbNet[],
-  netMapping: Map<string, number>
-): number {
+  netMapping: Map<string, number>,
+  netNameMapping: Map<string, string>
+): { id: number; name: string } {
   const localNet = localNets.find(n => n.id === localNetId)
   const localNetName = localNet?.name || ''
   const key = `${blockSlug}:${localNetName}`
-  return netMapping.get(key) ?? 0
+  return {
+    id: netMapping.get(key) ?? 0,
+    name: netNameMapping.get(key) ?? '',
+  }
 }
 
 /**
@@ -613,7 +628,8 @@ function transformFootprint(
   offsetY: number,
   blockSlug: string,
   localNets: PcbNet[],
-  netMapping: Map<string, number>
+  netMapping: Map<string, number>,
+  netNameMapping: Map<string, string>
 ): Footprint {
   // Update position
   const pos = footprint.position
@@ -630,17 +646,14 @@ function transformFootprint(
     refProp.value = `${refProp.value}_${blockSlug}`
   }
 
-  // Remap pad nets
+  // Remap pad nets - use global net ID AND name
   if (footprint.fpPads) {
     for (const pad of footprint.fpPads) {
       if (pad.net) {
         const localNetId = pad.net.id ?? 0
-        pad.net.id = getGlobalNetId(blockSlug, localNetId, localNets, netMapping)
-        // Update net name too
-        const localNet = localNets.find(n => n.id === localNetId)
-        if (localNet) {
-          pad.net.name = localNet.name || ''
-        }
+        const globalNet = getGlobalNet(blockSlug, localNetId, localNets, netMapping, netNameMapping)
+        pad.net.id = globalNet.id
+        pad.net.name = globalNet.name
       }
     }
   }
@@ -657,7 +670,8 @@ function transformSegment(
   offsetY: number,
   blockSlug: string,
   localNets: PcbNet[],
-  netMapping: Map<string, number>
+  netMapping: Map<string, number>,
+  netNameMapping: Map<string, string>
 ): Segment {
   if (segment.start) {
     const x = typeof segment.start.x === 'number' ? segment.start.x : 0
@@ -672,10 +686,15 @@ function transformSegment(
     segment.end.y = y + offsetY
   }
 
-  // Remap net
+  // Remap net - use global net ID AND name
   if (segment.net) {
     const localNetId = segment.net.id ?? 0
-    segment.net.id = getGlobalNetId(blockSlug, localNetId, localNets, netMapping)
+    const globalNet = getGlobalNet(blockSlug, localNetId, localNets, netMapping, netNameMapping)
+    segment.net.id = globalNet.id
+    // Segments also have net name in some versions
+    if ('name' in segment.net) {
+      (segment.net as { id?: number; name?: string }).name = globalNet.name
+    }
   }
 
   return segment
@@ -690,7 +709,8 @@ function transformVia(
   offsetY: number,
   blockSlug: string,
   localNets: PcbNet[],
-  netMapping: Map<string, number>
+  netMapping: Map<string, number>,
+  netNameMapping: Map<string, string>
 ): Via {
   if (via.at) {
     const x = typeof via.at.x === 'number' ? via.at.x : 0
@@ -699,10 +719,15 @@ function transformVia(
     via.at.y = y + offsetY
   }
 
-  // Remap net
+  // Remap net - use global net ID AND name
   if (via.net) {
     const localNetId = via.net.id ?? 0
-    via.net.id = getGlobalNetId(blockSlug, localNetId, localNets, netMapping)
+    const globalNet = getGlobalNet(blockSlug, localNetId, localNets, netMapping, netNameMapping)
+    via.net.id = globalNet.id
+    // Vias also have net name in some versions
+    if ('name' in via.net) {
+      (via.net as { id?: number; name?: string }).name = globalNet.name
+    }
   }
 
   return via
@@ -844,7 +869,7 @@ export async function mergeBlockPCBs(
   }
 
   // Build global net mapping
-  const { globalNets, netMapping } = buildPcbNetMapping(loadedBlocks)
+  const { globalNets, netMapping, netNameMapping } = buildPcbNetMapping(loadedBlocks)
 
   // Create merged PCB using first block as template for layers/setup
   const templatePcb = loadedBlocks[0].pcb
@@ -894,7 +919,8 @@ export async function mergeBlockPCBs(
         loaded.offsetY,
         loaded.block.slug,
         localNets,
-        netMapping
+        netMapping,
+        netNameMapping
       )
       pcbAny._footprints.push(transformed)
     }
@@ -913,7 +939,8 @@ export async function mergeBlockPCBs(
         loaded.offsetY,
         loaded.block.slug,
         localNets,
-        netMapping
+        netMapping,
+        netNameMapping
       )
       pcbAny._segments.push(transformed)
     }
@@ -932,7 +959,8 @@ export async function mergeBlockPCBs(
         loaded.offsetY,
         loaded.block.slug,
         localNets,
-        netMapping
+        netMapping,
+        netNameMapping
       )
       pcbAny._vias.push(transformed)
     }
