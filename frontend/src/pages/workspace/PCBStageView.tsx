@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import JSZip from 'jszip'
 import {
   Cpu,
   ArrowRight,
@@ -262,30 +263,35 @@ export function PCBStageView() {
         const res = await fetch(`/api/blocks/${slug}/files/${block.files.gerbers}`)
         if (!res.ok) continue
 
-        // The gerbers are stored as a ZIP, we need to extract them
-        // For now, fetch individual layer files if they exist
-        const gerberFiles = [
-          { name: `${slug}-F_Cu.gtl`, layer: `${slug}-F.Cu` },
-          { name: `${slug}-B_Cu.gbl`, layer: `${slug}-B.Cu` },
-          { name: `${slug}-In1_Cu.g2`, layer: `${slug}-In1.Cu` },
-          { name: `${slug}-In2_Cu.g3`, layer: `${slug}-In2.Cu` },
-          { name: `${slug}-F_Mask.gts`, layer: `${slug}-F.Mask` },
-          { name: `${slug}-B_Mask.gbs`, layer: `${slug}-B.Mask` },
-          { name: `${slug}-F_Silkscreen.gto`, layer: `${slug}-F.SilkS` },
-          { name: `${slug}-B_Silkscreen.gbo`, layer: `${slug}-B.SilkS` },
-          { name: `${slug}-Edge_Cuts.gm1`, layer: `${slug}-Edge.Cuts` },
+        // Extract gerbers from the ZIP
+        const blob = await res.blob()
+        const zip = await JSZip.loadAsync(blob)
+
+        // Map file extensions/patterns to layer names
+        const layerMappings = [
+          { patterns: ['-f_cu', '.gtl', '-F_Cu'], layer: `${slug}-F.Cu` },
+          { patterns: ['-b_cu', '.gbl', '-B_Cu'], layer: `${slug}-B.Cu` },
+          { patterns: ['-in1_cu', '.g2', '-In1_Cu'], layer: `${slug}-In1.Cu` },
+          { patterns: ['-in2_cu', '.g3', '-In2_Cu'], layer: `${slug}-In2.Cu` },
+          { patterns: ['-f_mask', '.gts', '-F_Mask'], layer: `${slug}-F.Mask` },
+          { patterns: ['-b_mask', '.gbs', '-B_Mask'], layer: `${slug}-B.Mask` },
+          { patterns: ['-f_silkscreen', '.gto', '-F_Silkscreen', '-F_SilkS'], layer: `${slug}-F.SilkS` },
+          { patterns: ['-b_silkscreen', '.gbo', '-B_Silkscreen', '-B_SilkS'], layer: `${slug}-B.SilkS` },
+          { patterns: ['-edge_cuts', '.gm1', '-Edge_Cuts'], layer: `${slug}-Edge.Cuts` },
         ]
 
-        // Try to load individual gerber files
-        for (const gf of gerberFiles) {
-          try {
-            const gRes = await fetch(`/api/blocks/${slug}/files/gerbers/${gf.name}`)
-            if (gRes.ok) {
-              const content = await gRes.text()
-              layers[gf.layer] = content
+        // Extract each file from the ZIP
+        for (const [filename, zipEntry] of Object.entries(zip.files)) {
+          if (zipEntry.dir) continue
+          const lowerFilename = filename.toLowerCase()
+
+          // Find matching layer
+          for (const mapping of layerMappings) {
+            if (mapping.patterns.some(p => lowerFilename.includes(p.toLowerCase()))) {
+              const content = await zipEntry.async('string')
+              layers[mapping.layer] = content
+              break
             }
-          } catch {
-            // Skip files that don't exist
           }
         }
       }
