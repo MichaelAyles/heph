@@ -87,13 +87,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const errorText = await response.text()
       await logger.error('llm', 'Image API error', { error: errorText, model })
 
-      // Log failed request
+      // Log failed request - still charge cost as API quota was consumed
       const id = crypto.randomUUID().replace(/-/g, '')
+      const costUsd = calculateImageCost(model)
       await env.DB.prepare(
         `INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
-         VALUES (?, ?, NULL, ?, 0, 0, 0, ?, 0, 'error', ?, datetime('now'))`
+         VALUES (?, ?, NULL, ?, 0, 0, 0, ?, ?, 'error', ?, datetime('now'))`
       )
-        .bind(id, user.id, model, Date.now() - startTime, errorText)
+        .bind(id, user.id, model, Date.now() - startTime, costUsd, errorText)
         .run()
 
       // Don't expose error details to client (may contain API keys or sensitive info)
