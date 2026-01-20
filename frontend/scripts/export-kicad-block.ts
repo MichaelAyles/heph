@@ -2,24 +2,22 @@
 /**
  * KiCad Block Export Script
  *
- * Exports a KiCad project to a ZIP file ready for block import:
- * - 4-layer Gerber files
- * - Drill files
- * - .kicad_pcb file
- * - .kicad_sch file
- * - .step 3D model
+ * Exports a KiCad project to a directory ready for block import:
+ * - gerbers.zip (4-layer Gerber files + drill files)
+ * - {name}.kicad_pcb
+ * - {name}.kicad_sch
+ * - {name}.step
  *
  * Usage:
  *   pnpm export-block <path-to-kicad-project> [options]
  *
  * Options:
- *   --upload    Upload to admin/blocks after export
- *   --slug      Block slug for upload (defaults to project name)
- *   --url       API base URL (defaults to http://localhost:8788)
+ *   --output    Output directory name (defaults to {slug}-export)
+ *   --slug      Block slug (defaults to project name)
  *
  * Examples:
  *   pnpm export-block ../kicad_seed_data/templates/remote-4ch-io-block
- *   pnpm export-block ../kicad_seed_data/templates/remote-4ch-io-block --upload --slug remote-io
+ *   pnpm export-block ./my-board --slug my-block
  */
 
 import { execSync } from 'child_process'
@@ -57,9 +55,8 @@ function findKicadCli(): string {
 // Parse command line arguments
 function parseArgs(): {
   projectPath: string
-  upload: boolean
+  output: string | null
   slug: string | null
-  url: string
 } {
   const args = process.argv.slice(2)
 
@@ -67,37 +64,39 @@ function parseArgs(): {
     console.log(`
 KiCad Block Export Script
 
+Exports a KiCad project to a directory with:
+  - gerbers.zip (Gerber + drill files only)
+  - {name}.kicad_pcb
+  - {name}.kicad_sch
+  - {name}.step
+
 Usage:
   pnpm export-block <path-to-kicad-project> [options]
 
 Options:
-  --upload    Upload to admin/blocks after export
-  --slug      Block slug for upload (defaults to project name)
-  --url       API base URL (defaults to http://localhost:8788)
+  --output    Output directory name (defaults to {slug}-export)
+  --slug      Block slug (defaults to project name)
 
 Examples:
-  pnpm export-block ../kicad_seed_data/templates/remote-4ch-io-block
-  pnpm export-block ./my-board --upload --slug my-block
+  pnpm export-block ../kicad_seed_data/templates/mcu-esp32c6
+  pnpm export-block ./my-board --slug my-block --output my-export
 `)
     process.exit(0)
   }
 
   const projectPath = args[0]
-  let upload = false
+  let output: string | null = null
   let slug: string | null = null
-  let url = 'http://localhost:8788'
 
   for (let i = 1; i < args.length; i++) {
-    if (args[i] === '--upload') {
-      upload = true
+    if (args[i] === '--output' && args[i + 1]) {
+      output = args[++i]
     } else if (args[i] === '--slug' && args[i + 1]) {
       slug = args[++i]
-    } else if (args[i] === '--url' && args[i + 1]) {
-      url = args[++i]
     }
   }
 
-  return { projectPath, upload, slug, url }
+  return { projectPath, output, slug }
 }
 
 // Find KiCad files in project directory
@@ -125,7 +124,7 @@ function findKicadFiles(projectDir: string): {
   }
 }
 
-// Export Gerbers
+// Export Gerbers to a temp directory
 function exportGerbers(
   kicadCli: string,
   pcbPath: string,
@@ -178,26 +177,26 @@ function exportStep(
   })
 }
 
-// Create ZIP archive
-async function createZip(
+// Create ZIP archive containing only gerber files
+async function createGerberZip(
   outputPath: string,
-  files: { source: string; name: string }[]
+  gerberFiles: string[]
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outputPath)
     const archive = archiver('zip', { zlib: { level: 9 } })
 
     output.on('close', () => {
-      console.log(`\n✓ Created ${outputPath} (${(archive.pointer() / 1024).toFixed(1)} KB)`)
+      console.log(`  Created gerbers.zip (${(archive.pointer() / 1024).toFixed(1)} KB)`)
       resolve()
     })
 
     archive.on('error', reject)
     archive.pipe(output)
 
-    for (const file of files) {
-      if (fs.existsSync(file.source)) {
-        archive.file(file.source, { name: file.name })
+    for (const file of gerberFiles) {
+      if (fs.existsSync(file)) {
+        archive.file(file, { name: path.basename(file) })
       }
     }
 
@@ -205,38 +204,9 @@ async function createZip(
   })
 }
 
-// Upload ZIP to admin/blocks
-async function uploadZip(
-  zipPath: string,
-  slug: string,
-  baseUrl: string
-): Promise<void> {
-  console.log(`\nUploading to ${baseUrl}/api/admin/blocks/import...`)
-
-  const formData = new FormData()
-  const zipBuffer = fs.readFileSync(zipPath)
-  const blob = new Blob([zipBuffer], { type: 'application/zip' })
-  formData.append('file', blob, path.basename(zipPath))
-  formData.append('slug', slug)
-
-  const response = await fetch(`${baseUrl}/api/admin/blocks/import`, {
-    method: 'POST',
-    body: formData,
-    credentials: 'include',
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Upload failed: ${response.status} ${error}`)
-  }
-
-  const result = await response.json()
-  console.log('✓ Upload successful:', result)
-}
-
 // Main
 async function main() {
-  const { projectPath, upload, slug, url } = parseArgs()
+  const { projectPath, output, slug } = parseArgs()
 
   // Resolve project path
   const projectDir = path.resolve(projectPath)
@@ -261,78 +231,57 @@ async function main() {
   if (sch) console.log(`Schematic: ${sch}`)
   console.log()
 
-  // Create temp directory for gerbers
-  const gerberDir = path.join(projectDir, 'gerbers')
-  if (!fs.existsSync(gerberDir)) {
-    fs.mkdirSync(gerberDir, { recursive: true })
+  // Create output directory
+  const outputDir = path.join(projectDir, output || `${blockSlug}-export`)
+  if (fs.existsSync(outputDir)) {
+    console.log(`Cleaning existing output directory: ${outputDir}`)
+    fs.rmSync(outputDir, { recursive: true })
   }
+  fs.mkdirSync(outputDir, { recursive: true })
 
-  // Collect files for ZIP
-  const zipFiles: { source: string; name: string }[] = []
+  // Create temp directory for gerbers
+  const gerberTempDir = path.join(outputDir, '_gerbers_temp')
+  fs.mkdirSync(gerberTempDir, { recursive: true })
 
   // Export Gerbers and STEP if PCB exists
-  let stepPath: string | null = null
   if (pcb) {
-    const gerberFiles = exportGerbers(kicadCli, pcb, gerberDir)
-    for (const gf of gerberFiles) {
-      zipFiles.push({ source: gf, name: `gerbers/${path.basename(gf)}` })
-    }
+    const gerberFiles = exportGerbers(kicadCli, pcb, gerberTempDir)
 
-    stepPath = path.join(projectDir, `${projectName}.step`)
+    // Create gerbers.zip from the gerber files
+    const gerberZipPath = path.join(outputDir, 'gerbers.zip')
+    await createGerberZip(gerberZipPath, gerberFiles)
+
+    // Clean up temp gerber directory
+    fs.rmSync(gerberTempDir, { recursive: true })
+
+    // Export STEP
+    const stepPath = path.join(outputDir, `${blockSlug}.step`)
     exportStep(kicadCli, pcb, stepPath)
-    zipFiles.push({ source: stepPath, name: `${projectName}.step` })
-    zipFiles.push({ source: pcb, name: path.basename(pcb) })
+
+    // Copy PCB file
+    const pcbDest = path.join(outputDir, `${blockSlug}.kicad_pcb`)
+    fs.copyFileSync(pcb, pcbDest)
+    console.log(`  Copied ${path.basename(pcb)} -> ${blockSlug}.kicad_pcb`)
   }
 
-  // Add schematic
+  // Copy schematic
   if (sch) {
-    zipFiles.push({ source: sch, name: path.basename(sch) })
+    const schDest = path.join(outputDir, `${blockSlug}.kicad_sch`)
+    fs.copyFileSync(sch, schDest)
+    console.log(`  Copied ${path.basename(sch)} -> ${blockSlug}.kicad_sch`)
   }
 
-  // Create template block.json if it doesn't exist
-  const blockJsonPath = path.join(projectDir, 'block.json')
-  if (!fs.existsSync(blockJsonPath)) {
-    console.log('  Creating template block.json...')
-    const blockJson = {
-      name: projectName.replace(/[-_]/g, ' '),
-      slug: blockSlug,
-      description: 'TODO: Add description',
-      category: 'custom',
-      version: '1.0.0',
-      grid: {
-        width: 1,
-        height: 1,
-      },
-      interfaces: {
-        // TODO: Define interfaces (I2C, SPI, GPIO, etc.)
-      },
-      power: {
-        voltage: '3.3V',
-        current_ma: 0,
-      },
-      notes: 'Generated by export-kicad-block script. Please update with actual specifications.',
-    }
-    fs.writeFileSync(blockJsonPath, JSON.stringify(blockJson, null, 2))
-    console.log(`  Created ${blockJsonPath} - please update with actual block specifications`)
-  }
-  zipFiles.push({ source: blockJsonPath, name: 'block.json' })
-
-  // Create ZIP
-  const zipPath = path.join(projectDir, `${blockSlug}-export.zip`)
-  await createZip(zipPath, zipFiles)
-
-  console.log('\nContents:')
-  for (const f of zipFiles) {
-    console.log(`  ${f.name}`)
+  // List output contents
+  console.log(`\n✓ Export complete: ${outputDir}\n`)
+  console.log('Contents:')
+  const outputFiles = fs.readdirSync(outputDir)
+  for (const f of outputFiles) {
+    const stat = fs.statSync(path.join(outputDir, f))
+    const size = (stat.size / 1024).toFixed(1)
+    console.log(`  ${f} (${size} KB)`)
   }
 
-  // Upload if requested
-  if (upload) {
-    await uploadZip(zipPath, blockSlug, url)
-  } else {
-    console.log(`\nTo upload manually, run:`)
-    console.log(`  pnpm export-block "${projectPath}" --upload --slug ${blockSlug}`)
-  }
+  console.log(`\nUpload these files individually to the admin blocks page.`)
 }
 
 main().catch((err) => {
