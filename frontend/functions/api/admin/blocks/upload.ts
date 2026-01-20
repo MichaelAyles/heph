@@ -10,9 +10,11 @@
  *   - blockJson: block.json content as text (optional - validates and updates definition)
  *   - thumbnail: .png file (optional)
  *   - gerber_*: individual gerber files extracted from ZIP (e.g., gerber_F_Cu.gtl)
+ *   - gerberZip: ZIP file containing gerbers (alternative to gerber_* fields)
  */
 
 import type { Env } from '../../../env.d'
+import JSZip from 'jszip'
 import { parseBlockJson, getBlockFileRequirements } from '../../../lib/block-validator'
 import { createLogger } from '../../../lib/logger'
 
@@ -106,6 +108,42 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           httpMetadata: { contentType },
         })
         gerberFiles.push(filename)
+      }
+    }
+
+    // Handle gerberZip file (alternative to individual gerber_* files)
+    const gerberZipFile = formData.get('gerberZip') as File | null
+    if (gerberZipFile) {
+      const zipData = await gerberZipFile.arrayBuffer()
+      const zip = await JSZip.loadAsync(zipData)
+
+      // Valid gerber file extensions
+      const validExtensions = ['.gtl', '.gbl', '.gto', '.gbo', '.gts', '.gbs', '.gm1', '.g1', '.g2', '.drl', '.gbr']
+
+      for (const [filename, zipEntry] of Object.entries(zip.files)) {
+        if (zipEntry.dir) continue
+
+        // Get just the filename without path
+        const baseName = filename.split('/').pop() || filename
+        const lowerName = baseName.toLowerCase()
+
+        if (validExtensions.some(ext => lowerName.endsWith(ext))) {
+          const content = await zipEntry.async('arraybuffer')
+          const r2Key = `${r2Prefix}gerbers/${baseName}`
+
+          // Determine content type based on extension
+          let contentType = 'application/octet-stream'
+          if (lowerName.endsWith('.drl')) {
+            contentType = 'application/x-excellon'
+          } else {
+            contentType = 'application/x-gerber'
+          }
+
+          await env.STORAGE.put(r2Key, content, {
+            httpMetadata: { contentType },
+          })
+          gerberFiles.push(baseName)
+        }
       }
     }
 

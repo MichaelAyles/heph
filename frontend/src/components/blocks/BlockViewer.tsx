@@ -685,6 +685,7 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
     stepModel: useRef<HTMLInputElement>(null),
     blockJson: useRef<HTMLInputElement>(null),
     thumbnail: useRef<HTMLInputElement>(null),
+    gerbers: useRef<HTMLInputElement>(null),
   }
 
   const handleDeleteFile = async (fileKey: string, filename: string) => {
@@ -723,6 +724,7 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
         stepModel: 'step',
         blockJson: 'blockJson',
         thumbnail: 'thumbnail',
+        gerbers: 'gerberZip',
       }
       formData.append(fieldMap[fileKey] || fileKey, file)
 
@@ -865,6 +867,13 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
       file: files.stepModel,
       ext: '.step',
       accept: '.step,.stp',
+    },
+    {
+      key: 'gerbers',
+      label: 'Gerbers',
+      file: files.gerbers,
+      ext: '.zip',
+      accept: '.zip',
     },
     {
       key: 'blockJson',
