@@ -18,7 +18,6 @@ import type {
 } from '../db/schema'
 import {
   mergeGerbers,
-  calculateBoardOutlineFromContent,
   type GerberBlock,
   type MergedGerbers,
 } from './gerber-merge'
@@ -112,7 +111,7 @@ export function generateVScoreLines(
   remoteBoardPositions: PanelConfiguration['remoteBoards'],
   remoteBoards: RemoteBoard[],
   panelSize: { width: number; height: number },
-  margin: number
+  _margin: number
 ): VScoreLine[] {
   const lines: VScoreLine[] = []
 

@@ -104,7 +104,7 @@ export function createRemoteBoard(
       height: gridHeight * 12.7,
       unit: 'mm',
     },
-    connectionMapping: template?.suggestedSignals.map((signal, index) => ({
+    connectionMapping: template?.suggestedSignals.map((signal) => ({
       remoteSignal: signal,
       mainSignal: signal,
       connectorType: connector?.id || 'JST-PH-4',

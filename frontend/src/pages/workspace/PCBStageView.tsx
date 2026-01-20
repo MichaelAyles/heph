@@ -19,6 +19,7 @@ import {
   Layers,
   ChevronDown,
   ChevronRight,
+  LayoutPanelTop,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
@@ -28,6 +29,7 @@ import { GridEditor } from '../../components/pcb/GridEditor'
 import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
 import { GerberViewer } from '../../components/pcb/GerberViewer'
 import { RemoteBoardManager } from '../../components/pcb/RemoteBoardManager'
+import { PanelPreview } from '../../components/pcb/PanelPreview'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
 import { mergeBlockSchematics, mergeBlockPCBs } from '../../services/pcb-merge'
 import { generatePCBDocument } from '../../services/pcb-document'
@@ -39,12 +41,13 @@ import {
 } from '../../prompts/pcb-selection'
 import { validateGrid, fromPlacedBlocks, calculateBoardSize } from '../../services/pcb-grid'
 import { getMainBoardSignals } from '../../services/remote-board'
+import { calculatePanelLayout } from '../../services/panel-merge'
 import { logger } from '../../lib/logger'
 import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment, RemoteBoard } from '../../db/schema'
 import type { BlockDefinition } from '../../schemas/block'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
-type ViewMode = 'grid' | 'bus' | 'gerbers' | '3d' | 'docs'
+type ViewMode = 'grid' | 'bus' | 'gerbers' | '3d' | 'docs' | 'panel'
 
 export function PCBStageView() {
   const { project } = useWorkspaceContext()
@@ -119,6 +122,16 @@ export function PCBStageView() {
       boardSize: calculateBoardSize(gridState),
     }
   }, [selectedBlocks, blockDefinitions, gridWidth, gridHeight])
+
+  // Calculate panel configuration when remote boards exist
+  const panelConfig = useMemo(() => {
+    if (remoteBoards.length === 0 || !boardSize) return null
+    const mainBoardSizeMm = {
+      width: boardSize.widthMm,
+      height: boardSize.heightMm,
+    }
+    return calculatePanelLayout(mainBoardSizeMm, remoteBoards)
+  }, [remoteBoards, boardSize])
 
   // Generate documentation
   const documentOutput = useMemo(() => {
@@ -638,6 +651,14 @@ export function PCBStageView() {
                 label="Docs"
                 disabled={selectedBlocks.length === 0}
               />
+              <ViewModeButton
+                mode="panel"
+                currentMode={viewMode}
+                onClick={() => setViewMode('panel')}
+                icon={LayoutPanelTop}
+                label="Panel"
+                disabled={!panelConfig}
+              />
             </div>
 
             <div className="flex items-center gap-2">
@@ -790,6 +811,14 @@ export function PCBStageView() {
                       {documentOutput.markdown}
                     </ReactMarkdown>
                   </article>
+                </div>
+              ) : viewMode === 'panel' && panelConfig && boardSize ? (
+                <div className="p-4 flex justify-center">
+                  <PanelPreview
+                    mainBoardSize={{ width: boardSize.widthMm, height: boardSize.heightMm }}
+                    remoteBoards={remoteBoards}
+                    panelConfig={panelConfig}
+                  />
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center h-full">
