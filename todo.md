@@ -13,6 +13,9 @@ The codebase is mature and production-ready with solid engineering practices:
 - Multi-stage workspace (PCB, Enclosure, Firmware, Export)
 - LangGraph orchestrator with state machine workflows, checkpointing, and 8 specialized agents
 - Gerber-based PCB merging for manufacturing output (replaces KiCad S-expression parsing)
+- Remote boards system for off-grid components (buttons, displays, connectors)
+- Panelization with v-score lines for manufacturing multiple boards together
+- Enhanced exports: Manufacturing BOM, Design Document (JSON/MD), Panelized Gerbers
 - Comprehensive LLM integration with retry logic, streaming, and tool calling
 - 18 database migrations, WorkOS OAuth, user approval workflow
 - 40+ API endpoints operational including orchestrator admin API
@@ -23,7 +26,19 @@ The codebase is mature and production-ready with solid engineering practices:
 - LLM-assisted block import wizard
 - 40 development blog posts documenting architecture decisions
 
-### Recent Changes (Jan 19-20, 2026)
+### Recent Changes (Jan 20, 2026)
+
+| Change | Commit | Impact |
+|--------|--------|--------|
+| Add Remote Boards system | - | Off-grid boards with connection mapping |
+| Add Panelization service | - | V-score layout for manufacturing |
+| Add BOM generator | - | Component aggregation with nofit marking |
+| Add Design Document export | - | JSON/Markdown design documentation |
+| Add PanelPreview component | - | SVG panel visualization |
+| Add RemoteBoardManager UI | - | Remote board creation/editing |
+| Enhanced Export stage | - | Manufacturing BOM, Design Doc, Panel Gerbers |
+
+### Earlier Changes (Jan 19-20, 2026)
 
 | Change | Commit | Impact |
 |--------|--------|--------|
@@ -141,7 +156,13 @@ The orchestrator system has three layers:
 | `langgraph/graph.ts` | 450 | New - LangGraph execution |
 | `langgraph/state.ts` | 604 | New - State management |
 | `langgraph/checkpointer.ts` | 628 | New - Persistence |
-| `gerber-merge.ts` | 621 | New - Manufacturing output |
+| `gerber-merge.ts` | 621 | Manufacturing output |
+| `remote-board.ts` | 400 | New - Remote board management |
+| `panel-merge.ts` | 407 | New - Panelization |
+| `bom-generator.ts` | 265 | New - BOM aggregation |
+| `design-document.ts` | 320 | New - Design export |
+| `RemoteBoardManager.tsx` | 320 | New - Remote board UI |
+| `PanelPreview.tsx` | 248 | New - Panel visualization |
 | `SpecPage.tsx` | 362 | Refactored |
 | `SpecStageView.tsx` | 1495 | Monitor |
 | `EnclosureStageView.tsx` | 962 | Good |
@@ -258,6 +279,11 @@ The orchestrator system has three layers:
 5. Fix incomplete I2C validation in firmware (regex-based, misses variable addresses)
 6. Add pagination bounds check (large offsets on expensive queries)
 7. Add message boundary awareness to trimConversationHistory (keep assistant+tool pairs together)
+8. Add tests for new services:
+   - `remote-board.ts` - Connection mapping validation, signal suggestion
+   - `panel-merge.ts` - Layout calculation, v-score generation
+   - `bom-generator.ts` - Component aggregation, nofit marking
+   - `design-document.ts` - JSON/Markdown export formatting
 
 ---
 
@@ -287,6 +313,16 @@ The orchestrator system has three layers:
 - Gerber-based merging replaces KiCad S-expression parsing
 - 4-layer board support (F.Cu, In1.Cu, In2.Cu, B.Cu)
 - Blog 40 documents the architectural decision
+- Remote boards system for off-grid components
+- Panelization with automatic v-score generation
+- Enhanced exports: Manufacturing BOM, Design Document, Panelized Gerbers
+
+### Remote Boards & Panelization
+- 4 board types: button, display, connector, custom
+- Connection mapping with GND requirement validation
+- Auto-suggest connections based on signal name similarity
+- Panel layout algorithm with v-score separation lines
+- PanelPreview component for visual layout inspection
 
 ### Recent
 - 18 database migrations

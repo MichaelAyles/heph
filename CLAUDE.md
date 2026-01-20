@@ -188,6 +188,10 @@ Development blog documenting PHAESTUS progress. 40 posts with images.
 - `src/services/orchestrator/` - Modular orchestrator (tools/, helpers/, types.ts, orchestrator.ts, index.ts)
 - `src/services/langgraph/` - LangGraph state machine (state.ts, graph.ts, checkpointer.ts, nodes/)
 - `src/services/gerber-merge.ts` - Gerber layer merging for manufacturing (621 lines)
+- `src/services/remote-board.ts` - Remote board creation, connection mapping, validation
+- `src/services/panel-merge.ts` - Panelization layout and v-score generation
+- `src/services/bom-generator.ts` - BOM aggregation with nofit marking
+- `src/services/design-document.ts` - Design JSON/Markdown export
 - `src/lib/tokn/` - TOKN KiCad parser (sexpr.ts, kicadSch.ts, connectivity.ts, toknEncoder.ts)
 - `src/stores/` - Zustand state (auth, workspace, orchestrator)
 - `src/components/admin/blocks/` - Block management UI (BlockImportWizard, BlockEditor)
@@ -432,6 +436,12 @@ const data = result.data // Fully typed!
 | Block import API | `functions/api/admin/blocks/import.ts` |
 | Block validator | `functions/lib/block-validator.ts` |
 | Gerber merger | `src/services/gerber-merge.ts` |
+| Remote board service | `src/services/remote-board.ts` |
+| Panel merge service | `src/services/panel-merge.ts` |
+| BOM generator | `src/services/bom-generator.ts` |
+| Design document export | `src/services/design-document.ts` |
+| Remote board UI | `src/components/pcb/RemoteBoardManager.tsx` |
+| Panel preview | `src/components/pcb/PanelPreview.tsx` |
 | LangGraph state | `src/services/langgraph/state.ts` |
 | LangGraph graph | `src/services/langgraph/graph.ts` |
 | LangGraph checkpointer | `src/services/langgraph/checkpointer.ts` |
@@ -455,10 +465,10 @@ Post-spec stages for hardware generation:
 
 | Stage | Key Files | What Happens |
 |-------|-----------|--------------|
-| PCB | `pages/workspace/PCBStageView.tsx`, `services/pcb-merge.ts` | Block selection, KiCad schematic merging |
+| PCB | `pages/workspace/PCBStageView.tsx`, `services/pcb-merge.ts` | Block selection, KiCad schematic merging, remote boards, panel preview |
 | Enclosure | `pages/workspace/EnclosureStageView.tsx`, `lib/openscadRenderer.ts` | OpenSCAD generation, STL preview |
 | Firmware | `pages/workspace/FirmwareStageView.tsx`, `prompts/firmware.ts` | ESP32 code generation, Monaco editor |
-| Export | `pages/workspace/ExportStageView.tsx` | Spec MD/JSON, BOM CSV, ZIP downloads |
+| Export | `pages/workspace/ExportStageView.tsx` | Spec MD/JSON, BOM CSV, Design Document, Panelized Gerbers, ZIP downloads |
 
 **Orchestrator** (`services/orchestrator/`): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`. Modular architecture with separate files for tools, helpers, and types.
 
@@ -553,6 +563,49 @@ PHAESTUS uses Gerber-based merging for manufacturing output (`src/services/gerbe
 - Silkscreen: `F.SilkS`, `B.SilkS`
 - Solder mask: `F.Mask`, `B.Mask`
 - Edge cuts, drill files (Excellon)
+
+### Remote Boards & Panelization
+
+Off-grid boards (button panels, displays, USB connectors) that connect to the main board via cables and are panelized together for manufacturing.
+
+**Remote Board System** (`src/services/remote-board.ts`):
+- 4 board types: `button`, `display`, `connector`, `custom`
+- Connection mapping with signal validation
+- Auto-suggest connections based on signal name similarity
+- Templates with default connectors (JST-PH, FFC, IDC, Dupont)
+
+**Panel Merging** (`src/services/panel-merge.ts`):
+- Layout algorithm places remote boards to the right of main board
+- V-score lines generated at board edges for separation
+- Generates panel outline and v-score Gerber layers
+- Merges all board gerbers into unified manufacturing output
+
+**UI Components**:
+- `RemoteBoardManager.tsx` - Add/edit remote boards with connection mapping editor
+- `PanelPreview.tsx` - SVG visualization of panel layout with v-score lines
+
+**Schema Types** (`src/db/schema.ts`):
+```typescript
+interface RemoteBoard {
+  id: string
+  name: string
+  slug: string
+  type: RemoteBoardType  // 'button' | 'display' | 'connector' | 'custom'
+  placedBlocks: PlacedBlock[]
+  boardSize: { width: number; height: number; unit: 'mm' }
+  connectionMapping: ConnectionMapping[]
+  gridWidth: number
+  gridHeight: number
+}
+
+interface PanelConfiguration {
+  mainBoardPosition: { x: number; y: number }
+  remoteBoards: Array<{ remoteBoardId: string; position: { x: y }; copies: number }>
+  vScoreLines: VScoreLine[]
+  panelSize: { width: number; height: number }
+  panelMargin: number
+}
+```
 
 ### Block Upload Requirements
 
