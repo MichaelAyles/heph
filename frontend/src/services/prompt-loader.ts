@@ -7,26 +7,12 @@
  */
 
 import { logger } from '@/lib/logger'
-import {
-  ORCHESTRATOR_SYSTEM_PROMPT,
-} from '@/prompts/orchestrator'
-import {
-  FEASIBILITY_SYSTEM_PROMPT,
-} from '@/prompts/feasibility'
-import {
-  ENCLOSURE_SYSTEM_PROMPT,
-  ENCLOSURE_VISION_SYSTEM_PROMPT,
-} from '@/prompts/enclosure'
-import {
-  FIRMWARE_SYSTEM_PROMPT,
-} from '@/prompts/firmware'
-import {
-  ENCLOSURE_REVIEW_PROMPT,
-  FIRMWARE_REVIEW_PROMPT,
-} from '@/prompts/review'
-import {
-  NAMING_SYSTEM_PROMPT,
-} from '@/prompts/naming'
+import { ORCHESTRATOR_SYSTEM_PROMPT } from '@/prompts/orchestrator'
+import { FEASIBILITY_SYSTEM_PROMPT } from '@/prompts/feasibility'
+import { ENCLOSURE_SYSTEM_PROMPT, ENCLOSURE_VISION_SYSTEM_PROMPT } from '@/prompts/enclosure'
+import { FIRMWARE_SYSTEM_PROMPT } from '@/prompts/firmware'
+import { ENCLOSURE_REVIEW_PROMPT, FIRMWARE_REVIEW_PROMPT } from '@/prompts/review'
+import { NAMING_SYSTEM_PROMPT } from '@/prompts/naming'
 
 // Hardcoded fallback prompts
 const HARDCODED_PROMPTS: Record<string, string> = {
@@ -41,7 +27,10 @@ const HARDCODED_PROMPTS: Record<string, string> = {
 }
 
 // Cache for loaded prompts (session-scoped)
-const promptCache = new Map<string, { prompt: string; source: 'database' | 'hardcoded'; loadedAt: number }>()
+const promptCache = new Map<
+  string,
+  { prompt: string; source: 'database' | 'hardcoded'; loadedAt: number }
+>()
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 /**
@@ -58,7 +47,10 @@ export async function loadPrompt(nodeName: string): Promise<string> {
   try {
     const response = await fetch(`/api/orchestrator/prompts/${nodeName}`)
     if (response.ok) {
-      const data = await response.json() as { systemPrompt: string; source: 'database' | 'hardcoded' }
+      const data = (await response.json()) as {
+        systemPrompt: string
+        source: 'database' | 'hardcoded'
+      }
       promptCache.set(nodeName, {
         prompt: data.systemPrompt,
         source: data.source,

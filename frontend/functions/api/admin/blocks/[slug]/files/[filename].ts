@@ -7,16 +7,6 @@
 import type { Env } from '../../../../../env.d'
 import { createLogger } from '../../../../../lib/logger'
 
-// Map from file key to files object property
-const FILE_KEY_MAP: Record<string, string> = {
-  schematic: 'schematic',
-  pcb: 'pcb',
-  stepModel: 'stepModel',
-  step: 'stepModel',
-  thumbnail: 'thumbnail',
-  blockJson: 'blockJson',
-}
-
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { env, data, params } = context
   const user = data.user as { id: string; isAdmin: boolean } | undefined
@@ -58,9 +48,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
     // Update files in database
     delete files[fileKey]
-    await env.DB.prepare(
-      'UPDATE pcb_blocks SET files = ?, updated_at = ? WHERE slug = ?'
-    )
+    await env.DB.prepare('UPDATE pcb_blocks SET files = ?, updated_at = ? WHERE slug = ?')
       .bind(JSON.stringify(files), new Date().toISOString(), slug)
       .run()
 

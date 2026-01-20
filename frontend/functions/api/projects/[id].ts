@@ -61,7 +61,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('project', 'Get project error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('project', 'Get project error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json(
       { error: 'Failed to get project', details: String(error) },
       { status: 500 }

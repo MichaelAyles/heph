@@ -1,5 +1,15 @@
 import { NavLink, useParams } from 'react-router-dom'
-import { FileText, Cpu, Box, Code, Download, FolderOpen, Check, AlertCircle, Loader2 } from 'lucide-react'
+import {
+  FileText,
+  Cpu,
+  Box,
+  Code,
+  Download,
+  FolderOpen,
+  Check,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import type { ProjectSpec, StageStatus } from '@/db/schema'
 import { STAGE_ORDER, STAGE_LABELS, type WorkspaceStage } from '@/stores/workspace'
@@ -31,7 +41,8 @@ export function WorkspaceStageTabs({ spec, canNavigateTo }: WorkspaceStageTabsPr
           const status =
             stage === 'files'
               ? 'pending'
-              : (spec?.stages?.[stage as keyof NonNullable<typeof spec.stages>]?.status ?? 'pending')
+              : (spec?.stages?.[stage as keyof NonNullable<typeof spec.stages>]?.status ??
+                'pending')
 
           return (
             <NavLink

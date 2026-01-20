@@ -136,26 +136,19 @@ export function EnclosureComparison({
           {/* Score breakdown */}
           <div className="p-4">
             <div className="grid grid-cols-4 gap-3 mb-4">
-              {(Object.entries(validationResult.scores) as [keyof typeof validationResult.scores, number][]).map(
-                ([key, score]) => (
-                  <div
-                    key={key}
-                    className="bg-surface-900 rounded-lg p-3 text-center"
-                  >
-                    <div className="text-xs text-steel-dim mb-1">
-                      {SCORE_LABELS[key]}
-                    </div>
-                    <div
-                      className={clsx(
-                        'text-xl font-semibold',
-                        getScoreColorClass(score)
-                      )}
-                    >
-                      {score}%
-                    </div>
+              {(
+                Object.entries(validationResult.scores) as [
+                  keyof typeof validationResult.scores,
+                  number,
+                ][]
+              ).map(([key, score]) => (
+                <div key={key} className="bg-surface-900 rounded-lg p-3 text-center">
+                  <div className="text-xs text-steel-dim mb-1">{SCORE_LABELS[key]}</div>
+                  <div className={clsx('text-xl font-semibold', getScoreColorClass(score))}>
+                    {score}%
                   </div>
-                )
-              )}
+                </div>
+              ))}
             </div>
 
             {/* Issues list */}

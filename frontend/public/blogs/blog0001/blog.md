@@ -38,16 +38,16 @@ frontend/
 
 ### Tech Stack
 
-| Layer | Choice |
-|-------|--------|
-| Framework | React 19 + Vite 7 |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS 4 |
-| State | Zustand + React Query |
-| Routing | React Router 7 |
-| Database | Cloudflare D1 (SQLite) |
-| Storage | Cloudflare R2 |
-| LLM | OpenRouter / Gemini API |
+| Layer     | Choice                  |
+| --------- | ----------------------- |
+| Framework | React 19 + Vite 7       |
+| Language  | TypeScript (strict)     |
+| Styling   | Tailwind CSS 4          |
+| State     | Zustand + React Query   |
+| Routing   | React Router 7          |
+| Database  | Cloudflare D1 (SQLite)  |
+| Storage   | Cloudflare R2           |
+| LLM       | OpenRouter / Gemini API |
 
 ### LLM Service
 
@@ -63,6 +63,7 @@ class LLMService {
 ```
 
 Features:
+
 - Provider toggle at runtime
 - Streaming support for both providers
 - Automatic message format conversion for Gemini
@@ -72,13 +73,13 @@ Features:
 
 Core tables for the hardware design pipeline:
 
-| Table | Purpose |
-|-------|---------|
-| `projects` | User projects with specs and status |
-| `pcb_blocks` | Pre-validated circuit modules (21 seeded) |
-| `conversations` | Chat history per project |
-| `system_settings` | LLM provider config, API keys |
-| `llm_requests` | Usage tracking |
+| Table             | Purpose                                   |
+| ----------------- | ----------------------------------------- |
+| `projects`        | User projects with specs and status       |
+| `pcb_blocks`      | Pre-validated circuit modules (21 seeded) |
+| `conversations`   | Chat history per project                  |
+| `system_settings` | LLM provider config, API keys             |
+| `llm_requests`    | Usage tracking                            |
 
 ### PCB Block Library
 
@@ -92,6 +93,7 @@ Seeded 21 validated blocks across 6 categories:
 - **Utility**: Corner routing, header breakout, bus terminator
 
 Each block defines:
+
 - Grid dimensions (12.7mm units)
 - Bus tap connections
 - I2C addresses / SPI chip selects
@@ -103,10 +105,12 @@ Each block defines:
 **HomePage** - Landing with value prop and CTAs
 
 **NewProjectPage** - Text input for product description with example prompts:
+
 - "Battery-powered plant moisture monitor with WiFi alerts"
 - "Smart doorbell with motion detection and OLED display"
 
 **ProjectPage** - Pipeline visualization with 6 stages:
+
 1. Requirements extraction
 2. Block selection
 3. Schematic generation
@@ -127,6 +131,7 @@ Includes streaming output display for LLM responses.
 ### Module-Based Hardware Design
 
 AI selects from pre-validated circuit blocks rather than generating novel circuits. This gives:
+
 - ~100% success rate vs ~70% for AI-generated circuits
 - Tractable validation (interface type-checking)
 - Known work to MVP (build 21 blocks vs open-ended research)
@@ -134,6 +139,7 @@ AI selects from pre-validated circuit blocks rather than generating novel circui
 ### Deterministic Grid Layout
 
 12.7mm grid with pre-routed bus interfaces eliminates autorouting:
+
 - Guaranteed success (no "autorouter failed" scenarios)
 - Predictable board dimensions
 - Synergy with parametric enclosures
@@ -141,6 +147,7 @@ AI selects from pre-validated circuit blocks rather than generating novel circui
 ### Frontend-Only Architecture
 
 Cloudflare edge services instead of backend servers:
+
 - D1 for SQLite database
 - R2 for file storage
 - Pages Functions for API endpoints

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { llm, type ChatOptions, type StreamCallbacks } from './llm'
 
 // Mock fetch
@@ -112,7 +112,7 @@ describe('llm service', () => {
 
       await llm.chat(options)
 
-      const body = JSON.parse((mockFetch.mock.calls[0][1] as any).body)
+      const body = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body)
       expect(body.projectId).toBe('project-123')
     })
   })
@@ -162,7 +162,7 @@ describe('llm service', () => {
       await llm.chatStream({ messages: [] }, callbacks)
 
       expect(callbacks.onError).toHaveBeenCalledWith(expect.any(Error))
-      expect((callbacks.onError as any).mock.calls[0][0].message).toBe('Stream failed')
+      expect((callbacks.onError as Mock).mock.calls[0][0].message).toBe('Stream failed')
     })
 
     it('should call onError with default message when none provided', async () => {
@@ -179,7 +179,7 @@ describe('llm service', () => {
 
       await llm.chatStream({ messages: [] }, callbacks)
 
-      expect((callbacks.onError as any).mock.calls[0][0].message).toBe('LLM stream failed')
+      expect((callbacks.onError as Mock).mock.calls[0][0].message).toBe('LLM stream failed')
     })
 
     it('should call onError when no response body', async () => {

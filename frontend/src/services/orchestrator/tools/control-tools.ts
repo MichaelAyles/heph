@@ -4,10 +4,7 @@
  * Tools for validation, fixes, stage completion, progress reporting, and user input.
  */
 
-import {
-  validateCrossStage,
-  generateValidationReport,
-} from '@/prompts/validation'
+import { validateCrossStage, generateValidationReport } from '@/prompts/validation'
 import type { OrchestratorContext, OrchestratorStage, ToolResult } from '../types'
 
 // Import sibling tools for fix operations
@@ -131,7 +128,12 @@ export async function fixStageIssue(
     case 'enclosure':
       return generateEnclosure(ctx, { style: 'rounded_box' })
     case 'firmware':
-      return generateFirmware(ctx, { enable_wifi: true, enable_ble: false, enable_ota: true, enable_deep_sleep: false })
+      return generateFirmware(ctx, {
+        enable_wifi: true,
+        enable_ble: false,
+        enable_ota: true,
+        enable_deep_sleep: false,
+      })
     case 'pcb':
       return selectPcbBlocks(ctx, { blocks: [], reasoning: fix })
     default:

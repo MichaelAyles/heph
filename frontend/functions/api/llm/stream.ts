@@ -130,7 +130,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Process the stream in the background
     // Pass messages for token estimation
-    processStream(upstreamResponse.body!, writable, provider, env, user.id, projectId, model, messages)
+    processStream(
+      upstreamResponse.body!,
+      writable,
+      provider,
+      env,
+      user.id,
+      projectId,
+      model,
+      messages
+    )
 
     return new Response(readable, {
       headers: {

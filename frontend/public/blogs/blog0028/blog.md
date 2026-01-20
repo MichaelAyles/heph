@@ -37,17 +37,19 @@ const isEligible = !!project
 For complete projects, the UI adapts:
 
 ```tsx
-{isFullyComplete ? (
-  <>
-    <MessageSquare className="w-4 h-4" />
-    Ask Question
-  </>
-) : (
-  <>
-    <Zap className="w-4 h-4" />
-    Start Design
-  </>
-)}
+{
+  isFullyComplete ? (
+    <>
+      <MessageSquare className="w-4 h-4" />
+      Ask Question
+    </>
+  ) : (
+    <>
+      <Zap className="w-4 h-4" />
+      Start Design
+    </>
+  )
+}
 ```
 
 ### Breaking Change Warnings
@@ -68,13 +70,15 @@ and firmware (wrong pins). I'll need to regenerate those stages. Proceed?"
 The init prompt now includes stage completion status so the AI knows context:
 
 ```typescript
-const stageStatus = spec?.stages ? {
-  spec: spec.stages.spec?.status === 'complete',
-  pcb: spec.stages.pcb?.status === 'complete',
-  enclosure: spec.stages.enclosure?.status === 'complete',
-  firmware: spec.stages.firmware?.status === 'complete',
-  export: spec.stages.export?.status === 'complete',
-} : undefined
+const stageStatus = spec?.stages
+  ? {
+      spec: spec.stages.spec?.status === 'complete',
+      pcb: spec.stages.pcb?.status === 'complete',
+      enclosure: spec.stages.enclosure?.status === 'complete',
+      firmware: spec.stages.firmware?.status === 'complete',
+      export: spec.stages.export?.status === 'complete',
+    }
+  : undefined
 
 buildOrchestratorInitPrompt(description, mode, stageStatus)
 ```
@@ -158,16 +162,18 @@ The "Continue to X" button now hides when you're already there:
 // Added currentStage prop
 interface StageCompletionSummaryProps {
   stage: WorkspaceStage
-  currentStage?: WorkspaceStage  // New: where user currently is
+  currentStage?: WorkspaceStage // New: where user currently is
   // ...
 }
 
 // Only show button if not already there
-{nextStage && nextStage !== currentStage && (
-  <button onClick={() => navigate(`/project/${projectId}/${nextStage}`)}>
-    Continue to {getStageLabel(nextStage)}
-  </button>
-)}
+{
+  nextStage && nextStage !== currentStage && (
+    <button onClick={() => navigate(`/project/${projectId}/${nextStage}`)}>
+      Continue to {getStageLabel(nextStage)}
+    </button>
+  )
+}
 ```
 
 ### Manual Stage Completion
@@ -198,23 +204,23 @@ const handleMarkStageComplete = async (stageName: string) => {
 A dropdown appears in the footer:
 
 ```tsx
-{getIncompleteStages().length > 0 && (
-  <div className="relative">
-    <button onClick={() => setShowStageMenu(!showStageMenu)}>
-      <Check className="w-3.5 h-3.5" />
-      <ChevronDown className="w-3 h-3" />
-    </button>
-    {showStageMenu && (
-      <div className="absolute bottom-full">
-        {getIncompleteStages().map((stage) => (
-          <button onClick={() => handleMarkStageComplete(stage)}>
-            {stage}
-          </button>
-        ))}
-      </div>
-    )}
-  </div>
-)}
+{
+  getIncompleteStages().length > 0 && (
+    <div className="relative">
+      <button onClick={() => setShowStageMenu(!showStageMenu)}>
+        <Check className="w-3.5 h-3.5" />
+        <ChevronDown className="w-3 h-3" />
+      </button>
+      {showStageMenu && (
+        <div className="absolute bottom-full">
+          {getIncompleteStages().map((stage) => (
+            <button onClick={() => handleMarkStageComplete(stage)}>{stage}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 ```
 
 ### Fixed Projects List Icons
@@ -244,22 +250,20 @@ const getStageState = (stageKey: string): 'complete' | 'current' | 'pending' => 
 Added tooltips for clarity:
 
 ```tsx
-<div title={`${stageLabel}: ${statusLabels[state]}`}>
-  {/* stage icon */}
-</div>
+<div title={`${stageLabel}: ${statusLabels[state]}`}>{/* stage icon */}</div>
 ```
 
 ## Summary of Changes
 
-| Feature | Impact |
-|---------|--------|
-| Always-available chat | Users can ask questions about completed projects |
-| Breaking change warnings | Prevents accidental cascade invalidation |
-| Pause/resume | Mid-design breaks don't lose progress |
-| Creative naming | No more "Smart Temp Monitor" everywhere |
-| Context-aware buttons | No confusing "Continue to Export" on Export page |
-| Manual stage completion | Design It mode users can progress manually |
-| Fixed status icons | Projects list accurately shows progress |
+| Feature                  | Impact                                           |
+| ------------------------ | ------------------------------------------------ |
+| Always-available chat    | Users can ask questions about completed projects |
+| Breaking change warnings | Prevents accidental cascade invalidation         |
+| Pause/resume             | Mid-design breaks don't lose progress            |
+| Creative naming          | No more "Smart Temp Monitor" everywhere          |
+| Context-aware buttons    | No confusing "Continue to Export" on Export page |
+| Manual stage completion  | Design It mode users can progress manually       |
+| Fixed status icons       | Projects list accurately shows progress          |
 
 ## Artifacts
 

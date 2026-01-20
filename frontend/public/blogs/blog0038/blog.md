@@ -25,7 +25,7 @@ const occt = await (occtModule.default as any)({
       return '/occt-import-js.wasm'
     }
     return file
-  }
+  },
 })
 ```
 
@@ -35,12 +35,16 @@ OCCT returns regular JavaScript arrays. Three.js needs typed arrays:
 
 ```typescript
 // Before: TypeError: array should be a Typed Array
-geometry.setAttribute('position', new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3))
+geometry.setAttribute(
+  'position',
+  new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3)
+)
 
 // After: Convert to typed arrays
-const positions = mesh.attributes.position.array instanceof Float32Array
-  ? mesh.attributes.position.array
-  : new Float32Array(mesh.attributes.position.array)
+const positions =
+  mesh.attributes.position.array instanceof Float32Array
+    ? mesh.attributes.position.array
+    : new Float32Array(mesh.attributes.position.array)
 geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
 ```
 
@@ -129,6 +133,7 @@ if (mesh.color) {
 ![Final: Colored STEP models with realistic PCB preview](2026-01-19%2015_13_41-.png)
 
 Real PCB models with:
+
 - Green FR4 substrate
 - Silver metal shields and connectors
 - Black IC packages
@@ -138,14 +143,14 @@ Real PCB models with:
 
 ## What Changed
 
-| Before | After |
-|--------|-------|
-| Colored boxes | Actual STEP geometry |
-| Single gray material | Per-mesh colors from file |
-| Misaligned heights | Bottom-surface alignment |
-| Scaled with gaps | True 12.7mm grid size |
-| Redundant green board | STEP includes substrate |
-| 50.8×76.2mm (default grid) | Actual board dimensions |
+| Before                     | After                     |
+| -------------------------- | ------------------------- |
+| Colored boxes              | Actual STEP geometry      |
+| Single gray material       | Per-mesh colors from file |
+| Misaligned heights         | Bottom-surface alignment  |
+| Scaled with gaps           | True 12.7mm grid size     |
+| Redundant green board      | STEP includes substrate   |
+| 50.8×76.2mm (default grid) | Actual board dimensions   |
 
 ## The Commits
 

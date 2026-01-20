@@ -8,7 +8,14 @@ import type { ProjectSpec, StageStatus } from '@/db/schema'
 
 export type WorkspaceStage = 'spec' | 'pcb' | 'enclosure' | 'firmware' | 'export' | 'files'
 
-export const STAGE_ORDER: WorkspaceStage[] = ['spec', 'pcb', 'enclosure', 'firmware', 'export', 'files']
+export const STAGE_ORDER: WorkspaceStage[] = [
+  'spec',
+  'pcb',
+  'enclosure',
+  'firmware',
+  'export',
+  'files',
+]
 
 export const STAGE_LABELS: Record<WorkspaceStage, string> = {
   spec: 'Spec',

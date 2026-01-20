@@ -173,7 +173,9 @@ export function buildVisionEnclosurePrompt(input: {
   features: EnclosureFeature[]
 }): string {
   const featureList = input.features
-    .map((f) => `- ${f.type}: ${f.width}x${f.height}mm (${f.count}x)${f.notes ? ` - ${f.notes}` : ''}`)
+    .map(
+      (f) => `- ${f.type}: ${f.width}x${f.height}mm (${f.count}x)${f.notes ? ` - ${f.notes}` : ''}`
+    )
     .join('\n')
 
   return `Based on the product blueprint image above, design an enclosure with:

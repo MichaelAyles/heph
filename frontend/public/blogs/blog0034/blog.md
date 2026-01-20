@@ -7,6 +7,7 @@
 In Blog 33, we introduced formal block specifications. Great for DRC validation. Terrible for actually creating blocks.
 
 A typical `block.json` is 80-150 lines. You need to:
+
 - List every component with reference, value, and footprint
 - Identify which nets are bus signals (GND, 3V3, I2C1_SDA...)
 - Document every 0R resistor tap and what it isolates
@@ -189,6 +190,7 @@ The admin panel now has "Import from KiCad" as the primary action.
 **Step 2: Generate** - The system shows "Analyzing KiCad files..." while parsing and calling the LLM.
 
 **Step 3: Review** - The left panel shows extracted data:
+
 - Validation status (green checkmark or amber warning)
 - Board size and suggested grid
 - Detected bus signals
@@ -212,6 +214,7 @@ return {
 ```
 
 Common LLM mistakes get caught:
+
 - `edges.north` has wrong array length
 - I2C addresses as hex strings instead of decimals
 - Missing required fields
@@ -278,6 +281,7 @@ We added this to CLAUDE.md as a pre-commit checklist item. `pnpm typecheck` isn'
 ## Results
 
 Creating a new block went from:
+
 1. Open KiCad project
 2. Manually transcribe 50+ component references
 3. Identify which nets are bus signals
@@ -288,6 +292,7 @@ Creating a new block went from:
 8. Upload files
 
 To:
+
 1. Upload `.kicad_sch` and `.kicad_pcb`
 2. Enter slug
 3. Review generated JSON
@@ -300,7 +305,7 @@ The LLM gets it ~80% right on the first try. The remaining 20% is usually edge a
 
 Some things still need human judgment:
 
-1. **Tap purposes**: The LLM sees a 0R resistor connecting U1.12 to BUS_3V3. It doesn't know *why* you'd want to isolate that. The generated "purpose" field is often generic.
+1. **Tap purposes**: The LLM sees a 0R resistor connecting U1.12 to BUS_3V3. It doesn't know _why_ you'd want to isolate that. The generated "purpose" field is often generic.
 
 2. **Power budgets**: The LLM can see that U1 is an ESP32, but doesn't know the actual current draw without a datasheet lookup.
 

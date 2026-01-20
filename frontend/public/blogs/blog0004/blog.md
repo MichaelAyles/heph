@@ -3,6 +3,7 @@
 ## The Problem
 
 Phaestus needs authentication for several reasons:
+
 - **User data isolation**: Projects, conversations, and LLM usage must be tied to specific users
 - **API key protection**: OpenRouter API keys live server-side, not in the browser
 - **Usage tracking**: We need to know who's consuming LLM tokens
@@ -54,6 +55,7 @@ CREATE TABLE sessions (
 ```
 
 All other tables reference `user_id`:
+
 - `projects.user_id` - Who owns this project
 - `conversations.user_id` - Conversation history per user
 - `llm_requests.user_id` - Token usage tracking
@@ -79,9 +81,15 @@ const useAuthStore = create((set) => ({
   isLoading: true,
   isAuthenticated: false,
 
-  checkAuth: async () => { /* GET /api/auth/me */ },
-  login: async (username, password) => { /* POST /api/auth/login */ },
-  logout: async () => { /* POST /api/auth/logout */ },
+  checkAuth: async () => {
+    /* GET /api/auth/me */
+  },
+  login: async (username, password) => {
+    /* POST /api/auth/login */
+  },
+  logout: async () => {
+    /* POST /api/auth/logout */
+  },
 }))
 ```
 
@@ -101,6 +109,7 @@ The data model doesn't change. Projects, conversations, usage - all already tied
 ## Development Workflow
 
 Two servers running:
+
 - **Vite (5173)** - Frontend with hot reload, proxies `/api/*` to wrangler
 - **Wrangler Pages (8788)** - API functions with D1/R2 bindings
 
@@ -108,11 +117,11 @@ This gives us fast frontend iteration while the API endpoints have full access t
 
 ## Summary
 
-| Aspect | Current | Future |
-|--------|---------|--------|
-| Auth method | Password | OAuth (Google/GitHub) |
-| User storage | D1 `users` table | Same |
-| Session storage | D1 `sessions` table | Same or upgrade to JWT |
-| Data isolation | `user_id` foreign keys | Same |
+| Aspect          | Current                | Future                 |
+| --------------- | ---------------------- | ---------------------- |
+| Auth method     | Password               | OAuth (Google/GitHub)  |
+| User storage    | D1 `users` table       | Same                   |
+| Session storage | D1 `sessions` table    | Same or upgrade to JWT |
+| Data isolation  | `user_id` foreign keys | Same                   |
 
 We got multi-user data isolation with 50 lines of auth code. OAuth can wait.

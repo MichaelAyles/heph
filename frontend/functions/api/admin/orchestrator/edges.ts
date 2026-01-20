@@ -68,7 +68,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     fromNode: string
     toNode: string
     condition?: Record<string, unknown>
@@ -82,7 +82,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   // Check for duplicate edge
-  const existing = await env.DB.prepare('SELECT id FROM orchestrator_edges WHERE from_node = ? AND to_node = ?')
+  const existing = await env.DB.prepare(
+    'SELECT id FROM orchestrator_edges WHERE from_node = ? AND to_node = ?'
+  )
     .bind(body.fromNode, body.toNode)
     .first()
 
@@ -90,11 +92,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'An edge between these nodes already exists' }, { status: 409 })
   }
 
-  const result = await env.DB.prepare(`
+  const result = await env.DB.prepare(
+    `
     INSERT INTO orchestrator_edges (from_node, to_node, condition, edge_type, priority, description)
     VALUES (?, ?, ?, ?, ?, ?)
     RETURNING id
-  `)
+  `
+  )
     .bind(
       body.fromNode,
       body.toNode,
@@ -120,7 +124,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     id: string
     condition?: Record<string, unknown> | null
     edgeType?: string
@@ -165,7 +169,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   updates.push("updated_at = datetime('now')")
   values.push(body.id)
 
-  const result = await env.DB.prepare(`UPDATE orchestrator_edges SET ${updates.join(', ')} WHERE id = ?`)
+  const result = await env.DB.prepare(
+    `UPDATE orchestrator_edges SET ${updates.join(', ')} WHERE id = ?`
+  )
     .bind(...values)
     .run()
 
@@ -195,9 +201,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'id query parameter is required' }, { status: 400 })
   }
 
-  const result = await env.DB.prepare('DELETE FROM orchestrator_edges WHERE id = ?')
-    .bind(id)
-    .run()
+  const result = await env.DB.prepare('DELETE FROM orchestrator_edges WHERE id = ?').bind(id).run()
 
   if (result.meta.changes === 0) {
     return Response.json({ error: 'Edge not found' }, { status: 404 })

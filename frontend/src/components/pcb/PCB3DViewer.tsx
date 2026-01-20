@@ -33,12 +33,12 @@ const BLOCK_HEIGHT = 8
 
 // Category colors for blocks
 const CATEGORY_COLORS: Record<BlockCategory, string> = {
-  mcu: '#4f46e5',      // Indigo - ESP32/MCU
-  power: '#dc2626',    // Red - Power management
-  sensor: '#16a34a',   // Green - Sensors
-  output: '#f59e0b',   // Amber - LEDs, displays
+  mcu: '#4f46e5', // Indigo - ESP32/MCU
+  power: '#dc2626', // Red - Power management
+  sensor: '#16a34a', // Green - Sensors
+  output: '#f59e0b', // Amber - LEDs, displays
   connector: '#6b7280', // Gray - Connectors
-  utility: '#8b5cf6',  // Purple - Utility
+  utility: '#8b5cf6', // Purple - Utility
 }
 
 // Mesh with color data from STEP file
@@ -57,6 +57,7 @@ interface StepModelData {
 const geometryCache = new Map<string, StepModelData | null>()
 
 /** Clear the geometry cache - call after uploading new files */
+// eslint-disable-next-line react-refresh/only-export-components
 export function clearGeometryCache() {
   geometryCache.clear()
 }
@@ -83,7 +84,10 @@ interface BlockMeshProps {
  * Convert OCCT color array to hex string
  */
 function rgbToHex(r: number, g: number, b: number): string {
-  const toHex = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0')
+  const toHex = (n: number) =>
+    Math.round(n * 255)
+      .toString(16)
+      .padStart(2, '0')
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`
 }
 
@@ -111,13 +115,18 @@ async function loadStepModel(url: string): Promise<StepModelData | null> {
           return '/occt-import-js.wasm'
         }
         return file
-      }
+      },
     })
 
     // Fetch the STEP file (no-store to avoid stale cached files)
     const response = await fetch(url, { cache: 'no-store' })
     if (!response.ok) {
-      console.warn('[PCB3DViewer] STEP file fetch failed:', url, response.status, response.statusText)
+      console.warn(
+        '[PCB3DViewer] STEP file fetch failed:',
+        url,
+        response.status,
+        response.statusText
+      )
       geometryCache.set(url, null)
       return null
     }
@@ -140,24 +149,27 @@ async function loadStepModel(url: string): Promise<StepModelData | null> {
       const geometry = new THREE.BufferGeometry()
 
       // Ensure arrays are typed arrays for Three.js
-      const positions = mesh.attributes.position.array instanceof Float32Array
-        ? mesh.attributes.position.array
-        : new Float32Array(mesh.attributes.position.array)
+      const positions =
+        mesh.attributes.position.array instanceof Float32Array
+          ? mesh.attributes.position.array
+          : new Float32Array(mesh.attributes.position.array)
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
 
       // Set normals if available
       if (mesh.attributes.normal) {
-        const normals = mesh.attributes.normal.array instanceof Float32Array
-          ? mesh.attributes.normal.array
-          : new Float32Array(mesh.attributes.normal.array)
+        const normals =
+          mesh.attributes.normal.array instanceof Float32Array
+            ? mesh.attributes.normal.array
+            : new Float32Array(mesh.attributes.normal.array)
         geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
       }
 
       // Set indices if available - convert to non-indexed for proper rendering
       if (mesh.index) {
-        const indices = mesh.index.array instanceof Uint32Array
-          ? mesh.index.array
-          : new Uint32Array(mesh.index.array)
+        const indices =
+          mesh.index.array instanceof Uint32Array
+            ? mesh.index.array
+            : new Uint32Array(mesh.index.array)
         geometry.setIndex(new THREE.BufferAttribute(indices, 1))
       }
 
@@ -214,7 +226,12 @@ async function loadStepModel(url: string): Promise<StepModelData | null> {
       boundingBox: finalBox,
     }
 
-    console.log('[PCB3DViewer] STEP file loaded successfully:', url, 'meshes:', coloredMeshes.length)
+    console.log(
+      '[PCB3DViewer] STEP file loaded successfully:',
+      url,
+      'meshes:',
+      coloredMeshes.length
+    )
     geometryCache.set(url, modelData)
     return modelData
   } catch (error) {
@@ -257,6 +274,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
   }, [block.slug, block.files])
 
   // Load STEP model
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!stepUrl || stepFailed) return
 
@@ -271,6 +289,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
       })
       .finally(() => setLoadingStep(false))
   }, [stepUrl, stepFailed])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Pulse animation on hover
   useFrame(() => {
@@ -297,11 +316,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
         >
           {modelData.meshes.map((mesh, i) => (
             <mesh key={i} geometry={mesh.geometry}>
-              <meshStandardMaterial
-                color={mesh.color}
-                metalness={0.3}
-                roughness={0.5}
-              />
+              <meshStandardMaterial color={mesh.color} metalness={0.3} roughness={0.5} />
             </mesh>
           ))}
         </group>
@@ -327,11 +342,7 @@ function BlockMesh({ placed, block }: BlockMeshProps) {
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
       >
-        <meshStandardMaterial
-          color={hovered ? '#f97316' : color}
-          metalness={0.2}
-          roughness={0.6}
-        />
+        <meshStandardMaterial color={hovered ? '#f97316' : color} metalness={0.2} roughness={0.6} />
       </Box>
       {/* Loading indicator for STEP */}
       {loadingStep && (
@@ -365,6 +376,7 @@ function Scene({
   blocks: PcbBlock[]
   autoRotate: boolean
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const controlsRef = useRef<any>(null)
 
   // Center the camera on the board
@@ -472,11 +484,7 @@ export function PCB3DViewer({
 
   return (
     <div
-      className={clsx(
-        'relative bg-surface-900',
-        isFullscreen && 'fixed inset-0 z-50',
-        className
-      )}
+      className={clsx('relative bg-surface-900', isFullscreen && 'fixed inset-0 z-50', className)}
     >
       {/* Controls */}
       <div className="absolute top-2 right-2 z-10 flex gap-1">
@@ -497,11 +505,7 @@ export function PCB3DViewer({
           className="p-1.5 bg-surface-800 text-steel rounded hover:bg-surface-700 transition-colors"
           title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         >
-          {isFullscreen ? (
-            <Minimize2 className="w-4 h-4" />
-          ) : (
-            <Maximize2 className="w-4 h-4" />
-          )}
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>
       </div>
 
@@ -523,10 +527,7 @@ export function PCB3DViewer({
         <div className="flex flex-wrap gap-2">
           {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
             <div key={cat} className="flex items-center gap-1">
-              <div
-                className="w-3 h-3 rounded-sm"
-                style={{ backgroundColor: color }}
-              />
+              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
               <span className="text-xs text-steel capitalize">{cat}</span>
             </div>
           ))}

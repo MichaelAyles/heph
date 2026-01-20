@@ -71,6 +71,7 @@ export function KiCanvasViewer({
   const [error, setError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!src && !content) {
       setError('No source or content provided')
@@ -181,6 +182,7 @@ export function KiCanvasViewer({
       }
     }
   }, [src, content, controls, theme, onLoad, onError])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Handle fullscreen toggle
   const toggleFullscreen = () => {

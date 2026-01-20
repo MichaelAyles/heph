@@ -7,7 +7,17 @@ import type { Env } from '../../../../env'
 import type { OrchestratorPromptRow } from '../../../../../src/db/schema'
 
 // Hardcoded defaults for reset functionality
-const HARDCODED_PROMPTS: Record<string, { displayName: string; description: string; systemPrompt: string; category: string; stage: string | null; tokenEstimate: number }> = {
+const HARDCODED_PROMPTS: Record<
+  string,
+  {
+    displayName: string
+    description: string
+    systemPrompt: string
+    category: string
+    stage: string | null
+    tokenEstimate: number
+  }
+> = {
   orchestrator: {
     displayName: 'Orchestrator Agent',
     description: 'Main orchestrator that coordinates the entire hardware design pipeline',
@@ -68,7 +78,8 @@ generate_firmware(feedback="Fix issues: 1) Missing deep sleep. 2) Wrong pin for 
   },
   feasibility: {
     displayName: 'Feasibility Analyzer',
-    description: 'Analyzes user description to determine if the project is within system capabilities',
+    description:
+      'Analyzes user description to determine if the project is within system capabilities',
     systemPrompt: `You are PHAESTUS, an expert hardware design assistant. Your task is to analyze a product description and determine if it can be manufactured using the available components.`,
     category: 'agent',
     stage: 'spec',
@@ -153,7 +164,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     displayName?: string
     description?: string
     systemPrompt?: string
@@ -172,7 +183,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   }
 
   // Check if prompt exists
-  const existing = await env.DB.prepare('SELECT id, version FROM orchestrator_prompts WHERE node_name = ?')
+  const existing = await env.DB.prepare(
+    'SELECT id, version FROM orchestrator_prompts WHERE node_name = ?'
+  )
     .bind(nodeName)
     .first<{ id: string; version: number }>()
 
@@ -276,7 +289,10 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   // Don't allow deleting core prompts
   if (nodeName in HARDCODED_PROMPTS) {
-    return Response.json({ error: 'Cannot delete core prompt. Use reset instead.' }, { status: 400 })
+    return Response.json(
+      { error: 'Cannot delete core prompt. Use reset instead.' },
+      { status: 400 }
+    )
   }
 
   const result = await env.DB.prepare('DELETE FROM orchestrator_prompts WHERE node_name = ?')
@@ -315,7 +331,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   // Get current version
-  const existing = await env.DB.prepare('SELECT version FROM orchestrator_prompts WHERE node_name = ?')
+  const existing = await env.DB.prepare(
+    'SELECT version FROM orchestrator_prompts WHERE node_name = ?'
+  )
     .bind(nodeName)
     .first<{ version: number }>()
 
@@ -323,12 +341,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Prompt not found' }, { status: 404 })
   }
 
-  await env.DB.prepare(`
+  await env.DB.prepare(
+    `
     UPDATE orchestrator_prompts
     SET display_name = ?, description = ?, system_prompt = ?, category = ?, stage = ?,
         token_estimate = ?, version = ?, updated_at = datetime('now')
     WHERE node_name = ?
-  `)
+  `
+  )
     .bind(
       defaultPrompt.displayName,
       defaultPrompt.description,

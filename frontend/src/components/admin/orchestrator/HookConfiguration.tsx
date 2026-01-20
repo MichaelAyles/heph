@@ -115,9 +115,7 @@ export function HookConfiguration({ nodeName }: HookConfigurationProps) {
 
   if (!nodeName) {
     return (
-      <div className="p-4 text-center text-steel-dim text-sm">
-        Select a node to configure hooks
-      </div>
+      <div className="p-4 text-center text-steel-dim text-sm">Select a node to configure hooks</div>
     )
   }
 
@@ -192,23 +190,16 @@ export function HookConfiguration({ nodeName }: HookConfigurationProps) {
 
       <div className="flex-1 overflow-y-auto">
         {hooks.length === 0 ? (
-          <div className="p-4 text-center text-steel-dim text-sm">
-            No hooks configured
-          </div>
+          <div className="p-4 text-center text-steel-dim text-sm">No hooks configured</div>
         ) : (
           <div className="divide-y divide-surface-700">
             {hooks.map((hook) => (
               <div
                 key={hook.id}
-                className={clsx(
-                  'p-3 flex items-start gap-2',
-                  !hook.isActive && 'opacity-50'
-                )}
+                className={clsx('p-3 flex items-start gap-2', !hook.isActive && 'opacity-50')}
               >
                 <button
-                  onClick={() =>
-                    toggleMutation.mutate({ id: hook.id, isActive: !hook.isActive })
-                  }
+                  onClick={() => toggleMutation.mutate({ id: hook.id, isActive: !hook.isActive })}
                   className={clsx(
                     'p-1 transition-colors mt-0.5',
                     hook.isActive ? 'text-green-400' : 'text-steel-dim'

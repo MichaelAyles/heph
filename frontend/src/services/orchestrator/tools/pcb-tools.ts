@@ -8,10 +8,7 @@ import { autoSelectBlocks } from '@/prompts/block-selection'
 import type { OrchestratorContext, ToolResult } from '../types'
 import type { PlacedBlock, PcbBlock, NetAssignment } from '@/db/schema'
 import type { BlockDefinition } from '@/schemas/block'
-import {
-  validateBlockCombination,
-  type DRCResult,
-} from '@/services/block-drc'
+import { validateBlockCombination, type DRCResult } from '@/services/block-drc'
 import { mergeBlockSchematics, mergeBlockPCBs } from '@/services/pcb-merge'
 
 const GRID_SIZE_MM = 12.7
@@ -28,12 +25,13 @@ function toBlockDefinition(block: PcbBlock): BlockDefinition | null {
 
   // Otherwise, create a minimal definition from legacy fields for basic DRC
   // This allows DRC to work even with blocks that haven't been migrated yet
-  const i2cAddresses = block.i2cAddresses
-    ?.map((addr) => {
-      const parsed = parseInt(addr, 16)
-      return isNaN(parsed) ? null : parsed
-    })
-    .filter((a): a is number => a !== null) || []
+  const i2cAddresses =
+    block.i2cAddresses
+      ?.map((addr) => {
+        const parsed = parseInt(addr, 16)
+        return isNaN(parsed) ? null : parsed
+      })
+      .filter((a): a is number => a !== null) || []
 
   return {
     slug: block.slug,
@@ -43,42 +41,47 @@ function toBlockDefinition(block: PcbBlock): BlockDefinition | null {
     description: block.description,
     gridSize: [block.widthUnits, block.heightUnits],
     bus: {
-      taps: block.taps?.map((t) => ({
-        signal: t.net as BlockDefinition['bus']['taps'][0]['signal'],
-        reference: 'R?',
-        isolates: { from: '', to: '', purpose: '' },
-      })) || [],
+      taps:
+        block.taps?.map((t) => ({
+          signal: t.net as BlockDefinition['bus']['taps'][0]['signal'],
+          reference: 'R?',
+          isolates: { from: '', to: '', purpose: '' },
+        })) || [],
       permanent: [],
-      i2c: i2cAddresses.length > 0
-        ? { addresses: i2cAddresses }
-        : undefined,
+      i2c: i2cAddresses.length > 0 ? { addresses: i2cAddresses } : undefined,
       spi: block.spiCs ? { csPin: block.spiCs as 'SPI0_CS0' | 'SPI0_CS1' } : undefined,
       power: block.power?.currentMaxMa
         ? block.power.currentMaxMa < 0
           ? { provides: [{ rail: '3V3', maxMa: Math.abs(block.power.currentMaxMa) }] }
-          : { requires: [{ rail: '3V3', typicalMa: block.power.currentMaxMa / 2, maxMa: block.power.currentMaxMa }] }
+          : {
+              requires: [
+                {
+                  rail: '3V3',
+                  typicalMa: block.power.currentMaxMa / 2,
+                  maxMa: block.power.currentMaxMa,
+                },
+              ],
+            }
         : undefined,
     },
     edges: {
       north: Array(block.widthUnits).fill({ signals: 'ALL' as const }),
       south: Array(block.widthUnits).fill({ signals: 'ALL' as const }),
     },
-    components: block.components?.map((c) => ({
-      reference: c.ref,
-      value: c.value,
-      footprint: c.package,
-      quantity: 1,
-    })) || [],
+    components:
+      block.components?.map((c) => ({
+        reference: c.ref,
+        value: c.value,
+        footprint: c.package,
+        quantity: 1,
+      })) || [],
   }
 }
 
 /**
  * Validate block selection with DRC checks
  */
-function validateSelection(
-  selectedSlugs: string[],
-  availableBlocks: PcbBlock[]
-): DRCResult {
+function validateSelection(selectedSlugs: string[], availableBlocks: PcbBlock[]): DRCResult {
   const selectedBlocks = selectedSlugs
     .map((slug) => availableBlocks.find((b) => b.slug === slug))
     .filter((b): b is PcbBlock => b !== undefined)
@@ -97,14 +100,16 @@ export async function selectPcbBlocks(
   ctx: OrchestratorContext,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
-  const blocks = args.blocks as Array<{
-    blockSlug?: string
-    block_slug?: string
-    gridX?: number
-    grid_x?: number
-    gridY?: number
-    grid_y?: number
-  }> | undefined
+  const blocks = args.blocks as
+    | Array<{
+        blockSlug?: string
+        block_slug?: string
+        gridX?: number
+        grid_x?: number
+        gridY?: number
+        grid_y?: number
+      }>
+    | undefined
   const reasoning = args.reasoning as string
   const skipDrc = args.skip_drc === true || args.skipDrc === true
 
@@ -159,7 +164,8 @@ export async function selectPcbBlocks(
           message: w.message,
           blocks: w.blocks,
         })),
-        suggestion: 'Please revise block selection to resolve conflicts. ' +
+        suggestion:
+          'Please revise block selection to resolve conflicts. ' +
           'Check I2C addresses, GPIO claims, SPI chip selects, and power requirements.',
         selectedBlocks: selectedSlugs,
       }
@@ -262,7 +268,7 @@ export async function generatePcbFiles(
     try {
       const pcbResult = await mergeBlockPCBs(placedBlocks, selectedBlockData, projectName)
       pcbData = pcbResult.pcb
-    } catch (pcbError) {
+    } catch {
       // PCB merge is optional
       ctx.addHistoryItem({
         type: 'progress',

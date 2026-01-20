@@ -35,6 +35,7 @@ LLM analyzes the user's description and scores confidence across categories:
 - **Inputs/Outputs** - Sensors and actuators available
 
 Hard rejections for:
+
 - FPGA or processing beyond ESP32
 - High voltage (>24V)
 - Safety-critical systems (automotive, aerospace)
@@ -53,6 +54,7 @@ Loops until complete.
 ### Step 3: Blueprint Generation
 
 Generates 4 product renders in parallel:
+
 - Minimal/clean design
 - Rounded/friendly design
 - Industrial/robust design
@@ -67,6 +69,7 @@ User picks their favorite design. This choice informs the final spec.
 ### Step 5: Final Specification
 
 LLM generates comprehensive locked spec including:
+
 - PCB dimensions
 - Complete I/O list
 - Power budget with battery life estimates
@@ -95,14 +98,14 @@ Each prompt is a separate file for easy editing and version control.
 
 ```typescript
 export type ProjectStatus =
-  | 'draft'        // Just created
-  | 'analyzing'    // Running feasibility
-  | 'rejected'     // Failed feasibility
-  | 'refining'     // User answering questions
-  | 'generating'   // Creating blueprint images
-  | 'selecting'    // User picking blueprint
-  | 'finalizing'   // Generating final spec
-  | 'complete'     // Spec locked
+  | 'draft' // Just created
+  | 'analyzing' // Running feasibility
+  | 'rejected' // Failed feasibility
+  | 'refining' // User answering questions
+  | 'generating' // Creating blueprint images
+  | 'selecting' // User picking blueprint
+  | 'finalizing' // Generating final spec
+  | 'complete' // Spec locked
 
 export interface ProjectSpec {
   description: string
@@ -118,6 +121,7 @@ export interface ProjectSpec {
 ### New Pages
 
 **SpecPage.tsx** - Multi-step wizard with:
+
 - Step indicator showing progress
 - Streaming LLM output display
 - Question/answer UI
@@ -125,6 +129,7 @@ export interface ProjectSpec {
 - Final spec preview
 
 **SpecViewerPage.tsx** - Read-only locked spec view with:
+
 - Summary and blueprint image
 - Dimensions, power, communication details
 - BOM table with cost totals
@@ -160,6 +165,7 @@ DELETED:
 User enters: "Battery-powered plant moisture monitor with WiFi alerts"
 
 **Feasibility Result:**
+
 - Communication: WiFi ✓ (ESP32-C6 native)
 - Processing: Low ✓ (sensor polling)
 - Power: LiPo/AA/CR2032 options
@@ -168,6 +174,7 @@ User enters: "Battery-powered plant moisture monitor with WiFi alerts"
 - Score: 92%
 
 **Refinement Questions:**
+
 - Power source → User picks "LiPo with USB-C"
 - Display needed → User picks "Yes, small OLED"
 - Enclosure → User picks "Compact handheld"
@@ -175,6 +182,7 @@ User enters: "Battery-powered plant moisture monitor with WiFi alerts"
 **Blueprints:** 4 renders generated, user picks sleek design
 
 **Final Spec:**
+
 - PCB: 45×35mm
 - Power: 3.7V LiPo, ~2 weeks battery life
 - BOM: ~$18 estimated

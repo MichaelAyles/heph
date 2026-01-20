@@ -35,9 +35,7 @@ export function FilesStageView() {
       {/* Header */}
       <div className="px-6 py-4 border-b border-surface-700">
         <h2 className="text-xl font-semibold text-steel mb-1">Project Files</h2>
-        <p className="text-steel-dim text-sm">
-          Browse all project artifacts organized by stage
-        </p>
+        <p className="text-steel-dim text-sm">Browse all project artifacts organized by stage</p>
       </div>
 
       {/* File Manager */}

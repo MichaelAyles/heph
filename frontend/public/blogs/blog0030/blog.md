@@ -85,27 +85,24 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
 ```typescript
 // Exchange code for user profile
-const tokenResponse = await fetch(
-  'https://api.workos.com/user_management/authenticate',
-  {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: env.WORKOS_CLIENT_ID,
-      client_secret: env.WORKOS_API_KEY,
-      grant_type: 'authorization_code',
-      code,
-    }),
-  }
-)
+const tokenResponse = await fetch('https://api.workos.com/user_management/authenticate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    client_id: env.WORKOS_CLIENT_ID,
+    client_secret: env.WORKOS_API_KEY,
+    grant_type: 'authorization_code',
+    code,
+  }),
+})
 
 const authData = await tokenResponse.json()
 const workosUser = authData.user
 
 // Find or create user in D1
-let user = await env.DB.prepare(
-  'SELECT id, username FROM users WHERE workos_id = ?'
-).bind(workosUser.id).first()
+let user = await env.DB.prepare('SELECT id, username FROM users WHERE workos_id = ?')
+  .bind(workosUser.id)
+  .first()
 
 if (!user) {
   // Create new user with WorkOS ID
@@ -113,14 +110,16 @@ if (!user) {
   await env.DB.prepare(
     `INSERT INTO users (id, username, password_hash, display_name, workos_id)
      VALUES (?, ?, '', ?, ?)`
-  ).bind(userId, workosUser.email, displayName, workosUser.id).run()
+  )
+    .bind(userId, workosUser.email, displayName, workosUser.id)
+    .run()
 }
 
 // Create session (same as password login)
 const sessionId = crypto.randomUUID().replace(/-/g, '')
-await env.DB.prepare(
-  'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
-).bind(sessionId, user.id, expiresAt).run()
+await env.DB.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)')
+  .bind(sessionId, user.id, expiresAt)
+  .run()
 ```
 
 The callback also handles account linking. If someone already has a password account with the same email, we link their WorkOS ID to the existing account instead of creating a duplicate.
@@ -146,6 +145,7 @@ No client-side OAuth complexity. No tokens to manage. Click button, redirect, co
 Password auth still works. The `mike/mike` admin account still works. Existing sessions are unaffected. OAuth is purely additive.
 
 This matters because:
+
 1. Local development doesn't need OAuth setup
 2. Existing test accounts keep working
 3. If WorkOS has issues, we have a fallback

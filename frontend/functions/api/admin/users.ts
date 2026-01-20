@@ -26,7 +26,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url)
   const filter = url.searchParams.get('filter') || 'pending'
 
-  let query = 'SELECT id, username, display_name, is_admin, is_approved, created_at, last_login_at FROM users'
+  let query =
+    'SELECT id, username, display_name, is_admin, is_approved, created_at, last_login_at FROM users'
 
   if (filter === 'pending') {
     query += ' WHERE is_approved = 0'
@@ -49,7 +50,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const body = await request.json() as { userId: string; isApproved: boolean }
+  const body = (await request.json()) as { userId: string; isApproved: boolean }
 
   if (!body.userId) {
     return Response.json({ error: 'userId required' }, { status: 400 })

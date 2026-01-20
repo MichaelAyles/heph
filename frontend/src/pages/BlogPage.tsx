@@ -127,8 +127,8 @@ export function BlogPage() {
         <div className="max-w-7xl mx-auto px-6 py-12">
           <h2 className="text-3xl font-bold text-steel mb-3">Development Blog</h2>
           <p className="text-lg text-steel-dim mb-6 max-w-2xl">
-            Follow along with the development of PHAESTUS - insights, challenges, and
-            technical deep-dives into building an AI-powered hardware design platform.
+            Follow along with the development of PHAESTUS - insights, challenges, and technical
+            deep-dives into building an AI-powered hardware design platform.
           </p>
 
           {/* Stats */}

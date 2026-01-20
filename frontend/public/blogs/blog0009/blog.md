@@ -7,6 +7,7 @@
 ## The Goal
 
 Get PHAESTUS to production with confidence:
+
 1. Add comprehensive test coverage
 2. Deploy to Cloudflare Pages
 3. Configure production secrets and bindings
@@ -18,6 +19,7 @@ Get PHAESTUS to production with confidence:
 ### Framework Choice: Vitest
 
 Vitest was chosen over Jest because:
+
 - Native ESM support (no transpilation needed)
 - Same config format as Vite
 - Faster execution with smart watch mode
@@ -36,10 +38,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       thresholds: {
-        global: { lines: 90, functions: 90, branches: 90, statements: 90 }
-      }
-    }
-  }
+        global: { lines: 90, functions: 90, branches: 90, statements: 90 },
+      },
+    },
+  },
 })
 ```
 
@@ -81,6 +83,7 @@ describe('buildFeasibilityPrompt', () => {
 ```
 
 Tested modules:
+
 - `feasibility.ts` - 10 tests
 - `blueprint.ts` - 20 tests
 - `refinement.ts` - 12 tests
@@ -135,10 +138,10 @@ const mockEnv = {
   DB: {
     prepare: vi.fn().mockReturnValue({
       bind: vi.fn().mockReturnValue({
-        run: vi.fn().mockResolvedValue({})
-      })
-    })
-  }
+        run: vi.fn().mockResolvedValue({}),
+      }),
+    }),
+  },
 }
 
 describe('Logger', () => {
@@ -159,7 +162,7 @@ describe('login', () => {
   it('should return success and set user on successful login', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ user: mockUser })
+      json: () => Promise.resolve({ user: mockUser }),
     })
 
     const result = await useAuthStore.getState().login('testuser', 'password')
@@ -180,7 +183,7 @@ describe('chatStream', () => {
     const chunks = [
       'data: {"token":"Hello"}\n',
       'data: {"token":" world"}\n',
-      'data: {"done":true}\n'
+      'data: {"done":true}\n',
     ]
     // Mock ReadableStream...
 
@@ -214,6 +217,7 @@ All files         |   99.31 |    96.90 |     100 |     100 |
 ### What's NOT Tested
 
 API endpoint handlers (`functions/api/**/*.ts`) are excluded because they require:
+
 - Cloudflare Workers runtime (or miniflare mock)
 - D1 database bindings
 - R2 storage bindings
@@ -252,6 +256,7 @@ pnpm build && wrangler pages deploy dist --project-name=phaestus
 ```
 
 Output:
+
 ```
 ✨ Compiled Worker successfully
 ✨ Success! Uploaded 4 files
@@ -281,13 +286,13 @@ Output:
 
 ### Cloudflare Bindings
 
-| Binding | Type | Purpose |
-|---------|------|---------|
-| `DB` | D1 | SQLite database for users, projects, logs |
-| `STORAGE` | R2 | Asset storage (images, files) |
-| `OPENROUTER_API_KEY` | Secret | LLM API authentication |
-| `TEXT_MODEL_SLUG` | Secret | Default text model |
-| `IMAGE_MODEL_SLUG` | Secret | Default image model |
+| Binding              | Type   | Purpose                                   |
+| -------------------- | ------ | ----------------------------------------- |
+| `DB`                 | D1     | SQLite database for users, projects, logs |
+| `STORAGE`            | R2     | Asset storage (images, files)             |
+| `OPENROUTER_API_KEY` | Secret | LLM API authentication                    |
+| `TEXT_MODEL_SLUG`    | Secret | Default text model                        |
+| `IMAGE_MODEL_SLUG`   | Secret | Default image model                       |
 
 ---
 

@@ -174,7 +174,9 @@ function generateMarkdown(input: MarkdownInput): string {
   lines.push('')
   lines.push(`| Property | Value |`)
   lines.push(`|----------|-------|`)
-  lines.push(`| Board size | ${input.boardSize.widthMm.toFixed(1)}mm × ${input.boardSize.heightMm.toFixed(1)}mm |`)
+  lines.push(
+    `| Board size | ${input.boardSize.widthMm.toFixed(1)}mm × ${input.boardSize.heightMm.toFixed(1)}mm |`
+  )
   lines.push(`| Grid units | ${input.boardSize.width} × ${input.boardSize.height} |`)
   lines.push(`| Grid pitch | ${GRID_UNIT_MM}mm (0.5") |`)
   lines.push(`| Total blocks | ${input.placedBlocks.length} |`)
@@ -218,8 +220,10 @@ function generateMarkdown(input: MarkdownInput): string {
   lines.push('|-------|----------|----------|------------------|')
 
   for (const block of input.blocks) {
-    const provides = block.bus.power?.provides?.map((p) => `${p.rail}@${p.maxMa}mA`).join(', ') || '-'
-    const requires = block.bus.power?.requires?.map((r) => `${r.rail}@${r.maxMa}mA`).join(', ') || '-'
+    const provides =
+      block.bus.power?.provides?.map((p) => `${p.rail}@${p.maxMa}mA`).join(', ') || '-'
+    const requires =
+      block.bus.power?.requires?.map((r) => `${r.rail}@${r.maxMa}mA`).join(', ') || '-'
 
     const signals: string[] = []
     if (block.bus.i2c?.addresses) {
@@ -244,7 +248,10 @@ function generateMarkdown(input: MarkdownInput): string {
   lines.push('|-----|--------|---------------------------|')
 
   // Build a map of signal -> list of blocks that tap into it
-  const signalTaps: Map<BusSignal, Array<{ blockName: string; reference: string; isolates: string }>> = new Map()
+  const signalTaps: Map<
+    BusSignal,
+    Array<{ blockName: string; reference: string; isolates: string }>
+  > = new Map()
   for (const signal of BUS_PINOUT) {
     signalTaps.set(signal, [])
   }
@@ -268,9 +275,8 @@ function generateMarkdown(input: MarkdownInput): string {
   for (let i = 0; i < BUS_PINOUT.length; i++) {
     const signal = BUS_PINOUT[i]
     const taps = signalTaps.get(signal) || []
-    const tapStr = taps.length > 0
-      ? taps.map((t) => `${t.blockName} (${t.reference})`).join(', ')
-      : '-'
+    const tapStr =
+      taps.length > 0 ? taps.map((t) => `${t.blockName} (${t.reference})`).join(', ') : '-'
     lines.push(`| ${i + 1} | ${signal} | ${tapStr} |`)
   }
   lines.push('')

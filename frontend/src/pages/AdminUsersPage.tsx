@@ -49,10 +49,7 @@ export function AdminUsersPage() {
     <div className="min-h-screen bg-ash p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-4 mb-8">
-          <Link
-            to="/"
-            className="p-2 hover:bg-surface-800 transition-colors"
-          >
+          <Link to="/" className="p-2 hover:bg-surface-800 transition-colors">
             <ArrowLeft className="w-5 h-5 text-steel-dim" strokeWidth={1.5} />
           </Link>
           <div>
@@ -124,9 +121,13 @@ export function AdminUsersPage() {
                       <span className="px-2 py-0.5 text-xs bg-copper/20 text-copper">Admin</span>
                     )}
                     {user.is_approved === 1 ? (
-                      <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">Approved</span>
+                      <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
+                        Approved
+                      </span>
                     ) : (
-                      <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400">Pending</span>
+                      <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400">
+                        Pending
+                      </span>
                     )}
                   </div>
                   {user.display_name && (

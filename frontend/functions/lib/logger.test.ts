@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { Logger, createLogger, isAdmin } from './logger'
+import type { Env } from '../env.d'
 
 // Mock environment
 const mockEnv = {
@@ -11,7 +12,7 @@ const mockEnv = {
       }),
     }),
   },
-} as any
+} as unknown as Env
 
 describe('logger', () => {
   beforeEach(() => {
@@ -115,7 +116,7 @@ describe('logger', () => {
         await logger.api('API test message')
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).toContain('[api]')
       })
 
@@ -125,7 +126,7 @@ describe('logger', () => {
         await logger.llm('LLM test message')
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).toContain('[llm]')
       })
 
@@ -135,7 +136,7 @@ describe('logger', () => {
         await logger.auth('Auth test message')
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).toContain('[auth]')
       })
 
@@ -145,7 +146,7 @@ describe('logger', () => {
         await logger.project('Project test message')
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).toContain('[project]')
       })
     })
@@ -157,7 +158,7 @@ describe('logger', () => {
         await logger.debug('general', 'Test message', { key: 'value' })
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).toContain('key')
         expect(logCall).toContain('value')
       })
@@ -357,7 +358,7 @@ describe('logger', () => {
         await logger.debug(category, 'Test message')
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).toContain(`[${category}]`)
       })
     })
@@ -419,7 +420,7 @@ describe('logger', () => {
         await logger.debug('general', 'Test message')
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).toContain('[req:')
       })
 
@@ -429,7 +430,7 @@ describe('logger', () => {
         await logger.error('general', 'Test message') // error to trigger console
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).not.toContain('[user:null]')
       })
 
@@ -439,7 +440,7 @@ describe('logger', () => {
         await logger.debug('general', 'Test message')
 
         expect(console.log).toHaveBeenCalled()
-        const logCall = (console.log as any).mock.calls[0][0]
+        const logCall = (console.log as unknown as Mock).mock.calls[0][0]
         expect(logCall).toContain('[user:user1234]') // First 8 chars
       })
     })

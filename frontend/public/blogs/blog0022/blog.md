@@ -32,7 +32,7 @@ Extended the ChatMessage type to support multipart content:
 interface ImageContent {
   type: 'image'
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
-  data: string  // base64 encoded
+  data: string // base64 encoded
 }
 
 interface TextContent {
@@ -232,6 +232,7 @@ Respond with JSON:
 ### Comparison Component
 
 Built a side-by-side comparison UI showing:
+
 - Blueprint image (design intent)
 - Rendered enclosure screenshot
 - Score breakdown by category

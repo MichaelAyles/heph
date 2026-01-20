@@ -27,10 +27,24 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 export function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepProps) {
   // 8 images: 4 Style A (adjective-heavy) + 4 Style B (structured photography)
   const [generating, setGenerating] = useState<boolean[]>([
-    true, true, true, true, true, true, true, true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
   ])
   const [blueprints, setBlueprints] = useState<({ url: string; prompt: string } | null)[]>([
-    null, null, null, null, null, null, null, null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
   ])
   const [errors, setErrors] = useState<string[]>([])
   // Use refs to prevent double execution - state updates are async and can race

@@ -15,10 +15,7 @@ import {
   ORCHESTRATOR_TOOLS,
   buildOrchestratorInitPrompt,
 } from '@/prompts/orchestrator'
-import type {
-  ProjectSpec,
-  PcbBlock,
-} from '@/db/schema'
+import type { ProjectSpec, PcbBlock } from '@/db/schema'
 import type {
   OrchestratorMode,
   OrchestratorState,
@@ -534,7 +531,7 @@ export class HardwareOrchestrator {
     // Initialize context from current state
     engine.updateContext({
       mode: this.mode,
-      spec: (this.currentSpec as unknown) as Record<string, unknown>,
+      spec: this.currentSpec as unknown as Record<string, unknown>,
       currentStage: this.state.currentStage,
       loopCount: {
         spec: 0,

@@ -30,6 +30,7 @@ The comparison above shows what 92% token reduction looks like. The original KiC
 ## Why We Needed This
 
 Our block import flow:
+
 1. Parse KiCad files
 2. Extract components and nets
 3. Send to LLM with context
@@ -38,6 +39,7 @@ Our block import flow:
 The kicadts library did step 1... until users had KiCad 8 files. Then it threw errors on syntax it didn't recognize.
 
 TOKN's S-expression parser is robust. It handles:
+
 - Quoted strings with escapes
 - Nested parentheses to any depth
 - Unknown tokens (ignores them gracefully)
@@ -71,23 +73,23 @@ Our parser tokenizes this into a tree:
 
 ```typescript
 export function parse(text: string): SExpr {
-  const tokens = tokenize(text);
-  let pos = 0;
+  const tokens = tokenize(text)
+  let pos = 0
 
   function parseExpr(): SExpr {
     if (tokens[pos] === '(') {
-      pos++; // consume (
-      const list: SExpr[] = [];
+      pos++ // consume (
+      const list: SExpr[] = []
       while (tokens[pos] !== ')') {
-        list.push(parseExpr());
+        list.push(parseExpr())
       }
-      pos++; // consume )
-      return list;
+      pos++ // consume )
+      return list
     }
-    return tokens[pos++]; // atom
+    return tokens[pos++] // atom
   }
 
-  return parseExpr();
+  return parseExpr()
 }
 ```
 
@@ -95,7 +97,7 @@ Helper functions make traversal easy:
 
 ```typescript
 // Get first child with name
-get(expr, 'property')  // -> ['property', 'Reference', 'R1']
+get(expr, 'property') // -> ['property', 'Reference', 'R1']
 
 // Get all children with name
 getAll(expr, 'symbol') // -> [['symbol', ...], ['symbol', ...]]
@@ -110,21 +112,23 @@ Walks the S-expression tree and extracts structured data:
 
 ```typescript
 export interface Component {
-  libId: string;      // "Device:R"
-  reference: string;  // "R1"
-  value: string;      // "10k"
-  footprint: string;  // "Resistor_SMD:R_0402"
-  x: number; y: number; angle: number;
-  pins: Map<string, Point>;  // Pin positions
+  libId: string // "Device:R"
+  reference: string // "R1"
+  value: string // "10k"
+  footprint: string // "Resistor_SMD:R_0402"
+  x: number
+  y: number
+  angle: number
+  pins: Map<string, Point> // Pin positions
 }
 
 export interface Schematic {
-  title: string;
-  libSymbols: Map<string, LibSymbol>;
-  components: Component[];
-  wires: Wire[];
-  junctions: Junction[];
-  labels: Label[];
+  title: string
+  libSymbols: Map<string, LibSymbol>
+  components: Component[]
+  wires: Wire[]
+  junctions: Junction[]
+  labels: Label[]
 }
 ```
 
@@ -132,16 +136,17 @@ Pin positions are computed by transforming library symbol pin coordinates throug
 
 ```typescript
 function transformPin(pinX, pinY, compX, compY, angle, mirror): Point {
-  let px = pinX, py = -pinY;  // KiCad's Y is inverted
+  let px = pinX,
+    py = -pinY // KiCad's Y is inverted
 
-  if (mirror === 'x') py = -py;
-  else if (mirror === 'y') px = -px;
+  if (mirror === 'x') py = -py
+  else if (mirror === 'y') px = -px
 
-  const rad = (-angle * Math.PI) / 180;
-  const rx = px * Math.cos(rad) - py * Math.sin(rad);
-  const ry = px * Math.sin(rad) + py * Math.cos(rad);
+  const rad = (-angle * Math.PI) / 180
+  const rx = px * Math.cos(rad) - py * Math.sin(rad)
+  const ry = px * Math.sin(rad) + py * Math.cos(rad)
 
-  return { x: compX + rx, y: compY + ry };
+  return { x: compX + rx, y: compY + ry }
 }
 ```
 
@@ -150,6 +155,7 @@ function transformPin(pinX, pinY, compX, compY, angle, mirror): Point {
 This is where the magic happens. KiCad stores wires as line segments and labels as floating text. The analyzer figures out which pins are actually connected.
 
 Algorithm:
+
 1. Build a point-to-segment mapping (which wire endpoints share coordinates)
 2. Use union-find to group connected wire segments
 3. For each group, find all pins that touch any point in the group
@@ -158,22 +164,22 @@ Algorithm:
 ```typescript
 export function analyzeConnectivity(sch: Schematic): Netlist {
   // Union-find for wire connectivity
-  const parent = Array.from({ length: sch.wires.length }, (_, i) => i);
+  const parent = Array.from({ length: sch.wires.length }, (_, i) => i)
 
   function find(x: number): number {
-    if (parent[x] !== x) parent[x] = find(parent[x]);
-    return parent[x];
+    if (parent[x] !== x) parent[x] = find(parent[x])
+    return parent[x]
   }
 
   function union(x: number, y: number): void {
-    parent[find(x)] = find(y);
+    parent[find(x)] = find(y)
   }
 
   // Connect wires that share endpoints
   for (let i = 0; i < sch.wires.length; i++) {
     for (let j = i + 1; j < sch.wires.length; j++) {
       if (wiresShareEndpoint(sch.wires[i], sch.wires[j])) {
-        union(i, j);
+        union(i, j)
       }
     }
   }
@@ -187,10 +193,10 @@ The result is a proper netlist:
 
 ```typescript
 interface Net {
-  name: string;           // "GND", "N1", "I2C_SDA"
-  pins: [string, string, string][];  // [ref, pin_number, pin_name]
-  wires: WireSegment[];
-  isPower: boolean;
+  name: string // "GND", "N1", "I2C_SDA"
+  pins: [string, string, string][] // [ref, pin_number, pin_name]
+  wires: WireSegment[]
+  isPower: boolean
 }
 ```
 
@@ -199,28 +205,28 @@ interface Net {
 Our existing `kicad-parser.ts` now imports from tokn:
 
 ```typescript
-import { parseSchematic, analyzeConnectivity } from '../lib/tokn';
-import { parse, get, getAll } from '../lib/tokn/sexpr';
+import { parseSchematic, analyzeConnectivity } from '../lib/tokn'
+import { parse, get, getAll } from '../lib/tokn/sexpr'
 
 export function parseKicadSchematic(content: string): Partial<KicadExtract> {
-  const sch = parseSchematic(content);
-  const netlist = analyzeConnectivity(sch);
+  const sch = parseSchematic(content)
+  const netlist = analyzeConnectivity(sch)
 
-  const components: ExtractedComponent[] = [];
+  const components: ExtractedComponent[] = []
   for (const comp of netlist.components) {
     components.push({
       reference: comp.reference,
       value: comp.value,
       footprint: comp.footprint.split(':').pop() || comp.footprint,
       libraryId: comp.libId,
-    });
+    })
   }
 
   return {
     components,
-    nets: netlist.nets.map(n => n.name),
+    nets: netlist.nets.map((n) => n.name),
     projectName: sch.title || undefined,
-  };
+  }
 }
 ```
 
@@ -228,23 +234,23 @@ The PCB parser uses the low-level S-expression functions directly:
 
 ```typescript
 export function parseKicadPcbFile(content: string): Partial<KicadExtract> {
-  const expr = parse(content);
+  const expr = parse(content)
 
   if (!Array.isArray(expr) || expr[0] !== 'kicad_pcb') {
-    throw new Error('Not a valid KiCad PCB file');
+    throw new Error('Not a valid KiCad PCB file')
   }
 
-  const nets: string[] = [];
+  const nets: string[] = []
   for (const net of getAll(expr, 'net')) {
     if (net.length >= 3 && typeof net[2] === 'string') {
-      const netName = net[2];
+      const netName = net[2]
       if (netName && !netName.startsWith('unconnected-')) {
-        nets.push(netName);
+        nets.push(netName)
       }
     }
   }
 
-  return { nets, boardSize };
+  return { nets, boardSize }
 }
 ```
 
@@ -259,6 +265,7 @@ export function parseKicadPcbFile(content: string): Partial<KicadExtract> {
 ## The Lesson
 
 Third-party KiCad parsing libraries:
+
 - kicad-utils: Last updated 2020, KiCad 5 era
 - kicadts: Last updated 2024, but still doesn't handle KiCad 8
 - Various Python libraries: Don't help in a TypeScript/Cloudflare environment

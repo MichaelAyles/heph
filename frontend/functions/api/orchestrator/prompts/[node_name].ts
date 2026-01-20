@@ -10,26 +10,15 @@
 import type { Env } from '../../../env'
 import { createLogger } from '../../../lib/logger'
 import type { OrchestratorPromptRow } from '../../../../src/db/schema'
-import {
-  ORCHESTRATOR_SYSTEM_PROMPT,
-} from '../../../../src/prompts/orchestrator'
-import {
-  FEASIBILITY_SYSTEM_PROMPT,
-} from '../../../../src/prompts/feasibility'
+import { ORCHESTRATOR_SYSTEM_PROMPT } from '../../../../src/prompts/orchestrator'
+import { FEASIBILITY_SYSTEM_PROMPT } from '../../../../src/prompts/feasibility'
 import {
   ENCLOSURE_SYSTEM_PROMPT,
   ENCLOSURE_VISION_SYSTEM_PROMPT,
 } from '../../../../src/prompts/enclosure'
-import {
-  FIRMWARE_SYSTEM_PROMPT,
-} from '../../../../src/prompts/firmware'
-import {
-  ENCLOSURE_REVIEW_PROMPT,
-  FIRMWARE_REVIEW_PROMPT,
-} from '../../../../src/prompts/review'
-import {
-  NAMING_SYSTEM_PROMPT,
-} from '../../../../src/prompts/naming'
+import { FIRMWARE_SYSTEM_PROMPT } from '../../../../src/prompts/firmware'
+import { ENCLOSURE_REVIEW_PROMPT, FIRMWARE_REVIEW_PROMPT } from '../../../../src/prompts/review'
+import { NAMING_SYSTEM_PROMPT } from '../../../../src/prompts/naming'
 
 // Hardcoded fallback prompts
 const HARDCODED_PROMPTS: Record<string, string> = {
@@ -49,7 +38,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     // Try to load from database first - fetch all fields including enhanced ones
-    const row = await env.DB.prepare(`
+    const row = await env.DB.prepare(
+      `
       SELECT
         id, node_name, display_name, description, system_prompt, category, stage,
         is_active, token_estimate, version, context_tags, created_at, updated_at,
@@ -57,7 +47,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         user_prompt_template, output_format
       FROM orchestrator_prompts
       WHERE node_name = ? AND is_active = 1
-    `)
+    `
+    )
       .bind(nodeName)
       .first<OrchestratorPromptRow>()
 
@@ -89,7 +80,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   } catch (error) {
     // Database error, fall through to hardcoded
     const logger = createLogger(env)
-    await logger.warn('api', 'Failed to load prompt from database, using hardcoded', { nodeName, error: error instanceof Error ? error.message : String(error) })
+    await logger.warn('api', 'Failed to load prompt from database, using hardcoded', {
+      nodeName,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   // Fall back to hardcoded

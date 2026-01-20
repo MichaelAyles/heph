@@ -9,7 +9,7 @@
  */
 
 import type { Env } from '../../../env.d'
-import { parseKicadFiles, formatExtractForLLM, calculateGridSize } from '../../../../src/services/kicad-parser'
+import { parseKicadFiles, calculateGridSize } from '../../../../src/services/kicad-parser'
 import { buildBlockGenerationMessages } from '../../../../src/prompts/block-generation'
 import { parseBlockJson } from '../../../lib/block-validator'
 import type { BlockCategory } from '../../../../src/schemas/block'
@@ -185,7 +185,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }
       }
 
-      suggestedCategory = formData.get('category') as BlockCategory | null || undefined
+      suggestedCategory = (formData.get('category') as BlockCategory | null) || undefined
     } else if (contentType.includes('application/json')) {
       // Handle JSON body (for testing)
       const body = (await request.json()) as GenerateRequest
@@ -251,7 +251,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       generatedBlock = JSON.parse(jsonString)
     } catch (jsonError) {
       // Provide more detail about the parse error
-      const parseError = jsonError instanceof SyntaxError ? jsonError.message : 'Unknown parse error'
+      const parseError =
+        jsonError instanceof SyntaxError ? jsonError.message : 'Unknown parse error'
       return Response.json(
         {
           error: 'Failed to parse LLM response as JSON',
@@ -293,7 +294,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('api', 'Block generation error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('api', 'Block generation error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Generation failed' },
       { status: 500 }

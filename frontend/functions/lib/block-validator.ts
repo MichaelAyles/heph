@@ -12,9 +12,7 @@ import {
   BlockDefinitionSchema,
   validateEdgeConnections,
   validateI2cAddresses,
-  BlockCategory,
 } from '../../src/schemas/block'
-import { z } from 'zod'
 
 // =============================================================================
 // Types
@@ -82,10 +80,7 @@ export const GERBER_FILE_EXTENSIONS = [
  * @param slug - Block slug
  * @param files - Array of filenames present
  */
-export function validateBlockFiles(
-  slug: string,
-  files: string[]
-): BlockValidationResult {
+export function validateBlockFiles(slug: string, files: string[]): BlockValidationResult {
   const requirements = getBlockFileRequirements(slug)
   const errors: string[] = []
   const warnings: string[] = []
@@ -171,10 +166,7 @@ export function parseBlockJson(
 /**
  * Check if two blocks have I2C address conflicts
  */
-export function checkI2cConflict(
-  block1: BlockDefinition,
-  block2: BlockDefinition
-): string[] {
+export function checkI2cConflict(block1: BlockDefinition, block2: BlockDefinition): string[] {
   const errors: string[] = []
 
   if (!block1.bus.i2c?.addresses || !block2.bus.i2c?.addresses) {
@@ -206,24 +198,17 @@ export function checkI2cConflict(
 /**
  * Check if blocks have GPIO claim conflicts
  */
-export function checkGpioConflict(
-  block1: BlockDefinition,
-  block2: BlockDefinition
-): string[] {
+export function checkGpioConflict(block1: BlockDefinition, block2: BlockDefinition): string[] {
   const errors: string[] = []
 
   if (!block1.bus.gpio?.claims || !block2.bus.gpio?.claims) {
     return errors
   }
 
-  const overlap = block1.bus.gpio.claims.filter((gpio) =>
-    block2.bus.gpio!.claims.includes(gpio)
-  )
+  const overlap = block1.bus.gpio.claims.filter((gpio) => block2.bus.gpio!.claims.includes(gpio))
 
   for (const gpio of overlap) {
-    errors.push(
-      `GPIO conflict: ${gpio} claimed by both ${block1.name} and ${block2.name}`
-    )
+    errors.push(`GPIO conflict: ${gpio} claimed by both ${block1.name} and ${block2.name}`)
   }
 
   return errors
@@ -232,10 +217,7 @@ export function checkGpioConflict(
 /**
  * Check if blocks have SPI CS conflicts
  */
-export function checkSpiConflict(
-  block1: BlockDefinition,
-  block2: BlockDefinition
-): string[] {
+export function checkSpiConflict(block1: BlockDefinition, block2: BlockDefinition): string[] {
   const errors: string[] = []
 
   if (!block1.bus.spi?.csPin || !block2.bus.spi?.csPin) {
@@ -299,9 +281,7 @@ export function calculatePowerBudget(blocks: BlockDefinition[]): {
     if (available === 0) {
       warnings.push(`No block provides ${rail} rail, but ${req.max}mA max required`)
     } else if (req.max > available) {
-      warnings.push(
-        `${rail} rail budget exceeded: ${req.max}mA required, ${available}mA available`
-      )
+      warnings.push(`${rail} rail budget exceeded: ${req.max}mA required, ${available}mA available`)
     } else if (req.typical > available * 0.8) {
       warnings.push(
         `${rail} rail near capacity: ${req.typical}mA typical usage, ${available}mA available`
@@ -315,9 +295,7 @@ export function calculatePowerBudget(blocks: BlockDefinition[]): {
 /**
  * Check compatibility between a set of blocks
  */
-export function checkBlockCompatibility(
-  blocks: BlockDefinition[]
-): BlockCompatibilityCheck {
+export function checkBlockCompatibility(blocks: BlockDefinition[]): BlockCompatibilityCheck {
   const errors: string[] = []
   const warnings: string[] = []
 

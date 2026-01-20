@@ -2,7 +2,11 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import type { RejectionDisplayProps } from './types'
 
-export function RejectionDisplay({ reason, suggestedRevisions, onAcceptRevision }: RejectionDisplayProps) {
+export function RejectionDisplay({
+  reason,
+  suggestedRevisions,
+  onAcceptRevision,
+}: RejectionDisplayProps) {
   const navigate = useNavigate()
 
   const handleRequestFeature = () => {

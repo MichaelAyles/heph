@@ -4,7 +4,7 @@
  * Non-blocking: users can proceed without acknowledging.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, createElement } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -61,7 +61,7 @@ export function StageCompletionSummary({
 
   if (!summary) return null
 
-  const Icon = getStageIcon(stage)
+  const IconComponent = getStageIcon(stage)
   const nextStage = getNextStage(stage)
 
   return (
@@ -77,7 +77,7 @@ export function StageCompletionSummary({
           </div>
           <div className="text-left">
             <h3 className="text-sm font-medium text-steel flex items-center gap-2">
-              <Icon className="w-4 h-4" strokeWidth={1.5} />
+              {createElement(IconComponent, { className: 'w-4 h-4', strokeWidth: 1.5 })}
               {summary.title}
             </h3>
             <p className="text-xs text-steel-dim">{summary.subtitle}</p>
@@ -403,10 +403,12 @@ function getStageLabel(stage: WorkspaceStage): string {
 /**
  * Hook to track stage completion and auto-expand summaries
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useStageCompletionTracking(spec: ProjectSpec | null) {
   const [expandedStages, setExpandedStages] = useState<Set<WorkspaceStage>>(new Set())
   const [lastCompletedStage, setLastCompletedStage] = useState<WorkspaceStage | null>(null)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!spec?.stages) return
 
@@ -420,6 +422,7 @@ export function useStageCompletionTracking(spec: ProjectSpec | null) {
       }
     }
   }, [spec?.stages])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isExpanded = (stage: WorkspaceStage) => expandedStages.has(stage)
 
@@ -479,10 +482,7 @@ export function MiniStageSummary({
   if (!summary) return null
 
   return (
-    <span
-      className="text-xs text-emerald-400/70 truncate max-w-[80px]"
-      title={summary}
-    >
+    <span className="text-xs text-emerald-400/70 truncate max-w-[80px]" title={summary}>
       {summary}
     </span>
   )

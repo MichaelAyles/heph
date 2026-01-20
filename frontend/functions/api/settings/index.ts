@@ -69,7 +69,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('api', 'Update settings error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('api', 'Update settings error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json({ error: 'Failed to update settings' }, { status: 500 })
   }
 }

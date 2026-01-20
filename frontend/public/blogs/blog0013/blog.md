@@ -24,11 +24,11 @@ The original spec pipeline ran fully automatically - users watched as the AI mad
 
 ### Three Control Modes
 
-| Mode | Icon | Behavior |
-|------|------|----------|
-| **Vibe It** | Zap | Full automation. AI proceeds without pausing. |
-| **Fix It** | Shield | Balanced. AI pauses on errors or low confidence (<80%). |
-| **Design It** | Pencil | Full control. User approves every step. |
+| Mode          | Icon   | Behavior                                                |
+| ------------- | ------ | ------------------------------------------------------- |
+| **Vibe It**   | Zap    | Full automation. AI proceeds without pausing.           |
+| **Fix It**    | Shield | Balanced. AI pauses on errors or low confidence (<80%). |
+| **Design It** | Pencil | Full control. User approves every step.                 |
 
 ### User Experience
 
@@ -155,12 +155,14 @@ const MODE_CONFIG: Record<ControlMode, { icon; label; color }> = {
 }
 
 // In footer
-{user?.controlMode && (
-  <Link to="/settings" className="flex items-center gap-2 px-2 py-1.5 bg-surface-800">
-    <ModeIcon className={mode.color} />
-    <span className={mode.color}>{mode.label}</span>
-  </Link>
-)}
+{
+  user?.controlMode && (
+    <Link to="/settings" className="flex items-center gap-2 px-2 py-1.5 bg-surface-800">
+      <ModeIcon className={mode.color} />
+      <span className={mode.color}>{mode.label}</span>
+    </Link>
+  )
+}
 ```
 
 ### Mode-Aware Step Transitions
@@ -200,12 +202,11 @@ function FeasibilityResults({ feasibility, onContinue, autoAdvance = false }) {
 }
 
 // In SpecStageView:
-<FeasibilityResults
+;<FeasibilityResults
   feasibility={spec.feasibility}
   onContinue={handleStartRefinement}
   autoAdvance={
-    controlMode === 'vibe_it' ||
-    (controlMode === 'fix_it' && spec.feasibility.overallScore >= 80)
+    controlMode === 'vibe_it' || (controlMode === 'fix_it' && spec.feasibility.overallScore >= 80)
   }
 />
 ```
@@ -241,6 +242,7 @@ Mode is a user preference, not a project setting. Users expect consistent behavi
 ### Why Default to "Fix It"?
 
 It's the balanced option:
+
 - More comfortable for new users than "Vibe It" (some guardrails)
 - Less tedious than "Design It" (doesn't require clicking through everything)
 - Pauses on low confidence gives users a safety net
@@ -248,6 +250,7 @@ It's the balanced option:
 ### Why Auto-Advance with Countdown?
 
 Rather than silently proceeding, the countdown:
+
 - Gives users time to notice and intervene
 - Makes automation visible (not sneaky)
 - Still allows immediate proceed with a click
@@ -255,6 +258,7 @@ Rather than silently proceeding, the countdown:
 ### Why 80% Threshold for Fix It Auto-Advance?
 
 Based on feasibility scoring:
+
 - 80%+ = "great fit" for our component library
 - 60-80% = "might need adjustments"
 - <60% = "significant constraints"
@@ -275,12 +279,12 @@ The control modes will affect all stages - "Vibe It" will auto-accept AI suggest
 
 ## Summary
 
-| Component | Purpose |
-|-----------|---------|
-| `control_mode` column | Store user preference in database |
-| `/api/users/me/mode` | Endpoint to update mode |
-| ControlModeCard | Settings page mode selection |
-| Sidebar indicator | Show current mode, link to settings |
-| autoAdvance prop | Enable countdown + auto-proceed |
+| Component             | Purpose                             |
+| --------------------- | ----------------------------------- |
+| `control_mode` column | Store user preference in database   |
+| `/api/users/me/mode`  | Endpoint to update mode             |
+| ControlModeCard       | Settings page mode selection        |
+| Sidebar indicator     | Show current mode, link to settings |
+| autoAdvance prop      | Enable countdown + auto-proceed     |
 
 Users now have control over their automation level. The system respects their preferences without requiring configuration at every step.

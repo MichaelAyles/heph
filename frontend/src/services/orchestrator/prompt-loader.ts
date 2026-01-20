@@ -166,7 +166,10 @@ function transformRowToEnhanced(row: Record<string, unknown>): EnhancedOrchestra
     category: (row.category || 'agent') as 'agent' | 'generator' | 'reviewer',
     stage: row.stage as 'spec' | 'pcb' | 'enclosure' | 'firmware' | null,
     isActive: row.is_active === 1 || row.isActive === true,
-    tokenEstimate: typeof row.token_estimate === 'number' ? row.token_estimate : (row.tokenEstimate as number | null),
+    tokenEstimate:
+      typeof row.token_estimate === 'number'
+        ? row.token_estimate
+        : (row.tokenEstimate as number | null),
     version: typeof row.version === 'number' ? row.version : 1,
     contextTags: parseJsonField(row.context_tags || row.contextTags, []),
     createdAt: String(row.created_at || row.createdAt || new Date().toISOString()),
@@ -178,7 +181,11 @@ function transformRowToEnhanced(row: Record<string, unknown>): EnhancedOrchestra
     contextSelector: parseJsonField(row.context_selector || row.contextSelector, null),
     iterationConfig: parseJsonField(row.iteration_config || row.iterationConfig, null),
     userPromptTemplate: (row.user_prompt_template || row.userPromptTemplate) as string | null,
-    outputFormat: (row.output_format || row.outputFormat || 'json') as 'json' | 'code' | 'text' | 'image_prompt',
+    outputFormat: (row.output_format || row.outputFormat || 'json') as
+      | 'json'
+      | 'code'
+      | 'text'
+      | 'image_prompt',
   }
 }
 

@@ -13,6 +13,7 @@ Implement AI-generated firmware for ESP32-C6 with Monaco editor integration, dow
 ## The Problem
 
 After designing the PCB and enclosure, users need working firmware that:
+
 1. Initializes all sensors and outputs correctly
 2. Uses proper libraries for each component
 3. Is structured for PlatformIO compilation
@@ -43,6 +44,7 @@ export interface FirmwareInput {
 ```
 
 The prompt includes:
+
 - Standard PlatformIO project structure
 - Pin assignment patterns for I2C, SPI, GPIO
 - Library recommendations for common sensors (BME280, LIS3DH, etc.)
@@ -55,10 +57,7 @@ The FirmwareStageView provides a full code editor experience:
 ```tsx
 // File tree + Monaco editor
 <div className="flex min-h-0">
-  <FileTree
-    nodes={fileTree}
-    onSelect={handleSelectFile}
-  />
+  <FileTree nodes={fileTree} onSelect={handleSelectFile} />
   <Editor
     language={selectedFile.language}
     value={editorContent}
@@ -69,6 +68,7 @@ The FirmwareStageView provides a full code editor experience:
 ```
 
 Features:
+
 - Collapsible file tree (platformio.ini, include/, src/)
 - C++ syntax highlighting
 - Line numbers
@@ -142,11 +142,11 @@ The modification prompt includes the current code and requested changes, returni
 
 ## Key Dependencies
 
-| Package | Purpose |
-|---------|---------|
+| Package                | Purpose                           |
+| ---------------------- | --------------------------------- |
 | `@monaco-editor/react` | Code editor with C++ highlighting |
-| `jszip` | Download source as ZIP archive |
-| `lucide-react` | File tree icons |
+| `jszip`                | Download source as ZIP archive    |
+| `lucide-react`         | File tree icons                   |
 
 ---
 
@@ -169,11 +169,13 @@ frontend/src/
 ### Why Manual Compilation?
 
 ESP32 compilation requires:
+
 - GCC toolchain (~2GB)
 - ESP-IDF SDK
 - 30-120 seconds build time
 
 None of this is possible on Cloudflare Workers. Options:
+
 1. **Fly.io Docker container** - Planned for future (Phase 6 in roadmap)
 2. **Manual PlatformIO** - Works now, users have full control
 
@@ -215,11 +217,11 @@ Also added in this update:
 
 ## Summary
 
-| Component | Purpose |
-|-----------|---------|
-| `firmware.ts` | LLM prompt for ESP32 code generation |
+| Component               | Purpose                                     |
+| ----------------------- | ------------------------------------------- |
+| `firmware.ts`           | LLM prompt for ESP32 code generation        |
 | `FirmwareStageView.tsx` | Monaco editor + file tree + download/upload |
-| `jszip` | Browser-side ZIP creation |
-| Workspace link | Navigation to project workbench |
+| `jszip`                 | Browser-side ZIP creation                   |
+| Workspace link          | Navigation to project workbench             |
 
 The firmware stage now generates complete PlatformIO projects from project specs, provides a full code editor experience, and enables manual compilation with binary upload.

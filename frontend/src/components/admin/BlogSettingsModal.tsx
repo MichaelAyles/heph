@@ -94,7 +94,11 @@ export function BlogSettingsModal({ blog, onClose }: BlogSettingsModalProps) {
   }
 
   const handleReset = () => {
-    if (confirm('Reset all settings to defaults? This will restore the original title, description, and thumbnail.')) {
+    if (
+      confirm(
+        'Reset all settings to defaults? This will restore the original title, description, and thumbnail.'
+      )
+    ) {
       resetMutation.mutate()
     }
   }
@@ -113,10 +117,7 @@ export function BlogSettingsModal({ blog, onClose }: BlogSettingsModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-ash/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-ash/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative w-full max-w-lg bg-surface-900 border border-surface-700 shadow-xl">
@@ -135,9 +136,7 @@ export function BlogSettingsModal({ blog, onClose }: BlogSettingsModalProps) {
         <div className="p-6 space-y-6">
           {/* Slug (read-only) */}
           <div>
-            <label className="block text-sm font-medium text-steel-dim mb-2">
-              Slug
-            </label>
+            <label className="block text-sm font-medium text-steel-dim mb-2">Slug</label>
             <div className="px-3 py-2 bg-surface-800 border border-surface-700 text-steel-dim font-mono text-sm">
               {blog.slug}
             </div>
@@ -164,9 +163,7 @@ export function BlogSettingsModal({ blog, onClose }: BlogSettingsModalProps) {
           <div>
             <label className="block text-sm font-medium text-steel-dim mb-2">
               Custom Title
-              {hasCustomTitle && (
-                <span className="ml-2 text-xs text-copper">(modified)</span>
-              )}
+              {hasCustomTitle && <span className="ml-2 text-xs text-copper">(modified)</span>}
             </label>
             <input
               type="text"
@@ -189,9 +186,7 @@ export function BlogSettingsModal({ blog, onClose }: BlogSettingsModalProps) {
           <div>
             <label className="block text-sm font-medium text-steel-dim mb-2">
               Custom Description
-              {hasCustomDescription && (
-                <span className="ml-2 text-xs text-copper">(modified)</span>
-              )}
+              {hasCustomDescription && <span className="ml-2 text-xs text-copper">(modified)</span>}
             </label>
             <textarea
               value={description}
@@ -214,9 +209,7 @@ export function BlogSettingsModal({ blog, onClose }: BlogSettingsModalProps) {
           <div>
             <label className="block text-sm font-medium text-steel-dim mb-2">
               Custom Thumbnail URL
-              {hasCustomThumbnail && (
-                <span className="ml-2 text-xs text-copper">(modified)</span>
-              )}
+              {hasCustomThumbnail && <span className="ml-2 text-xs text-copper">(modified)</span>}
             </label>
             <input
               type="text"

@@ -82,22 +82,29 @@ Suggestions improve quality but aren't required.`
 /**
  * Build the validation prompt for a specific OpenSCAD code
  */
-export function buildValidationPrompt(openScadCode: string, context: {
-  pcbWidth: number
-  pcbHeight: number
-  hasOled: boolean
-  hasUsb: boolean
-  hasButtons: boolean
-}): string {
+export function buildValidationPrompt(
+  openScadCode: string,
+  context: {
+    pcbWidth: number
+    pcbHeight: number
+    hasOled: boolean
+    hasUsb: boolean
+    hasButtons: boolean
+  }
+): string {
   return `Analyze this OpenSCAD enclosure code for issues:
 
 ## Context
 - PCB Size: ${context.pcbWidth}mm x ${context.pcbHeight}mm
-- Components: ${[
-    context.hasUsb && 'USB-C port',
-    context.hasOled && 'OLED display',
-    context.hasButtons && 'Buttons',
-  ].filter(Boolean).join(', ') || 'None specified'}
+- Components: ${
+    [
+      context.hasUsb && 'USB-C port',
+      context.hasOled && 'OLED display',
+      context.hasButtons && 'Buttons',
+    ]
+      .filter(Boolean)
+      .join(', ') || 'None specified'
+  }
 
 ## OpenSCAD Code
 
@@ -120,9 +127,14 @@ export function buildFixPrompt(
   }
 ): string {
   const issueList = issues
-    .map((issue, i) => `${i + 1}. [${issue.severity.toUpperCase()}] ${issue.category}: ${issue.description}
+    .map(
+      (
+        issue,
+        i
+      ) => `${i + 1}. [${issue.severity.toUpperCase()}] ${issue.category}: ${issue.description}
    Location: ${issue.location || 'N/A'}
-   Fix: ${issue.fix}`)
+   Fix: ${issue.fix}`
+    )
     .join('\n\n')
 
   return `Fix the following issues in this OpenSCAD enclosure code:
@@ -300,7 +312,8 @@ export function parseVisualValidationResponse(response: string): VisualValidatio
         formFactor: typeof parsed.scores?.formFactor === 'number' ? parsed.scores.formFactor : 50,
         featurePlacement:
           typeof parsed.scores?.featurePlacement === 'number' ? parsed.scores.featurePlacement : 50,
-        visualStyle: typeof parsed.scores?.visualStyle === 'number' ? parsed.scores.visualStyle : 50,
+        visualStyle:
+          typeof parsed.scores?.visualStyle === 'number' ? parsed.scores.visualStyle : 50,
         assembly: typeof parsed.scores?.assembly === 'number' ? parsed.scores.assembly : 50,
       },
       matches: typeof parsed.matches === 'boolean' ? parsed.matches : parsed.overallScore >= 70,

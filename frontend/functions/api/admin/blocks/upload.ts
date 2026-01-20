@@ -130,7 +130,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // Ensure slug matches
       if (validationResult.data.slug !== slug) {
         return Response.json(
-          { error: `block.json slug "${validationResult.data.slug}" doesn't match upload slug "${slug}"` },
+          {
+            error: `block.json slug "${validationResult.data.slug}" doesn't match upload slug "${slug}"`,
+          },
           { status: 400 }
         )
       }
@@ -197,9 +199,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const existingFiles = block.files ? JSON.parse(block.files) : {}
       const files = { ...existingFiles, ...uploadedFiles }
 
-      await env.DB.prepare(
-        `UPDATE pcb_blocks SET files = ?, updated_at = ? WHERE slug = ?`
-      )
+      await env.DB.prepare(`UPDATE pcb_blocks SET files = ?, updated_at = ? WHERE slug = ?`)
         .bind(JSON.stringify(files), new Date().toISOString(), slug)
         .run()
     }
@@ -213,9 +213,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Auto-validate if all required files are present and definition exists
     if (missingFiles.length === 0 && (definitionUpdated || block.definition)) {
-      await env.DB.prepare('UPDATE pcb_blocks SET is_validated = 1 WHERE slug = ?')
-        .bind(slug)
-        .run()
+      await env.DB.prepare('UPDATE pcb_blocks SET is_validated = 1 WHERE slug = ?').bind(slug).run()
     }
 
     return Response.json({
@@ -233,7 +231,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('api', 'Block upload error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('api', 'Block upload error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Upload failed' },
       { status: 500 }

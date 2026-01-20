@@ -684,15 +684,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepProps) {
   // 8 images: 4 Style A (adjective-heavy) + 4 Style B (structured photography)
   const [generating, setGenerating] = useState<boolean[]>([
-    true, true, true, true, true, true, true, true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
   ])
   const [blueprints, setBlueprints] = useState<({ url: string; prompt: string } | null)[]>([
-    null, null, null, null, null, null, null, null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
   ])
   const [errors, setErrors] = useState<string[]>([])
   const [hasStarted, setHasStarted] = useState(false)
   const [hasCompleted, setHasCompleted] = useState(false)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (hasStarted) return
 
@@ -742,6 +757,7 @@ function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepPro
       onComplete(validBlueprints)
     }
   }, [generating, blueprints, onComplete, hasCompleted])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const activeCount = generating.filter(Boolean).length
   const totalImages = 8
@@ -935,7 +951,11 @@ function SelectionStep({ blueprints, onSelect, onRegenerate }: SelectionStepProp
             className="aspect-square border-2 border-surface-600 hover:border-copper/50 transition-all overflow-hidden"
           >
             {isValidBlueprintUrl(bp.url) ? (
-              <img src={bp.url} alt={`Design ${index + 1}`} className="w-full h-full object-cover" />
+              <img
+                src={bp.url}
+                alt={`Design ${index + 1}`}
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div className="w-full h-full bg-surface-800 flex items-center justify-center">
                 <span className="text-steel-dim text-sm">No image</span>
@@ -1091,12 +1111,8 @@ function FinalSpecDisplay({ finalSpec, blueprintUrl, onContinue }: FinalSpecDisp
                 <li key={i} className="flex items-center gap-2 text-steel text-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-copper" />
                   <span>{input.type}</span>
-                  {input.count > 1 && (
-                    <span className="text-steel-dim">×{input.count}</span>
-                  )}
-                  {input.notes && (
-                    <span className="text-steel-dim text-xs">({input.notes})</span>
-                  )}
+                  {input.count > 1 && <span className="text-steel-dim">×{input.count}</span>}
+                  {input.notes && <span className="text-steel-dim text-xs">({input.notes})</span>}
                 </li>
               ))}
             </ul>
@@ -1112,12 +1128,8 @@ function FinalSpecDisplay({ finalSpec, blueprintUrl, onContinue }: FinalSpecDisp
                 <li key={i} className="flex items-center gap-2 text-steel text-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   <span>{output.type}</span>
-                  {output.count > 1 && (
-                    <span className="text-steel-dim">×{output.count}</span>
-                  )}
-                  {output.notes && (
-                    <span className="text-steel-dim text-xs">({output.notes})</span>
-                  )}
+                  {output.count > 1 && <span className="text-steel-dim">×{output.count}</span>}
+                  {output.notes && <span className="text-steel-dim text-xs">({output.notes})</span>}
                 </li>
               ))}
             </ul>
@@ -1184,7 +1196,8 @@ function FinalSpecDisplay({ finalSpec, blueprintUrl, onContinue }: FinalSpecDisp
               <div className="flex justify-between">
                 <span className="text-steel-dim">Dimensions</span>
                 <span className="text-steel">
-                  {finalSpec.enclosure.width} × {finalSpec.enclosure.height} × {finalSpec.enclosure.depth} mm
+                  {finalSpec.enclosure.width} × {finalSpec.enclosure.height} ×{' '}
+                  {finalSpec.enclosure.depth} mm
                 </span>
               </div>
             </div>
@@ -1195,7 +1208,9 @@ function FinalSpecDisplay({ finalSpec, blueprintUrl, onContinue }: FinalSpecDisp
       {/* BOM */}
       {finalSpec.estimatedBOM && finalSpec.estimatedBOM.length > 0 && (
         <div className="bg-surface-900 border border-surface-700 p-4">
-          <h3 className="text-sm font-mono text-steel-dim mb-3 tracking-wide">ESTIMATED BILL OF MATERIALS</h3>
+          <h3 className="text-sm font-mono text-steel-dim mb-3 tracking-wide">
+            ESTIMATED BILL OF MATERIALS
+          </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

@@ -147,7 +147,8 @@ function checkI2cConflict(
     if (isConfigurable) {
       warnings.push({
         code: 'I2C_ADDRESS_CONFLICT_CONFIGURABLE',
-        message: `I2C address conflict at ${addrHex} between ${block1.name} and ${block2.name}. ` +
+        message:
+          `I2C address conflict at ${addrHex} between ${block1.name} and ${block2.name}. ` +
           `One or both blocks have configurable addresses - adjust jumpers to resolve.`,
         blocks: [block1.slug, block2.slug],
         details: { address: addr, addressHex: addrHex },
@@ -155,7 +156,8 @@ function checkI2cConflict(
     } else {
       errors.push({
         code: 'I2C_ADDRESS_CONFLICT',
-        message: `I2C address conflict at ${addrHex} between ${block1.name} and ${block2.name}. ` +
+        message:
+          `I2C address conflict at ${addrHex} between ${block1.name} and ${block2.name}. ` +
           `These blocks cannot be used together.`,
         blocks: [block1.slug, block2.slug],
         details: { address: addr, addressHex: addrHex },
@@ -169,10 +171,7 @@ function checkI2cConflict(
 /**
  * Check for GPIO claim conflicts between two blocks
  */
-function checkGpioConflict(
-  block1: BlockDefinition,
-  block2: BlockDefinition
-): DRCError[] {
+function checkGpioConflict(block1: BlockDefinition, block2: BlockDefinition): DRCError[] {
   const errors: DRCError[] = []
 
   const gpio1 = block1.bus.gpio?.claims || []
@@ -199,10 +198,7 @@ function checkGpioConflict(
 /**
  * Check for SPI chip select conflicts between two blocks
  */
-function checkSpiConflict(
-  block1: BlockDefinition,
-  block2: BlockDefinition
-): DRCError[] {
+function checkSpiConflict(block1: BlockDefinition, block2: BlockDefinition): DRCError[] {
   const errors: DRCError[] = []
 
   const cs1 = block1.bus.spi?.csPin
@@ -274,7 +270,8 @@ function analyzePowerBudget(blocks: BlockDefinition[]): {
     if (providerList.length > 1) {
       warnings.push({
         code: 'MULTIPLE_POWER_PROVIDERS',
-        message: `Multiple blocks provide ${rail} rail: ${providerList.join(', ')}. ` +
+        message:
+          `Multiple blocks provide ${rail} rail: ${providerList.join(', ')}. ` +
           `Ensure power sources don't conflict (e.g., via isolation taps).`,
         blocks: blocks
           .filter((b) => b.bus.power?.provides?.some((p) => normalizeRail(p.rail) === rail))

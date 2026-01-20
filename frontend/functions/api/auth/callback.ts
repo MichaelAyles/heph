@@ -42,7 +42,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   // Handle OAuth errors
   if (error) {
     const logger = createLogger(env)
-    await logger.error('auth', 'OAuth error', { error, description: url.searchParams.get('error_description') })
+    await logger.error('auth', 'OAuth error', {
+      error,
+      description: url.searchParams.get('error_description'),
+    })
     return redirectWithError('OAuth authorization failed')
   }
 
@@ -60,21 +63,18 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     // Exchange code for user info
-    const tokenResponse = await fetch(
-      'https://api.workos.com/user_management/authenticate',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          client_id: env.WORKOS_CLIENT_ID,
-          client_secret: env.WORKOS_API_KEY,
-          grant_type: 'authorization_code',
-          code,
-        }),
-      }
-    )
+    const tokenResponse = await fetch('https://api.workos.com/user_management/authenticate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: env.WORKOS_CLIENT_ID,
+        client_secret: env.WORKOS_API_KEY,
+        grant_type: 'authorization_code',
+        code,
+      }),
+    })
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
@@ -91,15 +91,19 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       'SELECT id, username, display_name, is_admin, is_approved FROM users WHERE workos_id = ?'
     )
       .bind(workosUser.id)
-      .first<{ id: string; username: string; display_name: string | null; is_admin: number; is_approved: number }>()
+      .first<{
+        id: string
+        username: string
+        display_name: string | null
+        is_admin: number
+        is_approved: number
+      }>()
 
-    let isNewUser = false
+    let _isNewUser = false
 
     if (!user) {
       // Check if user exists by email (for linking)
-      const existingByEmail = await env.DB.prepare(
-        'SELECT id FROM users WHERE username = ?'
-      )
+      const existingByEmail = await env.DB.prepare('SELECT id FROM users WHERE username = ?')
         .bind(workosUser.email)
         .first<{ id: string }>()
 
@@ -116,11 +120,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           .first()
       } else {
         // Create new user (not approved by default)
-        isNewUser = true
+        _isNewUser = true
         const userId = crypto.randomUUID().replace(/-/g, '')
-        const displayName = [workosUser.first_name, workosUser.last_name]
-          .filter(Boolean)
-          .join(' ') || null
+        const displayName =
+          [workosUser.first_name, workosUser.last_name].filter(Boolean).join(' ') || null
 
         await env.DB.prepare(
           `INSERT INTO users (id, username, password_hash, display_name, workos_id, is_admin, is_approved)
@@ -154,16 +157,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const sessionId = crypto.randomUUID().replace(/-/g, '')
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    await env.DB.prepare(
-      'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
-    )
+    await env.DB.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)')
       .bind(sessionId, user!.id, expiresAt)
       .run()
 
     // Update last login
-    await env.DB.prepare(
-      "UPDATE users SET last_login_at = datetime('now') WHERE id = ?"
-    )
+    await env.DB.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?")
       .bind(user!.id)
       .run()
 
@@ -179,14 +178,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return new Response(null, { status: 302, headers })
   } catch (err) {
     const logger = createLogger(env)
-    await logger.error('auth', 'OAuth callback error', { error: err instanceof Error ? err.message : String(err) })
+    await logger.error('auth', 'OAuth callback error', {
+      error: err instanceof Error ? err.message : String(err),
+    })
     return redirectWithError('Authentication failed')
   }
 }
 
 function redirectWithError(message: string): Response {
   // Redirect to login with error
-  const params = new URLSearchParams({ error: message })
   return new Response(null, {
     status: 302,
     headers: {

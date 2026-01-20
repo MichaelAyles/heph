@@ -28,7 +28,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   if (nodeName) {
     query += ' AND (node_name = ? OR node_name = ?)'
-    params.push(nodeName, '*')  // Include wildcard hooks
+    params.push(nodeName, '*') // Include wildcard hooks
   }
 
   if (hookType && hookType !== 'all') {
@@ -73,7 +73,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     nodeName: string
     hookType: string
     hookFunction: string
@@ -82,13 +82,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   if (!body.nodeName || !body.hookType || !body.hookFunction) {
-    return Response.json({ error: 'nodeName, hookType, and hookFunction are required' }, { status: 400 })
+    return Response.json(
+      { error: 'nodeName, hookType, and hookFunction are required' },
+      { status: 400 }
+    )
   }
 
   // Validate hook type
   const validHookTypes = ['on_enter', 'on_exit', 'on_result', 'on_error']
   if (!validHookTypes.includes(body.hookType)) {
-    return Response.json({ error: `hookType must be one of: ${validHookTypes.join(', ')}` }, { status: 400 })
+    return Response.json(
+      { error: `hookType must be one of: ${validHookTypes.join(', ')}` },
+      { status: 400 }
+    )
   }
 
   // Check for duplicate hook
@@ -102,11 +108,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'This hook already exists for this node' }, { status: 409 })
   }
 
-  const result = await env.DB.prepare(`
+  const result = await env.DB.prepare(
+    `
     INSERT INTO orchestrator_hooks (node_name, hook_type, hook_function, hook_config, priority)
     VALUES (?, ?, ?, ?, ?)
     RETURNING id
-  `)
+  `
+  )
     .bind(
       body.nodeName,
       body.hookType,
@@ -131,7 +139,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     id: string
     hookConfig?: Record<string, unknown> | null
     priority?: number
@@ -166,7 +174,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   updates.push("updated_at = datetime('now')")
   values.push(body.id)
 
-  const result = await env.DB.prepare(`UPDATE orchestrator_hooks SET ${updates.join(', ')} WHERE id = ?`)
+  const result = await env.DB.prepare(
+    `UPDATE orchestrator_hooks SET ${updates.join(', ')} WHERE id = ?`
+  )
     .bind(...values)
     .run()
 
@@ -196,9 +206,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'id query parameter is required' }, { status: 400 })
   }
 
-  const result = await env.DB.prepare('DELETE FROM orchestrator_hooks WHERE id = ?')
-    .bind(id)
-    .run()
+  const result = await env.DB.prepare('DELETE FROM orchestrator_hooks WHERE id = ?').bind(id).run()
 
   if (result.meta.changes === 0) {
     return Response.json({ error: 'Hook not found' }, { status: 404 })

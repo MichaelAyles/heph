@@ -89,9 +89,12 @@ export function PromptEditor({ prompt, onSave }: PromptEditorProps) {
   const [outputSchema, setOutputSchema] = useState('')
   const [contextSelector, setContextSelector] = useState('')
   const [iterationConfig, setIterationConfig] = useState('')
-  const [outputFormat, setOutputFormat] = useState<'json' | 'code' | 'text' | 'image_prompt'>('json')
+  const [outputFormat, setOutputFormat] = useState<'json' | 'code' | 'text' | 'image_prompt'>(
+    'json'
+  )
 
-  // Reset state when prompt changes
+  // Reset state when prompt changes - syncing external prop to internal state is valid
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (prompt) {
       setDisplayName(prompt.displayName)
@@ -100,12 +103,15 @@ export function PromptEditor({ prompt, onSave }: PromptEditorProps) {
       setUserPromptTemplate(prompt.userPromptTemplate || '')
       setInputSchema(safeJsonStringify(prompt.inputSchema))
       setOutputSchema(safeJsonStringify(prompt.outputSchema))
-      setContextSelector(prompt.contextSelector ? JSON.stringify(prompt.contextSelector, null, 2) : '[]')
+      setContextSelector(
+        prompt.contextSelector ? JSON.stringify(prompt.contextSelector, null, 2) : '[]'
+      )
       setIterationConfig(safeJsonStringify(prompt.iterationConfig))
       setOutputFormat(prompt.outputFormat || 'json')
       setIsDirty(false)
     }
   }, [prompt])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -334,8 +340,7 @@ export function PromptEditor({ prompt, onSave }: PromptEditorProps) {
       <div className="px-4 py-2 border-b border-surface-700 flex items-center justify-between text-xs">
         <div className="flex items-center gap-4">
           <span className="text-steel-dim">
-            Category:{' '}
-            <span className="text-steel font-medium capitalize">{prompt.category}</span>
+            Category: <span className="text-steel font-medium capitalize">{prompt.category}</span>
           </span>
           {prompt.stage && (
             <span className="text-steel-dim">
@@ -400,7 +405,8 @@ export function PromptEditor({ prompt, onSave }: PromptEditorProps) {
         {activeTab === 'input' && (
           <div className="h-full flex flex-col">
             <div className="px-4 py-2 text-xs text-steel-dim bg-surface-800 border-b border-surface-700">
-              JSON Schema for validating input to this prompt. Used for type checking and documentation.
+              JSON Schema for validating input to this prompt. Used for type checking and
+              documentation.
             </div>
             <textarea
               value={inputSchema}
@@ -455,7 +461,8 @@ export function PromptEditor({ prompt, onSave }: PromptEditorProps) {
         {activeTab === 'iteration' && (
           <div className="h-full flex flex-col">
             <div className="px-4 py-2 text-xs text-steel-dim bg-surface-800 border-b border-surface-700">
-              Iteration configuration for generate→review→fix loops. Set maxAttempts and exit conditions.
+              Iteration configuration for generate→review→fix loops. Set maxAttempts and exit
+              conditions.
             </div>
             <textarea
               value={iterationConfig}

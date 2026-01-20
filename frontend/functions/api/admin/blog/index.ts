@@ -82,9 +82,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   // Get all blog settings from database
-  const settingsResult = await env.DB.prepare(
-    'SELECT * FROM blog_settings'
-  ).all<BlogSettings>()
+  const settingsResult = await env.DB.prepare('SELECT * FROM blog_settings').all<BlogSettings>()
 
   const settingsMap = new Map<string, BlogSettings>()
   for (const setting of settingsResult.results || []) {
@@ -155,9 +153,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
   }
 
   // Check if settings exist
-  const existing = await env.DB.prepare(
-    'SELECT id FROM blog_settings WHERE blog_slug = ?'
-  )
+  const existing = await env.DB.prepare('SELECT id FROM blog_settings WHERE blog_slug = ?')
     .bind(body.slug)
     .first<{ id: string }>()
 

@@ -17,6 +17,7 @@ PHAESTUS is an AI-powered hardware design platform that transforms natural langu
 ## The Vision
 
 Hardware design is hard. It requires expertise in:
+
 - Electronics (circuits, components, power budgets)
 - Mechanical (enclosures, thermal, mounting)
 - Software (firmware, drivers, protocols)
@@ -37,13 +38,13 @@ Natural Language → Spec → PCB → Enclosure → Firmware → Export
 
 ### The 5-Stage Pipeline
 
-| Stage | What AI Does | Output |
-|-------|--------------|--------|
-| **Spec** | Feasibility analysis, Q&A refinement, blueprint generation | Locked specification with BOM |
-| **PCB** | Select circuit blocks, place on grid, generate netlist | KiCad schematic + PCB layout |
-| **Enclosure** | Generate parametric 3D case with cutouts | OpenSCAD code + STL file |
-| **Firmware** | Generate ESP32-C6 code for all components | PlatformIO project |
-| **Export** | Package everything for manufacturing | ZIP with all artifacts |
+| Stage         | What AI Does                                               | Output                        |
+| ------------- | ---------------------------------------------------------- | ----------------------------- |
+| **Spec**      | Feasibility analysis, Q&A refinement, blueprint generation | Locked specification with BOM |
+| **PCB**       | Select circuit blocks, place on grid, generate netlist     | KiCad schematic + PCB layout  |
+| **Enclosure** | Generate parametric 3D case with cutouts                   | OpenSCAD code + STL file      |
+| **Firmware**  | Generate ESP32-C6 code for all components                  | PlatformIO project            |
+| **Export**    | Package everything for manufacturing                       | ZIP with all artifacts        |
 
 ---
 
@@ -75,11 +76,11 @@ const BLOCK_CATEGORIES = ['mcu', 'power', 'sensors', 'outputs', 'connectors', 'u
 
 // Each block defines grid dimensions, interfaces, and components
 interface PcbBlock {
-  slug: string             // 'sensor-bme280'
-  gridWidth: number        // 12.7mm units
-  gridHeight: number       // 12.7mm units
-  busTaps: BusTap[]        // {net: 'I2C0_SDA', offsetMm: 2.5}
-  components: Component[]  // {reference: 'U1', value: 'BME280'}
+  slug: string // 'sensor-bme280'
+  gridWidth: number // 12.7mm units
+  gridHeight: number // 12.7mm units
+  busTaps: BusTap[] // {net: 'I2C0_SDA', offsetMm: 2.5}
+  components: Component[] // {reference: 'U1', value: 'BME280'}
 }
 ```
 
@@ -110,12 +111,12 @@ The specification pipeline is the "funnel" that takes vague ideas and produces l
 ```typescript
 // 5 steps with distinct statuses
 type ProjectStatus =
-  | 'analyzing'    // Step 0: Feasibility check
-  | 'refining'     // Step 1: Q&A to lock decisions
-  | 'generating'   // Step 2: Generate 4 blueprint images
-  | 'selecting'    // Step 3: User picks design
-  | 'finalizing'   // Step 4: Generate final spec with BOM
-  | 'complete'     // Ready for PCB stage
+  | 'analyzing' // Step 0: Feasibility check
+  | 'refining' // Step 1: Q&A to lock decisions
+  | 'generating' // Step 2: Generate 4 blueprint images
+  | 'selecting' // Step 3: User picks design
+  | 'finalizing' // Step 4: Generate final spec with BOM
+  | 'complete' // Ready for PCB stage
 ```
 
 **Feasibility Analysis**
@@ -174,6 +175,7 @@ Professional studio lighting, no text.`
 Before opening to users, security and resilience improvements:
 
 **Password Security**
+
 ```typescript
 // Auto-upgrade plaintext to bcrypt on login
 const isValidPassword = user.password_hash.startsWith('$2')
@@ -187,6 +189,7 @@ if (!user.password_hash.startsWith('$2')) {
 ```
 
 **LLM Retry Logic**
+
 ```typescript
 // Exponential backoff: 1s, 2s delays
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
@@ -202,6 +205,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 ```
 
 **Test Coverage**
+
 ```
 --------------------|---------|----------|---------|---------|
 File                | % Stmts | % Branch | % Funcs | % Lines |
@@ -228,18 +232,18 @@ Built the multi-stage workspace with URL routing:
 
 **Three Control Modes**
 
-| Mode | Behavior |
-|------|----------|
-| **Vibe It** | Full automation. AI makes all decisions. |
-| **Fix It** | AI pauses on errors or confidence <80%. |
-| **Design It** | User approves every step. |
+| Mode          | Behavior                                 |
+| ------------- | ---------------------------------------- |
+| **Vibe It**   | Full automation. AI makes all decisions. |
+| **Fix It**    | AI pauses on errors or confidence <80%.  |
+| **Design It** | User approves every step.                |
 
 ```typescript
 // Auto-advance with countdown in Vibe It mode
 useEffect(() => {
   if (!autoAdvance) return
   const timer = setInterval(() => {
-    setCountdown(c => c <= 1 ? (onContinue(), 0) : c - 1)
+    setCountdown((c) => (c <= 1 ? (onContinue(), 0) : c - 1))
   }, 1000)
   return () => clearInterval(timer)
 }, [autoAdvance])
@@ -400,7 +404,7 @@ function validateCrossStage(spec: ProjectSpec): ValidationResult {
     }
   }
 
-  return { valid: issues.filter(i => i.severity === 'error').length === 0, issues }
+  return { valid: issues.filter((i) => i.severity === 'error').length === 0, issues }
 }
 ```
 
@@ -449,7 +453,7 @@ function OrchestratorPanel() {
       </div>
       {currentAction && <div className="text-sm text-steel-dim">{currentAction}</div>}
       <div className="max-h-48 overflow-y-auto">
-        {history.map(item => (
+        {history.map((item) => (
           <div key={item.id} className="text-sm">
             <span className="text-steel-dim">{item.timestamp}</span>
             <span>{item.action}</span>
@@ -467,31 +471,34 @@ function OrchestratorPanel() {
 
 ### Models Used
 
-| Model | Purpose | Cost |
-|-------|---------|------|
+| Model                    | Purpose                       | Cost               |
+| ------------------------ | ----------------------------- | ------------------ |
 | `gemini-3-flash-preview` | Text generation, tool calling | ~$0.000001/request |
-| `gemini-2.5-flash-image` | Blueprint image generation | $0.002/image |
+| `gemini-2.5-flash-image` | Blueprint image generation    | $0.002/image       |
 
 ### Tool Calling Pattern
 
 ```typescript
 // functions/api/llm/tools.ts
-const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-goog-api-key': apiKey,
-  },
-  body: JSON.stringify({
-    contents: convertToGeminiFormat(messages),
-    tools: [{ function_declarations: tools.map(convertToolToGemini) }],
-    toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
-    generationConfig: {
-      temperature: 0.3,
-      thinkingConfig: thinking ? { thinkingBudget: thinking.budgetTokens } : undefined,
+const response = await fetch(
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
     },
-  }),
-})
+    body: JSON.stringify({
+      contents: convertToGeminiFormat(messages),
+      tools: [{ function_declarations: tools.map(convertToolToGemini) }],
+      toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
+      generationConfig: {
+        temperature: 0.3,
+        thinkingConfig: thinking ? { thinkingBudget: thinking.budgetTokens } : undefined,
+      },
+    }),
+  }
+)
 ```
 
 ### Extended Thinking for Complex Decisions
@@ -515,20 +522,20 @@ const response = await llm.chatWithTools({
 
 ## Tech Stack Summary
 
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | React 19, TypeScript, Vite 7, Tailwind CSS 4 |
-| **State** | Zustand (auth, workspace, orchestrator) |
-| **Data Fetching** | TanStack Query v5 |
-| **Routing** | React Router 7 |
-| **3D Graphics** | React Three Fiber, Three.js |
-| **Code Editor** | Monaco Editor |
-| **CAD Rendering** | OpenSCAD WebAssembly |
-| **PCB Viewer** | KiCanvas |
-| **API** | Cloudflare Pages Functions |
-| **Database** | Cloudflare D1 (SQLite) |
-| **Storage** | Cloudflare R2 |
-| **LLM** | Gemini 3 Flash (text), Gemini 2.5 Flash (images) |
+| Layer             | Technology                                       |
+| ----------------- | ------------------------------------------------ |
+| **Frontend**      | React 19, TypeScript, Vite 7, Tailwind CSS 4     |
+| **State**         | Zustand (auth, workspace, orchestrator)          |
+| **Data Fetching** | TanStack Query v5                                |
+| **Routing**       | React Router 7                                   |
+| **3D Graphics**   | React Three Fiber, Three.js                      |
+| **Code Editor**   | Monaco Editor                                    |
+| **CAD Rendering** | OpenSCAD WebAssembly                             |
+| **PCB Viewer**    | KiCanvas                                         |
+| **API**           | Cloudflare Pages Functions                       |
+| **Database**      | Cloudflare D1 (SQLite)                           |
+| **Storage**       | Cloudflare R2                                    |
+| **LLM**           | Gemini 3 Flash (text), Gemini 2.5 Flash (images) |
 
 ---
 
@@ -598,28 +605,28 @@ The result is a "marathon agent" that transforms natural language into manufactu
 
 ## Appendix: Development Timeline
 
-| Day | Blog | Feature |
-|-----|------|---------|
-| 1 | 0001 | Frontend foundation, React + Cloudflare |
-| 1 | 0004 | Authentication with proper data modeling |
-| 2 | 0006 | LLM cost tracking per request |
-| 2 | 0007 | 5-step specification pipeline |
-| 3 | 0008 | Admin debug logging to D1 |
-| 3 | 0009 | Test suite (207 tests), production deploy |
-| 4 | 0010 | Iterative blueprint with feedback |
-| 4 | 0011 | bcrypt, retry logic, session extension |
-| 5 | 0012 | Workspace UI with stage tabs |
-| 5 | 0013 | Three control modes (Vibe/Fix/Design) |
-| 5 | 0014 | KiCanvas integration for PCB viewing |
-| 5 | 0015 | kicadts block merging algorithm |
-| 6 | 0016 | OpenSCAD WASM + React Three Fiber |
-| 6 | 0017 | AI firmware generation + Monaco |
-| 6 | 0018 | Export stage with ZIP downloads |
-| 7 | 0019 | Marathon orchestrator agent |
-| 7 | 0020 | Public gallery for showcase |
+| Day | Blog | Feature                                   |
+| --- | ---- | ----------------------------------------- |
+| 1   | 0001 | Frontend foundation, React + Cloudflare   |
+| 1   | 0004 | Authentication with proper data modeling  |
+| 2   | 0006 | LLM cost tracking per request             |
+| 2   | 0007 | 5-step specification pipeline             |
+| 3   | 0008 | Admin debug logging to D1                 |
+| 3   | 0009 | Test suite (207 tests), production deploy |
+| 4   | 0010 | Iterative blueprint with feedback         |
+| 4   | 0011 | bcrypt, retry logic, session extension    |
+| 5   | 0012 | Workspace UI with stage tabs              |
+| 5   | 0013 | Three control modes (Vibe/Fix/Design)     |
+| 5   | 0014 | KiCanvas integration for PCB viewing      |
+| 5   | 0015 | kicadts block merging algorithm           |
+| 6   | 0016 | OpenSCAD WASM + React Three Fiber         |
+| 6   | 0017 | AI firmware generation + Monaco           |
+| 6   | 0018 | Export stage with ZIP downloads           |
+| 7   | 0019 | Marathon orchestrator agent               |
+| 7   | 0020 | Public gallery for showcase               |
 
 **Total:** 17 blog posts documenting every major feature.
 
 ---
 
-*Built with Gemini 3 Flash for the Gemini API Developer Competition*
+_Built with Gemini 3 Flash for the Gemini API Developer Competition_

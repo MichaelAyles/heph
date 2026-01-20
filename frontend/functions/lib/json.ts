@@ -7,9 +7,7 @@ import { z } from 'zod'
 /**
  * Result type for validated JSON parsing
  */
-export type ParseResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string }
+export type ParseResult<T> = { success: true; data: T } | { success: false; error: string }
 
 /**
  * Safely parse JSON with a fallback value
@@ -33,9 +31,7 @@ export function safeJsonParse<T>(json: string | null | undefined, fallback: T): 
  * @param content - Raw content that may contain JSON
  * @returns Parsed object or null if no valid JSON found
  */
-export function extractJsonFromContent<T = Record<string, unknown>>(
-  content: string
-): T | null {
+export function extractJsonFromContent<T = Record<string, unknown>>(content: string): T | null {
   if (!content) return null
 
   // Try direct parse first (content is pure JSON)
@@ -166,10 +162,7 @@ export function safeJsonParseWithSchema<T>(
  * @param schema - Zod schema to validate against
  * @returns ParseResult with validated data or error message
  */
-export function extractAndValidateJson<T>(
-  content: string,
-  schema: z.ZodSchema<T>
-): ParseResult<T> {
+export function extractAndValidateJson<T>(content: string, schema: z.ZodSchema<T>): ParseResult<T> {
   if (!content) {
     return { success: false, error: 'Empty content' }
   }

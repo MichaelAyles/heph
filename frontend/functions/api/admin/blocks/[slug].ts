@@ -7,7 +7,7 @@
  */
 
 import type { Env } from '../../../env.d'
-import { parseBlockJson, validateBlockFiles, getBlockFileRequirements } from '../../../lib/block-validator'
+import { parseBlockJson, getBlockFileRequirements } from '../../../lib/block-validator'
 import type { BlockDefinition } from '../../../../src/schemas/block'
 import { createLogger } from '../../../lib/logger'
 
@@ -55,7 +55,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // Parse JSON fields
     const files = block.files ? JSON.parse(block.files) : {}
-    const definition = block.definition ? JSON.parse(block.definition) as BlockDefinition : null
+    const definition = block.definition ? (JSON.parse(block.definition) as BlockDefinition) : null
     const taps = JSON.parse(block.taps || '[]')
     const i2cAddresses = block.i2c_addresses ? JSON.parse(block.i2c_addresses) : null
     const power = block.power ? JSON.parse(block.power) : null
@@ -103,7 +103,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('api', 'Get block error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('api', 'Get block error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Failed to get block' },
       { status: 500 }
@@ -226,9 +228,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     // Add slug for WHERE clause
     params.push(slug)
 
-    await env.DB.prepare(
-      `UPDATE pcb_blocks SET ${updates.join(', ')} WHERE slug = ?`
-    )
+    await env.DB.prepare(`UPDATE pcb_blocks SET ${updates.join(', ')} WHERE slug = ?`)
       .bind(...params)
       .run()
 
@@ -239,7 +239,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('api', 'Update block error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('api', 'Update block error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Failed to update block' },
       { status: 500 }
@@ -284,9 +286,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     }
 
     // Delete from database
-    await env.DB.prepare('DELETE FROM pcb_blocks WHERE slug = ?')
-      .bind(slug)
-      .run()
+    await env.DB.prepare('DELETE FROM pcb_blocks WHERE slug = ?').bind(slug).run()
 
     return Response.json({
       success: true,
@@ -296,7 +296,9 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('api', 'Delete block error', { error: error instanceof Error ? error.message : String(error) })
+    await logger.error('api', 'Delete block error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Failed to delete block' },
       { status: 500 }

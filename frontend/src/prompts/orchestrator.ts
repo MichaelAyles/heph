@@ -212,7 +212,8 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'select_project_name',
-    description: 'Select or set the project name. Use index 0-3 to pick a generated name, or provide custom name.',
+    description:
+      'Select or set the project name. Use index 0-3 to pick a generated name, or provide custom name.',
     parameters: {
       type: 'object',
       properties: {
@@ -262,7 +263,8 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
             properties: {
               blockSlug: {
                 type: 'string',
-                description: 'The slug identifier of the block (e.g., "esp32-c6-module", "lipo-charger")',
+                description:
+                  'The slug identifier of the block (e.g., "esp32-c6-module", "lipo-charger")',
               },
               gridX: {
                 type: 'number',
@@ -515,7 +517,8 @@ export function buildOrchestratorInitPrompt(
     if (completed.length > 0) {
       stageInfo = `\n\nCompleted stages: ${completed.join(', ')}${completed.length === 5 ? ' (all complete)' : ''}`
       if (completed.length === 5) {
-        stageInfo += '\nThe user may ask questions or request changes. Remember to warn about breaking changes if they modify an earlier stage.'
+        stageInfo +=
+          '\nThe user may ask questions or request changes. Remember to warn about breaking changes if they modify an earlier stage.'
       }
     }
   }

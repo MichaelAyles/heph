@@ -3,7 +3,13 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { loadPrompt, loadPrompts, invalidateCache, getCacheStatus, preloadPrompts } from './prompt-loader'
+import {
+  loadPrompt,
+  loadPrompts,
+  invalidateCache,
+  getCacheStatus,
+  preloadPrompts,
+} from './prompt-loader'
 
 // Mock fetch
 const mockFetch = vi.fn()

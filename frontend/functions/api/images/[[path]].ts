@@ -36,7 +36,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return new Response(object.body, { headers })
   } catch (error) {
     const logger = createLogger(env)
-    await logger.error('image', 'Error serving image', { error: error instanceof Error ? error.message : String(error), key })
+    await logger.error('image', 'Error serving image', {
+      error: error instanceof Error ? error.message : String(error),
+      key,
+    })
     return new Response('Internal server error', { status: 500 })
   }
 }

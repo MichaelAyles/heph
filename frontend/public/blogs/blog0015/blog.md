@@ -13,6 +13,7 @@ Implement the core algorithms for merging multiple KiCad block schematics into a
 ## The Problem
 
 When users select multiple circuit blocks (MCU, sensors, power, etc.), we need to:
+
 1. Load each block's KiCad schematic file from R2
 2. Transform component positions based on grid placement
 3. Merge all symbols and wires into a single schematic
@@ -92,16 +93,18 @@ Blocks connect via overlapping edges. For each pair of adjacent blocks:
 // Check east-west connections
 for (const eastConn of block.edges.east) {
   const westEdges = neighbor.edges.west
-  const match = westEdges.find(w => w.net === eastConn.net)
+  const match = westEdges.find((w) => w.net === eastConn.net)
 
   if (match) {
     // Create 1mm overlap wire
-    wires.push(new Wire({
-      points: new Pts([
-        new Xy(block.rightEdge - 1, eastConn.offsetMm),
-        new Xy(neighbor.leftEdge + 1, match.offsetMm)
-      ])
-    }))
+    wires.push(
+      new Wire({
+        points: new Pts([
+          new Xy(block.rightEdge - 1, eastConn.offsetMm),
+          new Xy(neighbor.leftEdge + 1, match.offsetMm),
+        ]),
+      })
+    )
   }
 }
 ```
@@ -113,12 +116,10 @@ For AI-suggested layouts, blocks are placed using a bin-packing approach:
 ```typescript
 function autoPlaceBlocks(blocks: PcbBlock[]): PlacedBlock[] {
   // Sort by size (larger blocks first)
-  const sorted = blocks.sort((a, b) =>
-    (b.widthUnits * b.heightUnits) - (a.widthUnits * a.heightUnits)
-  )
+  const sorted = blocks.sort((a, b) => b.widthUnits * b.heightUnits - a.widthUnits * a.heightUnits)
 
   // MCU always at origin
-  const mcuIndex = sorted.findIndex(b => b.category === 'mcu')
+  const mcuIndex = sorted.findIndex((b) => b.category === 'mcu')
   if (mcuIndex >= 0) {
     sorted.unshift(sorted.splice(mcuIndex, 1)[0])
   }
@@ -151,17 +152,17 @@ function suggestBlocksForSpec(finalSpec, availableBlocks) {
   const suggested = []
 
   // Always need MCU
-  suggested.push(blocks.find(b => b.category === 'mcu'))
+  suggested.push(blocks.find((b) => b.category === 'mcu'))
 
   // Power based on spec
   if (spec.power.source.includes('lipo')) {
-    suggested.push(blocks.find(b => b.slug === 'power-lipo'))
+    suggested.push(blocks.find((b) => b.slug === 'power-lipo'))
   }
 
   // Sensors based on inputs
   for (const input of spec.inputs) {
     if (input.type.includes('temperature')) {
-      suggested.push(blocks.find(b => b.slug === 'sensor-bme280'))
+      suggested.push(blocks.find((b) => b.slug === 'sensor-bme280'))
     }
     // ... etc
   }
@@ -191,7 +192,11 @@ export async function mergeBlockSchematics(
   for (const placed of placedBlocks) {
     const text = await fetch(`/api/blocks/${placed.blockSlug}/files/${placed.blockSlug}.kicad_sch`)
     const schematic = parseKicadSch(await text.text())
-    loadedBlocks.push({ placed, schematic, offset: calculateBlockOffset(placed.gridX, placed.gridY) })
+    loadedBlocks.push({
+      placed,
+      schematic,
+      offset: calculateBlockOffset(placed.gridX, placed.gridY),
+    })
   }
 
   // Create merged schematic
@@ -200,7 +205,7 @@ export async function mergeBlockSchematics(
     generator: 'phaestus',
     titleBlock: new TitleBlock({ title: projectName }),
     symbols: [],
-    wires: []
+    wires: [],
   })
 
   // Merge symbols with position offsets
@@ -219,7 +224,7 @@ export async function mergeBlockSchematics(
   return {
     schematic: merged.getString(),
     boardSize: calculateBoardSize(placedBlocks),
-    netList: buildNetAssignments(globalNets)
+    netList: buildNetAssignments(globalNets),
   }
 }
 ```
@@ -243,6 +248,7 @@ frontend/
 ### Why kicadts Over Manual Parsing?
 
 KiCad S-expression format is complex with deeply nested structures. kicadts:
+
 - Handles all KiCad 6+ format variations
 - Provides typed classes for every element
 - Ensures output is format-compatible
@@ -251,6 +257,7 @@ KiCad S-expression format is complex with deeply nested structures. kicadts:
 ### Why 12.7mm Grid?
 
 12.7mm = 0.5" = half-inch grid. This is:
+
 - Standard for through-hole components
 - Allows 2.54mm (0.1") pin headers to align
 - Compatible with most breadboard prototyping
@@ -259,6 +266,7 @@ KiCad S-expression format is complex with deeply nested structures. kicadts:
 ### Why 1mm Edge Overlap?
 
 The 1mm copper overlap at block edges:
+
 - Ensures electrical continuity between blocks
 - Is manufacturable by all PCB fabs
 - Provides mechanical tolerance for alignment
@@ -267,6 +275,7 @@ The 1mm copper overlap at block edges:
 ### Why Client-Side Merging?
 
 Running the merge in the browser rather than on Cloudflare Workers:
+
 - No file system needed (use fetch instead)
 - Instant preview without API round-trip
 - kicadts is ~50KB, reasonable bundle size
@@ -284,12 +293,12 @@ Running the merge in the browser rather than on Cloudflare Workers:
 
 ## Summary
 
-| Component | Purpose |
-|-----------|---------|
-| `kicadts` | Parse and generate KiCad S-expression files |
-| `mergeBlockSchematics()` | Combine multiple block schematics |
-| `autoPlaceBlocks()` | Bin-pack blocks on the grid |
-| `suggestBlocksForSpec()` | AI-suggested block selection |
-| `generateInterconnectWires()` | Create bus connections at edges |
+| Component                     | Purpose                                     |
+| ----------------------------- | ------------------------------------------- |
+| `kicadts`                     | Parse and generate KiCad S-expression files |
+| `mergeBlockSchematics()`      | Combine multiple block schematics           |
+| `autoPlaceBlocks()`           | Bin-pack blocks on the grid                 |
+| `suggestBlocksForSpec()`      | AI-suggested block selection                |
+| `generateInterconnectWires()` | Create bus connections at edges             |
 
 The PCB stage can now load individual block schematics, merge them with proper positioning, and generate interconnect wires for the bus architecture. The foundation is complete for full schematic generation.

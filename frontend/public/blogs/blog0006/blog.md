@@ -31,6 +31,7 @@ ALTER TABLE llm_requests ADD COLUMN cost_usd REAL DEFAULT 0;
 ```
 
 Every LLM request now logs:
+
 - Model used
 - Prompt/completion tokens
 - Latency
@@ -49,10 +50,16 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   // ... more models
 }
 
-export function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
+export function calculateCost(
+  model: string,
+  promptTokens: number,
+  completionTokens: number
+): number {
   const pricing = MODEL_PRICING[model] || MODEL_PRICING['default']
-  return (promptTokens / 1_000_000) * pricing.promptPer1M +
-         (completionTokens / 1_000_000) * pricing.completionPer1M
+  return (
+    (promptTokens / 1_000_000) * pricing.promptPer1M +
+    (completionTokens / 1_000_000) * pricing.completionPer1M
+  )
 }
 ```
 
@@ -60,7 +67,7 @@ Image generation uses fixed per-image pricing:
 
 ```typescript
 export function calculateImageCost(model: string): number {
-  if (model.includes('gemini')) return 0.002  // $0.002 per image
+  if (model.includes('gemini')) return 0.002 // $0.002 per image
   if (model.includes('dall-e-3')) return 0.04
   return 0.01
 }
@@ -121,12 +128,13 @@ This prevents accidental model changes and keeps configuration in version contro
 
 From our testing:
 
-| Model | Use Case | Cost |
-|-------|----------|------|
-| gemini-3-flash-preview | Text completion | ~$0.000001/request |
-| gemini-2.5-flash-image | Image generation | $0.002/image |
+| Model                  | Use Case         | Cost               |
+| ---------------------- | ---------------- | ------------------ |
+| gemini-3-flash-preview | Text completion  | ~$0.000001/request |
+| gemini-2.5-flash-image | Image generation | $0.002/image       |
 
 Image generation dominates costs at ~2000x the price of text completions. This informs our architecture:
+
 - Cache generated images aggressively
 - Batch image requests where possible
 - Consider cheaper image models for previews

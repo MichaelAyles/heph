@@ -365,12 +365,16 @@ export function FirmwareStageView() {
 
   // Helper to convert fileTree to FirmwareProject files format
   const getFilesForSave = useCallback(
-    (currentFileTree: FileNode[], currentPath?: string, currentContent?: string): FirmwareProject['files'] => {
+    (
+      currentFileTree: FileNode[],
+      currentPath?: string,
+      currentContent?: string
+    ): FirmwareProject['files'] => {
       const files = flattenFiles(currentFileTree)
       return files.map((f) => ({
         path: f.path,
         // Use current editor content for the active file
-        content: currentPath && f.path === currentPath ? (currentContent || '') : (f.content || ''),
+        content: currentPath && f.path === currentPath ? currentContent || '' : f.content || '',
         language: (f.path.endsWith('.h') ? 'h' : f.path.endsWith('.ini') ? 'ini' : 'cpp') as
           | 'cpp'
           | 'h'

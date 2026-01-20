@@ -22,8 +22,20 @@ const mockSpec: ProjectSpec = {
     { id: '2', question: 'Power?', answer: 'USB', round: 1 },
   ],
   decisions: [
-    { id: 'd1', question: 'Power source?', answer: 'USB', options: ['USB', 'Battery'], reasoning: 'Near outlet' },
-    { id: 'd2', question: 'Display?', answer: 'OLED', options: ['OLED', 'LCD'], reasoning: 'Better contrast' },
+    {
+      id: 'd1',
+      question: 'Power source?',
+      answer: 'USB',
+      options: ['USB', 'Battery'],
+      reasoning: 'Near outlet',
+    },
+    {
+      id: 'd2',
+      question: 'Display?',
+      answer: 'OLED',
+      options: ['OLED', 'LCD'],
+      reasoning: 'Better contrast',
+    },
   ],
   blueprints: [
     { id: 'bp1', imageUrl: '/img1.png', description: 'Design 1' },
@@ -74,7 +86,10 @@ describe('buildContextFromSelector', () => {
   })
 
   it('selects nested fields', () => {
-    const result = buildContextFromSelector(mockSpec, ['feasibility.overallScore', 'feasibility.verdict'])
+    const result = buildContextFromSelector(mockSpec, [
+      'feasibility.overallScore',
+      'feasibility.verdict',
+    ])
     expect(result.feasibility).toEqual({
       overallScore: 85,
       verdict: 'feasible',
@@ -165,10 +180,9 @@ describe('renderPromptTemplate', () => {
   })
 
   it('renders #each with object items', () => {
-    const result = renderPromptTemplate(
-      '{{#each users}}Name: {{this.name}}\n{{/each}}',
-      { users: [{ name: 'Alice' }, { name: 'Bob' }] }
-    )
+    const result = renderPromptTemplate('{{#each users}}Name: {{this.name}}\n{{/each}}', {
+      users: [{ name: 'Alice' }, { name: 'Bob' }],
+    })
     expect(result).toContain('Name: Alice')
     expect(result).toContain('Name: Bob')
   })
@@ -176,10 +190,13 @@ describe('renderPromptTemplate', () => {
   it('handles nested #if in #each (limited support)', () => {
     // Note: Current implementation doesn't fully support nested {{#if}} inside {{#each}}
     // This test documents the current behavior - the template is passed through as-is
-    const result = renderPromptTemplate(
-      '{{#each items}}[{{this.value}}] {{/each}}',
-      { items: [{ value: 'A', show: true }, { value: 'B', show: false }, { value: 'C', show: true }] }
-    )
+    const result = renderPromptTemplate('{{#each items}}[{{this.value}}] {{/each}}', {
+      items: [
+        { value: 'A', show: true },
+        { value: 'B', show: false },
+        { value: 'C', show: true },
+      ],
+    })
     expect(result).toContain('[A]')
     expect(result).toContain('[B]')
     expect(result).toContain('[C]')

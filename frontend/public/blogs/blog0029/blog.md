@@ -14,6 +14,7 @@ First-time visitors see a clean landing page explaining what PHAESTUS does: tran
 ![Landing Page](01-landing-page.png)
 
 The page highlights key features:
+
 - **KiCad Schematics** - Professional circuit designs
 - **PCB Layouts** - Gerber files for manufacturing
 - **3D Enclosures** - OpenSCAD parametric designs
@@ -49,6 +50,7 @@ The AI analyzes the request across four dimensions: Communication, Processing, P
 ![Feasibility Analysis](06-feasibility-analysis.png)
 
 The analysis confirms:
+
 - WiFi 6 via ESP32-C6 (100% for communication)
 - Standard sensor processing needs (95%)
 - LiPo + TP4056 power system (95%)
@@ -61,6 +63,7 @@ The AI asks targeted questions to lock down design decisions. These address edge
 ![Refinement Questions](07-refinement-questions.png)
 
 Questions cover:
+
 1. **Soil probe connector type** - 3-pin JST-PH, screw terminals, or solder pads?
 2. **Cable gland configuration** - How many penetrations for the IP65 enclosure?
 3. **OLED power behavior** - Always off, button-activated, or periodic refresh?
@@ -98,6 +101,7 @@ The PCB stage shows a library of 21 pre-validated circuit blocks. Users select t
 ![PCB Block Selector](13-pcb-block-selector.png)
 
 For the soil moisture monitor, we select:
+
 - ESP32-C6 MCU (2x2 grid)
 - LiPo Battery with TP4056 charger (1x2 grid)
 - BME280 Environment Sensor (1x1 grid)
@@ -126,6 +130,7 @@ The OpenSCAD code is displayed in an editor, ready for customization:
 ![Enclosure Code Generated](18-enclosure-code-generated.png)
 
 Parameters include:
+
 - Wall thickness
 - Corner radius
 - OLED aperture dimensions
@@ -146,6 +151,7 @@ The firmware page shows a PlatformIO project structure for the ESP32-C6:
 ![Firmware Page](20-firmware-page.png)
 
 The file tree includes:
+
 - `platformio.ini` - Build configuration
 - `include/config.h` - Pin definitions and settings
 - `src/main.cpp` - Application code
@@ -155,6 +161,7 @@ The main source file contains startup code and a basic LED blink loop:
 ![Firmware Main.cpp](21-firmware-main-cpp.png)
 
 Users can:
+
 - Edit code directly in the browser
 - Download the source as a ZIP
 - Modify via AI chat
@@ -166,6 +173,7 @@ The final stage provides all downloadable files:
 ![Export Page](22-export-page.png)
 
 Available downloads:
+
 - **spec.md** - Complete specification with requirements and BOM
 - **bom.csv** - Component list for sourcing
 - **enclosure.zip** - OpenSCAD source files
@@ -178,14 +186,14 @@ Links to PCB manufacturers (JLCPCB, PCBWay) are provided for convenience.
 
 The complete flow takes a user from a plain-English description to:
 
-| Output | Format | Purpose |
-|--------|--------|---------|
-| Specification | Markdown | Requirements documentation |
-| Schematic | KiCad | Circuit design |
-| PCB | Gerber (coming soon) | Board manufacturing |
-| Enclosure | OpenSCAD/STL | 3D printing |
-| Firmware | PlatformIO C++ | Microcontroller code |
-| BOM | CSV | Component sourcing |
+| Output        | Format               | Purpose                    |
+| ------------- | -------------------- | -------------------------- |
+| Specification | Markdown             | Requirements documentation |
+| Schematic     | KiCad                | Circuit design             |
+| PCB           | Gerber (coming soon) | Board manufacturing        |
+| Enclosure     | OpenSCAD/STL         | 3D printing                |
+| Firmware      | PlatformIO C++       | Microcontroller code       |
+| BOM           | CSV                  | Component sourcing         |
 
 Each stage builds on the previous one, with AI assistance available throughout for questions and modifications.
 
@@ -198,4 +206,4 @@ Each stage builds on the previous one, with AI assistance available throughout f
 
 ---
 
-*Screenshots captured via Playwright automation on 2025-01-07*
+_Screenshots captured via Playwright automation on 2025-01-07_

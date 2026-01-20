@@ -42,7 +42,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   query += ' ORDER BY category, stage, display_name'
 
   const stmt = env.DB.prepare(query)
-  const result = await (params.length > 0 ? stmt.bind(...params) : stmt).all<OrchestratorPromptRow>()
+  const result = await (
+    params.length > 0 ? stmt.bind(...params) : stmt
+  ).all<OrchestratorPromptRow>()
 
   // Transform to camelCase (including enhanced fields)
   const prompts = result.results.map((row) => ({
@@ -83,7 +85,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     nodeName: string
     displayName: string
     description?: string
@@ -102,7 +104,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   if (!body.nodeName || !body.displayName || !body.systemPrompt || !body.category) {
-    return Response.json({ error: 'nodeName, displayName, systemPrompt, and category are required' }, { status: 400 })
+    return Response.json(
+      { error: 'nodeName, displayName, systemPrompt, and category are required' },
+      { status: 400 }
+    )
   }
 
   // Check for duplicate node_name
@@ -114,7 +119,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'A prompt with this node_name already exists' }, { status: 409 })
   }
 
-  const result = await env.DB.prepare(`
+  const result = await env.DB.prepare(
+    `
     INSERT INTO orchestrator_prompts (
       node_name, display_name, description, system_prompt, category, stage,
       token_estimate, context_tags, input_schema, output_schema, context_selector,
@@ -122,7 +128,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
-  `)
+  `
+  )
     .bind(
       body.nodeName,
       body.displayName,

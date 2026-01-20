@@ -6,7 +6,15 @@
  * Exposes a ref for taking screenshots of the rendered model.
  */
 
-import { Suspense, useRef, useEffect, useState, useImperativeHandle, forwardRef, useCallback } from 'react'
+import {
+  Suspense,
+  useRef,
+  useEffect,
+  useState,
+  useImperativeHandle,
+  forwardRef,
+  useCallback,
+} from 'react'
 import { Canvas, useThree, useLoader, useFrame } from '@react-three/fiber'
 import { OrbitControls, Center, Html, PerspectiveCamera } from '@react-three/drei'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
@@ -83,6 +91,7 @@ function STLDataModel({ data, color, onLoad }: STLDataModelProps) {
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null)
   const meshRef = useRef<THREE.Mesh>(null)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const loader = new STLLoader()
     // Create a regular ArrayBuffer copy to avoid SharedArrayBuffer issues
@@ -102,6 +111,7 @@ function STLDataModel({ data, color, onLoad }: STLDataModelProps) {
     setGeometry(geom)
     onLoad?.()
   }, [data, onLoad])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!geometry) return null
 
@@ -150,16 +160,7 @@ function ScreenshotHelper({ onReady }: { onReady: (gl: THREE.WebGLRenderer) => v
 }
 
 export const STLViewer = forwardRef<STLViewerRef, STLViewerProps>(function STLViewer(
-  {
-    src,
-    data,
-    className,
-    color = '#888888',
-    showGrid = true,
-    autoRotate = false,
-    onLoad,
-    onError,
-  },
+  { src, data, className, color = '#888888', showGrid = true, autoRotate = false, onLoad, onError },
   ref
 ) {
   const [isFullscreen, setIsFullscreen] = useState(false)

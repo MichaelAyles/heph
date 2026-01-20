@@ -44,7 +44,10 @@ interface StepViewerProps {
  * Convert OCCT color array to hex string
  */
 function rgbToHex(r: number, g: number, b: number): string {
-  const toHex = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0')
+  const toHex = (n: number) =>
+    Math.round(n * 255)
+      .toString(16)
+      .padStart(2, '0')
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`
 }
 
@@ -64,7 +67,7 @@ async function loadStepModel(url: string): Promise<StepModelData | null> {
           return '/occt-import-js.wasm'
         }
         return file
-      }
+      },
     })
     console.log('[StepViewer] OCCT initialized, fetching:', url)
 
@@ -79,7 +82,10 @@ async function loadStepModel(url: string): Promise<StepModelData | null> {
     console.log('[StepViewer] File loaded, size:', fileBuffer.length, 'bytes, parsing...')
 
     const result = occt.ReadStepFile(fileBuffer, null)
-    console.log('[StepViewer] Parse result:', { success: result.success, meshCount: result.meshes?.length })
+    console.log('[StepViewer] Parse result:', {
+      success: result.success,
+      meshCount: result.meshes?.length,
+    })
     if (!result.success || result.meshes.length === 0) {
       console.warn('[StepViewer] OCCT parse failed or no meshes')
       return null
@@ -92,22 +98,25 @@ async function loadStepModel(url: string): Promise<StepModelData | null> {
       const geometry = new THREE.BufferGeometry()
 
       // Ensure arrays are typed arrays for Three.js
-      const positions = mesh.attributes.position.array instanceof Float32Array
-        ? mesh.attributes.position.array
-        : new Float32Array(mesh.attributes.position.array)
+      const positions =
+        mesh.attributes.position.array instanceof Float32Array
+          ? mesh.attributes.position.array
+          : new Float32Array(mesh.attributes.position.array)
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
 
       if (mesh.attributes.normal) {
-        const normals = mesh.attributes.normal.array instanceof Float32Array
-          ? mesh.attributes.normal.array
-          : new Float32Array(mesh.attributes.normal.array)
+        const normals =
+          mesh.attributes.normal.array instanceof Float32Array
+            ? mesh.attributes.normal.array
+            : new Float32Array(mesh.attributes.normal.array)
         geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
       }
 
       if (mesh.index) {
-        const indices = mesh.index.array instanceof Uint32Array
-          ? mesh.index.array
-          : new Uint32Array(mesh.index.array)
+        const indices =
+          mesh.index.array instanceof Uint32Array
+            ? mesh.index.array
+            : new Uint32Array(mesh.index.array)
         geometry.setIndex(new THREE.BufferAttribute(indices, 1))
       }
 
@@ -233,6 +242,7 @@ export function StepViewer({ url, className }: StepViewerProps) {
   const [autoRotate, setAutoRotate] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setLoading(true)
     setError(null)
@@ -248,6 +258,7 @@ export function StepViewer({ url, className }: StepViewerProps) {
       .catch(() => setError('Failed to load 3D model'))
       .finally(() => setLoading(false))
   }, [url])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (loading) {
     return (
@@ -272,11 +283,7 @@ export function StepViewer({ url, className }: StepViewerProps) {
 
   return (
     <div
-      className={clsx(
-        'relative bg-surface-900',
-        isFullscreen && 'fixed inset-0 z-50',
-        className
-      )}
+      className={clsx('relative bg-surface-900', isFullscreen && 'fixed inset-0 z-50', className)}
     >
       {/* Controls */}
       <div className="absolute top-2 right-2 z-10 flex gap-1">
@@ -297,11 +304,7 @@ export function StepViewer({ url, className }: StepViewerProps) {
           className="p-1.5 bg-surface-800 text-steel rounded hover:bg-surface-700 transition-colors"
           title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         >
-          {isFullscreen ? (
-            <Minimize2 className="w-4 h-4" />
-          ) : (
-            <Maximize2 className="w-4 h-4" />
-          )}
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>
       </div>
 

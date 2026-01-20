@@ -5,7 +5,7 @@
  * Organized like a git repository structure.
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, createElement } from 'react'
 import {
   FolderOpen,
   FileText,
@@ -458,7 +458,7 @@ function FileTreeItem({
 }: FileTreeItemProps) {
   const isExpanded = expandedFolders.has(node.path)
   const isSelected = selectedPath === node.path
-  const Icon = getFileIcon(node)
+  const IconComponent = getFileIcon(node)
 
   if (node.type === 'folder') {
     return (
@@ -476,12 +476,13 @@ function FileTreeItem({
           ) : (
             <ChevronRight className="w-3.5 h-3.5 shrink-0" />
           )}
-          <Icon className="w-4 h-4 text-copper shrink-0" strokeWidth={1.5} />
+          {createElement(IconComponent, {
+            className: 'w-4 h-4 text-copper shrink-0',
+            strokeWidth: 1.5,
+          })}
           <span className="truncate">{node.name}</span>
           {node.children && (
-            <span className="text-xs text-surface-500 ml-auto">
-              {node.children.length}
-            </span>
+            <span className="text-xs text-surface-500 ml-auto">{node.children.length}</span>
           )}
         </button>
         {isExpanded && node.children && (
@@ -515,7 +516,7 @@ function FileTreeItem({
       style={{ paddingLeft: `${8 + depth * 16}px` }}
     >
       <span className="w-3.5" /> {/* Spacer for alignment */}
-      <Icon className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+      {createElement(IconComponent, { className: 'w-4 h-4 shrink-0', strokeWidth: 1.5 })}
       <span className="truncate">{node.name}</span>
     </button>
   )
@@ -530,10 +531,12 @@ function FilePreview({ node }: { node: ProjectFileNode }) {
   const [imageLoading, setImageLoading] = useState(true)
 
   // Reset image state when node changes
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setImageError(false)
     setImageLoading(true)
   }, [node.path])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleCopy = useCallback(() => {
     if (node.content) {
@@ -774,7 +777,8 @@ export function ProjectFileManager({
         path: 'chats/empty',
         type: 'file',
         previewType: 'markdown',
-        content: '# No Conversations\n\nNo AI conversations have been recorded for this project yet.',
+        content:
+          '# No Conversations\n\nNo AI conversations have been recorded for this project yet.',
       })
     } else {
       // Add all conversations as a single markdown file
@@ -853,9 +857,7 @@ export function ProjectFileManager({
             <div className="text-center text-steel-dim">
               <FolderOpen className="w-16 h-16 mx-auto mb-4 opacity-50" strokeWidth={1} />
               <p className="text-sm mb-2">Select a file to preview</p>
-              <p className="text-xs">
-                Browse the project structure in the sidebar
-              </p>
+              <p className="text-xs">Browse the project structure in the sidebar</p>
             </div>
           </div>
         )}
