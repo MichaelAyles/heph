@@ -1,8 +1,8 @@
 # PHAESTUS Code Review & Technical Debt
 
-**Last Review**: January 18, 2026
+**Last Review**: January 20, 2026
 **Overall Status**: Production-ready with identified issues
-**Test Coverage**: 648 tests (all passing)
+**Test Coverage**: 816 tests (all passing)
 
 ---
 
@@ -11,15 +11,30 @@
 The codebase is mature and production-ready with solid engineering practices:
 - Full 5-step spec pipeline (feasibility → refinement → blueprints → selection → finalization)
 - Multi-stage workspace (PCB, Enclosure, Firmware, Export)
-- Hardware orchestrator with 8 specialized agents and admin management UI
+- LangGraph orchestrator with state machine workflows, checkpointing, and 8 specialized agents
+- Gerber-based PCB merging for manufacturing output (replaces KiCad S-expression parsing)
 - Comprehensive LLM integration with retry logic, streaming, and tool calling
 - 18 database migrations, WorkOS OAuth, user approval workflow
 - 40+ API endpoints operational including orchestrator admin API
-- New: BlockViewer component with KiCanvas integration
-- New: TOKN KiCad parser for robust file parsing
-- New: LLM-assisted block import wizard
+- Block system with 5 required files (schematic, PCB, STEP, gerbers, block.json)
+- KiCad export script for automated block packaging
+- BlockViewer component with KiCanvas integration
+- TOKN KiCad parser for robust file parsing
+- LLM-assisted block import wizard
+- 40 development blog posts documenting architecture decisions
 
-### Recent Changes (Jan 17-18, 2026)
+### Recent Changes (Jan 19-20, 2026)
+
+| Change | Commit | Impact |
+|--------|--------|--------|
+| Add LangGraph orchestrator | 70b8985 | State machine workflows with checkpointing |
+| Add Gerber merging | 5fecb78 | Manufacturing output (replaces KiCad S-expr) |
+| Add KiCad export script | 04a6b08 | Automated block export to ZIP |
+| Add block import API | 04a6b08 | ZIP upload with validation |
+| Add Gerber ZIP requirement | e6046e0 | 5 required files for blocks |
+| Blog 40: Gerber Merging | 8357c80 | Architecture decision documentation |
+
+### Earlier Changes (Jan 17-18, 2026)
 
 | Change | Commit | Impact |
 |--------|--------|--------|
@@ -99,11 +114,34 @@ The codebase is mature and production-ready with solid engineering practices:
 
 ## Architecture
 
+### LangGraph Orchestrator
+
+The orchestrator system has three layers:
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| **Config UI** | `AdminOrchestratorPage.tsx` | Edit prompts, view flow graph, configure hooks |
+| **Prompt Storage** | `orchestrator_prompts` table | DB-backed prompt definitions for 8 agents |
+| **Prompt Loader** | `orchestrator/prompt-loader.ts` | Runtime loader with 60s TTL cache |
+| **Execution Engine** | `langgraph/` | LangGraph state machine with checkpointing |
+
+**LangGraph Files** (`src/services/langgraph/`):
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `state.ts` | 604 | State definition and reducers |
+| `graph.ts` | 450 | Graph with nodes and edges |
+| `checkpointer.ts` | 628 | D1-backed persistence for resumable workflows |
+| `nodes/` | ~1000 | Individual node implementations |
+
 ### Key Metrics
 
 | File | Lines | Status |
 |------|-------|--------|
-| `orchestrator.ts` | 1641 | Could benefit from split |
+| `langgraph/graph.ts` | 450 | New - LangGraph execution |
+| `langgraph/state.ts` | 604 | New - State management |
+| `langgraph/checkpointer.ts` | 628 | New - Persistence |
+| `gerber-merge.ts` | 621 | New - Manufacturing output |
 | `SpecPage.tsx` | 362 | Refactored |
 | `SpecStageView.tsx` | 1495 | Monitor |
 | `EnclosureStageView.tsx` | 962 | Good |
@@ -162,9 +200,9 @@ The codebase is mature and production-ready with solid engineering practices:
 ## Test Coverage
 
 ### Current Status
-- **Total tests**: 648
-- **Test files**: 22
-- **Overall coverage**: 63%
+- **Total tests**: 816
+- **Test files**: 28
+- **Overall coverage**: 65%
 
 ### Coverage by Module
 
@@ -225,17 +263,33 @@ The codebase is mature and production-ready with solid engineering practices:
 
 ## Notes
 
-- All 648 tests pass (verified January 18, 2026)
+- All 816 tests pass (verified January 20, 2026)
 - TypeScript compiles without errors
 - Deploy pipeline is stable (GitHub Actions → Cloudflare Pages)
 - LLM costs dominated by image generation (~2000x text completions)
 - WorkOS OAuth and user approval workflow active
 - Blueprint generation creates real images (not placeholders)
-- Orchestrator admin UI complete with prompt editing, flow visualization, and hook configuration
+
+### Orchestrator
+- LangGraph state machine with checkpointing for resumable workflows
+- Admin UI for prompt editing, flow visualization, and hook configuration
 - 8 specialized agents seeded and editable via admin interface
-- 18 database migrations supporting full orchestrator workflow management
-- New: BlockViewer component for admin block inspection with KiCanvas preview
-- New: TOKN KiCad parser replaces kicadts for KiCad 8 support
-- New: LLM-assisted block import wizard for automated block.json generation
-- New: CI workflow with GitHub Actions for PR checks
-- Code review completed January 18, 2026 - 8 high-priority race conditions and data loss issues identified and fixed
+- Prompt loader with 60-second TTL cache for runtime efficiency
+
+### Block System
+- 5 required files: schematic, PCB, STEP, gerbers, block.json
+- KiCad export script (`pnpm export-block`) for automated packaging
+- BlockViewer component with KiCanvas preview
+- TOKN KiCad parser for KiCad 8 support
+- LLM-assisted block import wizard
+
+### Manufacturing
+- Gerber-based merging replaces KiCad S-expression parsing
+- 4-layer board support (F.Cu, In1.Cu, In2.Cu, B.Cu)
+- Blog 40 documents the architectural decision
+
+### Recent
+- 18 database migrations
+- 40 development blog posts
+- CI workflow with GitHub Actions for PR checks
+- Code review completed January 20, 2026
