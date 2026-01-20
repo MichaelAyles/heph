@@ -131,7 +131,7 @@ When creating example prompts, use ONLY these components or the project will be 
 
 ### Blog System
 
-Development blog documenting PHAESTUS progress. 37+ posts with images.
+Development blog documenting PHAESTUS progress. 40 posts with images.
 
 **Structure**:
 - `frontend/public/blogs/blogXXXX/` - Blog directories (4-digit zero-padded)
@@ -142,17 +142,17 @@ Development blog documenting PHAESTUS progress. 37+ posts with images.
 **Manifest Schema** (`blog-manifest.json`):
 ```json
 {
-  "generatedAt": "2026-01-18T17:23:55.048Z",
+  "generatedAt": "2026-01-20T...",
   "entries": [
     {
-      "slug": "blog0037",
-      "number": 37,
-      "title": "Blog 37: Edge-Driven Orchestration...",
-      "date": "January 18, 2026",
+      "slug": "blog0040",
+      "number": 40,
+      "title": "Blog 40: Gerber Merging - Why We Gave Up on KiCad Native Files",
+      "date": "2026-01-19",
       "excerpt": "First 200 chars of content...",
-      "thumbnailPath": "/blogs/blog0037/screenshot.png",  // null if no thumbnail
-      "markdownPath": "/blogs/blog0037/blog.md",
-      "readingTime": 7
+      "thumbnailPath": "/blogs/blog0040/...",  // null if no thumbnail
+      "markdownPath": "/blogs/blog0040/blog.md",
+      "readingTime": 4
     }
   ]
 }
@@ -184,15 +184,18 @@ Development blog documenting PHAESTUS progress. 37+ posts with images.
 - `src/components/spec-steps/` - Individual step components (Feasibility, Refinement, Blueprint, Selection, Finalization)
 - `src/components/admin/orchestrator/` - Admin orchestrator editor (PromptEditor, FlowVisualization, HookConfiguration)
 - `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure, orchestrator)
-- `src/services/` - LLM client, PCB merging, KiCad parsing
+- `src/services/` - LLM client, PCB merging, KiCad parsing, Gerber merging
 - `src/services/orchestrator/` - Modular orchestrator (tools/, helpers/, types.ts, orchestrator.ts, index.ts)
+- `src/services/langgraph/` - LangGraph state machine (state.ts, graph.ts, checkpointer.ts, nodes/)
+- `src/services/gerber-merge.ts` - Gerber layer merging for manufacturing (621 lines)
 - `src/lib/tokn/` - TOKN KiCad parser (sexpr.ts, kicadSch.ts, connectivity.ts, toknEncoder.ts)
 - `src/stores/` - Zustand state (auth, workspace, orchestrator)
 - `src/components/admin/blocks/` - Block management UI (BlockImportWizard, BlockEditor)
 - `functions/api/` - Cloudflare Pages Functions (auth, llm, projects, admin, orchestrator)
 - `functions/api/admin/orchestrator/` - Admin API for managing orchestrator prompts, edges, and hooks
-- `functions/api/admin/blocks/` - Block management API (generate, upload, CRUD)
-- `functions/lib/` - Shared utilities (gemini.ts, logger.ts, json.ts)
+- `functions/api/admin/blocks/` - Block management API (generate, upload, import, CRUD)
+- `functions/lib/` - Shared utilities (gemini.ts, logger.ts, json.ts, block-validator.ts)
+- `scripts/` - CLI tools (export-kicad-block.ts)
 - `migrations/` - D1 SQL migrations (18 migrations)
 
 ### Database Schema
@@ -319,7 +322,7 @@ Logs are stored in D1 for admin users and viewable via `GET /api/admin/logs`.
 
 ## Testing
 
-Vitest with 648 tests, ~63% overall coverage. Target 90%+ on core modules.
+Vitest with 816 tests, ~65% overall coverage. Target 90%+ on core modules.
 
 **Fully Tested (90%+)**:
 - `src/prompts/*.ts` - All prompt template builders (96.51%)
@@ -426,10 +429,17 @@ const data = result.data // Fully typed!
 | Block generation prompt | `src/prompts/block-generation.ts` |
 | Admin blocks API | `functions/api/admin/blocks/` |
 | Block file serving | `functions/api/blocks/[slug]/files/` |
+| Block import API | `functions/api/admin/blocks/import.ts` |
+| Block validator | `functions/lib/block-validator.ts` |
+| Gerber merger | `src/services/gerber-merge.ts` |
+| LangGraph state | `src/services/langgraph/state.ts` |
+| LangGraph graph | `src/services/langgraph/graph.ts` |
+| LangGraph checkpointer | `src/services/langgraph/checkpointer.ts` |
+| KiCad export script | `scripts/export-kicad-block.ts` |
 | Blog listing page | `src/pages/BlogPage.tsx` |
 | Blog post page | `src/pages/BlogPostPage.tsx` |
 | Blog manifest | `src/data/blog-manifest.json` |
-| Blog content | `public/blogs/blogXXXX/blog.md` |
+| Blog content | `public/blogs/blogXXXX/blog.md` (40 posts) |
 
 ## Cost Insights
 
@@ -504,6 +514,67 @@ The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` 
 - Workflow graph visualization
 - Hook configuration for pre/post execution logic
 - Context tag management
+
+### LangGraph Architecture
+
+The orchestrator is built on LangGraph for state machine-based multi-agent workflows (`src/services/langgraph/`):
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `state.ts` | 604 | Orchestrator state definition and reducers |
+| `graph.ts` | 450 | LangGraph graph definition with nodes and edges |
+| `checkpointer.ts` | 628 | D1-backed state persistence for resumable workflows |
+| `nodes/` | - | Individual node implementations |
+
+**Key Features**:
+- **Checkpointing** - Workflows can be paused and resumed across sessions
+- **State Reducers** - Immutable state updates with conflict resolution
+- **Tool Integration** - 6 tool modules (control, enclosure, firmware, pcb, spec, index)
+- **Context Building** - Dynamic context assembly from project state
+
+### Gerber Merging
+
+PHAESTUS uses Gerber-based merging for manufacturing output (`src/services/gerber-merge.ts`, 621 lines):
+
+**Why Gerbers, not KiCad S-expressions?**
+- Gerbers are flat vector graphics without electrical context
+- No net ID conflicts, no symbol library dependencies
+- ~400 lines vs thousands for KiCad parsing
+- Blog 40 documents this architectural decision
+
+**Process**:
+1. Each block exports 4-layer Gerbers (F.Cu, In1.Cu, In2.Cu, B.Cu) + masks, silk, edge cuts
+2. Gerber merger normalizes each block to origin
+3. Blocks offset by grid position (12.7mm grid)
+4. Layers concatenated to produce merged manufacturing files
+
+**Supported Layers**:
+- Copper: `F.Cu`, `In1.Cu`, `In2.Cu`, `B.Cu`
+- Silkscreen: `F.SilkS`, `B.SilkS`
+- Solder mask: `F.Mask`, `B.Mask`
+- Edge cuts, drill files (Excellon)
+
+### Block Upload Requirements
+
+Blocks require 5 files for complete import (`functions/lib/block-validator.ts`):
+
+| File | Extension | Required | Purpose |
+|------|-----------|----------|---------|
+| Schematic | `.kicad_sch` | Yes | Circuit schematic |
+| PCB | `.kicad_pcb` | Yes | Board layout |
+| STEP | `.step` / `.stp` | Yes | 3D model for enclosure fitting |
+| Gerbers | `gerbers/*.gbr` | Yes | Manufacturing files (ZIP) |
+| Definition | `block.json` | Yes | Metadata, electrical, physical specs |
+| Thumbnail | `.png` | No | Preview image |
+
+**KiCad Export Script** (`scripts/export-kicad-block.ts`):
+```bash
+pnpm export-block <path-to-kicad-project> [--upload] [--slug name]
+```
+- Exports 4-layer gerbers + drill files
+- Generates STEP 3D model
+- Creates ZIP with all required files
+- Optional: uploads directly to admin/blocks/import API
 
 ## API Endpoints (40+ endpoints)
 

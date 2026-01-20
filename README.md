@@ -40,10 +40,12 @@ PHAESTUS transforms natural language specifications into manufacturable hardware
 - **Debug Logs** - Real-time log streaming with filtering by level/category
 
 ### Technical Highlights
+- **LangGraph Orchestrator** - State machine-based multi-agent system with checkpointing and resumable workflows
+- **Gerber Merging** - Block-based PCB manufacturing via Gerber layer concatenation (replaces complex KiCad S-expression parsing)
 - **TOKN Parser** - Custom KiCad S-expression parser for token-optimized hardware representation
-- **Formal Block System** - Zod-validated block.json schema with DRC validation
-- **Multi-Agent Orchestrator** - 8 specialized agents (feasibility, naming, enclosure, firmware, reviewers)
+- **Formal Block System** - Zod-validated block.json schema with 5 required files (schematic, PCB, STEP, gerbers, block.json)
 - **OpenSCAD 2025 WASM** - Real-time STL rendering with Manifold backend
+- **KiCad Export Script** - Automated block export to ZIP with gerbers, drill files, and 3D models
 
 ## Live Demo
 
@@ -78,7 +80,7 @@ Open http://localhost:8788
 | **Database** | Cloudflare D1 (SQLite, 18 migrations) |
 | **Storage** | Cloudflare R2 |
 | **LLM** | OpenRouter / Google Gemini |
-| **Testing** | Vitest (648 tests, ~63% coverage) |
+| **Testing** | Vitest (816 tests, ~65% coverage) |
 
 ## Architecture
 
@@ -150,7 +152,7 @@ CI/CD via GitHub Actions on push to `main`.
 
 ## Development Blog
 
-PHAESTUS includes a development blog documenting the build process with 37+ technical posts.
+PHAESTUS includes a development blog documenting the build process with 40 technical posts.
 
 **Live**: https://phaestus.app/blog
 
@@ -161,7 +163,7 @@ frontend/
 │   ├── blog0001/
 │   │   ├── blog.md          # Markdown content
 │   │   └── screenshot.png   # Images
-│   ├── blog0037/
+│   ├── blog0040/            # Latest: Gerber Merging
 │   │   └── ...
 └── src/data/
     └── blog-manifest.json   # Index of all posts
