@@ -87,6 +87,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       uploadedFiles.thumbnail = `${slug}.png`
     }
 
+    // Upload pick and place / centroid file
+    const posFile = formData.get('pos') as File | null
+    if (posFile) {
+      const key = `${r2Prefix}${slug}-pos.csv`
+      await env.STORAGE.put(key, await posFile.arrayBuffer(), {
+        httpMetadata: { contentType: 'text/csv' },
+      })
+      uploadedFiles.pos = `${slug}-pos.csv`
+    }
+
     // Collect gerber files from form data (sent individually with gerber_ prefix from client-side extraction)
     const gerberContents: Map<string, ArrayBuffer> = new Map()
     for (const [key, value] of formData.entries()) {

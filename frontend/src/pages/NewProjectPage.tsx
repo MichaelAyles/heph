@@ -7,12 +7,23 @@ import { logger } from '@/lib/logger'
 const MAX_DESCRIPTION_LENGTH = 2000
 
 const EXAMPLE_PROMPTS = [
-  'Battery-powered soil moisture monitor with ESP32-C6 WiFi, BME280 for temperature/humidity, capacitive soil probe input, MQTT alerts to Home Assistant, LiPo battery with USB-C charging (TP4056), 0.96" OLED status display, IP65 weatherproof enclosure',
-  'Smart motion-activated doorbell with ESP32-C6 WiFi, PIR motion sensor trigger, 0.96" OLED showing visitor count, piezo buzzer chime, WS2812B status ring, push notifications via MQTT, 5V USB-C powered, weatherproof enclosure',
-  'Portable environment logger with ESP32-C6, BME280 (temp/humidity/pressure), VEML7700 ambient light sensor, SPI LCD display with live readings, LiPo battery with USB-C charging, button to cycle display modes, data upload via WiFi',
-  'Desktop air quality station with ESP32-C6 WiFi, BME280 for temperature/humidity/pressure, VEML7700 light sensor, SPI LCD dashboard, WS2812B LED strip for visual alerts, USB-C powered, Home Assistant integration via MQTT',
-  'USB-C rechargeable wireless presentation remote with ESP32-C6 BLE HID, LiPo battery with TP4056 charging, 3 tactile buttons (prev/next/blank screen), WS2812B status LED, direct BLE pairing with laptop, compact handheld enclosure',
-  'USB-C inline power monitor with ESP32-C6 WiFi/Zigbee, voltage/current sensing via ADC, SPI LCD showing watts and amp-hours, data logging to cloud via MQTT, passthrough USB-C design, compact inline enclosure',
+  // #1 - Presentation remote (uses what we have: ESP32-C6, buttons, LEDs, XIAO with battery charging)
+  'Wireless presentation clicker using BLE HID. Three buttons for next slide, previous, and blank screen. RGB LED to show connection status. Rechargeable via USB-C. Should pair directly with my laptop like a normal bluetooth remote.',
+
+  // #2 - Soil moisture monitor (needs: BME280, soil probe, OLED - we don't have these yet)
+  'Garden moisture sensor that texts me when plants need water. ESP32-C6 with WiFi, BME280 for temp and humidity, capacitive soil probe, small OLED to show readings. Battery powered with USB-C charging. Needs to survive outdoors.',
+
+  // #3 - Smart doorbell (needs: PIR, OLED, piezo, WS2812B strip)
+  'Motion doorbell that pings my phone. PIR sensor to detect someone approaching, little OLED showing how many visitors today, piezo for the chime sound, RGB LED ring for status. Runs on 5V USB-C. Goes outside so needs weatherproofing.',
+
+  // #4 - Environment logger (needs: BME280, VEML7700, LCD)
+  'Portable weather station I can leave places. BME280 for the usual temp/humidity/pressure, light sensor too. LCD screen showing live readings, button to flip between different views. Battery with USB charging, uploads data over WiFi.',
+
+  // #5 - Air quality display (needs: BME280, VEML7700, LCD, WS2812B strip)
+  'Desktop air quality thing for my office. Shows temperature, humidity, pressure, light levels on a little LCD. LED strip that changes color based on conditions. USB powered, pushes data to Home Assistant.',
+
+  // #6 - USB power meter (needs: current sensing, LCD, passthrough USB-C hardware)
+  'Inline USB-C power monitor. Shows volts, amps, watts, total energy used on a small screen. Logs everything to the cloud. Sits between charger and device without adding much bulk.',
 ]
 
 export function NewProjectPage() {

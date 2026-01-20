@@ -27,6 +27,8 @@ const CONTENT_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.zip': 'application/zip',
   '.json': 'application/json',
+  '.csv': 'text/csv',
+  '.pos': 'text/csv',
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {

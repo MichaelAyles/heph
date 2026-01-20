@@ -52,6 +52,7 @@ export function getBlockFileRequirements(slug: string): BlockFileRequirements {
       `${slug}.step`, // 3D model for enclosure generation
       'block.json', // Structured metadata for DRC
       `${slug}-gerbers.zip`, // Manufacturing files (Gerber + drill)
+      `${slug}-pos.csv`, // Pick and place / centroid file for SMT assembly
     ],
     optional: [
       `${slug}.png`, // Thumbnail for UI

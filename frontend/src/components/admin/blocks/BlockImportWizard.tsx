@@ -87,6 +87,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
   const [pcbContent, setPcbContent] = useState<string | null>(null)
   const [stepFile, setStepFile] = useState<File | null>(null)
   const [gerberFiles, setGerberFiles] = useState<Map<string, ArrayBuffer> | null>(null)
+  const [posFile, setPosFile] = useState<File | null>(null)
   const [isExtractingZip, setIsExtractingZip] = useState(false)
   const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null)
   const [editedJson, setEditedJson] = useState('')
@@ -157,12 +158,13 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
       }
 
       // Now upload the KiCad files
-      if (schematicFile || pcbFile || stepFile || gerberFiles) {
+      if (schematicFile || pcbFile || stepFile || gerberFiles || posFile) {
         const uploadFormData = new FormData()
         uploadFormData.append('slug', slug)
         if (schematicFile) uploadFormData.append('schematic', schematicFile)
         if (pcbFile) uploadFormData.append('pcb', pcbFile)
         if (stepFile) uploadFormData.append('step', stepFile)
+        if (posFile) uploadFormData.append('pos', posFile)
         uploadFormData.append('blockJson', editedJson)
 
         // Add extracted gerber files
@@ -240,8 +242,8 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
   }
 
   const isValidSlug = /^[a-z0-9-]+$/.test(slug) && slug.length >= 3 && slug.length <= 50
-  // All 4 file types are required for new imports
-  const canGenerate = schematicFile && pcbFile && stepFile && gerberFiles && isValidSlug
+  // All 5 file types are required for new imports
+  const canGenerate = schematicFile && pcbFile && stepFile && gerberFiles && posFile && isValidSlug
 
   // Handle gerber ZIP extraction
   const handleGerberZipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -394,7 +396,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
 
               {/* Required files status */}
               <div className="p-3 bg-surface-800 border border-surface-700 text-sm">
-                <div className="text-steel-dim mb-2">All 4 file types are required:</div>
+                <div className="text-steel-dim mb-2">All 5 file types are required:</div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className={clsx(schematicFile ? 'text-emerald-400' : 'text-steel-dim')}>
                     {schematicFile ? '✓' : '○'} Schematic (.kicad_sch)
@@ -407,6 +409,9 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                   </div>
                   <div className={clsx(gerberFiles ? 'text-emerald-400' : 'text-steel-dim')}>
                     {gerberFiles ? '✓' : '○'} Gerbers (.zip)
+                  </div>
+                  <div className={clsx(posFile ? 'text-emerald-400' : 'text-steel-dim')}>
+                    {posFile ? '✓' : '○'} Pick & Place (.pos/.csv)
                   </div>
                 </div>
               </div>
@@ -566,6 +571,49 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                           <Archive className="w-8 h-8 text-steel-dim" strokeWidth={1.5} />
                           <span className="text-sm text-steel-dim">.zip file</span>
                           <span className="text-xs text-steel-dim">File &gt; Fabrication &gt; Gerbers</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pick and Place file upload */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-steel mb-2">
+                    Pick & Place *
+                  </label>
+                  <div
+                    className={clsx(
+                      'border-2 border-dashed p-4 text-center transition-colors',
+                      posFile
+                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                        : 'border-surface-700 hover:border-surface-600'
+                    )}
+                  >
+                    <input
+                      type="file"
+                      accept=".pos,.csv"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) setPosFile(file)
+                      }}
+                      className="hidden"
+                      id="pos-upload"
+                    />
+                    <label htmlFor="pos-upload" className="cursor-pointer">
+                      {posFile ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <FileCode className="w-8 h-8 text-emerald-400" strokeWidth={1.5} />
+                          <span className="text-sm text-steel">{posFile.name}</span>
+                          <span className="text-xs text-steel-dim">Click to change</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <FileCode className="w-8 h-8 text-steel-dim" strokeWidth={1.5} />
+                          <span className="text-sm text-steel-dim">.pos or .csv file</span>
+                          <span className="text-xs text-steel-dim">File &gt; Fabrication &gt; Component Placement</span>
                         </div>
                       )}
                     </label>

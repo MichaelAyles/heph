@@ -18,6 +18,7 @@ import type {
   PcbBlock,
 } from '../db/schema'
 import type { BlockComponentDef } from '../schemas/block'
+import { prefixReference } from './centroid-merge'
 
 // =============================================================================
 // Types
@@ -217,18 +218,8 @@ function makeComponentKey(key: ComponentKey): string {
   return `${key.boardName}|${key.value}|${key.footprint}|${key.nofit}`
 }
 
-/**
- * Prefix reference designator with block slug for uniqueness
- * e.g., "R1" + "bme280-sensor" -> "BME280_R1"
- */
-function prefixReference(ref: string, blockSlug: string): string {
-  // Convert slug to uppercase prefix
-  const prefix = blockSlug
-    .split('-')
-    .map((part) => part.substring(0, 3).toUpperCase())
-    .join('')
-  return `${prefix}_${ref}`
-}
+// Note: prefixReference is imported from centroid-merge.ts to keep
+// BOM and pick-and-place reference naming synchronized
 
 // =============================================================================
 // CSV Export
