@@ -107,7 +107,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         updatedAt: row.updated_at,
         fileStatus: {
           required: requirements.required,
-          present: filesList,
+          present: requirements.required.filter((f) => filesList.includes(f)),
           missing: requirements.required.filter((f) => !filesList.includes(f)),
         },
       }
