@@ -36,6 +36,11 @@ import {
   designDocumentToJSON,
   designDocumentToMarkdown,
 } from '@/services/design-document'
+import {
+  calculatePanelLayout,
+  generateVScoreGerber,
+  needsPanelization,
+} from '@/services/panel-merge'
 import type { PcbBlock } from '@/db/schema'
 
 interface ConversationMessage {
@@ -121,6 +126,7 @@ export function ExportStageView() {
 
   const firmwareComplete = project?.spec?.stages?.firmware?.status === 'complete'
   const hasPcbArtifacts = (project?.spec?.pcb?.placedBlocks?.length ?? 0) > 0
+  const hasPanelization = project?.spec?.pcb ? needsPanelization(project.spec.pcb) : false
 
   // Generate spec as JSON/text
   const downloadSpec = async () => {
@@ -337,6 +343,58 @@ Use the JSON file for automated tools and the Markdown file for reference during
 
     const blob = await zip.generateAsync({ type: 'blob' })
     downloadBlob(blob, `${projectSlug}-design-document.zip`)
+  }
+
+  // Download panelized Gerbers with v-score lines
+  const downloadPanelGerbers = async () => {
+    if (!project?.spec?.pcb || !hasPanelization) return
+
+    const zip = new JSZip()
+    const projectSlug = project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'
+    const pcb = project.spec.pcb
+
+    // Calculate panel layout
+    const mainBoardSize = pcb.boardSize || { width: 50.8, height: 76.2 }
+    const remoteBoards = pcb.remoteBoards || []
+    const panelConfig = calculatePanelLayout(mainBoardSize, remoteBoards)
+
+    // Generate v-score gerber
+    const vScoreGerber = generateVScoreGerber(panelConfig.vScoreLines)
+    zip.file(`${projectSlug}-panel-VScore.gbr`, vScoreGerber)
+
+    // Add panel configuration JSON
+    zip.file(`${projectSlug}-panel-config.json`, JSON.stringify(panelConfig, null, 2))
+
+    // Add README
+    zip.file(
+      'README.md',
+      `# Panelized Gerbers
+
+## Panel Configuration
+- Panel Size: ${panelConfig.panelSize.width.toFixed(1)} x ${panelConfig.panelSize.height.toFixed(1)} mm
+- Boards: ${1 + remoteBoards.length} (1 main + ${remoteBoards.length} remote)
+- V-Score Lines: ${panelConfig.vScoreLines.length}
+
+## Files
+- \`${projectSlug}-panel-VScore.gbr\` - V-score lines for panel separation
+- \`${projectSlug}-panel-config.json\` - Panel layout configuration
+
+## Manufacturing Notes
+1. V-score lines indicate where to separate boards after assembly
+2. V-scoring is typically 1/3 board thickness from each side
+3. Order panel with breakaway tabs if v-scoring is not available
+
+## Board Positions
+- Main Board: (${panelConfig.mainBoardPosition.x}, ${panelConfig.mainBoardPosition.y}) mm
+${remoteBoards.map((rb, i) => {
+  const pos = panelConfig.remoteBoards[i]
+  return `- ${rb.name}: (${pos.position.x}, ${pos.position.y}) mm`
+}).join('\n')}
+`
+    )
+
+    const blob = await zip.generateAsync({ type: 'blob' })
+    downloadBlob(blob, `${projectSlug}-panel-gerbers.zip`)
   }
 
   // Download firmware source
@@ -815,6 +873,15 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
       filename: 'gerbers.zip',
       ready: false, // Not yet implemented
       onDownload: async () => {}, // Placeholder
+    },
+    {
+      id: 'panel-gerbers',
+      icon: Cpu,
+      title: 'Panelized Gerbers',
+      description: 'V-score lines and panel layout for multi-board manufacturing',
+      filename: 'panel-gerbers.zip',
+      ready: hasPanelization,
+      onDownload: downloadPanelGerbers,
     },
     {
       id: 'enclosure',
