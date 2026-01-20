@@ -182,6 +182,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     })) ?? []
 
     // Insert into database
+    // For remote blocks, gridSize is undefined - default to 0x0
+    const widthUnits = definition.gridSize?.[0] ?? 0
+    const heightUnits = definition.gridSize?.[1] ?? 0
+
     await env.DB.prepare(
       `INSERT INTO pcb_blocks (
         id, slug, name, category, description,
@@ -196,8 +200,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         definition.name,
         definition.category,
         definition.description,
-        definition.gridSize[0],
-        definition.gridSize[1],
+        widthUnits,
+        heightUnits,
         JSON.stringify(taps),
         i2cAddresses ? JSON.stringify(i2cAddresses) : null,
         spiCs,
