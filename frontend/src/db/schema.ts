@@ -337,6 +337,7 @@ export interface BlockFiles {
   stepModel?: string // e.g., "mcu-esp32c6.step"
   thumbnail?: string // e.g., "mcu-esp32c6.png"
   blockJson?: string // e.g., "block.json"
+  gerbers?: string // e.g., "gerbers.zip" - ZIP file containing Gerber files
 }
 
 // Net mapping for schematic merge

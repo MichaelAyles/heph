@@ -32,6 +32,12 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.90.16
         version: 5.90.16(react@19.2.3)
+      '@tracespace/core':
+        specifier: 5.0.0-alpha.0
+        version: 5.0.0-alpha.0
+      '@tracespace/parser':
+        specifier: 5.0.0-next.0
+        version: 5.0.0-next.0
       archiver:
         specifier: ^7.0.1
         version: 7.0.1
@@ -1210,6 +1216,27 @@ packages:
       '@types/react-dom':
         optional: true
 
+  '@tracespace/core@5.0.0-alpha.0':
+    resolution: {integrity: sha512-OG2IPCT8nDoB0brIGhXaMpT0xqyvj0oKhnrjIA3fhFeiLZueSmn47xB0lqHXt/ZQze0NQZO6NtXCqAy2J7UQPA==}
+
+  '@tracespace/identify-layers@5.0.0-alpha.0':
+    resolution: {integrity: sha512-4cu0fB+QwVSQ+CvDzFaF7E4ixOacxinuluxY8hxE1Whzm87MwmYsUVFPaY32xARcY++meTdjbWG9Kd+DyOOA6Q==}
+
+  '@tracespace/parser@5.0.0-alpha.0':
+    resolution: {integrity: sha512-Y+WDUXDXugUEpGn3x6tT80aUTk0vu5W052JVuJfouSXxs70uX6zKF1rsfA6aP8YiFGtQUHCgecrvuO0sec3pDg==}
+
+  '@tracespace/parser@5.0.0-next.0':
+    resolution: {integrity: sha512-4auyyBTLGRbHXHClr5Gqbv/UNXR8KwMa59XTUtQojPIvX3SVapRQYfbJb1bNqMtpOoeLDVZjFF6h0WgL0ZFrjQ==}
+
+  '@tracespace/plotter@5.0.0-alpha.0':
+    resolution: {integrity: sha512-vYTOclcTXhNtlTLz/gVwAAsuAMvHE/7AGpZ7tbfmZWDiCjiq+7YLQB+5e1lCvG/QE3ggNBpuT1rQQkEPj+yezA==}
+
+  '@tracespace/renderer@5.0.0-alpha.0':
+    resolution: {integrity: sha512-juLVp880nVNXlEqRdl20mN2HYYluz4mhATzha2oDqOjot0qzWHWG/2ZJ9QLSfArbhB5V+YKZFuQeemfsvZ5+vw==}
+
+  '@tracespace/xml-id@5.0.0-alpha.0':
+    resolution: {integrity: sha512-+RTkH5Ar3U4nhF7LLhIbSpDKUAo3NFRDXNN/Pm5YMgjBCX/jDj8YsvaldOPwccDKFJR2RQIyLB85kWZXp7iR7A==}
+
   '@tweenjs/tween.js@23.1.3':
     resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
 
@@ -1253,6 +1280,9 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
+  '@types/hast@2.3.10':
+    resolution: {integrity: sha512-McWspRw8xx8J9HurkVBfYj0xKoE25tOFlHGdx4MJ5xORQrMGZNqJhVQWaIbm6Oyla5kYOXtDiopzKRJzEOkwJw==}
+
   '@types/hast@3.0.4':
     resolution: {integrity: sha512-WPs+bbQw5aCj+x6laNGWLH3wviHtoCv/P3+otBhbOhJgG8qtpdAMlTCxLtsTWA7LH1Oh/bFCHsBn0TPS5m30EQ==}
 
@@ -1265,6 +1295,9 @@ packages:
 
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
+
+  '@types/moo@0.5.10':
+    resolution: {integrity: sha512-W6KzyZjXUYpwQfLK1O1UDzqcqYlul+lO7Bt71luyIIyNlOZwJaNeWWdqFs1C/f2hohZvUFHMk6oFNe9Rg48DbA==}
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
@@ -2486,6 +2519,9 @@ packages:
 
   monaco-editor@0.55.1:
     resolution: {integrity: sha512-jz4x+TJNFHwHtwuV9vA9rMujcZRb0CEilTEwG2rRSpe/A7Jdkuj8xPKttCgOh+v/lkHy7HsZ64oj+q3xoAFl9A==}
+
+  moo@0.5.2:
+    resolution: {integrity: sha512-iSAJLHYKnX41mKcJKjqvnAN9sf0LMDTXDEvFv+ffuRR9a1MIuXLjMNL6EsnDHSkKLTWNqQQ5uo61P4EbU4NU+Q==}
 
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
@@ -4105,6 +4141,41 @@ snapshots:
       '@types/react': 19.2.7
       '@types/react-dom': 19.2.3(@types/react@19.2.7)
 
+  '@tracespace/core@5.0.0-alpha.0':
+    dependencies:
+      '@tracespace/identify-layers': 5.0.0-alpha.0
+      '@tracespace/parser': 5.0.0-alpha.0
+      '@tracespace/plotter': 5.0.0-alpha.0
+      '@tracespace/renderer': 5.0.0-alpha.0
+      '@tracespace/xml-id': 5.0.0-alpha.0
+
+  '@tracespace/identify-layers@5.0.0-alpha.0': {}
+
+  '@tracespace/parser@5.0.0-alpha.0':
+    dependencies:
+      '@types/moo': 0.5.10
+      '@types/unist': 2.0.11
+
+  '@tracespace/parser@5.0.0-next.0':
+    dependencies:
+      '@types/moo': 0.5.10
+      '@types/unist': 2.0.11
+      moo: 0.5.2
+
+  '@tracespace/plotter@5.0.0-alpha.0':
+    dependencies:
+      '@tracespace/parser': 5.0.0-alpha.0
+      '@types/unist': 2.0.11
+
+  '@tracespace/renderer@5.0.0-alpha.0':
+    dependencies:
+      '@tracespace/parser': 5.0.0-alpha.0
+      '@tracespace/plotter': 5.0.0-alpha.0
+      '@tracespace/xml-id': 5.0.0-alpha.0
+      '@types/hast': 2.3.10
+
+  '@tracespace/xml-id@5.0.0-alpha.0': {}
+
   '@tweenjs/tween.js@23.1.3': {}
 
   '@types/archiver@6.0.4':
@@ -4157,6 +4228,10 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
+  '@types/hast@2.3.10':
+    dependencies:
+      '@types/unist': 2.0.11
+
   '@types/hast@3.0.4':
     dependencies:
       '@types/unist': 3.0.3
@@ -4170,6 +4245,8 @@ snapshots:
   '@types/mdast@4.0.4':
     dependencies:
       '@types/unist': 3.0.3
+
+  '@types/moo@0.5.10': {}
 
   '@types/ms@2.1.0': {}
 
@@ -5641,6 +5718,8 @@ snapshots:
     dependencies:
       dompurify: 3.2.7
       marked: 14.0.0
+
+  moo@0.5.2: {}
 
   ms@2.1.3: {}
 

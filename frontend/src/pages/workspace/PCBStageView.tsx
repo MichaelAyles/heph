@@ -9,24 +9,22 @@ import {
   CheckCircle2,
   XCircle,
   Grid3X3,
-  Eye,
   Wand2,
   Box,
-  FileCode2,
   Download,
   FileText,
   Sparkles,
   LayoutGrid,
   Network,
-  CircuitBoard,
+  Layers,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
-import { KiCanvasViewer } from '../../components/pcb/KiCanvasViewer'
 import { BlockSelector } from '../../components/pcb/BlockSelector'
 import { PCB3DViewer } from '../../components/pcb/PCB3DViewer'
 import { GridEditor } from '../../components/pcb/GridEditor'
 import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
+import { GerberViewer } from '../../components/pcb/GerberViewer'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
 import { mergeBlockSchematics, mergeBlockPCBs } from '../../services/pcb-merge'
 import { generatePCBDocument } from '../../services/pcb-document'
@@ -42,21 +40,21 @@ import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '../../d
 import type { BlockDefinition } from '../../schemas/block'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
-type ViewMode = 'schematic' | 'pcb' | '3d' | 'grid' | 'bus' | 'docs'
+type ViewMode = 'grid' | 'bus' | 'gerbers' | '3d' | 'docs'
 
 export function PCBStageView() {
   const { project } = useWorkspaceContext()
   const queryClient = useQueryClient()
   const [currentStep, setCurrentStep] = useState<PCBStep>('select_blocks')
   const [selectedBlocks, setSelectedBlocks] = useState<PlacedBlock[]>([])
-  const [previewBlockSlug, setPreviewBlockSlug] = useState<string | null>(null)
   const [isMerging, setIsMerging] = useState(false)
   const [mergeError, setMergeError] = useState<string | null>(null)
-  const [pcbUnavailableReason, setPcbUnavailableReason] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [isAiSuggesting, setIsAiSuggesting] = useState(false)
   const [gridWidth, setGridWidth] = useState(4)
   const [gridHeight, setGridHeight] = useState(6)
+  const [gerberLayers, setGerberLayers] = useState<Record<string, string>>({})
+  const [isLoadingGerbers, setIsLoadingGerbers] = useState(false)
 
   const specComplete = project?.status === 'complete'
   const spec = project?.spec
@@ -202,11 +200,63 @@ export function PCBStageView() {
     savePCBMutation.mutate({ placedBlocks: updatedBlocks })
   }
 
-  // Handle preview of a single block's schematic
-  const handlePreviewBlock = (blockSlug: string) => {
-    setPreviewBlockSlug(blockSlug)
-    setViewMode('schematic')
-  }
+  // Load gerber files for selected blocks
+  const loadGerbers = useCallback(async () => {
+    if (selectedBlocks.length === 0 || !blocksData?.blocks) {
+      setGerberLayers({})
+      return
+    }
+
+    setIsLoadingGerbers(true)
+    const layers: Record<string, string> = {}
+
+    try {
+      // Get unique block slugs
+      const uniqueSlugs = [...new Set(selectedBlocks.map((b) => b.blockSlug))]
+
+      for (const slug of uniqueSlugs) {
+        const block = blocksData.blocks.find((b) => b.slug === slug)
+        if (!block?.files?.gerbers) continue
+
+        // Fetch the gerber ZIP
+        const res = await fetch(`/api/blocks/${slug}/files/${block.files.gerbers}`)
+        if (!res.ok) continue
+
+        // The gerbers are stored as a ZIP, we need to extract them
+        // For now, fetch individual layer files if they exist
+        const gerberFiles = [
+          { name: `${slug}-F_Cu.gtl`, layer: `${slug}-F.Cu` },
+          { name: `${slug}-B_Cu.gbl`, layer: `${slug}-B.Cu` },
+          { name: `${slug}-In1_Cu.g2`, layer: `${slug}-In1.Cu` },
+          { name: `${slug}-In2_Cu.g3`, layer: `${slug}-In2.Cu` },
+          { name: `${slug}-F_Mask.gts`, layer: `${slug}-F.Mask` },
+          { name: `${slug}-B_Mask.gbs`, layer: `${slug}-B.Mask` },
+          { name: `${slug}-F_Silkscreen.gto`, layer: `${slug}-F.SilkS` },
+          { name: `${slug}-B_Silkscreen.gbo`, layer: `${slug}-B.SilkS` },
+          { name: `${slug}-Edge_Cuts.gm1`, layer: `${slug}-Edge.Cuts` },
+        ]
+
+        // Try to load individual gerber files
+        for (const gf of gerberFiles) {
+          try {
+            const gRes = await fetch(`/api/blocks/${slug}/files/gerbers/${gf.name}`)
+            if (gRes.ok) {
+              const content = await gRes.text()
+              layers[gf.layer] = content
+            }
+          } catch {
+            // Skip files that don't exist
+          }
+        }
+      }
+
+      setGerberLayers(layers)
+    } catch (error) {
+      logger.error('pcb', 'Failed to load gerbers', { error })
+    } finally {
+      setIsLoadingGerbers(false)
+    }
+  }, [selectedBlocks, blocksData?.blocks])
 
   // Handle AI suggestion
   const handleAiSuggest = useCallback(async () => {
@@ -325,12 +375,9 @@ export function PCBStageView() {
         logger.warn('pcb', 'PCB merge failed', { error: pcbError })
       }
 
-      // Show PCB merge error in the UI if there was one
+      // Log PCB merge error if there was one
       if (pcbMergeError) {
-        logger.info('pcb', 'PCB preview unavailable', { reason: pcbMergeError })
-        setPcbUnavailableReason(pcbMergeError)
-      } else {
-        setPcbUnavailableReason(null)
+        logger.info('pcb', 'PCB merge unavailable', { reason: pcbMergeError })
       }
 
       // Transform netList to match schema type
@@ -351,7 +398,9 @@ export function PCBStageView() {
       })
 
       setCurrentStep('preview')
-      setViewMode(pcbData ? 'pcb' : 'schematic')
+      setViewMode('gerbers')
+      // Load gerber files for display
+      loadGerbers()
     } catch (error) {
       logger.error('pcb', 'Merge failed', { error })
       setMergeError(error instanceof Error ? error.message : 'Failed to merge schematics')
@@ -499,53 +548,32 @@ export function PCBStageView() {
               <ViewModeButton
                 mode="grid"
                 currentMode={viewMode}
-                onClick={() => {
-                  setViewMode('grid')
-                  setPreviewBlockSlug(null)
-                }}
+                onClick={() => setViewMode('grid')}
                 icon={LayoutGrid}
                 label="Grid"
               />
               <ViewModeButton
                 mode="bus"
                 currentMode={viewMode}
-                onClick={() => {
-                  setViewMode('bus')
-                  setPreviewBlockSlug(null)
-                }}
+                onClick={() => setViewMode('bus')}
                 icon={Network}
                 label="Bus"
               />
               <ViewModeButton
-                mode="schematic"
+                mode="gerbers"
                 currentMode={viewMode}
                 onClick={() => {
-                  setViewMode('schematic')
-                  setPreviewBlockSlug(null)
+                  setViewMode('gerbers')
+                  loadGerbers()
                 }}
-                icon={FileCode2}
-                label="Schematic"
-                disabled={!pcbArtifacts?.schematicData && !previewBlockSlug}
-              />
-              <ViewModeButton
-                mode="pcb"
-                currentMode={viewMode}
-                onClick={() => {
-                  setViewMode('pcb')
-                  setPreviewBlockSlug(null)
-                }}
-                icon={CircuitBoard}
-                label="PCB"
-                disabled={!pcbArtifacts?.pcbData}
-                disabledReason={pcbUnavailableReason}
+                icon={Layers}
+                label="Gerbers"
+                disabled={selectedBlocks.length === 0}
               />
               <ViewModeButton
                 mode="3d"
                 currentMode={viewMode}
-                onClick={() => {
-                  setViewMode('3d')
-                  setPreviewBlockSlug(null)
-                }}
+                onClick={() => setViewMode('3d')}
                 icon={Box}
                 label="3D"
                 disabled={selectedBlocks.length === 0}
@@ -553,10 +581,7 @@ export function PCBStageView() {
               <ViewModeButton
                 mode="docs"
                 currentMode={viewMode}
-                onClick={() => {
-                  setViewMode('docs')
-                  setPreviewBlockSlug(null)
-                }}
+                onClick={() => setViewMode('docs')}
                 icon={FileText}
                 label="Docs"
                 disabled={selectedBlocks.length === 0}
@@ -606,41 +631,6 @@ export function PCBStageView() {
                   Download MD
                 </button>
               )}
-              {pcbArtifacts?.schematicData && viewMode === 'schematic' && (
-                <button
-                  onClick={() => {
-                    const blob = new Blob([pcbArtifacts.schematicData!], { type: 'text/plain' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `${project?.name?.toLowerCase().replace(/\s+/g, '-') || 'merged'}.kicad_sch`
-                    a.click()
-                    URL.revokeObjectURL(url)
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-steel rounded transition-colors"
-                >
-                  <Download className="w-3 h-3" />
-                  Download .kicad_sch
-                </button>
-              )}
-              {pcbArtifacts?.pcbData && viewMode === 'pcb' && (
-                <button
-                  onClick={() => {
-                    const blob = new Blob([pcbArtifacts.pcbData!], { type: 'text/plain' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `${project?.name?.toLowerCase().replace(/\s+/g, '-') || 'merged'}.kicad_pcb`
-                    a.click()
-                    URL.revokeObjectURL(url)
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-steel rounded transition-colors"
-                >
-                  <Download className="w-3 h-3" />
-                  Download .kicad_pcb
-                </button>
-              )}
-
               {/* Generate button - always visible when blocks are selected */}
               {selectedBlocks.length > 0 && (
                 <button
@@ -680,27 +670,7 @@ export function PCBStageView() {
           <div className="flex-1 bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
             {/* View content */}
             <div className="flex-1 min-h-0 overflow-auto">
-              {previewBlockSlug ? (
-                <div className="h-full flex flex-col">
-                  <div className="px-4 py-2 border-b border-surface-700 flex items-center justify-between bg-surface-800/50">
-                    <span className="text-sm text-steel">Preview: {previewBlockSlug}</span>
-                    <button
-                      onClick={() => setPreviewBlockSlug(null)}
-                      className="text-xs text-copper hover:text-copper-light"
-                    >
-                      Clear Preview
-                    </button>
-                  </div>
-                  <div className="flex-1">
-                    <KiCanvasViewer
-                      src={`/api/blocks/${previewBlockSlug}/files/${previewBlockSlug}.kicad_sch`}
-                      type="schematic"
-                      controls="basic"
-                      className="w-full h-full"
-                    />
-                  </div>
-                </div>
-              ) : viewMode === 'grid' ? (
+              {viewMode === 'grid' ? (
                 <div className="p-4 flex justify-center">
                   <GridEditor
                     placedBlocks={selectedBlocks}
@@ -719,20 +689,24 @@ export function PCBStageView() {
                     variant="diagram"
                   />
                 </div>
-              ) : viewMode === 'schematic' && pcbArtifacts?.schematicData ? (
-                <KiCanvasViewer
-                  content={pcbArtifacts.schematicData}
-                  type="schematic"
-                  controls="basic"
-                  className="w-full h-full"
-                />
-              ) : viewMode === 'pcb' && pcbArtifacts?.pcbData ? (
-                <KiCanvasViewer
-                  content={pcbArtifacts.pcbData}
-                  type="pcb"
-                  controls="basic"
-                  className="w-full h-full"
-                />
+              ) : viewMode === 'gerbers' ? (
+                isLoadingGerbers ? (
+                  <div className="flex-1 flex items-center justify-center h-full">
+                    <Loader2 className="w-8 h-8 text-copper animate-spin" />
+                  </div>
+                ) : Object.keys(gerberLayers).length > 0 ? (
+                  <GerberViewer layers={gerberLayers} className="w-full h-full" />
+                ) : (
+                  <div className="flex-1 flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <Layers className="w-12 h-12 text-surface-600 mx-auto mb-3" strokeWidth={1} />
+                      <p className="text-steel-dim text-sm mb-2">No Gerber files available</p>
+                      <p className="text-xs text-surface-500">
+                        Generate the design first or ensure blocks have Gerber files
+                      </p>
+                    </div>
+                  </div>
+                )
               ) : viewMode === '3d' && selectedBlocks.length > 0 && blocksData?.blocks ? (
                 <PCB3DViewer
                   boardSize={pcbArtifacts?.boardSize}
@@ -808,13 +782,6 @@ export function PCBStageView() {
                     <span className="text-xs text-steel-dim font-mono">
                       ({placed.gridX},{placed.gridY})
                     </span>
-                    <button
-                      onClick={() => handlePreviewBlock(placed.blockSlug)}
-                      className="text-copper hover:text-copper-light"
-                      title="Preview schematic"
-                    >
-                      <Eye className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    </button>
                     <button
                       onClick={() => handleRemoveBlock(placed.blockId)}
                       className="text-red-400 hover:text-red-300"
