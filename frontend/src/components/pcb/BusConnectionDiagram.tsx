@@ -458,7 +458,7 @@ function BusConnectionTable({ blocks, powerBudget, className }: BusConnectionTab
                     ({placement.gridX},{placement.gridY})
                   </td>
                   <td className="px-3 py-1.5 font-mono">
-                    {block.gridSize[0]}x{block.gridSize[1]}
+                    {block.gridSize ? `${block.gridSize[0]}x${block.gridSize[1]}` : block.isRemote ? 'Remote' : '-'}
                   </td>
                   <td className="px-3 py-1.5 text-green-400">
                     {provides.length > 0 ? provides.join(', ') : '-'}

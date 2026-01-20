@@ -39,6 +39,7 @@ function toBlockDefinition(block: PcbBlock): BlockDefinition | null {
     version: block.version || '0.0.0',
     category: block.category,
     description: block.description,
+    isRemote: false, // Legacy blocks are always grid blocks
     gridSize: [block.widthUnits, block.heightUnits],
     bus: {
       taps:

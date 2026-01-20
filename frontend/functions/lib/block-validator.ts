@@ -12,6 +12,7 @@ import {
   BlockDefinitionSchema,
   validateEdgeConnections,
   validateI2cAddresses,
+  validateRemoteBlock,
 } from '../../src/schemas/block'
 
 // =============================================================================
@@ -132,6 +133,7 @@ export function validateBlockJson(
   const semanticErrors: string[] = [
     ...validateEdgeConnections(result.data),
     ...validateI2cAddresses(result.data),
+    ...validateRemoteBlock(result.data),
   ]
 
   if (semanticErrors.length > 0) {
@@ -339,10 +341,22 @@ export function generateBlockSummary(block: BlockDefinition): string {
     block.description,
     '',
     `**Category:** ${block.category}`,
-    `**Grid Size:** ${block.gridSize[0]}x${block.gridSize[1]} (${block.gridSize[0] * 12.7}mm x ${block.gridSize[1] * 12.7}mm)`,
-    `**Version:** ${block.version}`,
-    '',
   ]
+
+  // Handle remote vs grid blocks differently
+  if (block.isRemote && block.remote) {
+    lines.push(`**Type:** Remote Block (cable-connected)`)
+    lines.push(`**Mating Connector:** ${block.remote.matingConnectorSlug}`)
+    lines.push(`**Cable:** ${block.remote.cable.connectorType} (${block.remote.cable.pinCount} pins)`)
+    if (block.remote.boardDimensions) {
+      lines.push(`**Board Size:** ${block.remote.boardDimensions.width}mm x ${block.remote.boardDimensions.height}mm`)
+    }
+  } else if (block.gridSize) {
+    lines.push(`**Grid Size:** ${block.gridSize[0]}x${block.gridSize[1]} (${block.gridSize[0] * 12.7}mm x ${block.gridSize[1] * 12.7}mm)`)
+  }
+
+  lines.push(`**Version:** ${block.version}`)
+  lines.push('')
 
   // Bus interface
   if (block.bus.power?.provides?.length) {

@@ -157,12 +157,19 @@ export function BlockViewer({ block, editable = false, onSave, className }: Bloc
                 <span>{category.label}</span>
               </div>
               <span className="text-steel-dim text-sm">v{definition.version}</span>
-              <div className="flex items-center gap-1 text-steel-dim text-sm">
-                <Grid3X3 className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span>
-                  {definition.gridSize[0]}×{definition.gridSize[1]}
-                </span>
-              </div>
+              {definition.gridSize && (
+                <div className="flex items-center gap-1 text-steel-dim text-sm">
+                  <Grid3X3 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <span>
+                    {definition.gridSize[0]}×{definition.gridSize[1]}
+                  </span>
+                </div>
+              )}
+              {definition.isRemote && (
+                <div className="flex items-center gap-1 text-amber-400 text-sm">
+                  <span>Remote</span>
+                </div>
+              )}
             </div>
 
             {/* Name */}
@@ -501,7 +508,31 @@ function BusInterfaceTab({ definition }: { definition: BlockDefinition }) {
 // =============================================================================
 
 function EdgesTab({ definition }: { definition: BlockDefinition }) {
-  const renderEdge = (direction: 'north' | 'south', connections: typeof definition.edges.north) => (
+  // Remote blocks don't have edges
+  if (definition.isRemote || !definition.edges || !definition.gridSize) {
+    return (
+      <div className="p-6 text-center">
+        <div className="text-steel-dim">
+          {definition.isRemote
+            ? 'Remote blocks connect via cable, not bus edges.'
+            : 'No edge connection data available.'}
+        </div>
+        {definition.remote && (
+          <div className="mt-4 bg-surface-800 rounded-lg p-4 text-left">
+            <h4 className="text-sm font-medium text-white mb-2">Cable Connection</h4>
+            <div className="text-sm text-steel space-y-1">
+              <div>Connector: {definition.remote.cable.connectorType}</div>
+              <div>Pin count: {definition.remote.cable.pinCount}</div>
+              {definition.remote.cable.pitch && <div>Pitch: {definition.remote.cable.pitch}</div>}
+              <div>Mates with: {definition.remote.matingConnectorSlug}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderEdge = (direction: 'north' | 'south', connections: NonNullable<typeof definition.edges>['north']) => (
     <div className="bg-surface-700/30 rounded-lg p-4">
       <h4 className="text-sm font-medium text-white mb-3 capitalize">{direction} Edge</h4>
       <div className="flex gap-2">

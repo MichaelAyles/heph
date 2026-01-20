@@ -262,6 +262,75 @@ Include taps for power rails (3V3, 5V0) if they have 0R resistors for isolation.
 - VL53L0X: 41 (0x29)
 - OLED SSD1306: 60 (0x3C) or 61 (0x3D)
 
+## Remote Blocks
+
+Remote blocks are PCB modules that connect via cable instead of the bus connector system. They are used for:
+- Button panels that need to be mounted on enclosure surface
+- Display modules that need to be flush with enclosure front
+- IO expanders for remote sensors
+- USB/power connectors that need to be at enclosure edges
+
+### Detecting Remote Blocks
+
+A block is likely REMOTE if:
+1. It has NO ForgeLabs_Interconnect footprints (the 20-pin bus connectors)
+2. It HAS FFC, JST, IDC, or similar cable connectors
+3. Its name/description suggests it's a "remote", "panel", or "breakout" module
+
+### Remote Block Schema
+
+Remote blocks use a different schema:
+\`\`\`typescript
+{
+  // Same identity fields
+  slug: string
+  name: string
+  version: string
+  category: BlockCategory
+  description: string  // Up to 4000 chars - be detailed about cable type, I2C config, etc.
+
+  // MUST be true for remote blocks
+  isRemote: true
+
+  // Required for remote blocks
+  remote: {
+    matingConnectorSlug: string  // Slug of connector block on main board, e.g., "connector-io-1x1"
+    cable: {
+      connectorType: 'JST-PH-2' | 'JST-PH-3' | 'JST-PH-4' | 'JST-PH-5' | 'JST-PH-6' |
+                     'FFC-6' | 'FFC-10' | 'FFC-14' | 'FFC-20' |
+                     'IDC-6' | 'IDC-10' | 'DUPONT-4' | 'DUPONT-6' | 'QWIIC' | 'STEMMA-QT'
+      pinCount: number
+      pitch?: string        // e.g., "0.5mm", "2.54mm"
+      notes?: string        // e.g., "Type A FFC (contacts same side)"
+    }
+    i2cAddressConfigs?: Array<{
+      address: number       // 7-bit I2C address as decimal
+      resistors: Array<{ reference: string, state: 'fit' | 'nofit' }>
+      isDefault?: boolean
+    }>
+    boardDimensions?: { width: number, height: number }  // mm
+  }
+
+  // NO gridSize for remote blocks
+  // NO edges for remote blocks
+
+  // Same bus and components as regular blocks
+  bus: BusInterface
+  components: BlockComponent[]
+}
+\`\`\`
+
+### Remote Block Description Requirements
+
+For remote blocks, the description MUST include:
+1. What the module does (e.g., "4-channel RGB IO panel")
+2. Cable type and specs (e.g., "Connects via 6-pin 0.5mm FFC cable")
+3. Required connector block (e.g., "Requires 1x1 IO Connector Block")
+4. I2C address configuration (e.g., "I2C: 0x58 default, configurable via R6/R7")
+
+Example description (for rich detail up to 4000 chars):
+"4-channel RGB IO panel with AW9523B I2C LED driver and tactile switches. Connects via 6-pin 0.5mm FFC cable. Requires 1x1 IO Connector Block. I2C addresses: 0x58 (R6/R7 nofit, default), 0x59 (R7 fit), 0x5A (R6 fit), 0x5B (both fit)."
+
 ## Output Format
 
 Return ONLY valid JSON. No markdown, no explanation, no code fences.`
@@ -274,7 +343,8 @@ export function buildBlockGenerationUserPrompt(
   extract: KicadExtract,
   slug: string,
   suggestedCategory?: BlockCategory,
-  toknData?: string
+  toknData?: string,
+  isRemote?: boolean
 ): string {
   const gridSize = calculateGridSize(extract.boardSize)
   const formattedExtract = formatExtractForLLM(extract)
@@ -287,6 +357,62 @@ export function buildBlockGenerationUserPrompt(
   // Use TOKN if available (has pin-level net connections), otherwise use simplified format
   const schematicData = toknData || formattedExtract
 
+  // Detect if this is likely a remote block based on components
+  const hasInterconnect = extract.components.some(
+    (c) => c.footprint?.includes('ForgeLabs_Interconnect') || c.footprint?.includes('BUS_20')
+  )
+  const hasCableConnector = extract.components.some(
+    (c) =>
+      c.footprint?.toLowerCase().includes('ffc') ||
+      c.footprint?.toLowerCase().includes('jst') ||
+      c.footprint?.toLowerCase().includes('idc') ||
+      c.value?.toLowerCase().includes('ffc') ||
+      c.value?.toLowerCase().includes('conn')
+  )
+  const likelyRemote = isRemote || (!hasInterconnect && hasCableConnector)
+
+  if (likelyRemote) {
+    // Remote block prompt - no gridSize/edges
+    const prompt = `Generate a block.json for this REMOTE block (off-grid, cable-connected module).
+
+**Slug**: ${slug}
+${suggestedCategory ? `**Suggested Category**: ${suggestedCategory}` : ''}
+${boardDims}
+**Block Type**: REMOTE (connects via cable, not bus connectors)
+
+## Schematic Data (TOKN format)
+
+\`\`\`
+${schematicData}
+\`\`\`
+
+## Instructions for REMOTE Block
+
+1. Analyze the components to determine the block's primary function
+2. Identify the cable connector type (FFC, JST, IDC, etc.)
+3. Determine the I2C addresses and how they can be configured via resistors
+4. Trace nets to identify which resistors control I2C address selection
+5. Generate a complete, valid remote block.json
+
+## CRITICAL Requirements for REMOTE Blocks
+
+- **isRemote**: MUST be \`true\`
+- **remote.matingConnectorSlug**: Slug of connector block on main board (e.g., "connector-io-1x1")
+- **remote.cable**: Identify connector type, pin count, pitch from schematic
+- **remote.i2cAddressConfigs**: Document all I2C address options with resistor configurations
+- **remote.boardDimensions**: Set to { width: ${extract.boardSize?.width || 'XX'}, height: ${extract.boardSize?.height || 'XX'} }
+- **description**: MUST include cable type, required connector block, I2C address config (up to 4000 chars)
+- **NO gridSize**: Remote blocks don't have gridSize
+- **NO edges**: Remote blocks don't have edge connections
+- **i2c.addresses**: Use decimal integers (e.g., 88 not "0x58")
+- **components**: Include ALL components from the extracted data
+
+Return ONLY the JSON object. No markdown, no explanation.`
+
+    return prompt
+  }
+
+  // Standard grid block prompt
   const prompt = `Generate a block.json for this KiCad design.
 
 **Slug**: ${slug}
@@ -333,13 +459,14 @@ export function buildBlockGenerationMessages(
   extract: KicadExtract,
   slug: string,
   suggestedCategory?: BlockCategory,
-  toknData?: string
+  toknData?: string,
+  isRemote?: boolean
 ): { role: 'system' | 'user'; content: string }[] {
   return [
     { role: 'system', content: buildBlockGenerationSystemPrompt() },
     {
       role: 'user',
-      content: buildBlockGenerationUserPrompt(extract, slug, suggestedCategory, toknData),
+      content: buildBlockGenerationUserPrompt(extract, slug, suggestedCategory, toknData, isRemote),
     },
   ]
 }

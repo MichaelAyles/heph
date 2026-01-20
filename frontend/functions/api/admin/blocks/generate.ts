@@ -21,6 +21,7 @@ interface GenerateRequest {
   schematic: string
   pcb?: string
   suggestedCategory?: BlockCategory
+  isRemote?: boolean
 }
 
 /**
@@ -149,6 +150,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     let schematicContent: string
     let pcbContent: string | undefined
     let suggestedCategory: BlockCategory | undefined
+    let isRemote: boolean | undefined
 
     if (contentType.includes('multipart/form-data')) {
       // Handle multipart form data upload
@@ -186,6 +188,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
 
       suggestedCategory = (formData.get('category') as BlockCategory | null) || undefined
+      isRemote = formData.get('isRemote') === 'true'
     } else if (contentType.includes('application/json')) {
       // Handle JSON body (for testing)
       const body = (await request.json()) as GenerateRequest
@@ -193,6 +196,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       schematicContent = body.schematic
       pcbContent = body.pcb
       suggestedCategory = body.suggestedCategory
+      isRemote = body.isRemote
 
       if (!slug || !schematicContent) {
         return Response.json({ error: 'slug and schematic are required' }, { status: 400 })
@@ -219,7 +223,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // Build LLM messages with TOKN data for accurate net tracing
-    const messages = buildBlockGenerationMessages(extract, slug, suggestedCategory, toknOutput)
+    const messages = buildBlockGenerationMessages(extract, slug, suggestedCategory, toknOutput, isRemote)
 
     // Call LLM
     let llmResponse: string

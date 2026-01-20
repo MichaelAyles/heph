@@ -119,6 +119,10 @@ export function getEffectiveSize(
   block: BlockDefinition,
   rotation: 0 | 90 | 180 | 270
 ): [number, number] {
+  // Remote blocks don't have grid size - return 0,0
+  if (!block.gridSize) {
+    return [0, 0]
+  }
   const [width, height] = block.gridSize
   if (rotation === 90 || rotation === 270) {
     return [height, width]

@@ -64,7 +64,7 @@ interface GenerateResponse {
 
 type LeftPanelTab = 'extract' | 'tokn' | 'preview'
 
-type WizardStep = 'upload' | 'generating' | 'review' | 'saving'
+type WizardStep = 'upload' | 'generating' | 'review'
 
 const CATEGORY_OPTIONS: { value: BlockCategory; label: string; icon: typeof Cpu }[] = [
   { value: 'mcu', label: 'MCU', icon: Cpu },
@@ -79,6 +79,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
   const [step, setStep] = useState<WizardStep>('upload')
   const [slug, setSlug] = useState('')
   const [category, setCategory] = useState<BlockCategory | ''>('')
+  const [isRemote, setIsRemote] = useState(false)
   const [schematicFile, setSchematicFile] = useState<File | null>(null)
   const [pcbFile, setPcbFile] = useState<File | null>(null)
   const [pcbContent, setPcbContent] = useState<string | null>(null)
@@ -98,6 +99,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
       if (schematicFile) formData.append('schematic', schematicFile)
       if (pcbFile) formData.append('pcb', pcbFile)
       if (category) formData.append('category', category)
+      if (isRemote) formData.append('isRemote', 'true')
 
       const res = await fetch('/api/admin/blocks/generate', {
         method: 'POST',
@@ -204,7 +206,8 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
       setJsonError('Invalid JSON syntax')
       return
     }
-    setStep('saving')
+    // Don't set step to 'saving' - use saveMutation.isPending instead
+    // This allows the button to re-enable on error
     saveMutation.mutate()
   }, [editedJson, saveMutation])
 
@@ -299,7 +302,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
               <span
                 className={clsx(
                   'px-2 py-0.5',
-                  step === 'review' || step === 'saving' ? 'bg-copper text-ash' : 'bg-surface-800'
+                  step === 'review' ? 'bg-copper text-ash' : 'bg-surface-800'
                 )}
               >
                 3. Review & Save
@@ -367,6 +370,24 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                     )
                   })}
                 </div>
+              </div>
+
+              {/* Remote block checkbox */}
+              <div>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isRemote}
+                    onChange={(e) => setIsRemote(e.target.checked)}
+                    className="w-4 h-4 accent-copper"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-steel">Remote Block</span>
+                    <p className="text-xs text-steel-dim">
+                      Off-grid module that connects via cable (button panels, displays, etc.)
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* Required files status */}
@@ -572,7 +593,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
           )}
 
           {/* Step 3: Review */}
-          {(step === 'review' || step === 'saving') && generateResult && (
+          {step === 'review' && generateResult && (
             <div className="flex h-[500px]">
               {/* Left: Tabs and content */}
               <div className="w-1/3 border-r border-surface-700 flex flex-col">
@@ -794,20 +815,10 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
               <button
                 onClick={handleSave}
                 disabled={saveMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                Save Block
-              </button>
-            )}
-
-            {step === 'saving' && (
-              <button
-                disabled
-                className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium opacity-50"
-              >
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving...
+                {saveMutation.isPending ? 'Saving...' : 'Save Block'}
               </button>
             )}
           </div>

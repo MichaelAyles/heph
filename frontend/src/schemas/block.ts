@@ -382,10 +382,87 @@ export const FirmwareHintsSchema = z.object({
 export type FirmwareHints = z.infer<typeof FirmwareHintsSchema>
 
 // =============================================================================
+// Remote Block Schemas
+// =============================================================================
+
+/**
+ * Cable connector types for remote blocks
+ */
+export const CableConnectorSchema = z.enum([
+  'JST-PH-2',
+  'JST-PH-3',
+  'JST-PH-4',
+  'JST-PH-5',
+  'JST-PH-6',
+  'FFC-6',
+  'FFC-10',
+  'FFC-14',
+  'FFC-20',
+  'IDC-6',
+  'IDC-10',
+  'DUPONT-4',
+  'DUPONT-6',
+  'QWIIC',
+  'STEMMA-QT',
+])
+
+export type CableConnector = z.infer<typeof CableConnectorSchema>
+
+/**
+ * I2C address configuration via resistors
+ * Allows specifying which resistors to fit/nofit to achieve different I2C addresses
+ */
+export const I2cAddressConfigSchema = z.object({
+  address: z.number().int().min(0x08).max(0x77).describe('I2C address (7-bit, 0x08-0x77)'),
+  resistors: z.array(
+    z.object({
+      reference: z.string().describe('Resistor reference, e.g., "R6"'),
+      state: z.enum(['fit', 'nofit']).describe('Whether to populate the resistor'),
+    })
+  ),
+  isDefault: z.boolean().optional().describe('True if this is the default configuration'),
+})
+
+export type I2cAddressConfig = z.infer<typeof I2cAddressConfigSchema>
+
+/**
+ * Remote block properties - for blocks that connect via cable
+ */
+export const RemoteBlockPropertiesSchema = z.object({
+  matingConnectorSlug: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .describe('Slug of the connector block this mates with on the main board'),
+  cable: z.object({
+    connectorType: CableConnectorSchema,
+    pinCount: z.number().int().positive().describe('Number of pins in the cable'),
+    pitch: z.string().optional().describe('Cable pitch, e.g., "0.5mm", "2.54mm"'),
+    notes: z.string().optional().describe('Additional cable notes, e.g., "Type A FFC (contacts same side)"'),
+  }),
+  i2cAddressConfigs: z
+    .array(I2cAddressConfigSchema)
+    .optional()
+    .describe('Available I2C address configurations'),
+  boardDimensions: z
+    .object({
+      width: z.number().positive().describe('Board width in mm'),
+      height: z.number().positive().describe('Board height in mm'),
+    })
+    .optional()
+    .describe('Physical board dimensions (not grid-aligned)'),
+})
+
+export type RemoteBlockProperties = z.infer<typeof RemoteBlockPropertiesSchema>
+
+// =============================================================================
 // Complete Block Definition Schema
 // =============================================================================
 
-export const BlockDefinitionSchema = z.object({
+/**
+ * Base block definition schema without refinement
+ * This is used internally - use BlockDefinitionSchema for validation
+ */
+const BlockDefinitionBaseSchema = z.object({
   // Identity
   slug: z
     .string()
@@ -395,11 +472,18 @@ export const BlockDefinitionSchema = z.object({
   name: z.string().min(1).max(100),
   version: z.string().regex(/^\d+\.\d+\.\d+$/, 'Version must be semver format (e.g., 1.0.0)'),
   category: BlockCategorySchema,
-  description: z.string().min(10).max(500),
+  description: z.string().min(10).max(4000),
 
-  // Physical grid size
+  // Remote block flag - if true, this block connects via cable instead of bus
+  isRemote: z.boolean().optional().default(false),
+
+  // Remote block properties (required if isRemote is true)
+  remote: RemoteBlockPropertiesSchema.optional(),
+
+  // Physical grid size (required for non-remote blocks, absent for remote blocks)
   gridSize: z
     .tuple([z.number().int().positive(), z.number().int().positive()])
+    .optional()
     .describe('[width, height] in grid units (12.7mm each)'),
 
   // Physical properties for enclosure generation
@@ -408,8 +492,8 @@ export const BlockDefinitionSchema = z.object({
   // Bus interface
   bus: BusInterfaceSchema,
 
-  // Edge connections (north/south only, array length = gridSize[0])
-  edges: EdgeConnectionsSchema,
+  // Edge connections (required for non-remote blocks, absent for remote blocks)
+  edges: EdgeConnectionsSchema.optional(),
 
   // Configurable options (jumpers, solder bridges)
   jumpers: z.array(JumperSchema).optional(),
@@ -427,6 +511,28 @@ export const BlockDefinitionSchema = z.object({
   firmware: FirmwareHintsSchema.optional(),
 })
 
+/**
+ * Complete block definition schema with conditional validation
+ * - Remote blocks require: `isRemote: true`, `remote` property, NO gridSize/edges
+ * - Non-remote blocks require: `gridSize`, `edges`
+ */
+export const BlockDefinitionSchema = BlockDefinitionBaseSchema.refine(
+  (data) => {
+    if (data.isRemote) {
+      // Remote blocks must have remote properties
+      return data.remote !== undefined
+    } else {
+      // Non-remote blocks must have gridSize and edges
+      return data.gridSize !== undefined && data.edges !== undefined
+    }
+  },
+  {
+    message:
+      'Remote blocks require "remote" property. Non-remote blocks require "gridSize" and "edges".',
+    path: ['isRemote'],
+  }
+)
+
 export type BlockDefinition = z.infer<typeof BlockDefinitionSchema>
 
 // =============================================================================
@@ -435,8 +541,19 @@ export type BlockDefinition = z.infer<typeof BlockDefinitionSchema>
 
 /**
  * Validate that edge array lengths match grid width
+ * Skipped for remote blocks which don't have edges/gridSize
  */
 export function validateEdgeConnections(block: BlockDefinition): string[] {
+  // Remote blocks don't have edges - skip validation
+  if (block.isRemote) {
+    return []
+  }
+
+  // Non-remote blocks must have gridSize and edges
+  if (!block.gridSize || !block.edges) {
+    return ['Non-remote blocks require gridSize and edges']
+  }
+
   const errors: string[] = []
   const expectedLength = block.gridSize[0]
 
@@ -450,6 +567,41 @@ export function validateEdgeConnections(block: BlockDefinition): string[] {
     errors.push(
       `South edge has ${block.edges.south.length} connections, expected ${expectedLength} (gridSize[0])`
     )
+  }
+
+  return errors
+}
+
+/**
+ * Validate remote block properties
+ */
+export function validateRemoteBlock(block: BlockDefinition): string[] {
+  if (!block.isRemote) {
+    return []
+  }
+
+  const errors: string[] = []
+
+  if (!block.remote) {
+    errors.push('Remote blocks require "remote" property')
+    return errors
+  }
+
+  // Validate mating connector slug format
+  if (!block.remote.matingConnectorSlug) {
+    errors.push('Remote blocks require matingConnectorSlug')
+  }
+
+  // Validate I2C address configs match declared addresses
+  if (block.remote.i2cAddressConfigs && block.bus.i2c?.addresses) {
+    const declaredAddresses = new Set(block.bus.i2c.addresses)
+    for (const config of block.remote.i2cAddressConfigs) {
+      if (!declaredAddresses.has(config.address)) {
+        errors.push(
+          `I2C address config 0x${config.address.toString(16)} not in declared addresses`
+        )
+      }
+    }
   }
 
   return errors
@@ -493,6 +645,7 @@ export function validateBlockDefinition(
   const semanticErrors: string[] = [
     ...validateEdgeConnections(result.data),
     ...validateI2cAddresses(result.data),
+    ...validateRemoteBlock(result.data),
   ]
 
   if (semanticErrors.length > 0) {

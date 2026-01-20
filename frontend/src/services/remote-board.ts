@@ -337,7 +337,7 @@ export function recalculateBoardSize(
 
   for (const placed of remoteBoard.placedBlocks) {
     const def = blockDefinitions.get(placed.blockSlug)
-    if (!def) continue
+    if (!def || !def.gridSize) continue
 
     const [blockWidth, blockHeight] = def.gridSize
     const endX = placed.gridX + blockWidth

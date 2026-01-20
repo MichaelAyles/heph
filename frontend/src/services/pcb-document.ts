@@ -198,8 +198,13 @@ function generateMarkdown(input: MarkdownInput): string {
   for (const placement of sortedPlacements) {
     const block = input.blockDefinitions.get(placement.blockSlug)
     if (block) {
+      const sizeStr = block.gridSize
+        ? `${block.gridSize[0]}×${block.gridSize[1]}`
+        : block.isRemote
+          ? 'Remote'
+          : '-'
       lines.push(
-        `| (${placement.gridX},${placement.gridY}) | ${block.name} | ${block.gridSize[0]}×${block.gridSize[1]} | ${block.category} | ${truncate(block.description, 40)} |`
+        `| (${placement.gridX},${placement.gridY}) | ${block.name} | ${sizeStr} | ${block.category} | ${truncate(block.description, 40)} |`
       )
     }
   }
@@ -436,7 +441,7 @@ function generateAsciiGrid(input: MarkdownInput): string {
   // Place blocks in the grid
   for (const placement of placedBlocks) {
     const block = blockDefinitions.get(placement.blockSlug)
-    if (!block) continue
+    if (!block || !block.gridSize) continue
 
     const [width, height] = block.gridSize
     const label = block.slug.slice(0, 4).toUpperCase()

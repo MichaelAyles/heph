@@ -51,11 +51,13 @@ export interface PCBSuggestionResponse {
  * Convert BlockDefinition to a simplified catalog entry for the prompt
  */
 export function toBlockCatalogEntry(block: BlockDefinition): BlockCatalogEntry {
+  // Skip remote blocks for PCB selection as they don't go on the main grid
+  // Provide a default gridSize for compatibility if somehow called
   const entry: BlockCatalogEntry = {
     slug: block.slug,
     name: block.name,
     category: block.category,
-    gridSize: block.gridSize,
+    gridSize: block.gridSize ?? [1, 1],
     description: block.description,
   }
 
