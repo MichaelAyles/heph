@@ -828,10 +828,14 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
                 lower.endsWith('.gto') ||
                 lower.endsWith('.gbo') ||
                 lower.endsWith('.gm1') ||
+                lower.endsWith('.g1') ||
                 lower.endsWith('.g2') ||
                 lower.endsWith('.g3') ||
+                lower.endsWith('.drl') ||
                 lower.includes('-f_cu') ||
                 lower.includes('-b_cu') ||
+                lower.includes('-in1_cu') ||
+                lower.includes('-in2_cu') ||
                 lower.includes('-f_mask') ||
                 lower.includes('-b_mask') ||
                 lower.includes('-f_silkscreen') ||

@@ -268,11 +268,12 @@ export function PCBStageView() {
         const zip = await JSZip.loadAsync(blob)
 
         // Map file extensions/patterns to layer names
+        // Note: KiCad inner layer extensions vary (.g1/.g2 or .g2/.g3 depending on export settings)
         const layerMappings = [
           { patterns: ['-f_cu', '.gtl', '-F_Cu'], layer: `${slug}-F.Cu` },
           { patterns: ['-b_cu', '.gbl', '-B_Cu'], layer: `${slug}-B.Cu` },
-          { patterns: ['-in1_cu', '.g2', '-In1_Cu'], layer: `${slug}-In1.Cu` },
-          { patterns: ['-in2_cu', '.g3', '-In2_Cu'], layer: `${slug}-In2.Cu` },
+          { patterns: ['-in1_cu', '-In1_Cu', '.g1'], layer: `${slug}-In1.Cu` },
+          { patterns: ['-in2_cu', '-In2_Cu', '.g2'], layer: `${slug}-In2.Cu` },
           { patterns: ['-f_mask', '.gts', '-F_Mask'], layer: `${slug}-F.Mask` },
           { patterns: ['-b_mask', '.gbs', '-B_Mask'], layer: `${slug}-B.Mask` },
           { patterns: ['-f_silkscreen', '.gto', '-F_Silkscreen', '-F_SilkS'], layer: `${slug}-F.SilkS` },
