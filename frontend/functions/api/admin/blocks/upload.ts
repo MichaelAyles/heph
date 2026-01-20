@@ -186,7 +186,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // Extract legacy fields for backwards compatibility
       const definition = validationResult.data
       const taps = definition.bus.taps?.map((t) => ({ net: t.signal })) || []
-      const i2cAddresses = definition.bus.i2c?.addresses.map((a) => `0x${a.toString(16)}`) || null
+      const i2cAddresses = definition.bus.i2c?.addresses?.map((a) => `0x${a.toString(16)}`) ?? null
       const spiCs = definition.bus.spi?.csPin || null
       const power = definition.bus.power?.requires?.[0]
         ? { current_max_ma: definition.bus.power.requires[0].maxMa }
