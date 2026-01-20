@@ -9,6 +9,7 @@
  *   - step: .step/.stp file (REQUIRED for enclosure generation)
  *   - blockJson: block.json content as text (optional - validates and updates definition)
  *   - thumbnail: .png file (optional)
+ *   - gerber_*: individual gerber files extracted from ZIP (e.g., gerber_F_Cu.gtl)
  */
 
 import type { Env } from '../../../env.d'
@@ -82,6 +83,34 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         httpMetadata: { contentType: 'image/png' },
       })
       uploadedFiles.thumbnail = `${slug}.png`
+    }
+
+    // Upload gerber files (sent individually with gerber_ prefix from client-side ZIP extraction)
+    const gerberFiles: string[] = []
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith('gerber_') && value instanceof File) {
+        const filename = key.replace('gerber_', '')
+        const r2Key = `${r2Prefix}gerbers/${filename}`
+
+        // Determine content type based on extension
+        let contentType = 'application/octet-stream'
+        if (filename.endsWith('.gtl') || filename.endsWith('.gbl') || filename.endsWith('.gto') ||
+            filename.endsWith('.gbo') || filename.endsWith('.gts') || filename.endsWith('.gbs') ||
+            filename.endsWith('.gm1') || filename.endsWith('.g1') || filename.endsWith('.g2')) {
+          contentType = 'application/x-gerber'
+        } else if (filename.endsWith('.drl')) {
+          contentType = 'application/x-excellon'
+        }
+
+        await env.STORAGE.put(r2Key, await value.arrayBuffer(), {
+          httpMetadata: { contentType },
+        })
+        gerberFiles.push(filename)
+      }
+    }
+
+    if (gerberFiles.length > 0) {
+      uploadedFiles.gerbers = 'gerbers/'
     }
 
     // Also upload block.json to R2 if provided
