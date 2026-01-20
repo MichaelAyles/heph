@@ -23,11 +23,20 @@ import {
   Globe,
   User,
   ChevronRight,
+  FileJson,
+  Wrench,
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { clsx } from 'clsx'
 import JSZip from 'jszip'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
+import { generateManufacturingBOM, bomToCSV } from '@/services/bom-generator'
+import {
+  generateDesignDocument,
+  designDocumentToJSON,
+  designDocumentToMarkdown,
+} from '@/services/design-document'
+import type { PcbBlock } from '@/db/schema'
 
 interface ConversationMessage {
   role: string
@@ -99,7 +108,19 @@ export function ExportStageView() {
     },
   })
 
+  // Fetch PCB blocks for BOM generation
+  const { data: blocks = [] } = useQuery<PcbBlock[]>({
+    queryKey: ['blocks'],
+    queryFn: async () => {
+      const res = await fetch('/api/blocks')
+      if (!res.ok) throw new Error('Failed to fetch blocks')
+      const data = await res.json()
+      return data.blocks
+    },
+  })
+
   const firmwareComplete = project?.spec?.stages?.firmware?.status === 'complete'
+  const hasPcbArtifacts = (project?.spec?.pcb?.placedBlocks?.length ?? 0) > 0
 
   // Generate spec as JSON/text
   const downloadSpec = async () => {
@@ -255,6 +276,67 @@ Edit the parameters at the top of the .scad file to adjust:
 
     const blob = new Blob([csv], { type: 'text/csv' })
     downloadBlob(blob, `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-bom.csv`)
+  }
+
+  // Download Manufacturing BOM (from PCB blocks)
+  const downloadManufacturingBOM = async () => {
+    if (!project?.spec?.pcb || !hasPcbArtifacts) return
+
+    const bom = generateManufacturingBOM(project.spec.pcb, blocks)
+    const csv = bomToCSV(bom)
+
+    const blob = new Blob([csv], { type: 'text/csv' })
+    downloadBlob(
+      blob,
+      `${project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'}-manufacturing-bom.csv`
+    )
+  }
+
+  // Download Design Document (JSON + Markdown)
+  const downloadDesignDocument = async () => {
+    if (!project?.spec?.pcb || !hasPcbArtifacts) return
+
+    const zip = new JSZip()
+    const projectSlug = project.name?.toLowerCase().replace(/\s+/g, '-') || 'project'
+
+    // Generate design document
+    const doc = generateDesignDocument(project, project.spec.pcb, blocks)
+
+    // Add JSON version
+    zip.file(`${projectSlug}-design.json`, designDocumentToJSON(doc))
+
+    // Add Markdown version
+    zip.file(`${projectSlug}-design.md`, designDocumentToMarkdown(doc))
+
+    // Add README
+    zip.file(
+      'README.md',
+      `# Design Document
+
+This archive contains the design documentation for ${project.name || 'your PHAESTUS project'}.
+
+## Files
+
+- \`${projectSlug}-design.json\` - Machine-readable design document
+- \`${projectSlug}-design.md\` - Human-readable design document
+
+## Contents
+
+The design document includes:
+- Block placements and positions
+- Cable connection pinouts (main to remote boards)
+- Design justifications for component selection
+- Resistor tap (0R) configuration and isolation decisions
+- Net assignments and GPIO mappings
+
+## Usage
+
+Use the JSON file for automated tools and the Markdown file for reference during assembly.
+`
+    )
+
+    const blob = await zip.generateAsync({ type: 'blob' })
+    downloadBlob(blob, `${projectSlug}-design-document.zip`)
   }
 
   // Download firmware source
@@ -706,6 +788,24 @@ ${spec.decisions.length > 0 ? spec.decisions.map((d) => `### ${d.question}\n${d.
       filename: 'bom.csv',
       ready: (project?.spec?.finalSpec?.estimatedBOM?.length ?? 0) > 0,
       onDownload: downloadBOM,
+    },
+    {
+      id: 'manufacturing-bom',
+      icon: Wrench,
+      title: 'Manufacturing BOM',
+      description: 'Component list from PCB blocks with nofit marking',
+      filename: 'manufacturing-bom.csv',
+      ready: hasPcbArtifacts,
+      onDownload: downloadManufacturingBOM,
+    },
+    {
+      id: 'design-document',
+      icon: FileJson,
+      title: 'Design Document',
+      description: 'Connections, justifications, 0R tap status (JSON/MD)',
+      filename: 'design-document.zip',
+      ready: hasPcbArtifacts,
+      onDownload: downloadDesignDocument,
     },
     {
       id: 'gerbers',

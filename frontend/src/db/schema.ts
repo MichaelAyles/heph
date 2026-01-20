@@ -144,6 +144,76 @@ export interface PCBArtifacts {
   netList?: NetAssignment[]
   // Timestamp of last merge
   mergedAt?: string
+  // Remote boards (off-grid boards like button panels, displays)
+  remoteBoards?: RemoteBoard[]
+  // Panel configuration for manufacturing
+  panelConfig?: PanelConfiguration
+  // Design justifications for each block selection
+  designJustifications?: DesignJustification[]
+  // Resistor tap states (0R nofit decisions)
+  resistorTapStates?: ResistorTapState[]
+}
+
+// =============================================================================
+// REMOTE BOARDS & PANELIZATION
+// =============================================================================
+
+export type RemoteBoardType = 'button' | 'display' | 'connector' | 'custom'
+
+export interface RemoteBoard {
+  id: string
+  name: string // "Button Panel"
+  slug: string // "button-panel"
+  type: RemoteBoardType
+  placedBlocks: PlacedBlock[] // Blocks on this remote board
+  boardSize: { width: number; height: number; unit: 'mm' }
+  connectionMapping: ConnectionMapping[]
+  gridWidth: number
+  gridHeight: number
+}
+
+export interface ConnectionMapping {
+  remoteSignal: string // Signal on remote board
+  mainSignal: string // Corresponding signal on main board
+  connectorType: string // "JST-PH-4", "FFC-10"
+}
+
+export interface PanelConfiguration {
+  mainBoardPosition: { x: number; y: number }
+  remoteBoards: Array<{
+    remoteBoardId: string
+    position: { x: number; y: number }
+    copies: number
+  }>
+  vScoreLines: VScoreLine[]
+  panelSize: { width: number; height: number }
+  panelMargin: number // Default 5mm
+}
+
+export interface VScoreLine {
+  orientation: 'horizontal' | 'vertical'
+  position: number // mm from panel origin
+  startMm: number
+  endMm: number
+}
+
+// =============================================================================
+// DESIGN DOCUMENT TYPES
+// =============================================================================
+
+export interface DesignJustification {
+  blockSlug: string
+  blockName: string
+  reason: string
+}
+
+export interface ResistorTapState {
+  blockSlug: string
+  reference: string // "R3"
+  signal: string // "I2C1_SDA"
+  populated: boolean // false = no-fit
+  reason: string
+  isolates: { from: string; to: string }
 }
 
 export interface PlacedBlock {
