@@ -37,9 +37,11 @@ import type { BlockDefinition, BusSignal } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { StepViewer } from '@/components/pcb/StepViewer'
+import { GerberViewer } from '@/components/pcb/GerberViewer'
 import { clearGeometryCache } from '@/components/pcb/PCB3DViewer'
 import type { LucideIcon } from 'lucide-react'
 import { logger } from '@/lib/logger'
+import JSZip from 'jszip'
 
 // =============================================================================
 // Types
@@ -698,9 +700,10 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
   const hasPcb = !!files.pcb
   const hasStep = !!files.stepModel
   const hasBlockJson = !!files.blockJson
+  const hasGerbers = !!files.gerbers
 
-  const [previewType, setPreviewType] = useState<'schematic' | 'pcb' | '3d' | 'json' | null>(
-    hasSchematic ? 'schematic' : hasPcb ? 'pcb' : hasStep ? '3d' : hasBlockJson ? 'json' : null
+  const [previewType, setPreviewType] = useState<'schematic' | 'pcb' | '3d' | 'json' | 'gerbers' | null>(
+    hasSchematic ? 'schematic' : hasPcb ? 'pcb' : hasStep ? '3d' : hasGerbers ? 'gerbers' : hasBlockJson ? 'json' : null
   )
   const [previewContent, setPreviewContent] = useState<string | null>(null)
   const [jsonContent, setJsonContent] = useState<string | null>(null)
@@ -710,6 +713,7 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [deletingFile, setDeletingFile] = useState<string | null>(null)
   const [uploadingFile, setUploadingFile] = useState<string | null>(null)
+  const [gerberLayers, setGerberLayers] = useState<Record<string, string> | null>(null)
 
   // File input refs for replacement
   const fileInputRefs = {
@@ -790,11 +794,66 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
     e.target.value = ''
   }
 
-  const loadPreview = async (type: 'schematic' | 'pcb' | '3d' | 'json') => {
+  const loadPreview = async (type: 'schematic' | 'pcb' | '3d' | 'json' | 'gerbers') => {
     // 3D preview doesn't need to load content - StepViewer fetches directly
     if (type === '3d') {
       setPreviewType('3d')
       setPreviewContent(null)
+      return
+    }
+
+    // Gerbers preview - load and extract zip
+    if (type === 'gerbers') {
+      if (!files.gerbers) return
+      setLoadingPreview(true)
+      setPreviewType('gerbers')
+      try {
+        const res = await fetch(`/api/blocks/${block.slug}/files/${files.gerbers}`)
+        if (res.ok) {
+          const blob = await res.blob()
+          const zip = await JSZip.loadAsync(blob)
+          const layers: Record<string, string> = {}
+
+          // Extract all files from the zip
+          for (const [filename, zipEntry] of Object.entries(zip.files)) {
+            if (!zipEntry.dir) {
+              // Only extract gerber files (skip directories and non-gerber files)
+              const lower = filename.toLowerCase()
+              if (
+                lower.endsWith('.gbr') ||
+                lower.endsWith('.gtl') ||
+                lower.endsWith('.gbl') ||
+                lower.endsWith('.gts') ||
+                lower.endsWith('.gbs') ||
+                lower.endsWith('.gto') ||
+                lower.endsWith('.gbo') ||
+                lower.endsWith('.gm1') ||
+                lower.endsWith('.g2') ||
+                lower.endsWith('.g3') ||
+                lower.includes('-f_cu') ||
+                lower.includes('-b_cu') ||
+                lower.includes('-f_mask') ||
+                lower.includes('-b_mask') ||
+                lower.includes('-f_silkscreen') ||
+                lower.includes('-b_silkscreen') ||
+                lower.includes('-edge_cuts')
+              ) {
+                const content = await zipEntry.async('string')
+                // Use just the filename without path
+                const basename = filename.split('/').pop() || filename
+                layers[basename] = content
+              }
+            }
+          }
+
+          setGerberLayers(layers)
+        }
+      } catch (err) {
+        logger.error('ui', 'Failed to load gerbers', { error: err })
+        setGerberLayers(null)
+      } finally {
+        setLoadingPreview(false)
+      }
       return
     }
 
@@ -1009,7 +1068,7 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
       </div>
 
       {/* Preview */}
-      {(hasSchematic || hasPcb || hasStep || hasBlockJson) && (
+      {(hasSchematic || hasPcb || hasStep || hasGerbers || hasBlockJson) && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -1052,6 +1111,19 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
                     )}
                   >
                     3D Model
+                  </button>
+                )}
+                {hasGerbers && (
+                  <button
+                    onClick={() => loadPreview('gerbers')}
+                    className={clsx(
+                      'px-3 py-1 text-xs rounded transition-colors',
+                      previewType === 'gerbers'
+                        ? 'bg-copper text-surface-900'
+                        : 'bg-surface-700 text-steel hover:text-white'
+                    )}
+                  >
+                    Gerbers
                   </button>
                 )}
                 {hasBlockJson && (
@@ -1102,6 +1174,8 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
                 url={`/api/blocks/${block.slug}/files/${files.stepModel}`}
                 className="h-full"
               />
+            ) : previewType === 'gerbers' && gerberLayers ? (
+              <GerberViewer layers={gerberLayers} className="h-full" />
             ) : previewType === 'json' && jsonContent !== null ? (
               <textarea
                 value={jsonContent}
