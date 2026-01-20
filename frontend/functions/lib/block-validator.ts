@@ -51,7 +51,7 @@ export function getBlockFileRequirements(slug: string): BlockFileRequirements {
       `${slug}.kicad_pcb`, // Source for PCB merge
       `${slug}.step`, // 3D model for enclosure generation
       'block.json', // Structured metadata for DRC
-      'gerbers/', // Manufacturing files (Gerber + drill)
+      `${slug}-gerbers.zip`, // Manufacturing files (Gerber + drill)
     ],
     optional: [
       `${slug}.png`, // Thumbnail for UI
