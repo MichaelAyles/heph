@@ -82,7 +82,7 @@ Examples:
     process.exit(0)
   }
 
-  let projectPath = args[0]
+  const projectPath = args[0]
   let upload = false
   let slug: string | null = null
   let url = 'http://localhost:8788'
