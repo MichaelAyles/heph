@@ -25,6 +25,8 @@ const CONTENT_TYPES: Record<string, string> = {
   '.step': 'model/step',
   '.stp': 'model/step',
   '.png': 'image/png',
+  '.zip': 'application/zip',
+  '.json': 'application/json',
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {

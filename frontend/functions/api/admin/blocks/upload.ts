@@ -87,27 +87,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       uploadedFiles.thumbnail = `${slug}.png`
     }
 
-    // Upload gerber files (sent individually with gerber_ prefix from client-side ZIP extraction)
-    const gerberFiles: string[] = []
+    // Collect gerber files from form data (sent individually with gerber_ prefix from client-side extraction)
+    const gerberContents: Map<string, ArrayBuffer> = new Map()
     for (const [key, value] of formData.entries()) {
       if (key.startsWith('gerber_') && value instanceof File) {
         const filename = key.replace('gerber_', '')
-        const r2Key = `${r2Prefix}gerbers/${filename}`
-
-        // Determine content type based on extension
-        let contentType = 'application/octet-stream'
-        if (filename.endsWith('.gtl') || filename.endsWith('.gbl') || filename.endsWith('.gto') ||
-            filename.endsWith('.gbo') || filename.endsWith('.gts') || filename.endsWith('.gbs') ||
-            filename.endsWith('.gm1') || filename.endsWith('.g1') || filename.endsWith('.g2')) {
-          contentType = 'application/x-gerber'
-        } else if (filename.endsWith('.drl')) {
-          contentType = 'application/x-excellon'
-        }
-
-        await env.STORAGE.put(r2Key, await value.arrayBuffer(), {
-          httpMetadata: { contentType },
-        })
-        gerberFiles.push(filename)
+        gerberContents.set(filename, await value.arrayBuffer())
       }
     }
 
@@ -129,26 +114,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
         if (validExtensions.some(ext => lowerName.endsWith(ext))) {
           const content = await zipEntry.async('arraybuffer')
-          const r2Key = `${r2Prefix}gerbers/${baseName}`
-
-          // Determine content type based on extension
-          let contentType = 'application/octet-stream'
-          if (lowerName.endsWith('.drl')) {
-            contentType = 'application/x-excellon'
-          } else {
-            contentType = 'application/x-gerber'
-          }
-
-          await env.STORAGE.put(r2Key, content, {
-            httpMetadata: { contentType },
-          })
-          gerberFiles.push(baseName)
+          gerberContents.set(baseName, content)
         }
       }
     }
 
-    if (gerberFiles.length > 0) {
-      uploadedFiles.gerbers = 'gerbers/'
+    // If we have gerber files, create a zip and upload it
+    if (gerberContents.size > 0) {
+      const gerberZip = new JSZip()
+      for (const [filename, content] of gerberContents) {
+        gerberZip.file(filename, content)
+      }
+      const zipBlob = await gerberZip.generateAsync({ type: 'arraybuffer' })
+      const key = `${r2Prefix}${slug}-gerbers.zip`
+      await env.STORAGE.put(key, zipBlob, {
+        httpMetadata: { contentType: 'application/zip' },
+      })
+      uploadedFiles.gerbers = `${slug}-gerbers.zip`
     }
 
     // Also upload block.json to R2 if provided
