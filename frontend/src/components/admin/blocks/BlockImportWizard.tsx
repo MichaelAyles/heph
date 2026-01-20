@@ -26,6 +26,7 @@ import {
   FileText,
   List,
   Archive,
+  Unplug,
 } from 'lucide-react'
 import JSZip from 'jszip'
 import { clsx } from 'clsx'
@@ -73,6 +74,7 @@ const CATEGORY_OPTIONS: { value: BlockCategory; label: string; icon: typeof Cpu 
   { value: 'output', label: 'Output', icon: Settings },
   { value: 'connector', label: 'Connector', icon: Cable },
   { value: 'utility', label: 'Utility', icon: Box },
+  { value: 'remote', label: 'Remote', icon: Unplug },
 ]
 
 export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps) {

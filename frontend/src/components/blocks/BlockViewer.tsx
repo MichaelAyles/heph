@@ -31,6 +31,7 @@ import {
   Trash2,
   Upload,
   Loader2,
+  Unplug,
 } from 'lucide-react'
 import type { BlockDefinition, BusSignal } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
@@ -64,6 +65,7 @@ const CATEGORY_CONFIG: Record<string, { icon: LucideIcon; label: string; color: 
   output: { icon: Lightbulb, label: 'Output', color: 'text-purple-400' },
   connector: { icon: Cable, label: 'Connector', color: 'text-orange-400' },
   utility: { icon: Wrench, label: 'Utility', color: 'text-steel' },
+  remote: { icon: Unplug, label: 'Remote', color: 'text-amber-400' },
 }
 
 const WIRELESS_CONFIG: Record<string, { icon: LucideIcon; label: string; color: string }> = {

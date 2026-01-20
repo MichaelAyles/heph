@@ -21,6 +21,7 @@ import {
   Eye,
   X,
   Archive,
+  Unplug,
 } from 'lucide-react'
 import JSZip from 'jszip'
 import { clsx } from 'clsx'
@@ -60,6 +61,7 @@ const CATEGORY_ICONS: Record<BlockCategory, typeof Cpu> = {
   output: Settings,
   connector: Cable,
   utility: Box,
+  remote: Unplug,
 }
 
 const CATEGORY_LABELS: Record<BlockCategory, string> = {
@@ -69,6 +71,7 @@ const CATEGORY_LABELS: Record<BlockCategory, string> = {
   output: 'Output',
   connector: 'Connector',
   utility: 'Utility',
+  remote: 'Remote',
 }
 
 export function AdminBlocksPage() {
@@ -108,7 +111,7 @@ export function AdminBlocksPage() {
 
   const blocks = data?.blocks || []
 
-  const categories: CategoryFilter[] = ['all', 'mcu', 'power', 'sensor', 'output', 'connector', 'utility']
+  const categories: CategoryFilter[] = ['all', 'mcu', 'power', 'sensor', 'output', 'connector', 'utility', 'remote']
 
   return (
     <div className="min-h-screen bg-ash p-8">

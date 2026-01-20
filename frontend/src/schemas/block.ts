@@ -85,6 +85,7 @@ export const BlockCategorySchema = z.enum([
   'output',
   'connector',
   'utility',
+  'remote',
 ])
 
 export type BlockCategory = z.infer<typeof BlockCategorySchema>
