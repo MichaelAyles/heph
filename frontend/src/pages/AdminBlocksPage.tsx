@@ -1,762 +1,623 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import {
-  ArrowLeft,
-  Loader2,
-  Plus,
-  Cpu,
-  Zap,
-  Radio,
-  Settings,
-  Cable,
-  Box,
-  CheckCircle,
-  AlertTriangle,
   Upload,
+  Package,
   Trash2,
-  Edit,
-  FileJson,
+  Download,
+  FileArchive,
+  Cpu,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
   FileCode,
-  Eye,
-  X,
+  CircuitBoard,
+  Box,
+  Layers,
+  FileJson,
+  Image,
+  XCircle,
 } from 'lucide-react'
-import { clsx } from 'clsx'
-import type { BlockCategory } from '@/schemas/block'
-import type { PcbBlock } from '@/db/schema'
-import { BlockImportWizard } from '@/components/admin/blocks/BlockImportWizard'
-import { BlockViewer } from '@/components/blocks'
+import clsx from 'clsx'
 
-interface BlockSummary {
-  id: string
+interface Block {
+  id: number
   slug: string
   name: string
+  description: string | null
   category: string
-  description: string
-  widthUnits: number
-  heightUnits: number
-  isValidated: boolean
-  isActive: boolean
-  hasDefinition: boolean
-  hasFiles: boolean
-  version: string | null
-  createdAt: string | null
-  updatedAt: string | null
-  fileStatus: {
-    required: string[]
-    present: string[]
-    missing: string[]
+  files: {
+    schematic?: string
+    pcb?: string
+    stepModel?: string
+    gerbers?: string
+    thumbnail?: string
   }
+  definition?: Record<string, unknown>
+  created_at: string
+  updated_at: string
 }
 
-type CategoryFilter = 'all' | BlockCategory
-
-const CATEGORY_ICONS: Record<BlockCategory, typeof Cpu> = {
-  mcu: Cpu,
-  power: Zap,
-  sensor: Radio,
-  output: Settings,
-  connector: Cable,
-  utility: Box,
+interface ValidationResult {
+  valid: boolean
+  files: {
+    schematic: string | null
+    pcb: string | null
+    step: string | null
+    gerbers: string[]
+    definition: string | null
+    thumbnail: string | null
+  }
+  missing: string[]
 }
 
-const CATEGORY_LABELS: Record<BlockCategory, string> = {
-  mcu: 'MCU',
-  power: 'Power',
-  sensor: 'Sensor',
-  output: 'Output',
-  connector: 'Connector',
-  utility: 'Utility',
+interface ImportResult {
+  success: boolean
+  slug: string
+  name: string
+  isNew: boolean
+  uploadedFiles: Record<string, string>
+  gerberCount: number
+  message: string
 }
+
+const FILE_REQUIREMENTS = [
+  { key: 'schematic', label: 'Schematic', icon: FileCode, required: true },
+  { key: 'pcb', label: 'PCB', icon: CircuitBoard, required: true },
+  { key: 'gerbers', label: 'Gerbers', icon: Layers, required: true },
+  { key: 'step', label: 'STEP', icon: Box, required: true },
+  { key: 'definition', label: 'block.json', icon: FileJson, required: true },
+  { key: 'thumbnail', label: 'Thumbnail', icon: Image, required: false },
+] as const
 
 export function AdminBlocksPage() {
-  const [filter, setFilter] = useState<CategoryFilter>('all')
-  const [selectedBlock, setSelectedBlock] = useState<BlockSummary | null>(null)
-  const [isEditorOpen, setIsEditorOpen] = useState(false)
-  const [isUploaderOpen, setIsUploaderOpen] = useState(false)
-  const [isImportWizardOpen, setIsImportWizardOpen] = useState(false)
-  const [isViewerOpen, setIsViewerOpen] = useState(false)
   const queryClient = useQueryClient()
+  const [dragOver, setDragOver] = useState(false)
+  const [validation, setValidation] = useState<ValidationResult | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [importStatus, setImportStatus] = useState<{
+    type: 'success' | 'error'
+    message: string
+  } | null>(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin-blocks', filter],
+  // Fetch blocks
+  const { data: blocks, isLoading } = useQuery<Block[]>({
+    queryKey: ['admin-blocks'],
     queryFn: async () => {
-      const params = filter !== 'all' ? `?category=${filter}` : ''
-      const res = await fetch(`/api/admin/blocks${params}`)
+      const res = await fetch('/api/blocks')
       if (!res.ok) throw new Error('Failed to fetch blocks')
-      return res.json() as Promise<{ blocks: BlockSummary[] }>
+      return res.json()
     },
   })
 
+  // Validate mutation
+  const validateMutation = useMutation({
+    mutationFn: async (file: File): Promise<{ validation: ValidationResult }> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('validate', 'true')
+
+      const res = await fetch('/api/admin/blocks/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Validation failed')
+      }
+
+      return res.json()
+    },
+    onSuccess: (result, file) => {
+      setValidation(result.validation)
+      setSelectedFile(file)
+    },
+    onError: (error: Error) => {
+      setImportStatus({ type: 'error', message: error.message })
+      setTimeout(() => setImportStatus(null), 5000)
+    },
+  })
+
+  // Import mutation
+  const importMutation = useMutation({
+    mutationFn: async (file: File): Promise<ImportResult> => {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/admin/blocks/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Import failed')
+      }
+
+      return res.json()
+    },
+    onSuccess: (result) => {
+      setImportStatus({ type: 'success', message: result.message })
+      setValidation(null)
+      setSelectedFile(null)
+      queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
+      setTimeout(() => setImportStatus(null), 5000)
+    },
+    onError: (error: Error) => {
+      setImportStatus({ type: 'error', message: error.message })
+      setTimeout(() => setImportStatus(null), 5000)
+    },
+  })
+
+  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (slug: string) => {
       const res = await fetch(`/api/admin/blocks/${slug}`, {
         method: 'DELETE',
       })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Failed to delete block')
-      }
+      if (!res.ok) throw new Error('Delete failed')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
-      setSelectedBlock(null)
     },
   })
 
-  const blocks = data?.blocks || []
+  // Handle file drop/select - validate first
+  const handleFile = useCallback(
+    (file: File) => {
+      if (file && file.name.endsWith('.zip')) {
+        validateMutation.mutate(file)
+      } else {
+        setImportStatus({ type: 'error', message: 'Please select a ZIP file' })
+        setTimeout(() => setImportStatus(null), 3000)
+      }
+    },
+    [validateMutation]
+  )
 
-  const categories: CategoryFilter[] = [
-    'all',
-    'mcu',
-    'power',
-    'sensor',
-    'output',
-    'connector',
-    'utility',
-  ]
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setDragOver(false)
+      const file = e.dataTransfer.files[0]
+      if (file) handleFile(file)
+    },
+    [handleFile]
+  )
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file) handleFile(file)
+      e.target.value = ''
+    },
+    [handleFile]
+  )
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(true)
+  }
+
+  const handleDragLeave = () => {
+    setDragOver(false)
+  }
+
+  const handleImport = () => {
+    if (selectedFile && validation?.valid) {
+      importMutation.mutate(selectedFile)
+    }
+  }
+
+  const handleCancel = () => {
+    setValidation(null)
+    setSelectedFile(null)
+  }
+
+  const getFileStatus = (key: string): 'present' | 'missing' | null => {
+    if (!validation) return null
+    const files = validation.files as Record<string, unknown>
+    if (key === 'gerbers') {
+      return (files.gerbers as string[])?.length > 0 ? 'present' : 'missing'
+    }
+    return files[key] ? 'present' : 'missing'
+  }
 
   return (
-    <div className="min-h-screen bg-ash p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="p-2 hover:bg-surface-800 transition-colors">
-              <ArrowLeft className="w-5 h-5 text-steel-dim" strokeWidth={1.5} />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-semibold text-steel">PCB Block Library</h1>
-              <p className="text-steel-dim text-sm">
-                Manage hardware blocks with formal definitions
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsImportWizardOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors"
-            >
-              <FileCode className="w-4 h-4" strokeWidth={1.5} />
-              Import from KiCad
-            </button>
-            <button
-              onClick={() => {
-                setSelectedBlock(null)
-                setIsEditorOpen(true)
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-surface-800 text-steel text-sm font-medium hover:bg-surface-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" strokeWidth={1.5} />
-              Manual JSON
-            </button>
-          </div>
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-medium text-white">PCB Blocks</h1>
+          <p className="text-white/50 mt-1">
+            Import and manage circuit block modules
+          </p>
         </div>
+        <button
+          onClick={() => queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
+      </div>
 
-        {/* Category Tabs */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {categories.map((cat) => {
-            const Icon = cat === 'all' ? Box : CATEGORY_ICONS[cat as BlockCategory]
-            const label = cat === 'all' ? 'All' : CATEGORY_LABELS[cat as BlockCategory]
-            return (
-              <button
-                key={cat}
-                onClick={() => setFilter(cat)}
-                className={clsx(
-                  'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
-                  filter === cat
-                    ? 'bg-copper text-ash'
-                    : 'bg-surface-800 text-steel-dim hover:text-steel'
-                )}
-              >
-                <Icon className="w-4 h-4" strokeWidth={1.5} />
-                {label}
-              </button>
-            )
-          })}
-        </div>
+      {/* Import Zone */}
+      <div className="bg-charcoal border border-white/10 rounded-lg p-6 mb-8">
+        <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <Upload className="w-5 h-5" />
+          Import Block
+        </h2>
 
-        {/* Blocks Grid */}
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 text-copper animate-spin" strokeWidth={1.5} />
-          </div>
-        ) : blocks.length === 0 ? (
-          <div className="text-center py-12 text-steel-dim">
-            No blocks found. Create a new block to get started.
+        {!validation ? (
+          // Drop zone
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            className={clsx(
+              'border-2 border-dashed rounded-lg p-8 transition-all text-center',
+              dragOver
+                ? 'border-copper bg-copper/10'
+                : 'border-white/20 hover:border-white/40',
+              validateMutation.isPending && 'opacity-50 pointer-events-none'
+            )}
+          >
+            <input
+              type="file"
+              accept=".zip"
+              onChange={handleFileInput}
+              className="hidden"
+              id="block-import"
+            />
+            <label
+              htmlFor="block-import"
+              className="cursor-pointer flex flex-col items-center gap-4"
+            >
+              {validateMutation.isPending ? (
+                <>
+                  <Loader2 className="w-12 h-12 text-copper animate-spin" />
+                  <div className="text-white">Validating ZIP contents...</div>
+                </>
+              ) : (
+                <>
+                  <FileArchive className="w-12 h-12 text-white/40" />
+                  <div>
+                    <div className="text-white font-medium">
+                      Drop ZIP file here or click to upload
+                    </div>
+                    <div className="text-white/50 text-sm mt-1">
+                      Required: .kicad_sch, .kicad_pcb, .step, gerbers/, block.json
+                    </div>
+                  </div>
+                </>
+              )}
+            </label>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {blocks.map((block) => {
-              const CategoryIcon = CATEGORY_ICONS[block.category as BlockCategory] || Box
-              const isComplete = block.hasDefinition && block.fileStatus.missing.length === 0
+          // Validation result
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileArchive className="w-5 h-5 text-copper" />
+                <span className="text-white font-medium">{selectedFile?.name}</span>
+              </div>
+              <button
+                onClick={handleCancel}
+                className="text-white/50 hover:text-white text-sm"
+              >
+                Cancel
+              </button>
+            </div>
 
-              return (
-                <div
-                  key={block.id}
-                  className={clsx(
-                    'p-4 bg-surface-900 border border-surface-700 hover:border-surface-600 transition-colors cursor-pointer',
-                    selectedBlock?.id === block.id && 'border-copper'
-                  )}
-                  onClick={() => setSelectedBlock(block)}
+            {/* File validation grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {FILE_REQUIREMENTS.map(({ key, label, icon: Icon, required }) => {
+                const status = getFileStatus(key)
+                const isPresent = status === 'present'
+                const isMissing = status === 'missing' && required
+
+                return (
+                  <div
+                    key={key}
+                    className={clsx(
+                      'flex items-center gap-3 px-3 py-2 rounded-lg border',
+                      isPresent
+                        ? 'bg-green-500/10 border-green-500/30'
+                        : isMissing
+                          ? 'bg-red-500/10 border-red-500/30'
+                          : 'bg-white/5 border-white/10'
+                    )}
+                  >
+                    <Icon
+                      className={clsx(
+                        'w-4 h-4',
+                        isPresent ? 'text-green-400' : isMissing ? 'text-red-400' : 'text-white/40'
+                      )}
+                    />
+                    <span
+                      className={clsx(
+                        'text-sm',
+                        isPresent ? 'text-green-300' : isMissing ? 'text-red-300' : 'text-white/50'
+                      )}
+                    >
+                      {label}
+                    </span>
+                    {isPresent ? (
+                      <CheckCircle className="w-4 h-4 text-green-400 ml-auto" />
+                    ) : isMissing ? (
+                      <XCircle className="w-4 h-4 text-red-400 ml-auto" />
+                    ) : (
+                      <span className="text-xs text-white/30 ml-auto">optional</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Gerber count */}
+            {validation.files.gerbers.length > 0 && (
+              <div className="text-sm text-white/50">
+                {validation.files.gerbers.length} gerber files detected
+              </div>
+            )}
+
+            {/* Import button */}
+            <div className="flex items-center gap-4 pt-2">
+              {validation.valid ? (
+                <button
+                  onClick={handleImport}
+                  disabled={importMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 bg-copper hover:bg-copper/90 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {/* Header */}
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <CategoryIcon className="w-5 h-5 text-copper" strokeWidth={1.5} />
-                      <div>
-                        <h3 className="font-medium text-steel">{block.name}</h3>
-                        <p className="text-xs text-steel-dim">{block.slug}</p>
-                      </div>
+                  {importMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Import Block
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 text-red-400">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">
+                    Missing: {validation.missing.join(', ')}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Status Message */}
+      {importStatus && (
+        <div
+          className={clsx(
+            'flex items-center gap-3 px-4 py-3 rounded-lg mb-6',
+            importStatus.type === 'success'
+              ? 'bg-green-500/10 border border-green-500/30'
+              : 'bg-red-500/10 border border-red-500/30'
+          )}
+        >
+          {importStatus.type === 'success' ? (
+            <CheckCircle className="w-5 h-5 text-green-400" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-red-400" />
+          )}
+          <span
+            className={
+              importStatus.type === 'success' ? 'text-green-300' : 'text-red-300'
+            }
+          >
+            {importStatus.message}
+          </span>
+        </div>
+      )}
+
+      {/* Export Script Info */}
+      <div className="bg-charcoal border border-white/10 rounded-lg p-4 mb-8">
+        <div className="flex items-start gap-3">
+          <Upload className="w-5 h-5 text-copper mt-0.5" />
+          <div>
+            <div className="text-white font-medium">Export from KiCad</div>
+            <div className="text-white/50 text-sm mt-1">
+              Use the export script to create a block ZIP from a KiCad project:
+            </div>
+            <pre className="bg-black/30 rounded px-3 py-2 mt-2 text-sm text-copper font-mono">
+              cd frontend && pnpm export-block ../path/to/kicad-project
+            </pre>
+            <div className="text-white/40 text-xs mt-2">
+              Note: You'll need to manually create block.json with the block definition
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Blocks List */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-medium text-white flex items-center gap-2">
+          <Package className="w-5 h-5" />
+          Imported Blocks ({blocks?.length || 0})
+        </h2>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-copper animate-spin" />
+          </div>
+        ) : blocks?.length === 0 ? (
+          <div className="text-center py-12 text-white/50">
+            No blocks imported yet. Drop a ZIP above to get started.
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {blocks?.map((block) => (
+              <div
+                key={block.id}
+                className="bg-charcoal border border-white/10 rounded-lg p-4"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded bg-copper/20 flex items-center justify-center">
+                      <Cpu className="w-5 h-5 text-copper" />
                     </div>
-                    <div className="flex items-center gap-1">
-                      {isComplete ? (
-                        <CheckCircle className="w-4 h-4 text-emerald-400" strokeWidth={1.5} />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-amber-400" strokeWidth={1.5} />
+                    <div>
+                      <h3 className="text-white font-medium">{block.name}</h3>
+                      <div className="text-white/50 text-sm">{block.slug}</div>
+                      {block.description && (
+                        <p className="text-white/60 text-sm mt-1">
+                          {block.description}
+                        </p>
                       )}
                     </div>
                   </div>
-
-                  {/* Description */}
-                  <p className="text-sm text-steel-dim mb-3 line-clamp-2">{block.description}</p>
-
-                  {/* Grid size */}
-                  <div className="flex items-center gap-4 text-xs text-steel-dim mb-2">
-                    <span>
-                      {block.widthUnits}x{block.heightUnits} grid
-                    </span>
-                    <span>
-                      {block.widthUnits * 12.7}mm x {block.heightUnits * 12.7}mm
-                    </span>
-                  </div>
-
-                  {/* Status badges */}
-                  <div className="flex flex-wrap gap-1">
-                    {block.hasDefinition ? (
-                      <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
-                        <FileJson className="w-3 h-3 inline mr-1" />
-                        definition
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400">
-                        no definition
-                      </span>
-                    )}
-                    {block.fileStatus.missing.length === 0 ? (
-                      <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
-                        files complete
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400">
-                        {block.fileStatus.missing.length} files missing
-                      </span>
-                    )}
-                    {block.isValidated ? (
-                      <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
-                        validated
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs bg-surface-700 text-steel-dim">
-                        unvalidated
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Version */}
-                  {block.version && <p className="text-xs text-steel-dim mt-2">v{block.version}</p>}
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete block "${block.name}"?`)) {
+                        deleteMutation.mutate(block.slug)
+                      }
+                    }}
+                    className="p-2 text-white/50 hover:text-red-400 transition-colors"
+                    title="Delete block"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-              )
-            })}
-          </div>
-        )}
 
-        {/* Selected Block Actions */}
-        {selectedBlock && (
-          <div className="fixed bottom-0 left-0 right-0 bg-surface-900 border-t border-surface-700 p-4">
-            <div className="max-w-6xl mx-auto flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-steel">{selectedBlock.name}</h3>
-                <p className="text-sm text-steel-dim">{selectedBlock.slug}</p>
+                {/* Files Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                  <FileItem
+                    label="Schematic"
+                    icon={FileCode}
+                    file={block.files.schematic}
+                    slug={block.slug}
+                    color="blue"
+                  />
+                  <FileItem
+                    label="PCB"
+                    icon={CircuitBoard}
+                    file={block.files.pcb}
+                    slug={block.slug}
+                    color="green"
+                  />
+                  <FileItem
+                    label="STEP"
+                    icon={Box}
+                    file={block.files.stepModel}
+                    slug={block.slug}
+                    color="purple"
+                  />
+                  <FileItem
+                    label="Gerbers"
+                    icon={Layers}
+                    file={block.files.gerbers}
+                    slug={block.slug}
+                    color="orange"
+                  />
+                  <FileItem
+                    label="Definition"
+                    icon={FileJson}
+                    file={block.definition ? 'block.json' : undefined}
+                    slug={block.slug}
+                    color="cyan"
+                    isDefinition
+                  />
+                  <FileItem
+                    label="Thumbnail"
+                    icon={Image}
+                    file={block.files.thumbnail}
+                    slug={block.slug}
+                    color="pink"
+                    optional
+                  />
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setIsViewerOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors"
-                >
-                  <Eye className="w-4 h-4" strokeWidth={1.5} />
-                  View
-                </button>
-                <button
-                  onClick={() => {
-                    setIsUploaderOpen(true)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-surface-800 text-steel text-sm font-medium hover:bg-surface-700 transition-colors"
-                >
-                  <Upload className="w-4 h-4" strokeWidth={1.5} />
-                  Upload Files
-                </button>
-                <button
-                  onClick={() => {
-                    setIsEditorOpen(true)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-surface-800 text-steel text-sm font-medium hover:bg-surface-700 transition-colors"
-                >
-                  <Edit className="w-4 h-4" strokeWidth={1.5} />
-                  Edit Definition
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`Delete block "${selectedBlock.name}"? This cannot be undone.`)) {
-                      deleteMutation.mutate(selectedBlock.slug)
-                    }
-                  }}
-                  disabled={deleteMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/30 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                  Delete
-                </button>
-                <button
-                  onClick={() => setSelectedBlock(null)}
-                  className="px-4 py-2 text-steel-dim text-sm hover:text-steel transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
         )}
-
-        {/* Editor Modal */}
-        {isEditorOpen && (
-          <BlockEditorModal
-            block={selectedBlock}
-            onClose={() => {
-              setIsEditorOpen(false)
-              queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
-            }}
-          />
-        )}
-
-        {/* Uploader Modal */}
-        {isUploaderOpen && selectedBlock && (
-          <BlockUploaderModal
-            block={selectedBlock}
-            onClose={() => {
-              setIsUploaderOpen(false)
-              queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
-            }}
-          />
-        )}
-
-        {/* Import Wizard */}
-        {isImportWizardOpen && (
-          <BlockImportWizard
-            onClose={() => setIsImportWizardOpen(false)}
-            onSuccess={() => {
-              setIsImportWizardOpen(false)
-              queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
-            }}
-          />
-        )}
-
-        {/* Block Viewer Modal */}
-        {isViewerOpen && selectedBlock && (
-          <BlockViewerModal slug={selectedBlock.slug} onClose={() => setIsViewerOpen(false)} />
-        )}
       </div>
     </div>
   )
 }
 
-// Block Editor Modal Component
-function BlockEditorModal({ block, onClose }: { block: BlockSummary | null; onClose: () => void }) {
-  const [jsonContent, setJsonContent] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+// Color mappings for file items
+const FILE_COLORS = {
+  blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300', icon: 'text-blue-400' },
+  green: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300', icon: 'text-green-400' },
+  purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-300', icon: 'text-purple-400' },
+  orange: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-300', icon: 'text-orange-400' },
+  cyan: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300', icon: 'text-cyan-400' },
+  pink: { bg: 'bg-pink-500/10', border: 'border-pink-500/30', text: 'text-pink-300', icon: 'text-pink-400' },
+} as const
 
-  // Load existing definition if editing
-  useState(() => {
-    if (block) {
-      fetch(`/api/admin/blocks/${block.slug}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.block?.definition) {
-            setJsonContent(JSON.stringify(data.block.definition, null, 2))
-          }
-        })
-    }
-  })
-
-  const handleSave = async () => {
-    setError(null)
-    setIsLoading(true)
-
-    try {
-      let definition: unknown
-      try {
-        definition = JSON.parse(jsonContent)
-      } catch {
-        setError('Invalid JSON syntax')
-        setIsLoading(false)
-        return
-      }
-
-      const url = block ? `/api/admin/blocks/${block.slug}` : '/api/admin/blocks'
-      const method = block ? 'PUT' : 'POST'
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ definition }),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok) {
-        if (result.errors) {
-          setError(`Validation errors:\n${result.errors.join('\n')}`)
-        } else {
-          setError(result.error || 'Failed to save block')
-        }
-        return
-      }
-
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface-900 border border-surface-700 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-surface-700 flex items-center justify-between">
-          <h2 className="text-lg font-medium text-steel">
-            {block ? `Edit ${block.name}` : 'Create New Block'}
-          </h2>
-          <button onClick={onClose} className="text-steel-dim hover:text-steel">
-            &times;
-          </button>
-        </div>
-
-        {/* Editor */}
-        <div className="flex-1 overflow-auto p-4">
-          <p className="text-sm text-steel-dim mb-4">
-            Enter the block.json definition. See{' '}
-            <a
-              href="https://github.com/your-repo/docs/BLOCK_SPEC.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-copper hover:underline"
-            >
-              BLOCK_SPEC.md
-            </a>{' '}
-            for schema documentation.
-          </p>
-
-          <textarea
-            value={jsonContent}
-            onChange={(e) => setJsonContent(e.target.value)}
-            placeholder={`{
-  "slug": "sensor-bme280",
-  "name": "BME280 Environmental Sensor",
-  "version": "1.0.0",
-  "category": "sensor",
-  "description": "Temperature, humidity, and pressure sensor with I2C interface.",
-  "gridSize": [1, 1],
-  "bus": {
-    "power": {
-      "requires": [{ "rail": "3V3", "typicalMa": 1, "maxMa": 4 }]
-    },
-    "i2c": {
-      "addresses": [118]
-    }
-  },
-  "edges": {
-    "north": [{ "signals": "ALL" }],
-    "south": [{ "signals": "ALL" }]
-  },
-  "components": [
-    { "reference": "U1", "value": "BME280", "footprint": "LGA-8", "quantity": 1 }
-  ]
-}`}
-            className="w-full h-96 p-4 bg-surface-800 border border-surface-700 text-steel font-mono text-sm resize-none focus:outline-none focus:border-copper"
-          />
-
-          {error && (
-            <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 text-red-400 text-sm whitespace-pre-wrap">
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-surface-700 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-steel-dim hover:text-steel text-sm transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isLoading || !jsonContent.trim()}
-            className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors disabled:opacity-50"
-          >
-            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {block ? 'Update' : 'Create'} Block
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Block Uploader Modal Component
-function BlockUploaderModal({ block, onClose }: { block: BlockSummary; onClose: () => void }) {
-  const [files, setFiles] = useState<{
-    schematic?: File
-    pcb?: File
-    step?: File
-    thumbnail?: File
-    blockJson?: string
-  }>({})
-  const [error, setError] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadResult, setUploadResult] = useState<{
-    success: boolean
-    message: string
-    fileStatus?: { missing: string[] }
-  } | null>(null)
-
-  const handleUpload = async () => {
-    setError(null)
-    setIsUploading(true)
-
-    try {
-      const formData = new FormData()
-      formData.append('slug', block.slug)
-
-      if (files.schematic) formData.append('schematic', files.schematic)
-      if (files.pcb) formData.append('pcb', files.pcb)
-      if (files.step) formData.append('step', files.step)
-      if (files.thumbnail) formData.append('thumbnail', files.thumbnail)
-      if (files.blockJson) formData.append('blockJson', files.blockJson)
-
-      const res = await fetch('/api/admin/blocks/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await res.json()
-
-      if (!res.ok) {
-        if (result.errors) {
-          setError(`Validation errors:\n${result.errors.join('\n')}`)
-        } else {
-          setError(result.error || 'Upload failed')
-        }
-        return
-      }
-
-      setUploadResult(result)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed')
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const handleFileChange =
-    (type: keyof typeof files) => (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (file) {
-        if (type === 'blockJson') {
-          // Read as text for block.json
-          const reader = new FileReader()
-          reader.onload = (event) => {
-            setFiles((prev) => ({ ...prev, blockJson: event.target?.result as string }))
-          }
-          reader.readAsText(file)
-        } else {
-          setFiles((prev) => ({ ...prev, [type]: file }))
-        }
-      }
-    }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface-900 border border-surface-700 w-full max-w-lg">
-        {/* Header */}
-        <div className="p-4 border-b border-surface-700 flex items-center justify-between">
-          <h2 className="text-lg font-medium text-steel">Upload Files for {block.name}</h2>
-          <button onClick={onClose} className="text-steel-dim hover:text-steel">
-            &times;
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 space-y-4">
-          {/* Missing files warning */}
-          {block.fileStatus.missing.length > 0 && (
-            <div className="p-3 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-sm">
-              Missing files: {block.fileStatus.missing.join(', ')}
-            </div>
-          )}
-
-          {/* File inputs */}
-          <div className="space-y-3">
-            <FileInput
-              label="Schematic (.kicad_sch)"
-              accept=".kicad_sch"
-              required={block.fileStatus.missing.includes(`${block.slug}.kicad_sch`)}
-              onChange={handleFileChange('schematic')}
-            />
-            <FileInput
-              label="PCB Layout (.kicad_pcb)"
-              accept=".kicad_pcb"
-              required={block.fileStatus.missing.includes(`${block.slug}.kicad_pcb`)}
-              onChange={handleFileChange('pcb')}
-            />
-            <FileInput
-              label="3D Model (.step)"
-              accept=".step,.stp"
-              required={block.fileStatus.missing.includes(`${block.slug}.step`)}
-              onChange={handleFileChange('step')}
-            />
-            <FileInput
-              label="Block Definition (block.json)"
-              accept=".json"
-              required={block.fileStatus.missing.includes('block.json')}
-              onChange={handleFileChange('blockJson')}
-            />
-            <FileInput
-              label="Thumbnail (.png)"
-              accept=".png"
-              onChange={handleFileChange('thumbnail')}
-            />
-          </div>
-
-          {error && (
-            <div className="p-3 bg-red-500/20 border border-red-500/30 text-red-400 text-sm whitespace-pre-wrap">
-              {error}
-            </div>
-          )}
-
-          {uploadResult && (
-            <div
-              className={clsx(
-                'p-3 border text-sm',
-                uploadResult.success
-                  ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
-                  : 'bg-red-500/20 border-red-500/30 text-red-400'
-              )}
-            >
-              {uploadResult.message}
-              {uploadResult.fileStatus?.missing?.length === 0 && (
-                <p className="mt-1">All required files are now present!</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-surface-700 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-steel-dim hover:text-steel text-sm transition-colors"
-          >
-            {uploadResult?.success ? 'Done' : 'Cancel'}
-          </button>
-          {!uploadResult?.success && (
-            <button
-              onClick={handleUpload}
-              disabled={isUploading || Object.keys(files).length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors disabled:opacity-50"
-            >
-              {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Upload
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// File Input Component
-function FileInput({
-  label,
-  accept,
-  required,
-  onChange,
-}: {
+interface FileItemProps {
   label: string
-  accept: string
-  required?: boolean
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-steel mb-1">
-        {label}
-        {required && <span className="text-amber-400 ml-1">*</span>}
-      </label>
-      <input
-        type="file"
-        accept={accept}
-        onChange={onChange}
-        className="w-full text-sm text-steel-dim file:mr-4 file:py-2 file:px-4 file:border-0 file:bg-surface-800 file:text-steel file:cursor-pointer hover:file:bg-surface-700"
-      />
-    </div>
-  )
+  icon: React.ComponentType<{ className?: string }>
+  file: string | undefined
+  slug: string
+  color: keyof typeof FILE_COLORS
+  optional?: boolean
+  isDefinition?: boolean
 }
 
-// Block Viewer Modal Component
-function BlockViewerModal({ slug, onClose }: { slug: string; onClose: () => void }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-block', slug],
-    queryFn: async () => {
-      const res = await fetch(`/api/admin/blocks/${slug}`)
-      if (!res.ok) throw new Error('Failed to fetch block')
-      return res.json() as Promise<{ block: PcbBlock }>
-    },
-  })
+function FileItem({ label, icon: Icon, file, slug, color, optional, isDefinition }: FileItemProps) {
+  const hasFile = !!file
+  const colors = FILE_COLORS[color]
+
+  if (!hasFile) {
+    return (
+      <div
+        className={clsx(
+          'flex items-center gap-2 px-3 py-2 rounded border',
+          optional ? 'bg-white/5 border-white/10' : 'bg-red-500/5 border-red-500/20'
+        )}
+      >
+        <Icon className={optional ? 'w-4 h-4 text-white/30' : 'w-4 h-4 text-red-400/50'} />
+        <div className="flex-1 min-w-0">
+          <span className={clsx('text-xs', optional ? 'text-white/30' : 'text-red-400/70')}>
+            {label}
+          </span>
+        </div>
+        {optional ? (
+          <span className="text-[10px] text-white/20">optional</span>
+        ) : (
+          <XCircle className="w-3 h-3 text-red-400/50" />
+        )}
+      </div>
+    )
+  }
+
+  // For definition, we don't have a download link
+  if (isDefinition) {
+    return (
+      <div className={clsx('flex items-center gap-2 px-3 py-2 rounded border', colors.bg, colors.border)}>
+        <Icon className={clsx('w-4 h-4', colors.icon)} />
+        <span className={clsx('text-xs flex-1', colors.text)}>{label}</span>
+        <CheckCircle className={clsx('w-3 h-3', colors.icon)} />
+      </div>
+    )
+  }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface-900 border border-surface-700 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col rounded-lg">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-surface-700">
-          <h2 className="text-lg font-medium text-white">{data?.block?.name || 'Block Details'}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-steel-dim hover:text-white transition-colors rounded-lg hover:bg-surface-700"
-          >
-            <X className="w-5 h-5" strokeWidth={1.5} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-copper animate-spin" strokeWidth={1.5} />
-            </div>
-          ) : error ? (
-            <div className="p-8 text-center text-red-400">Failed to load block details</div>
-          ) : data?.block ? (
-            <BlockViewer block={data.block} editable={true} className="rounded-none border-0" />
-          ) : (
-            <div className="p-8 text-center text-steel-dim">Block not found</div>
-          )}
-        </div>
-      </div>
-    </div>
+    <a
+      href={`/api/blocks/${slug}/files/${file}`}
+      download
+      className={clsx(
+        'flex items-center gap-2 px-3 py-2 rounded border transition-colors hover:opacity-80',
+        colors.bg,
+        colors.border
+      )}
+      title={`Download ${file}`}
+    >
+      <Icon className={clsx('w-4 h-4', colors.icon)} />
+      <span className={clsx('text-xs flex-1 truncate', colors.text)}>{label}</span>
+      <Download className={clsx('w-3 h-3', colors.icon)} />
+    </a>
   )
 }
