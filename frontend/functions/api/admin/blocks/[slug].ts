@@ -162,19 +162,19 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       }
 
       // Extract legacy fields for backwards compatibility
-      const taps = definition.bus.taps?.map((t) => ({ net: t.signal })) || []
-      const i2cAddresses = definition.bus.i2c?.addresses?.map((a) => `0x${a.toString(16)}`) ?? null
-      const spiCs = definition.bus.spi?.csPin || null
-      const power = definition.bus.power?.requires?.[0]
+      const taps = definition.bus?.taps?.map((t) => ({ net: t.signal })) ?? []
+      const i2cAddresses = definition.bus?.i2c?.addresses?.map((a) => `0x${a.toString(16)}`) ?? null
+      const spiCs = definition.bus?.spi?.csPin ?? null
+      const power = definition.bus?.power?.requires?.[0]
         ? { current_max_ma: definition.bus.power.requires[0].maxMa }
-        : definition.bus.power?.provides?.[0]
+        : definition.bus?.power?.provides?.[0]
           ? { current_max_ma: -definition.bus.power.provides[0].maxMa }
           : { current_max_ma: 0 }
-      const components = definition.components.map((c) => ({
+      const components = definition.components?.map((c) => ({
         ref: c.reference,
         value: c.value,
         package: c.footprint,
-      }))
+      })) ?? []
 
       updates.push(
         'name = ?',
