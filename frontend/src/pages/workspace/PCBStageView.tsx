@@ -17,6 +17,8 @@ import {
   LayoutGrid,
   Network,
   Layers,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
@@ -25,6 +27,7 @@ import { PCB3DViewer } from '../../components/pcb/PCB3DViewer'
 import { GridEditor } from '../../components/pcb/GridEditor'
 import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
 import { GerberViewer } from '../../components/pcb/GerberViewer'
+import { RemoteBoardManager } from '../../components/pcb/RemoteBoardManager'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
 import { mergeBlockSchematics, mergeBlockPCBs } from '../../services/pcb-merge'
 import { generatePCBDocument } from '../../services/pcb-document'
@@ -35,8 +38,9 @@ import {
   validatePCBSuggestion,
 } from '../../prompts/pcb-selection'
 import { validateGrid, fromPlacedBlocks, calculateBoardSize } from '../../services/pcb-grid'
+import { getMainBoardSignals } from '../../services/remote-board'
 import { logger } from '../../lib/logger'
-import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment } from '../../db/schema'
+import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment, RemoteBoard } from '../../db/schema'
 import type { BlockDefinition } from '../../schemas/block'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
@@ -55,6 +59,8 @@ export function PCBStageView() {
   const [gridHeight, setGridHeight] = useState(6)
   const [gerberLayers, setGerberLayers] = useState<Record<string, string>>({})
   const [isLoadingGerbers, setIsLoadingGerbers] = useState(false)
+  const [remoteBoards, setRemoteBoards] = useState<RemoteBoard[]>([])
+  const [showRemoteBoards, setShowRemoteBoards] = useState(false)
 
   const specComplete = project?.status === 'complete'
   const spec = project?.spec
@@ -91,6 +97,18 @@ export function PCBStageView() {
       setSelectedBlocks(pcbArtifacts.placedBlocks)
     }
   }, [pcbArtifacts?.placedBlocks])
+
+  // Initialize remote boards from spec if available
+  useMemo(() => {
+    if (pcbArtifacts?.remoteBoards && remoteBoards.length === 0) {
+      setRemoteBoards(pcbArtifacts.remoteBoards)
+    }
+  }, [pcbArtifacts?.remoteBoards])
+
+  // Calculate main board signals for remote board connection mapping
+  const mainBoardSignals = useMemo(() => {
+    return getMainBoardSignals(selectedBlocks, blockDefinitions)
+  }, [selectedBlocks, blockDefinitions])
 
   // Validate current placement and calculate board size
   const { validationResult, boardSize } = useMemo(() => {
@@ -191,6 +209,15 @@ export function PCBStageView() {
       savePCBMutation.mutate({ placedBlocks: blocks })
     },
     [savePCBMutation]
+  )
+
+  // Handle remote boards change
+  const handleRemoteBoardsChange = useCallback(
+    (boards: RemoteBoard[]) => {
+      setRemoteBoards(boards)
+      savePCBMutation.mutate({ placedBlocks: selectedBlocks, remoteBoards: boards })
+    },
+    [savePCBMutation, selectedBlocks]
   )
 
   // Handle block removal
@@ -536,8 +563,33 @@ export function PCBStageView() {
             onSelectBlock={handleSelectBlock}
             onRemoveBlock={handleRemoveBlock}
             disabled={currentStep === 'generating'}
-            className="flex-1"
+            className="flex-1 min-h-0"
           />
+
+          {/* Remote Boards Section - Collapsible */}
+          <div className="border-t border-surface-700">
+            <button
+              onClick={() => setShowRemoteBoards(!showRemoteBoards)}
+              className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-steel-dim uppercase tracking-wider hover:bg-surface-800/50"
+            >
+              <span>Remote Boards ({remoteBoards.length})</span>
+              {showRemoteBoards ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
+            </button>
+            {showRemoteBoards && (
+              <div className="max-h-64 overflow-y-auto">
+                <RemoteBoardManager
+                  remoteBoards={remoteBoards}
+                  mainBoardSignals={mainBoardSignals}
+                  onBoardsChange={handleRemoteBoardsChange}
+                  disabled={currentStep === 'generating'}
+                />
+              </div>
+            )}
+          </div>
         </aside>
 
         {/* Main panel */}
