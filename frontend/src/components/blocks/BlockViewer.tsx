@@ -813,7 +813,17 @@ function ComponentsTab({
                               : sortedRefs.join(', ')}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-2 text-xs">{comp.value}</td>
+                        <td className="py-1.5 pr-2 text-xs">
+                          <a
+                            href={`https://www.lcsc.com/search?q=${encodeURIComponent(comp.value)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-copper hover:text-copper-light hover:underline"
+                            title={`Search LCSC for "${comp.value}"`}
+                          >
+                            {comp.value}
+                          </a>
+                        </td>
                         <td className="py-1.5 pr-2 text-steel-dim text-xs">{comp.footprint}</td>
                         <td className="py-1.5 pr-2 text-center text-xs">{totalQty}</td>
                         {editable && (
