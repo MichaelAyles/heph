@@ -198,7 +198,7 @@ export function GalleryPage() {
       {/* Hero Section */}
       <div className="bg-surface-900 border-b border-surface-700">
         <div className="max-w-7xl mx-auto px-6 py-12">
-          <h2 className="text-3xl font-bold text-steel mb-3">Hardware Designs by AI</h2>
+          <h2 className="text-3xl font-bold text-steel mb-3">Hardware Designed by AI</h2>
           <p className="text-lg text-steel-dim mb-6 max-w-2xl">
             Browse projects created with PHAESTUS - from idea to manufacturable design in minutes.
             Each project includes specifications, PCB layouts, enclosures, and firmware.
