@@ -32,10 +32,11 @@ import {
   Upload,
   Loader2,
   Unplug,
+  Library,
 } from 'lucide-react'
 import type { BlockDefinition, BusSignal, BlockComponentDef } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { StepViewer } from '@/components/pcb/StepViewer'
 import { GerberViewer } from '@/components/pcb/GerberViewer'
@@ -609,6 +610,45 @@ function ComponentsTab({
   const queryClient = useQueryClient()
   const [components, setComponents] = useState<BlockComponentDef[]>(definition?.components || [])
   const [hasChanges, setHasChanges] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState<string | null>(null) // key of the group to pick for
+
+  // Fetch all blocks to build parts library
+  const { data: allBlocksData } = useQuery({
+    queryKey: ['admin-blocks-library'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/blocks')
+      if (!res.ok) return { blocks: [] }
+      return res.json() as Promise<{ blocks: Array<{ slug: string; name: string; definition?: BlockDefinition }> }>
+    },
+    enabled: editable, // Only fetch when editing
+    staleTime: 60000, // Cache for 1 minute
+  })
+
+  // Build parts library from all blocks with LCSC numbers
+  const partsLibrary = (() => {
+    if (!allBlocksData?.blocks) return []
+    const parts: Array<{ value: string; footprint: string; manufacturer?: string; mpn?: string; lcscPartNumber?: string; fromBlock: string }> = []
+    const seen = new Set<string>()
+
+    for (const b of allBlocksData.blocks) {
+      if (!b.definition?.components) continue
+      for (const comp of b.definition.components) {
+        if (!comp.lcscPartNumber) continue
+        const key = `${comp.value}|${comp.footprint}|${comp.lcscPartNumber}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        parts.push({
+          value: comp.value,
+          footprint: comp.footprint,
+          manufacturer: comp.manufacturer,
+          mpn: comp.mpn,
+          lcscPartNumber: comp.lcscPartNumber,
+          fromBlock: b.name,
+        })
+      }
+    }
+    return parts.sort((a, b) => a.value.localeCompare(b.value))
+  })()
 
   // Reset when definition changes
   useEffect(() => {
@@ -846,19 +886,71 @@ function ComponentsTab({
                                 className="w-28 px-1.5 py-0.5 bg-surface-800 border border-surface-600 text-steel text-xs focus:outline-none focus:border-copper"
                               />
                             </td>
-                            <td className="py-1.5">
-                              <input
-                                type="text"
-                                value={comp.lcscPartNumber || ''}
-                                onChange={(e) => updateGroup('lcscPartNumber', e.target.value)}
-                                placeholder="C######"
-                                className={clsx(
-                                  'w-20 px-1.5 py-0.5 bg-surface-800 border text-xs focus:outline-none focus:border-copper',
-                                  comp.lcscPartNumber
-                                    ? 'border-emerald-500/50 text-emerald-400'
-                                    : 'border-surface-600 text-steel'
+                            <td className="py-1.5 relative">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  value={comp.lcscPartNumber || ''}
+                                  onChange={(e) => updateGroup('lcscPartNumber', e.target.value)}
+                                  placeholder="C######"
+                                  className={clsx(
+                                    'w-20 px-1.5 py-0.5 bg-surface-800 border text-xs focus:outline-none focus:border-copper',
+                                    comp.lcscPartNumber
+                                      ? 'border-emerald-500/50 text-emerald-400'
+                                      : 'border-surface-600 text-steel'
+                                  )}
+                                />
+                                {partsLibrary.length > 0 && (
+                                  <button
+                                    onClick={() => setLibraryOpen(libraryOpen === key ? null : key)}
+                                    className="p-1 text-steel-dim hover:text-copper transition-colors"
+                                    title="Pick from library"
+                                  >
+                                    <Library className="w-3.5 h-3.5" />
+                                  </button>
                                 )}
-                              />
+                              </div>
+                              {/* Library picker dropdown */}
+                              {libraryOpen === key && (
+                                <div className="absolute right-0 top-full mt-1 z-20 w-80 max-h-64 overflow-auto bg-surface-800 border border-surface-600 rounded shadow-lg">
+                                  <div className="p-2 border-b border-surface-700 text-xs text-steel-dim">
+                                    Select from parts library ({partsLibrary.length} parts)
+                                  </div>
+                                  <div className="divide-y divide-surface-700/50">
+                                    {partsLibrary.map((part, pi) => (
+                                      <button
+                                        key={pi}
+                                        onClick={() => {
+                                          // Apply part info to all components in group
+                                          setComponents((prev) => {
+                                            const updated = [...prev]
+                                            indices.forEach((i) => {
+                                              updated[i] = {
+                                                ...updated[i],
+                                                manufacturer: part.manufacturer,
+                                                mpn: part.mpn,
+                                                lcscPartNumber: part.lcscPartNumber,
+                                              }
+                                            })
+                                            return updated
+                                          })
+                                          setHasChanges(true)
+                                          setLibraryOpen(null)
+                                        }}
+                                        className="w-full text-left px-2 py-1.5 hover:bg-surface-700 transition-colors"
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs text-white font-medium">{part.value}</span>
+                                          <span className="text-xs text-emerald-400">{part.lcscPartNumber}</span>
+                                        </div>
+                                        <div className="text-xs text-steel-dim truncate">
+                                          {part.footprint} · {part.mpn || 'No MPN'} · from {part.fromBlock}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </td>
                           </>
                         )}
