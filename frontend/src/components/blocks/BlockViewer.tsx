@@ -6,7 +6,7 @@
  * - Block library (editable=false) for browsing available blocks
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { clsx } from 'clsx'
 import {
   Cpu,
@@ -33,8 +33,9 @@ import {
   Loader2,
   Unplug,
 } from 'lucide-react'
-import type { BlockDefinition, BusSignal } from '@/schemas/block'
+import type { BlockDefinition, BusSignal, BlockComponentDef } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { KiCanvasViewer } from '@/components/pcb/KiCanvasViewer'
 import { StepViewer } from '@/components/pcb/StepViewer'
 import { GerberViewer } from '@/components/pcb/GerberViewer'
@@ -271,7 +272,7 @@ export function BlockViewer({ block, editable = false, onSave, className }: Bloc
       <div className="p-6">
         {activeTab === 'bus' && <BusInterfaceTab definition={definition} />}
         {activeTab === 'edges' && <EdgesTab definition={definition} />}
-        {activeTab === 'components' && <ComponentsTab definition={definition} />}
+        {activeTab === 'components' && <ComponentsTab block={block} editable={editable} />}
         {activeTab === 'files' && <FilesTab block={block} editable={editable} />}
       </div>
     </div>
@@ -594,42 +595,153 @@ function EdgesTab({ definition }: { definition: BlockDefinition }) {
 }
 
 // =============================================================================
-// Components Tab
+// Components Tab (Editable BOM)
 // =============================================================================
 
-function ComponentsTab({ definition }: { definition: BlockDefinition }) {
-  const components = definition.components || []
+function ComponentsTab({
+  block,
+  editable = false,
+}: {
+  block: PcbBlock
+  editable?: boolean
+}) {
+  const definition = block.definition
+  const queryClient = useQueryClient()
+  const [components, setComponents] = useState<BlockComponentDef[]>(definition?.components || [])
+  const [hasChanges, setHasChanges] = useState(false)
 
-  // Group by type
+  // Reset when definition changes
+  useEffect(() => {
+    setComponents(definition?.components || [])
+    setHasChanges(false)
+  }, [definition])
+
+  // Save mutation
+  const saveMutation = useMutation({
+    mutationFn: async (updatedComponents: BlockComponentDef[]) => {
+      if (!definition) throw new Error('No definition to update')
+
+      const updatedDefinition: BlockDefinition = {
+        ...definition,
+        components: updatedComponents,
+      }
+
+      const res = await fetch(`/api/admin/blocks/${block.slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ definition: updatedDefinition }),
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to update')
+      }
+
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-block'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
+      setHasChanges(false)
+    },
+  })
+
+  const updateComponent = (index: number, field: keyof BlockComponentDef, value: string | number | boolean) => {
+    setComponents((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+    setHasChanges(true)
+  }
+
+  const handleSave = () => {
+    saveMutation.mutate(components)
+  }
+
+  // Group by fit/nofit
   const grouped = components.reduce(
     (acc, comp) => {
-      const isNofit = comp.nofit
-      const key = isNofit ? 'nofit' : 'fit'
+      const key = comp.nofit ? 'nofit' : 'fit'
       acc[key].push(comp)
       return acc
     },
-    { fit: [] as typeof components, nofit: [] as typeof components }
+    { fit: [] as BlockComponentDef[], nofit: [] as BlockComponentDef[] }
   )
+
+  // Stats
+  const withLcsc = components.filter((c) => c.lcscPartNumber).length
+  const withMpn = components.filter((c) => c.mpn).length
+
+  if (!definition) {
+    return (
+      <div className="text-center py-8 text-steel-dim">
+        No block definition available. Components cannot be edited.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-surface-700/30 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-white">{components.length}</div>
-          <div className="text-sm text-steel-dim">Total Types</div>
+      <div className="grid grid-cols-4 gap-3">
+        <div className="bg-surface-700/30 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-white">{components.length}</div>
+          <div className="text-xs text-steel-dim">Total</div>
         </div>
-        <div className="bg-surface-700/30 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-400">{grouped.fit.length}</div>
-          <div className="text-sm text-steel-dim">To Populate</div>
+        <div className="bg-surface-700/30 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-green-400">{grouped.fit.length}</div>
+          <div className="text-xs text-steel-dim">Populate</div>
         </div>
-        <div className="bg-surface-700/30 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-steel-dim">{grouped.nofit.length}</div>
-          <div className="text-sm text-steel-dim">No-fit</div>
+        <div className="bg-surface-700/30 rounded-lg p-3 text-center">
+          <div className={clsx('text-xl font-bold', withLcsc === components.length ? 'text-emerald-400' : 'text-amber-400')}>
+            {withLcsc}/{components.length}
+          </div>
+          <div className="text-xs text-steel-dim">LCSC</div>
+        </div>
+        <div className="bg-surface-700/30 rounded-lg p-3 text-center">
+          <div className={clsx('text-xl font-bold', withMpn === components.length ? 'text-emerald-400' : 'text-amber-400')}>
+            {withMpn}/{components.length}
+          </div>
+          <div className="text-xs text-steel-dim">MPN</div>
         </div>
       </div>
 
-      {/* Components to populate */}
+      {/* Save bar */}
+      {editable && (
+        <div className="flex items-center justify-between bg-surface-700/30 rounded-lg px-4 py-2">
+          <div className="text-xs">
+            {saveMutation.isSuccess && <span className="text-emerald-400">Saved successfully</span>}
+            {saveMutation.isError && (
+              <span className="text-red-400">
+                {saveMutation.error instanceof Error ? saveMutation.error.message : 'Save failed'}
+              </span>
+            )}
+            {hasChanges && !saveMutation.isPending && (
+              <span className="text-amber-400">Unsaved changes</span>
+            )}
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges || saveMutation.isPending}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors',
+              hasChanges
+                ? 'bg-copper text-surface-900 hover:bg-copper-light'
+                : 'bg-surface-700 text-steel-dim cursor-not-allowed'
+            )}
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Save className="w-3 h-3" strokeWidth={1.5} />
+            )}
+            Save
+          </button>
+        </div>
+      )}
+
+      {/* Components table */}
       {grouped.fit.length > 0 && (
         <div>
           <h4 className="text-sm font-medium text-white mb-3">Bill of Materials</h4>
@@ -637,28 +749,74 @@ function ComponentsTab({ definition }: { definition: BlockDefinition }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-steel-dim border-b border-surface-700">
-                  <th className="pb-2 pr-4 font-medium">Reference</th>
-                  <th className="pb-2 pr-4 font-medium">Value</th>
-                  <th className="pb-2 pr-4 font-medium">Footprint</th>
-                  <th className="pb-2 font-medium text-right">Qty</th>
+                  <th className="pb-2 pr-2 font-medium">Ref</th>
+                  <th className="pb-2 pr-2 font-medium">Value</th>
+                  <th className="pb-2 pr-2 font-medium">Footprint</th>
+                  <th className="pb-2 pr-2 font-medium">Qty</th>
+                  {editable && (
+                    <>
+                      <th className="pb-2 pr-2 font-medium">Manufacturer</th>
+                      <th className="pb-2 pr-2 font-medium">MPN</th>
+                      <th className="pb-2 font-medium">LCSC #</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-700/50">
-                {grouped.fit.map((comp, i) => (
-                  <tr key={i} className="text-steel hover:bg-surface-700/30">
-                    <td className="py-2 pr-4 font-mono text-white">{comp.reference}</td>
-                    <td className="py-2 pr-4">{comp.value}</td>
-                    <td className="py-2 pr-4 text-steel-dim text-xs">{comp.footprint}</td>
-                    <td className="py-2 text-right text-white">{comp.quantity}</td>
-                  </tr>
-                ))}
+                {components.map((comp, i) => {
+                  if (comp.nofit) return null
+                  return (
+                    <tr key={i} className="text-steel hover:bg-surface-700/30">
+                      <td className="py-1.5 pr-2 font-mono text-white text-xs">{comp.reference}</td>
+                      <td className="py-1.5 pr-2 text-xs">{comp.value}</td>
+                      <td className="py-1.5 pr-2 text-steel-dim text-xs">{comp.footprint}</td>
+                      <td className="py-1.5 pr-2 text-center text-xs">{comp.quantity}</td>
+                      {editable && (
+                        <>
+                          <td className="py-1.5 pr-2">
+                            <input
+                              type="text"
+                              value={comp.manufacturer || ''}
+                              onChange={(e) => updateComponent(i, 'manufacturer', e.target.value)}
+                              placeholder="—"
+                              className="w-20 px-1.5 py-0.5 bg-surface-800 border border-surface-600 text-steel text-xs focus:outline-none focus:border-copper"
+                            />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <input
+                              type="text"
+                              value={comp.mpn || ''}
+                              onChange={(e) => updateComponent(i, 'mpn', e.target.value)}
+                              placeholder="—"
+                              className="w-28 px-1.5 py-0.5 bg-surface-800 border border-surface-600 text-steel text-xs focus:outline-none focus:border-copper"
+                            />
+                          </td>
+                          <td className="py-1.5">
+                            <input
+                              type="text"
+                              value={comp.lcscPartNumber || ''}
+                              onChange={(e) => updateComponent(i, 'lcscPartNumber', e.target.value)}
+                              placeholder="C######"
+                              className={clsx(
+                                'w-20 px-1.5 py-0.5 bg-surface-800 border text-xs focus:outline-none focus:border-copper',
+                                comp.lcscPartNumber
+                                  ? 'border-emerald-500/50 text-emerald-400'
+                                  : 'border-surface-600 text-steel'
+                              )}
+                            />
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* No-fit components */}
+      {/* No-fit components (read-only) */}
       {grouped.nofit.length > 0 && (
         <div>
           <h4 className="text-sm font-medium text-steel-dim mb-3">No-fit (Board Interconnects)</h4>
@@ -701,10 +859,13 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
   const hasStep = !!files.stepModel
   const hasBlockJson = !!files.blockJson
   const hasGerbers = !!files.gerbers
+  const hasPos = !!files.pos
 
-  const [previewType, setPreviewType] = useState<'schematic' | 'pcb' | '3d' | 'json' | 'gerbers' | null>(
+  const [previewType, setPreviewType] = useState<'schematic' | 'pcb' | '3d' | 'json' | 'gerbers' | 'pos' | 'bom' | null>(
     hasSchematic ? 'schematic' : hasPcb ? 'pcb' : hasStep ? '3d' : hasGerbers ? 'gerbers' : hasBlockJson ? 'json' : null
   )
+  const [posContent, setPosContent] = useState<string | null>(null)
+  const [bomContent, setBomContent] = useState<string | null>(null)
   const [previewContent, setPreviewContent] = useState<string | null>(null)
   const [jsonContent, setJsonContent] = useState<string | null>(null)
   const [jsonEdited, setJsonEdited] = useState(false)
@@ -723,6 +884,7 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
     blockJson: useRef<HTMLInputElement>(null),
     thumbnail: useRef<HTMLInputElement>(null),
     gerbers: useRef<HTMLInputElement>(null),
+    pos: useRef<HTMLInputElement>(null),
   }
 
   const handleDeleteFile = async (fileKey: string, filename: string) => {
@@ -794,11 +956,55 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
     e.target.value = ''
   }
 
-  const loadPreview = async (type: 'schematic' | 'pcb' | '3d' | 'json' | 'gerbers') => {
+  const loadPreview = async (type: 'schematic' | 'pcb' | '3d' | 'json' | 'gerbers' | 'pos' | 'bom') => {
     // 3D preview doesn't need to load content - StepViewer fetches directly
     if (type === '3d') {
       setPreviewType('3d')
       setPreviewContent(null)
+      return
+    }
+
+    // Position file preview
+    if (type === 'pos') {
+      if (!files.pos) return
+      setLoadingPreview(true)
+      setPreviewType('pos')
+      try {
+        const res = await fetch(`/api/blocks/${block.slug}/files/${files.pos}`)
+        if (res.ok) {
+          const content = await res.text()
+          setPosContent(content)
+        }
+      } catch (err) {
+        logger.error('ui', 'Failed to load pos file', { error: err })
+        setPosContent(null)
+      } finally {
+        setLoadingPreview(false)
+      }
+      return
+    }
+
+    // BOM preview (generated from definition)
+    if (type === 'bom') {
+      setPreviewType('bom')
+      // Generate BOM from block definition
+      const components = block.definition?.components || []
+      const fitComponents = components.filter((c) => !c.nofit)
+
+      // Create CSV content
+      const headers = ['Reference', 'Value', 'Footprint', 'Quantity', 'Manufacturer', 'MPN', 'LCSC Part Number']
+      const rows = fitComponents.map((c) => [
+        c.reference,
+        c.value,
+        c.footprint,
+        c.quantity.toString(),
+        c.manufacturer || '',
+        c.mpn || '',
+        c.lcscPartNumber || '',
+      ])
+
+      const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+      setBomContent(csvContent)
       return
     }
 
@@ -972,6 +1178,13 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
       accept: '.zip',
     },
     {
+      key: 'pos',
+      label: 'Pick & Place',
+      file: files.pos,
+      ext: '.csv',
+      accept: '.csv',
+    },
+    {
       key: 'blockJson',
       label: 'Block Definition',
       file: files.blockJson,
@@ -1072,7 +1285,7 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
       </div>
 
       {/* Preview */}
-      {(hasSchematic || hasPcb || hasStep || hasGerbers || hasBlockJson) && (
+      {(hasSchematic || hasPcb || hasStep || hasGerbers || hasBlockJson || hasPos || block.definition?.components) && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -1143,6 +1356,32 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
                     JSON
                   </button>
                 )}
+                {hasPos && (
+                  <button
+                    onClick={() => loadPreview('pos')}
+                    className={clsx(
+                      'px-3 py-1 text-xs rounded transition-colors',
+                      previewType === 'pos'
+                        ? 'bg-copper text-surface-900'
+                        : 'bg-surface-700 text-steel hover:text-white'
+                    )}
+                  >
+                    Pick & Place
+                  </button>
+                )}
+                {block.definition?.components && (
+                  <button
+                    onClick={() => loadPreview('bom')}
+                    className={clsx(
+                      'px-3 py-1 text-xs rounded transition-colors',
+                      previewType === 'bom'
+                        ? 'bg-copper text-surface-900'
+                        : 'bg-surface-700 text-steel hover:text-white'
+                    )}
+                  >
+                    BOM
+                  </button>
+                )}
               </div>
             </div>
             {/* Save button for JSON editor */}
@@ -1180,6 +1419,59 @@ function FilesTab({ block, editable = false }: { block: PcbBlock; editable?: boo
               />
             ) : previewType === 'gerbers' && gerberLayers ? (
               <GerberViewer layers={gerberLayers} className="h-full" />
+            ) : previewType === 'pos' && posContent !== null ? (
+              <div className="h-full overflow-auto p-4">
+                <table className="w-full text-xs font-mono">
+                  <thead className="sticky top-0 bg-surface-800">
+                    <tr className="text-left text-steel-dim border-b border-surface-700">
+                      {posContent.split('\n')[0]?.split(',').map((header, i) => (
+                        <th key={i} className="pb-2 pr-3 font-medium whitespace-nowrap">
+                          {header.replace(/"/g, '')}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-700/30">
+                    {posContent.split('\n').slice(1).filter(line => line.trim()).map((row, i) => (
+                      <tr key={i} className="text-steel hover:bg-surface-800/50">
+                        {row.split(',').map((cell, j) => (
+                          <td key={j} className="py-1.5 pr-3 whitespace-nowrap">
+                            {cell.replace(/"/g, '')}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : previewType === 'bom' && bomContent !== null ? (
+              <div className="h-full overflow-auto p-4">
+                <table className="w-full text-xs font-mono">
+                  <thead className="sticky top-0 bg-surface-800">
+                    <tr className="text-left text-steel-dim border-b border-surface-700">
+                      {bomContent.split('\n')[0]?.split(',').map((header, i) => (
+                        <th key={i} className="pb-2 pr-3 font-medium whitespace-nowrap">
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-700/30">
+                    {bomContent.split('\n').slice(1).filter(line => line.trim()).map((row, i) => (
+                      <tr key={i} className="text-steel hover:bg-surface-800/50">
+                        {row.split(',').map((cell, j) => (
+                          <td key={j} className={clsx(
+                            'py-1.5 pr-3 whitespace-nowrap',
+                            j === 6 && cell ? 'text-emerald-400' : '' // LCSC column
+                          )}>
+                            {cell || '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : previewType === 'json' && jsonContent !== null ? (
               <textarea
                 value={jsonContent}

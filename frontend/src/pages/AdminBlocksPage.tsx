@@ -13,22 +13,17 @@ import {
   Box,
   CheckCircle,
   AlertTriangle,
-  Upload,
   Trash2,
-  Edit,
   FileJson,
   FileCode,
   Eye,
   X,
-  Archive,
   Unplug,
 } from 'lucide-react'
-import JSZip from 'jszip'
 import { clsx } from 'clsx'
 import type { BlockCategory } from '@/schemas/block'
 import type { PcbBlock } from '@/db/schema'
 import { BlockImportWizard } from '@/components/admin/blocks/BlockImportWizard'
-import { BlockBOMEditor } from '@/components/admin/blocks/BlockBOMEditor'
 import { BlockViewer } from '@/components/blocks'
 
 interface BlockSummary {
@@ -79,10 +74,8 @@ export function AdminBlocksPage() {
   const [filter, setFilter] = useState<CategoryFilter>('all')
   const [selectedBlock, setSelectedBlock] = useState<BlockSummary | null>(null)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
-  const [isUploaderOpen, setIsUploaderOpen] = useState(false)
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false)
   const [isViewerOpen, setIsViewerOpen] = useState(false)
-  const [isBOMEditorOpen, setIsBOMEditorOpen] = useState(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -287,32 +280,7 @@ export function AdminBlocksPage() {
                   className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors"
                 >
                   <Eye className="w-4 h-4" strokeWidth={1.5} />
-                  View
-                </button>
-                <button
-                  onClick={() => setIsBOMEditorOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-500/20 text-emerald-400 text-sm font-medium hover:bg-emerald-500/30 transition-colors"
-                >
-                  <Edit className="w-4 h-4" strokeWidth={1.5} />
-                  Edit BOM
-                </button>
-                <button
-                  onClick={() => {
-                    setIsUploaderOpen(true)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-surface-800 text-steel text-sm font-medium hover:bg-surface-700 transition-colors"
-                >
-                  <Upload className="w-4 h-4" strokeWidth={1.5} />
-                  Upload Files
-                </button>
-                <button
-                  onClick={() => {
-                    setIsEditorOpen(true)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-surface-800 text-steel text-sm font-medium hover:bg-surface-700 transition-colors"
-                >
-                  <Edit className="w-4 h-4" strokeWidth={1.5} />
-                  Edit JSON
+                  View & Edit
                 </button>
                 <button
                   onClick={() => {
@@ -337,23 +305,12 @@ export function AdminBlocksPage() {
           </div>
         )}
 
-        {/* Editor Modal */}
+        {/* Editor Modal (for creating new blocks) */}
         {isEditorOpen && (
           <BlockEditorModal
             block={selectedBlock}
             onClose={() => {
               setIsEditorOpen(false)
-              queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
-            }}
-          />
-        )}
-
-        {/* Uploader Modal */}
-        {isUploaderOpen && selectedBlock && (
-          <BlockUploaderModal
-            block={selectedBlock}
-            onClose={() => {
-              setIsUploaderOpen(false)
               queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
             }}
           />
@@ -374,16 +331,8 @@ export function AdminBlocksPage() {
         {isViewerOpen && selectedBlock && (
           <BlockViewerModal
             slug={selectedBlock.slug}
-            onClose={() => setIsViewerOpen(false)}
-          />
-        )}
-
-        {/* BOM Editor Modal */}
-        {isBOMEditorOpen && selectedBlock && (
-          <BlockBOMEditor
-            slug={selectedBlock.slug}
             onClose={() => {
-              setIsBOMEditorOpen(false)
+              setIsViewerOpen(false)
               queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
             }}
           />
@@ -542,296 +491,6 @@ function BlockEditorModal({
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-// Block Uploader Modal Component
-function BlockUploaderModal({
-  block,
-  onClose,
-}: {
-  block: BlockSummary
-  onClose: () => void
-}) {
-  const [files, setFiles] = useState<{
-    schematic?: File
-    pcb?: File
-    step?: File
-    thumbnail?: File
-    blockJson?: string
-    gerberZip?: File
-    gerberFiles?: Map<string, ArrayBuffer>
-  }>({})
-  const [error, setError] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [isExtractingZip, setIsExtractingZip] = useState(false)
-  const [uploadResult, setUploadResult] = useState<{
-    success: boolean
-    message: string
-    fileStatus?: { missing: string[] }
-  } | null>(null)
-
-  const handleGerberZipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setIsExtractingZip(true)
-    setError(null)
-
-    try {
-      const zip = await JSZip.loadAsync(file)
-      const gerberFiles = new Map<string, ArrayBuffer>()
-
-      // Extract all gerber/drill files from the ZIP
-      const validExtensions = ['.gtl', '.gbl', '.gto', '.gbo', '.gts', '.gbs', '.gm1', '.g1', '.g2', '.drl']
-
-      for (const [filename, zipEntry] of Object.entries(zip.files)) {
-        if (zipEntry.dir) continue
-
-        // Get just the filename without path
-        const baseName = filename.split('/').pop() || filename
-        const lowerName = baseName.toLowerCase()
-
-        if (validExtensions.some(ext => lowerName.endsWith(ext))) {
-          const content = await zipEntry.async('arraybuffer')
-          gerberFiles.set(baseName, content)
-        }
-      }
-
-      if (gerberFiles.size === 0) {
-        setError('No valid Gerber files found in ZIP. Expected .gtl, .gbl, .gto, .gbo, .gts, .gbs, .gm1, .g1, .g2, or .drl files.')
-        return
-      }
-
-      setFiles(prev => ({ ...prev, gerberZip: file, gerberFiles }))
-    } catch (err) {
-      setError(`Failed to read ZIP file: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    } finally {
-      setIsExtractingZip(false)
-    }
-  }
-
-  const handleUpload = async () => {
-    setError(null)
-    setIsUploading(true)
-
-    try {
-      const formData = new FormData()
-      formData.append('slug', block.slug)
-
-      if (files.schematic) formData.append('schematic', files.schematic)
-      if (files.pcb) formData.append('pcb', files.pcb)
-      if (files.step) formData.append('step', files.step)
-      if (files.thumbnail) formData.append('thumbnail', files.thumbnail)
-      if (files.blockJson) formData.append('blockJson', files.blockJson)
-
-      // Add extracted gerber files
-      if (files.gerberFiles) {
-        for (const [filename, content] of files.gerberFiles) {
-          formData.append(`gerber_${filename}`, new Blob([content]), filename)
-        }
-      }
-
-      const res = await fetch('/api/admin/blocks/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await res.json()
-
-      if (!res.ok) {
-        if (result.errors) {
-          setError(`Validation errors:\n${result.errors.join('\n')}`)
-        } else {
-          setError(result.error || 'Upload failed')
-        }
-        return
-      }
-
-      setUploadResult(result)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed')
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const handleFileChange = (type: keyof typeof files) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (type === 'blockJson') {
-        // Read as text for block.json
-        const reader = new FileReader()
-        reader.onload = (event) => {
-          setFiles((prev) => ({ ...prev, blockJson: event.target?.result as string }))
-        }
-        reader.readAsText(file)
-      } else {
-        setFiles((prev) => ({ ...prev, [type]: file }))
-      }
-    }
-  }
-
-  // Count how many required files are present vs missing
-  const requiredCount = 5 // kicad_sch, kicad_pcb, step, block.json, gerbers
-  const presentCount = requiredCount - block.fileStatus.missing.length
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface-900 border border-surface-700 w-full max-w-lg">
-        {/* Header */}
-        <div className="p-4 border-b border-surface-700 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-medium text-steel">Upload Files for {block.name}</h2>
-            <p className="text-xs text-steel-dim mt-1">
-              Files: {presentCount}/{requiredCount} present
-            </p>
-          </div>
-          <button onClick={onClose} className="text-steel-dim hover:text-steel">
-            &times;
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 space-y-4">
-          {/* Missing files warning */}
-          {block.fileStatus.missing.length > 0 && (
-            <div className="p-3 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-sm">
-              Missing: {block.fileStatus.missing.join(', ')}
-            </div>
-          )}
-
-          {/* File inputs */}
-          <div className="space-y-3">
-            <FileInput
-              label="Schematic (.kicad_sch)"
-              accept=".kicad_sch"
-              required={block.fileStatus.missing.includes(`${block.slug}.kicad_sch`)}
-              onChange={handleFileChange('schematic')}
-            />
-            <FileInput
-              label="PCB Layout (.kicad_pcb)"
-              accept=".kicad_pcb"
-              required={block.fileStatus.missing.includes(`${block.slug}.kicad_pcb`)}
-              onChange={handleFileChange('pcb')}
-            />
-            <FileInput
-              label="3D Model (.step)"
-              accept=".step,.stp"
-              required={block.fileStatus.missing.includes(`${block.slug}.step`)}
-              onChange={handleFileChange('step')}
-            />
-
-            {/* Gerber ZIP upload */}
-            <div>
-              <label className="block text-sm font-medium text-steel mb-1">
-                Gerbers (.zip)
-                {block.fileStatus.missing.includes('gerbers/') && (
-                  <span className="text-amber-400 ml-1">*</span>
-                )}
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  accept=".zip"
-                  onChange={handleGerberZipChange}
-                  className="flex-1 text-sm text-steel-dim file:mr-4 file:py-2 file:px-4 file:border-0 file:bg-surface-800 file:text-steel file:cursor-pointer hover:file:bg-surface-700"
-                />
-                {isExtractingZip && <Loader2 className="w-4 h-4 text-copper animate-spin" />}
-              </div>
-              {files.gerberFiles && (
-                <p className="text-xs text-emerald-400 mt-1">
-                  <Archive className="w-3 h-3 inline mr-1" />
-                  {files.gerberFiles.size} gerber files extracted
-                </p>
-              )}
-            </div>
-
-            <FileInput
-              label="Block Definition (block.json)"
-              accept=".json"
-              required={block.fileStatus.missing.includes('block.json')}
-              onChange={handleFileChange('blockJson')}
-            />
-            <FileInput
-              label="Thumbnail (.png)"
-              accept=".png"
-              onChange={handleFileChange('thumbnail')}
-            />
-          </div>
-
-          {error && (
-            <div className="p-3 bg-red-500/20 border border-red-500/30 text-red-400 text-sm whitespace-pre-wrap">
-              {error}
-            </div>
-          )}
-
-          {uploadResult && (
-            <div
-              className={clsx(
-                'p-3 border text-sm',
-                uploadResult.success
-                  ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
-                  : 'bg-red-500/20 border-red-500/30 text-red-400'
-              )}
-            >
-              {uploadResult.message}
-              {uploadResult.fileStatus?.missing?.length === 0 && (
-                <p className="mt-1">All required files are now present!</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-surface-700 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-steel-dim hover:text-steel text-sm transition-colors"
-          >
-            {uploadResult?.success ? 'Done' : 'Cancel'}
-          </button>
-          {!uploadResult?.success && (
-            <button
-              onClick={handleUpload}
-              disabled={isUploading || isExtractingZip || Object.keys(files).filter(k => k !== 'gerberFiles').length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors disabled:opacity-50"
-            >
-              {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Upload
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// File Input Component
-function FileInput({
-  label,
-  accept,
-  required,
-  onChange,
-}: {
-  label: string
-  accept: string
-  required?: boolean
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-steel mb-1">
-        {label}
-        {required && <span className="text-amber-400 ml-1">*</span>}
-      </label>
-      <input
-        type="file"
-        accept={accept}
-        onChange={onChange}
-        className="w-full text-sm text-steel-dim file:mr-4 file:py-2 file:px-4 file:border-0 file:bg-surface-800 file:text-steel file:cursor-pointer hover:file:bg-surface-700"
-      />
     </div>
   )
 }
