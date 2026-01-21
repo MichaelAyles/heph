@@ -183,10 +183,10 @@ export function AdminBlocksPage() {
 
               return (
                 <div
-                  key={block.id}
+                  key={block.slug}
                   className={clsx(
                     'p-4 bg-surface-900 border border-surface-700 hover:border-surface-600 transition-colors cursor-pointer',
-                    selectedBlock?.id === block.id && 'border-copper'
+                    selectedBlock?.slug === block.slug && 'border-copper'
                   )}
                   onClick={() => setSelectedBlock(block)}
                 >
