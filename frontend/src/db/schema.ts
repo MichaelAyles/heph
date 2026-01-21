@@ -450,6 +450,72 @@ export interface SystemSettings {
 }
 
 // =============================================================================
+// SYSTEM PROMPTS (LangGraph Architecture)
+// =============================================================================
+
+export interface SystemPrompt {
+  id: number
+  name: string
+  description: string | null
+  capabilityAssessmentBase: string
+  designConstraints: string | null
+  cadCapability: string | null
+  firmwareCapability: string | null
+  isActive: boolean
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SystemPromptRow {
+  id: number
+  name: string
+  description: string | null
+  capability_assessment_base: string
+  design_constraints: string | null
+  cad_capability: string | null
+  firmware_capability: string | null
+  is_active: number
+  version: number
+  created_at: string
+  updated_at: string
+}
+
+export type HardRejectionCategory = 'safety' | 'capability' | 'legal'
+
+export interface HardRejectionCriteria {
+  id: number
+  pattern: string
+  reason: string
+  category: HardRejectionCategory
+  isActive: boolean
+  createdAt: string
+}
+
+export interface HardRejectionCriteriaRow {
+  id: number
+  pattern: string
+  reason: string
+  category: string
+  is_active: number
+  created_at: string
+}
+
+// =============================================================================
+// CAPABILITY ASSESSMENT (LangGraph State)
+// =============================================================================
+
+export interface CapabilityAssessment {
+  canBuild: boolean
+  confidence: number
+  reasoning: string
+  missingCapabilities: string[]
+  suggestedAlternatives: string[]
+}
+
+export type ChatRoute = 'REJECT' | 'CLARIFY' | 'PROCEED' | null
+
+// =============================================================================
 // DB Row Types (snake_case from SQLite)
 // =============================================================================
 
@@ -595,6 +661,33 @@ export function settingsFromRow(row: SettingsRow): SystemSettings {
     openRouterApiKey: row.openrouter_api_key,
     geminiApiKey: row.gemini_api_key,
     updatedAt: row.updated_at,
+  }
+}
+
+export function systemPromptFromRow(row: SystemPromptRow): SystemPrompt {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    capabilityAssessmentBase: row.capability_assessment_base,
+    designConstraints: row.design_constraints,
+    cadCapability: row.cad_capability,
+    firmwareCapability: row.firmware_capability,
+    isActive: row.is_active === 1,
+    version: row.version,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+export function hardRejectionCriteriaFromRow(row: HardRejectionCriteriaRow): HardRejectionCriteria {
+  return {
+    id: row.id,
+    pattern: row.pattern,
+    reason: row.reason,
+    category: row.category as HardRejectionCategory,
+    isActive: row.is_active === 1,
+    createdAt: row.created_at,
   }
 }
 

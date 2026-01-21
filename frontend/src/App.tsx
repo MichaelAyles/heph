@@ -8,13 +8,13 @@ import { WorkspaceLayout } from '@/components/workspace/WorkspaceLayout'
 import { HomePage } from '@/pages/HomePage'
 import { ProjectsPage } from '@/pages/ProjectsPage'
 import { NewProjectPage } from '@/pages/NewProjectPage'
+import { ChatPage } from '@/pages/ChatPage'
 import { SpecViewerPage } from '@/pages/SpecViewerPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { BlocksPage } from '@/pages/BlocksPage'
 import { AdminLogsPage } from '@/pages/AdminLogsPage'
 import { AdminUsersPage } from '@/pages/AdminUsersPage'
 import { AdminLLMsPage } from '@/pages/AdminLLMsPage'
-import { AdminOrchestratorPage } from '@/pages/AdminOrchestratorPage'
 import { AdminBlocksPage } from '@/pages/AdminBlocksPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { GalleryPage } from '@/pages/GalleryPage'
@@ -22,6 +22,7 @@ import { GalleryDetailPage } from '@/pages/GalleryDetailPage'
 import { BlogPage } from '@/pages/BlogPage'
 import { BlogPostPage } from '@/pages/BlogPostPage'
 import { AdminBlogPage } from '@/pages/AdminBlogPage'
+import { AdminSystemPromptsPage } from '@/pages/AdminSystemPromptsPage'
 import {
   SpecStageView,
   PCBStageView,
@@ -46,6 +47,7 @@ function AuthenticatedApp() {
     <Routes>
       <Route path="/" element={<Layout />}>
         <Route index element={<HomePage />} />
+        <Route path="chat" element={<ChatPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="new" element={<NewProjectPage />} />
         {/* Workspace routes with stage tabs */}
@@ -65,8 +67,8 @@ function AuthenticatedApp() {
         <Route path="admin/users" element={<AdminUsersPage />} />
         <Route path="admin/blocks" element={<AdminBlocksPage />} />
         <Route path="admin/llms" element={<AdminLLMsPage />} />
-        <Route path="admin/orchestrator" element={<AdminOrchestratorPage />} />
         <Route path="admin/blog" element={<AdminBlogPage />} />
+        <Route path="admin/system-prompts" element={<AdminSystemPromptsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

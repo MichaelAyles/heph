@@ -1,14 +1,11 @@
-import { useEffect, useCallback, useRef } from 'react'
-import { Outlet, useParams, useLocation, Navigate, useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { Outlet, useParams, useLocation, Navigate, useOutletContext } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { WorkspaceHeader } from './WorkspaceHeader'
 import { WorkspaceStageTabs } from './WorkspaceStageTabs'
-import { OrchestratorSidebar } from './OrchestratorSidebar'
 import { useWorkspaceStore, type WorkspaceStage } from '@/stores/workspace'
-import { useOrchestratorStore } from '@/stores/orchestrator'
-import type { Project, ProjectSpec } from '@/db/schema'
-import { logger } from '@/lib/logger'
+import type { Project } from '@/db/schema'
 
 async function fetchProject(id: string): Promise<Project> {
   const res = await fetch(`/api/projects/${id}`)
@@ -20,14 +17,7 @@ async function fetchProject(id: string): Promise<Project> {
 export function WorkspaceLayout() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { setActiveStage, canNavigateTo, isSidebarCollapsed, toggleSidebar } = useWorkspaceStore()
-
-  // Orchestrator state for auto-navigation
-  const orchestratorStatus = useOrchestratorStore((s) => s.status)
-  const orchestratorStage = useOrchestratorStore((s) => s.currentStage)
-  const prevStageRef = useRef(orchestratorStage)
+  const { setActiveStage, canNavigateTo } = useWorkspaceStore()
 
   const {
     data: project,
@@ -37,52 +27,7 @@ export function WorkspaceLayout() {
     queryKey: ['project', id],
     queryFn: () => fetchProject(id!),
     enabled: !!id,
-    refetchInterval: () => {
-      // Refetch every 1s while orchestrator is running for live updates
-      const isOrchestratorActive = ['running', 'validating', 'fixing'].includes(orchestratorStatus)
-      if (isOrchestratorActive) return 1000
-      return false
-    },
   })
-
-  // Handler for orchestrator spec updates
-  // Fetches fresh data before merging to avoid race conditions
-  const handleOrchestratorSpecUpdate = useCallback(
-    async (specUpdate: Partial<ProjectSpec>) => {
-      if (!id) return
-
-      // Fetch current project to get fresh spec (avoid stale cache issues)
-      const getRes = await fetch(`/api/projects/${id}`)
-      if (!getRes.ok) {
-        logger.error('api', 'Failed to fetch project for spec update')
-        return
-      }
-      const { project: freshProject } = await getRes.json()
-
-      // Merge with fresh spec
-      const mergedSpec = { ...freshProject?.spec, ...specUpdate }
-
-      // Build update payload - include name if finalSpec has one
-      const updatePayload: { spec: typeof mergedSpec; name?: string } = { spec: mergedSpec }
-      if (specUpdate.finalSpec?.name) {
-        updatePayload.name = specUpdate.finalSpec.name
-      }
-
-      const res = await fetch(`/api/projects/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload),
-      })
-      if (res.ok) {
-        queryClient.invalidateQueries({ queryKey: ['project', id] })
-        // Also invalidate projects list so stage indicators stay in sync
-        queryClient.invalidateQueries({ queryKey: ['projects'] })
-      } else {
-        logger.error('api', 'Failed to update spec', { error: await res.text() })
-      }
-    },
-    [id, queryClient]
-  )
 
   // Extract current stage from path
   const pathSegments = location.pathname.split('/')
@@ -94,18 +39,6 @@ export function WorkspaceLayout() {
       setActiveStage(currentStage)
     }
   }, [currentStage, setActiveStage])
-
-  // Auto-navigate when orchestrator advances to a new stage (visual feedback)
-  useEffect(() => {
-    const isRunning = orchestratorStatus === 'running' || orchestratorStatus === 'validating'
-    const stageChanged = orchestratorStage !== prevStageRef.current
-
-    if (isRunning && stageChanged && id) {
-      // Navigate to the new stage
-      navigate(`/project/${id}/${orchestratorStage}`)
-      prevStageRef.current = orchestratorStage
-    }
-  }, [orchestratorStatus, orchestratorStage, id, navigate])
 
   // Redirect /project/:id to /project/:id/spec
   if (location.pathname === `/project/${id}`) {
@@ -136,25 +69,15 @@ export function WorkspaceLayout() {
       <WorkspaceHeader project={project || null} isLoading={isLoading} />
       <WorkspaceStageTabs spec={project?.spec || null} canNavigateTo={canNavigateTo} />
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Main content area */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <Outlet context={{ project, isLoading }} />
         </div>
-        {/* AI Assistant Sidebar */}
-        <OrchestratorSidebar
-          project={project || null}
-          onSpecUpdate={handleOrchestratorSpecUpdate}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={toggleSidebar}
-        />
       </div>
     </div>
   )
 }
 
 // Hook to access workspace context in child routes
-import { useOutletContext } from 'react-router-dom'
-
 interface WorkspaceContext {
   project: Project | null
   isLoading: boolean
