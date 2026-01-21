@@ -14,8 +14,9 @@ import {
   Shield,
   Pencil,
   Wrench,
-  Workflow,
+  MessageSquare,
   FileText,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
@@ -28,6 +29,7 @@ const MODE_CONFIG: Record<ControlMode, { icon: typeof Zap; label: string; color:
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
+  { name: 'Chat', href: '/chat', icon: MessageSquare },
   { name: 'Projects', href: '/projects', icon: FolderOpen },
   { name: 'New Project', href: '/new', icon: PlusCircle },
   { name: 'Block Library', href: '/blocks', icon: Layers },
@@ -38,7 +40,7 @@ const adminNavigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Blocks', href: '/admin/blocks', icon: Layers },
   { name: 'LLMs', href: '/admin/llms', icon: Cpu },
-  { name: 'Orchestrator', href: '/admin/orchestrator', icon: Workflow },
+  { name: 'Prompts', href: '/admin/system-prompts', icon: SlidersHorizontal },
   { name: 'Blog', href: '/admin/blog', icon: FileText },
   { name: 'Logs', href: '/admin/logs', icon: ScrollText },
 ]
