@@ -30,3 +30,6 @@ tmpclaude-*
 
 # LangGraph local state
 .langgraph_api/
+
+# External tools
+gerbv/
