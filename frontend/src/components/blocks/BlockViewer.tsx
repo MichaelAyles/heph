@@ -646,15 +646,6 @@ function ComponentsTab({
     },
   })
 
-  const updateComponent = (index: number, field: keyof BlockComponentDef, value: string | number | boolean) => {
-    setComponents((prev) => {
-      const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
-      return updated
-    })
-    setHasChanges(true)
-  }
-
   const handleSave = () => {
     saveMutation.mutate(components)
   }
