@@ -7,10 +7,13 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createParser } from '@tracespace/parser'
-import { plot as plotTree, BoundingBox } from '@tracespace/plotter'
+import { plot as plotTree } from '@tracespace/plotter'
 import { render as renderImage } from '@tracespace/renderer'
 import { Loader2, AlertCircle, ZoomIn, ZoomOut, RotateCcw, Layers, Eye, EyeOff } from 'lucide-react'
 import { clsx } from 'clsx'
+
+// Bounding box type: [minX, minY, maxX, maxY]
+type BoundingBox = [number, number, number, number]
 
 // Layer colors matching typical PCB CAM viewers
 const LAYER_COLORS: Record<string, { fill: string; stroke: string; label: string; order: number }> = {
@@ -96,8 +99,8 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
             parser.feed(content)
             const parseTree = parser.results()
 
-            // Plot to image tree
-            const imageTree = plotTree(parseTree)
+            // Plot to image tree (use as any to handle version mismatch)
+            const imageTree = plotTree(parseTree as never)
 
             // Render to SVG
             const svgElement = renderImage(imageTree)
@@ -107,8 +110,8 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
             let svgString = ''
             if (svgElement && typeof svgElement === 'object') {
               // Build SVG string from element properties
-              const children = svgElement.children || []
-              const viewBox = svgElement.attributes?.viewBox || ''
+              const svgObj = svgElement as { children?: unknown[] }
+              const children = svgObj.children || []
 
               // Create group with layer styling
               const colorConfig = LAYER_COLORS[layerName] || { fill: '#888', stroke: '#aaa' }

@@ -444,6 +444,7 @@ export interface BlockFiles {
   thumbnail?: string // e.g., "mcu-esp32c6.png"
   blockJson?: string // e.g., "block.json"
   gerbers?: string // e.g., "gerbers.zip" - ZIP file containing Gerber files
+  pos?: string // e.g., "mcu-esp32c6-pos.csv" - Pick and place file
 }
 
 // Net mapping for schematic merge
