@@ -146,7 +146,7 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
               content,
               visible: layerName !== 'Unknown',
               svgContent: svgString,
-              bounds: imageTree.size,
+              bounds: imageTree.size as BoundingBox,
             })
           } catch (parseError) {
             console.warn(`Failed to parse ${filename}:`, parseError)
