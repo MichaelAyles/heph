@@ -669,9 +669,15 @@ function ComponentsTab({
     { fit: [] as BlockComponentDef[], nofit: [] as BlockComponentDef[] }
   )
 
-  // Stats
-  const withLcsc = components.filter((c) => c.lcscPartNumber).length
-  const withMpn = components.filter((c) => c.mpn).length
+  // Stats - count unique part types (by value+footprint)
+  const uniquePartTypes = new Map<string, BlockComponentDef>()
+  components.filter(c => !c.nofit).forEach((c) => {
+    const key = `${c.value}|${c.footprint}`
+    if (!uniquePartTypes.has(key)) uniquePartTypes.set(key, c)
+  })
+  const uniqueCount = uniquePartTypes.size
+  const withLcsc = Array.from(uniquePartTypes.values()).filter((c) => c.lcscPartNumber).length
+  const withMpn = Array.from(uniquePartTypes.values()).filter((c) => c.mpn).length
 
   if (!definition) {
     return (
@@ -686,22 +692,22 @@ function ComponentsTab({
       {/* Summary */}
       <div className="grid grid-cols-4 gap-3">
         <div className="bg-surface-700/30 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-white">{components.length}</div>
-          <div className="text-xs text-steel-dim">Total</div>
+          <div className="text-xl font-bold text-white">{uniqueCount}</div>
+          <div className="text-xs text-steel-dim">Part Types</div>
         </div>
         <div className="bg-surface-700/30 rounded-lg p-3 text-center">
           <div className="text-xl font-bold text-green-400">{grouped.fit.length}</div>
-          <div className="text-xs text-steel-dim">Populate</div>
+          <div className="text-xs text-steel-dim">Components</div>
         </div>
         <div className="bg-surface-700/30 rounded-lg p-3 text-center">
-          <div className={clsx('text-xl font-bold', withLcsc === components.length ? 'text-emerald-400' : 'text-amber-400')}>
-            {withLcsc}/{components.length}
+          <div className={clsx('text-xl font-bold', withLcsc === uniqueCount ? 'text-emerald-400' : 'text-amber-400')}>
+            {withLcsc}/{uniqueCount}
           </div>
           <div className="text-xs text-steel-dim">LCSC</div>
         </div>
         <div className="bg-surface-700/30 rounded-lg p-3 text-center">
-          <div className={clsx('text-xl font-bold', withMpn === components.length ? 'text-emerald-400' : 'text-amber-400')}>
-            {withMpn}/{components.length}
+          <div className={clsx('text-xl font-bold', withMpn === uniqueCount ? 'text-emerald-400' : 'text-amber-400')}>
+            {withMpn}/{uniqueCount}
           </div>
           <div className="text-xs text-steel-dim">MPN</div>
         </div>
@@ -741,7 +747,7 @@ function ComponentsTab({
         </div>
       )}
 
-      {/* Components table */}
+      {/* Components table - grouped by value+footprint */}
       {grouped.fit.length > 0 && (
         <div>
           <h4 className="text-sm font-medium text-white mb-3">Bill of Materials</h4>
@@ -749,7 +755,7 @@ function ComponentsTab({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-steel-dim border-b border-surface-700">
-                  <th className="pb-2 pr-2 font-medium">Ref</th>
+                  <th className="pb-2 pr-2 font-medium">References</th>
                   <th className="pb-2 pr-2 font-medium">Value</th>
                   <th className="pb-2 pr-2 font-medium">Footprint</th>
                   <th className="pb-2 pr-2 font-medium">Qty</th>
@@ -763,53 +769,102 @@ function ComponentsTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-700/50">
-                {components.map((comp, i) => {
-                  if (comp.nofit) return null
-                  return (
-                    <tr key={i} className="text-steel hover:bg-surface-700/30">
-                      <td className="py-1.5 pr-2 font-mono text-white text-xs">{comp.reference}</td>
-                      <td className="py-1.5 pr-2 text-xs">{comp.value}</td>
-                      <td className="py-1.5 pr-2 text-steel-dim text-xs">{comp.footprint}</td>
-                      <td className="py-1.5 pr-2 text-center text-xs">{comp.quantity}</td>
-                      {editable && (
-                        <>
-                          <td className="py-1.5 pr-2">
-                            <input
-                              type="text"
-                              value={comp.manufacturer || ''}
-                              onChange={(e) => updateComponent(i, 'manufacturer', e.target.value)}
-                              placeholder="—"
-                              className="w-20 px-1.5 py-0.5 bg-surface-800 border border-surface-600 text-steel text-xs focus:outline-none focus:border-copper"
-                            />
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            <input
-                              type="text"
-                              value={comp.mpn || ''}
-                              onChange={(e) => updateComponent(i, 'mpn', e.target.value)}
-                              placeholder="—"
-                              className="w-28 px-1.5 py-0.5 bg-surface-800 border border-surface-600 text-steel text-xs focus:outline-none focus:border-copper"
-                            />
-                          </td>
-                          <td className="py-1.5">
-                            <input
-                              type="text"
-                              value={comp.lcscPartNumber || ''}
-                              onChange={(e) => updateComponent(i, 'lcscPartNumber', e.target.value)}
-                              placeholder="C######"
-                              className={clsx(
-                                'w-20 px-1.5 py-0.5 bg-surface-800 border text-xs focus:outline-none focus:border-copper',
-                                comp.lcscPartNumber
-                                  ? 'border-emerald-500/50 text-emerald-400'
-                                  : 'border-surface-600 text-steel'
-                              )}
-                            />
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  )
-                })}
+                {(() => {
+                  // Group components by value+footprint
+                  const componentGroups = new Map<string, { indices: number[]; refs: string[]; comp: BlockComponentDef }>()
+                  components.forEach((comp, i) => {
+                    if (comp.nofit) return
+                    const key = `${comp.value}|${comp.footprint}`
+                    const existing = componentGroups.get(key)
+                    if (existing) {
+                      existing.indices.push(i)
+                      existing.refs.push(comp.reference)
+                    } else {
+                      componentGroups.set(key, { indices: [i], refs: [comp.reference], comp })
+                    }
+                  })
+
+                  // Sort refs naturally (R1, R2, R10, not R1, R10, R2)
+                  const sortRefs = (refs: string[]) => {
+                    return refs.sort((a, b) => {
+                      const aMatch = a.match(/^([A-Z]+)(\d+)$/)
+                      const bMatch = b.match(/^([A-Z]+)(\d+)$/)
+                      if (aMatch && bMatch && aMatch[1] === bMatch[1]) {
+                        return parseInt(aMatch[2]) - parseInt(bMatch[2])
+                      }
+                      return a.localeCompare(b)
+                    })
+                  }
+
+                  return Array.from(componentGroups.entries()).map(([key, group]) => {
+                    const { indices, refs, comp } = group
+                    const sortedRefs = sortRefs([...refs])
+                    const totalQty = indices.reduce((sum, i) => sum + (components[i].quantity || 1), 0)
+
+                    // Update all components in group when editing
+                    const updateGroup = (field: keyof BlockComponentDef, value: string) => {
+                      setComponents((prev) => {
+                        const updated = [...prev]
+                        indices.forEach((i) => {
+                          updated[i] = { ...updated[i], [field]: value }
+                        })
+                        return updated
+                      })
+                      setHasChanges(true)
+                    }
+
+                    return (
+                      <tr key={key} className="text-steel hover:bg-surface-700/30">
+                        <td className="py-1.5 pr-2 font-mono text-white text-xs max-w-32">
+                          <span className="truncate block" title={sortedRefs.join(', ')}>
+                            {sortedRefs.length > 4
+                              ? `${sortedRefs.slice(0, 3).join(', ')}... (${sortedRefs.length})`
+                              : sortedRefs.join(', ')}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-2 text-xs">{comp.value}</td>
+                        <td className="py-1.5 pr-2 text-steel-dim text-xs">{comp.footprint}</td>
+                        <td className="py-1.5 pr-2 text-center text-xs">{totalQty}</td>
+                        {editable && (
+                          <>
+                            <td className="py-1.5 pr-2">
+                              <input
+                                type="text"
+                                value={comp.manufacturer || ''}
+                                onChange={(e) => updateGroup('manufacturer', e.target.value)}
+                                placeholder="—"
+                                className="w-20 px-1.5 py-0.5 bg-surface-800 border border-surface-600 text-steel text-xs focus:outline-none focus:border-copper"
+                              />
+                            </td>
+                            <td className="py-1.5 pr-2">
+                              <input
+                                type="text"
+                                value={comp.mpn || ''}
+                                onChange={(e) => updateGroup('mpn', e.target.value)}
+                                placeholder="—"
+                                className="w-28 px-1.5 py-0.5 bg-surface-800 border border-surface-600 text-steel text-xs focus:outline-none focus:border-copper"
+                              />
+                            </td>
+                            <td className="py-1.5">
+                              <input
+                                type="text"
+                                value={comp.lcscPartNumber || ''}
+                                onChange={(e) => updateGroup('lcscPartNumber', e.target.value)}
+                                placeholder="C######"
+                                className={clsx(
+                                  'w-20 px-1.5 py-0.5 bg-surface-800 border text-xs focus:outline-none focus:border-copper',
+                                  comp.lcscPartNumber
+                                    ? 'border-emerald-500/50 text-emerald-400'
+                                    : 'border-surface-600 text-steel'
+                                )}
+                              />
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    )
+                  })
+                })()}
               </tbody>
             </table>
           </div>
