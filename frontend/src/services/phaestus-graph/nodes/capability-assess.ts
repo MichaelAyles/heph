@@ -6,7 +6,7 @@
  */
 
 import type { PhaestusState, BlockSummary } from '../state'
-import { setAssessment, setRoute, setError } from '../state'
+import { setAssessment, setRoute, setError, setDebugLlm } from '../state'
 import type { CapabilityAssessment, SystemPrompt } from '../../../db/schema'
 import type { D1Database } from '../types'
 
@@ -131,17 +131,20 @@ export async function capabilityAssessNode(
       projectId: state.projectId ?? undefined,
     })
 
+    // Track LLM call in debug
+    let newState = setDebugLlm(state, prompt, response.content)
+
     const assessment = parseAssessmentResponse(response.content)
 
     if (!assessment) {
-      return setError(state, 'Failed to parse capability assessment')
+      return setError(newState, 'Failed to parse capability assessment')
     }
 
     // Determine route based on assessment
     const route = determineRoute(assessment)
 
     // Update state
-    let newState = setAssessment(state, assessment)
+    newState = setAssessment(newState, assessment)
     newState = setRoute(newState, route)
 
     return newState

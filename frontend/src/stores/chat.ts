@@ -6,6 +6,7 @@
 
 import { create } from 'zustand'
 import type { CapabilityAssessment, ChatRoute } from '../db/schema'
+import type { DebugInfo } from '../services/phaestus-graph'
 
 // =============================================================================
 // Types
@@ -36,10 +37,15 @@ export interface ChatState {
   latestAssessment: CapabilityAssessment | null
   latestRoute: ChatRoute
 
+  // Debug info
+  debugInfo: DebugInfo | null
+  showDebugPanel: boolean
+
   // Actions
   sendMessage: (message: string) => Promise<void>
   clearChat: () => void
   setError: (error: string | null) => void
+  toggleDebugPanel: () => void
 }
 
 // =============================================================================
@@ -52,6 +58,7 @@ interface ChatResponse {
   assessment?: CapabilityAssessment
   projectId?: string
   sessionId: string
+  debug?: DebugInfo
 }
 
 async function sendChatMessage(
@@ -88,6 +95,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   error: null,
   latestAssessment: null,
   latestRoute: null,
+  debugInfo: null,
+  showDebugPanel: false,
 
   // Actions
   sendMessage: async (content: string) => {
@@ -127,6 +136,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         projectId: response.projectId ?? state.projectId,
         latestAssessment: response.assessment ?? state.latestAssessment,
         latestRoute: response.route,
+        debugInfo: response.debug ?? null,
         isLoading: false,
       }))
     } catch (err) {
@@ -147,10 +157,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
       latestAssessment: null,
       latestRoute: null,
+      debugInfo: null,
     })
   },
 
   setError: (error: string | null) => {
     set({ error })
+  },
+
+  toggleDebugPanel: () => {
+    set((state) => ({ showDebugPanel: !state.showDebugPanel }))
   },
 }))

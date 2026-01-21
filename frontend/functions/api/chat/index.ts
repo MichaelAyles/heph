@@ -194,13 +194,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       sessionId: result.sessionId,
     })
 
-    // Return response
+    // Return response with debug info
     return Response.json({
       response: result.response,
       route: result.route,
       assessment: result.state.capabilityAssessment,
       projectId: result.projectId,
       sessionId: result.sessionId,
+      debug: result.state.debug,
     })
   } catch (error) {
     await logger.error('api', 'Chat error', { error: String(error) })

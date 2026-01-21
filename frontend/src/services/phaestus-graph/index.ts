@@ -46,3 +46,6 @@ export {
   setError,
   incrementIteration,
 } from './state'
+
+// Debug types
+export type { DebugInfo, DebugStep } from './state'

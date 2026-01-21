@@ -7,7 +7,13 @@
  */
 
 import type { PhaestusState } from './state'
-import { createInitialState } from './state'
+import {
+  createInitialState,
+  addDebugStep,
+  setDebugSystemPrompt,
+  setDebugHardRejection,
+  finalizeDebug,
+} from './state'
 import { hardRejectionNode, checkHardRejectionFromDb } from './nodes/hard-rejection'
 import { capabilityAssessNode, getActiveSystemPrompt, type LLMClient } from './nodes/capability-assess'
 import { rejectNode } from './nodes/reject'
@@ -49,21 +55,38 @@ export async function runGraph(
 ): Promise<GraphResult> {
   // Initialize state
   let state = createInitialState(message, existingSessionId)
+  state = addDebugStep(state, 'init', { message, sessionId: existingSessionId })
 
   // Step 1: Hard rejection check (pattern matching, no LLM)
+  const hardRejectionStart = Date.now()
   if (config.db) {
     const rejection = await checkHardRejectionFromDb(message, config.db)
+    state = setDebugHardRejection(
+      state,
+      rejection.criteriaCount ?? 0,
+      rejection.rejected ? rejection.matchedPattern ?? null : null
+    )
+    state = addDebugStep(
+      state,
+      'hard_rejection_check',
+      { message },
+      rejection,
+      Date.now() - hardRejectionStart
+    )
+
     if (rejection.rejected) {
       // Create a mock criteria array for the node
       const mockCriteria: HardRejectionCriteria[] = [{
         id: 0,
-        pattern: '',
+        pattern: rejection.matchedPattern ?? '',
         reason: rejection.reason!,
         category: rejection.category as 'safety' | 'capability' | 'legal',
         isActive: true,
         createdAt: new Date().toISOString(),
       }]
       state = await hardRejectionNode(state, mockCriteria)
+      state = addDebugStep(state, 'hard_rejection_node', null, { reason: rejection.reason })
+      state = finalizeDebug(state)
 
       // Return early - no need for LLM call
       const lastMessage = state.messages[state.messages.length - 1]
@@ -76,8 +99,17 @@ export async function runGraph(
       }
     }
   } else if (config.hardRejectionCriteria) {
+    state = setDebugHardRejection(state, config.hardRejectionCriteria.length, null)
     state = await hardRejectionNode(state, config.hardRejectionCriteria)
+    state = addDebugStep(
+      state,
+      'hard_rejection_check',
+      { criteriaCount: config.hardRejectionCriteria.length },
+      { rejected: state.route === 'REJECT' },
+      Date.now() - hardRejectionStart
+    )
     if (state.route === 'REJECT') {
+      state = finalizeDebug(state)
       const lastMessage = state.messages[state.messages.length - 1]
       return {
         state,
@@ -99,14 +131,33 @@ export async function runGraph(
     systemPrompt = getDefaultSystemPrompt()
   }
 
+  // Track system prompt in debug
+  state = setDebugSystemPrompt(
+    state,
+    systemPrompt.name,
+    systemPrompt.capabilityAssessmentBase
+  )
+  state = addDebugStep(state, 'system_prompt_loaded', null, { name: systemPrompt.name })
+
   // Step 3: Capability assessment (LLM call)
+  const llmStart = Date.now()
   state = await capabilityAssessNode(state, config.llm, systemPrompt)
+  state = addDebugStep(
+    state,
+    'capability_assess',
+    { userRequest: state.userRequest },
+    { assessment: state.capabilityAssessment, route: state.route },
+    Date.now() - llmStart
+  )
 
   // Check for errors
   if (state.error) {
+    const errorMessage = state.error
+    state = addDebugStep(state, 'error', null, { error: errorMessage })
+    state = finalizeDebug(state)
     return {
       state,
-      response: state.error,
+      response: errorMessage,
       route: null,
       projectId: null,
       sessionId: state.sessionId,
@@ -114,21 +165,35 @@ export async function runGraph(
   }
 
   // Step 4: Route based on assessment
+  const routeStart = Date.now()
   switch (state.route) {
     case 'REJECT':
       state = rejectNode(state)
+      state = addDebugStep(state, 'reject_node', null, null, Date.now() - routeStart)
       break
     case 'CLARIFY':
       state = clarifyNode(state)
+      state = addDebugStep(state, 'clarify_node', null, null, Date.now() - routeStart)
       break
     case 'PROCEED':
       state = await proceedNode(state, config.db)
+      state = addDebugStep(
+        state,
+        'proceed_node',
+        null,
+        { projectId: state.projectId },
+        Date.now() - routeStart
+      )
       break
     default:
       // Should not happen, but handle gracefully
       state = clarifyNode(state)
+      state = addDebugStep(state, 'clarify_node_fallback', null, null, Date.now() - routeStart)
       break
   }
+
+  // Finalize debug timing
+  state = finalizeDebug(state)
 
   // Return result
   const lastMessage = state.messages[state.messages.length - 1]

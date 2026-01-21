@@ -33,6 +33,44 @@ export interface BlockSummary {
 // State Schema
 // =============================================================================
 
+// =============================================================================
+// Debug Info
+// =============================================================================
+
+export interface DebugStep {
+  node: string
+  timestamp: string
+  input?: unknown
+  output?: unknown
+  duration?: number
+}
+
+export interface DebugInfo {
+  // Execution trace
+  steps: DebugStep[]
+
+  // System prompt used
+  systemPromptName: string | null
+  systemPromptContent: string | null
+
+  // Hard rejection check
+  hardRejectionCriteriaCount: number
+  hardRejectionMatched: string | null
+
+  // LLM call details
+  llmPrompt: string | null
+  llmRawResponse: string | null
+
+  // Timing
+  startTime: string
+  endTime: string | null
+  totalDuration: number | null
+}
+
+// =============================================================================
+// State Schema
+// =============================================================================
+
 export interface PhaestusState {
   // User input
   userRequest: string
@@ -57,6 +95,9 @@ export interface PhaestusState {
 
   // Error state
   error: string | null
+
+  // Debug info
+  debug: DebugInfo
 }
 
 // =============================================================================
@@ -67,6 +108,7 @@ export function createInitialState(
   userRequest: string,
   sessionId?: string
 ): PhaestusState {
+  const now = new Date().toISOString()
   return {
     userRequest,
     userFeedback: null,
@@ -78,13 +120,25 @@ export function createInitialState(
         id: crypto.randomUUID(),
         role: 'user',
         content: userRequest,
-        timestamp: new Date().toISOString(),
+        timestamp: now,
       },
     ],
     sessionId: sessionId ?? crypto.randomUUID(),
     projectId: null,
     availableBlocks: [],
     error: null,
+    debug: {
+      steps: [],
+      systemPromptName: null,
+      systemPromptContent: null,
+      hardRejectionCriteriaCount: 0,
+      hardRejectionMatched: null,
+      llmPrompt: null,
+      llmRawResponse: null,
+      startTime: now,
+      endTime: null,
+      totalDuration: null,
+    },
   }
 }
 
@@ -155,5 +209,93 @@ export function incrementIteration(state: PhaestusState): PhaestusState {
   return {
     ...state,
     iterationCount: state.iterationCount + 1,
+  }
+}
+
+// =============================================================================
+// Debug Helpers
+// =============================================================================
+
+export function addDebugStep(
+  state: PhaestusState,
+  node: string,
+  input?: unknown,
+  output?: unknown,
+  duration?: number
+): PhaestusState {
+  return {
+    ...state,
+    debug: {
+      ...state.debug,
+      steps: [
+        ...state.debug.steps,
+        {
+          node,
+          timestamp: new Date().toISOString(),
+          input,
+          output,
+          duration,
+        },
+      ],
+    },
+  }
+}
+
+export function setDebugSystemPrompt(
+  state: PhaestusState,
+  name: string,
+  content: string
+): PhaestusState {
+  return {
+    ...state,
+    debug: {
+      ...state.debug,
+      systemPromptName: name,
+      systemPromptContent: content,
+    },
+  }
+}
+
+export function setDebugHardRejection(
+  state: PhaestusState,
+  criteriaCount: number,
+  matchedPattern: string | null
+): PhaestusState {
+  return {
+    ...state,
+    debug: {
+      ...state.debug,
+      hardRejectionCriteriaCount: criteriaCount,
+      hardRejectionMatched: matchedPattern,
+    },
+  }
+}
+
+export function setDebugLlm(
+  state: PhaestusState,
+  prompt: string,
+  rawResponse: string
+): PhaestusState {
+  return {
+    ...state,
+    debug: {
+      ...state.debug,
+      llmPrompt: prompt,
+      llmRawResponse: rawResponse,
+    },
+  }
+}
+
+export function finalizeDebug(state: PhaestusState): PhaestusState {
+  const endTime = new Date().toISOString()
+  const startMs = new Date(state.debug.startTime).getTime()
+  const endMs = new Date(endTime).getTime()
+  return {
+    ...state,
+    debug: {
+      ...state.debug,
+      endTime,
+      totalDuration: endMs - startMs,
+    },
   }
 }

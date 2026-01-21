@@ -14,6 +14,8 @@ export interface HardRejectionResult {
   rejected: boolean
   reason: string | null
   category: string | null
+  criteriaCount?: number
+  matchedPattern?: string | null
 }
 
 /**
@@ -24,10 +26,9 @@ export function checkHardRejection(
   criteria: HardRejectionCriteria[]
 ): HardRejectionResult {
   const normalizedRequest = request.toLowerCase()
+  const activeCriteria = criteria.filter((c) => c.isActive)
 
-  for (const criterion of criteria) {
-    if (!criterion.isActive) continue
-
+  for (const criterion of activeCriteria) {
     try {
       const regex = new RegExp(criterion.pattern, 'i')
       if (regex.test(normalizedRequest)) {
@@ -35,6 +36,8 @@ export function checkHardRejection(
           rejected: true,
           reason: criterion.reason,
           category: criterion.category,
+          criteriaCount: activeCriteria.length,
+          matchedPattern: criterion.pattern,
         }
       }
     } catch {
@@ -43,7 +46,13 @@ export function checkHardRejection(
     }
   }
 
-  return { rejected: false, reason: null, category: null }
+  return {
+    rejected: false,
+    reason: null,
+    category: null,
+    criteriaCount: activeCriteria.length,
+    matchedPattern: null,
+  }
 }
 
 /**
