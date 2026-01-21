@@ -616,7 +616,7 @@ function ComponentsTab({
   const { data: allBlocksData } = useQuery({
     queryKey: ['admin-blocks-library'],
     queryFn: async () => {
-      const res = await fetch('/api/admin/blocks')
+      const res = await fetch('/api/admin/blocks?withDefinition=true')
       if (!res.ok) return { blocks: [] }
       return res.json() as Promise<{ blocks: Array<{ slug: string; name: string; definition?: BlockDefinition }> }>
     },

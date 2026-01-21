@@ -46,6 +46,7 @@ interface BlockSummary {
     present: string[]
     missing: string[]
   }
+  definition?: unknown // Include full definition when requested
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -90,7 +91,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const filesList = Object.values(files).filter(Boolean) as string[]
       const requirements = getBlockFileRequirements(row.slug)
 
-      return {
+      const summary: BlockSummary = {
         id: row.id,
         slug: row.slug,
         name: row.name,
@@ -111,6 +112,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           missing: requirements.required.filter((f) => !filesList.includes(f)),
         },
       }
+
+      // Include full definition when requested
+      if (withDefinition && row.definition) {
+        try {
+          summary.definition = JSON.parse(row.definition)
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      return summary
     })
 
     return Response.json({ blocks })
