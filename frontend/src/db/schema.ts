@@ -152,6 +152,12 @@ export interface PCBArtifacts {
   designJustifications?: DesignJustification[]
   // Resistor tap states (0R nofit decisions)
   resistorTapStates?: ResistorTapState[]
+  // Merged gerber files (for manufacturing export)
+  mergedGerbers?: MergedGerberArtifacts
+  // Panelized gerber files (with v-score)
+  panelGerbers?: PanelGerberArtifacts
+  // Board outline info from content-based calculation
+  boardOutline?: { width: number; height: number; marginMm: number }
 }
 
 // =============================================================================
@@ -186,6 +192,7 @@ export interface PanelConfiguration {
     copies: number
   }>
   vScoreLines: VScoreLine[]
+  routedEdges: RoutedEdge[]
   panelSize: { width: number; height: number }
   panelMargin: number // Default 5mm
 }
@@ -195,6 +202,35 @@ export interface VScoreLine {
   position: number // mm from panel origin
   startMm: number
   endMm: number
+}
+
+export interface RoutedEdge {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+// =============================================================================
+// MERGED GERBER ARTIFACTS
+// =============================================================================
+
+export interface MergedGerberArtifacts {
+  topCopper: string
+  innerCopper1: string
+  innerCopper2: string
+  bottomCopper: string
+  topSilk: string
+  bottomSilk: string
+  topMask: string
+  bottomMask: string
+  edgeCuts: string
+  drill: string
+}
+
+export interface PanelGerberArtifacts extends MergedGerberArtifacts {
+  vScore: string
+  routedEdges: string // Gerber for milled edges (shorter boards' top edges)
 }
 
 // =============================================================================

@@ -13,6 +13,7 @@
 import type {
   PanelConfiguration,
   VScoreLine,
+  RoutedEdge,
   RemoteBoard,
   PCBArtifacts,
 } from '../db/schema'
@@ -27,10 +28,12 @@ import {
 // =============================================================================
 
 export const PANEL_DEFAULTS = {
-  margin: 5, // mm from panel edge
-  spacing: 2, // mm between boards
+  margin: 5, // mm from panel edge to board
+  spacing: 4, // mm between boards (must accommodate boardMargin*2 + routeBitDiameter for routing clearance)
   railWidth: 5, // mm for edge rails
   vScoreWidth: 0.3, // mm v-score line width
+  boardMargin: 1, // mm between v-score/route and board copper
+  routeBitDiameter: 2, // mm routing bit diameter
 } as const
 
 export const GRID_SIZE_MM = 12.7
@@ -79,9 +82,9 @@ export function calculatePanelLayout(
     maxHeight = Math.max(maxHeight, boardHeight)
   }
 
-  // Calculate total panel size
-  const panelWidth = currentX - config.spacing + config.margin
-  const panelHeight = maxHeight + config.margin * 2
+  // Calculate total panel size (includes boardMargin for v-score clearance)
+  const panelWidth = currentX - config.spacing + config.margin + config.boardMargin * 2
+  const panelHeight = maxHeight + config.margin * 2 + config.boardMargin * 2
 
   // Generate v-score lines
   const vScoreLines = generateVScoreLines(
@@ -93,10 +96,20 @@ export function calculatePanelLayout(
     config.margin
   )
 
+  // Generate routed edges (for boards shorter than the tallest)
+  const routedEdges = generateRoutedEdges(
+    mainBoardPosition,
+    mainBoardSize,
+    remoteBoardPositions,
+    remoteBoards,
+    config.margin
+  )
+
   return {
     mainBoardPosition,
     remoteBoards: remoteBoardPositions,
     vScoreLines,
+    routedEdges,
     panelSize: { width: panelWidth, height: panelHeight },
     panelMargin: config.margin,
   }
@@ -104,6 +117,15 @@ export function calculatePanelLayout(
 
 /**
  * Generate v-score lines for panel separation
+ *
+ * V-scores are placed boardMargin (1mm) OUTSIDE the board edge, so:
+ * v-score | 1mm gap | board copper | 1mm gap | v-score
+ *
+ * Strategy:
+ * - All vertical edges: v-score at board_edge ± boardMargin
+ * - Bottom edges: v-score at bottom - boardMargin
+ * - Top edges of shorter boards: routed (can't v-score partial width)
+ * - Top edge of tallest board(s): v-score at top + boardMargin
  */
 export function generateVScoreLines(
   mainBoardPosition: { x: number; y: number },
@@ -111,41 +133,59 @@ export function generateVScoreLines(
   remoteBoardPositions: PanelConfiguration['remoteBoards'],
   remoteBoards: RemoteBoard[],
   panelSize: { width: number; height: number },
-  _margin: number
+  _margin: number,
+  boardMargin: number = PANEL_DEFAULTS.boardMargin
 ): VScoreLine[] {
   const lines: VScoreLine[] = []
 
-  // Main board left edge
+  // Find the maximum height (boards align at bottom, so max height = top of panel content)
+  const allHeights = [
+    mainBoardSize.height,
+    ...remoteBoards.map((b) => b.boardSize.height),
+  ]
+  const maxHeight = Math.max(...allHeights)
+
+  // Board bottoms are at Y = _margin (e.g., Y=5)
+  // Board tops are at Y = _margin + height
+  // V-score at BOTTOM: 1mm below board bottom = _margin - boardMargin
+  const bottomVScoreY = _margin - boardMargin
+  // V-score at TOP of tallest: 1mm above tallest board top = _margin + maxHeight + boardMargin
+  const topVScoreY = _margin + maxHeight + boardMargin
+
+  // Main board left edge - vertical v-score (offset left by boardMargin)
   lines.push({
     orientation: 'vertical',
-    position: mainBoardPosition.x,
+    position: mainBoardPosition.x - boardMargin,
     startMm: 0,
     endMm: panelSize.height,
   })
 
-  // Main board right edge
+  // Main board right edge - vertical v-score (offset right by boardMargin)
   lines.push({
     orientation: 'vertical',
-    position: mainBoardPosition.x + mainBoardSize.width,
+    position: mainBoardPosition.x + mainBoardSize.width + boardMargin,
     startMm: 0,
     endMm: panelSize.height,
   })
 
-  // Main board top edge
+  // Bottom edge (all boards) - horizontal v-score below board bottoms
   lines.push({
     orientation: 'horizontal',
-    position: mainBoardPosition.y,
-    startMm: mainBoardPosition.x,
-    endMm: mainBoardPosition.x + mainBoardSize.width,
+    position: bottomVScoreY,
+    startMm: 0,
+    endMm: panelSize.width,
   })
 
-  // Main board bottom edge
-  lines.push({
-    orientation: 'horizontal',
-    position: mainBoardPosition.y + mainBoardSize.height,
-    startMm: mainBoardPosition.x,
-    endMm: mainBoardPosition.x + mainBoardSize.width,
-  })
+  // Top edge - only v-score if main board is the tallest (aligns with panel top)
+  // Otherwise it will be routed (handled separately in generateRoutedEdges)
+  if (Math.abs(mainBoardSize.height - maxHeight) < 0.1) {
+    lines.push({
+      orientation: 'horizontal',
+      position: topVScoreY,
+      startMm: 0,
+      endMm: panelSize.width,
+    })
+  }
 
   // Remote board edges
   for (let i = 0; i < remoteBoardPositions.length; i++) {
@@ -155,41 +195,110 @@ export function generateVScoreLines(
 
     const { width, height } = board.boardSize
 
-    // Left edge
+    // Left edge - vertical v-score (offset left by boardMargin)
     lines.push({
       orientation: 'vertical',
-      position: pos.position.x,
+      position: pos.position.x - boardMargin,
       startMm: 0,
       endMm: panelSize.height,
     })
 
-    // Right edge
+    // Right edge - vertical v-score (offset right by boardMargin)
     lines.push({
       orientation: 'vertical',
-      position: pos.position.x + width,
+      position: pos.position.x + width + boardMargin,
       startMm: 0,
       endMm: panelSize.height,
     })
 
-    // Top edge
-    lines.push({
-      orientation: 'horizontal',
-      position: pos.position.y,
-      startMm: pos.position.x,
-      endMm: pos.position.x + width,
-    })
+    // Bottom edge is already covered by the full-width bottom v-score
 
-    // Bottom edge
-    lines.push({
-      orientation: 'horizontal',
-      position: pos.position.y + height,
-      startMm: pos.position.x,
-      endMm: pos.position.x + width,
-    })
+    // Top edge - only v-score if this board is the tallest
+    if (Math.abs(height - maxHeight) < 0.1) {
+      // This board is tallest, its top aligns with panel content top
+      lines.push({
+        orientation: 'horizontal',
+        position: topVScoreY,
+        startMm: 0,
+        endMm: panelSize.width,
+      })
+    }
+    // Shorter boards get routed top edges (handled in generateRoutedEdges)
   }
 
   // Deduplicate lines at same position
   return deduplicateVScoreLines(lines)
+}
+
+/**
+ * Generate routed edges for boards that don't align with v-scores
+ * These are the top edges of boards shorter than the tallest board
+ *
+ * Route position accounts for:
+ * - boardMargin: 1mm gap between board copper and cut line
+ * - bitRadius: route line is bit CENTER, so offset by half bit diameter
+ *
+ * Layout: board_top | 1mm gap | route_cut_starts_here
+ * Route center = board_top + boardMargin + bitRadius
+ */
+export function generateRoutedEdges(
+  mainBoardPosition: { x: number; y: number },
+  mainBoardSize: { width: number; height: number },
+  remoteBoardPositions: PanelConfiguration['remoteBoards'],
+  remoteBoards: RemoteBoard[],
+  margin: number,
+  boardMargin: number = PANEL_DEFAULTS.boardMargin,
+  routeBitDiameter: number = PANEL_DEFAULTS.routeBitDiameter
+): RoutedEdge[] {
+  const edges: RoutedEdge[] = []
+  const bitRadius = routeBitDiameter / 2
+
+  // Find max height
+  const allHeights = [
+    mainBoardSize.height,
+    ...remoteBoards.map((b) => b.boardSize.height),
+  ]
+  const maxHeight = Math.max(...allHeights)
+
+  // Check main board - if shorter than max, route its top edge
+  // Boards are bottom-aligned at y=margin, so top edge is at y = margin + height
+  // Route is ABOVE the board (toward higher Y values)
+  if (mainBoardSize.height < maxHeight - 0.1) {
+    const boardTop = margin + mainBoardSize.height
+    // Route center: board_top + boardMargin + bitRadius
+    // This places the bit's inner edge at boardMargin above the board top
+    const routeY = boardTop + boardMargin + bitRadius
+    edges.push({
+      x1: mainBoardPosition.x - boardMargin,
+      y1: routeY,
+      x2: mainBoardPosition.x + mainBoardSize.width + boardMargin,
+      y2: routeY,
+    })
+  }
+
+  // Check remote boards
+  for (let i = 0; i < remoteBoardPositions.length; i++) {
+    const pos = remoteBoardPositions[i]
+    const board = remoteBoards.find((b) => b.id === pos.remoteBoardId)
+    if (!board) continue
+
+    const { width, height } = board.boardSize
+
+    if (height < maxHeight - 0.1) {
+      // This board is shorter, route its top edge
+      const boardTop = margin + height
+      // Route center: board_top + boardMargin + bitRadius
+      const routeY = boardTop + boardMargin + bitRadius
+      edges.push({
+        x1: pos.position.x - boardMargin,
+        y1: routeY,
+        x2: pos.position.x + width + boardMargin,
+        y2: routeY,
+      })
+    }
+  }
+
+  return edges
 }
 
 /**
@@ -258,6 +367,44 @@ export function generateVScoreGerber(
   return [...header, ...draws, 'M02*'].join('\n')
 }
 
+/**
+ * Generate routed edges layer as Gerber content
+ * These are milled/routed cuts for edges that can't be v-scored
+ * (typically top edges of shorter boards in a mixed-height panel)
+ */
+export function generateRoutedEdgesGerber(
+  routedEdges: RoutedEdge[],
+  routeWidth: number = 2.0 // 2mm routing bit is common
+): string {
+  if (routedEdges.length === 0) {
+    return ''
+  }
+
+  const header = [
+    'G04 Routed edges layer - Generated by PHAESTUS*',
+    'G04 These edges require routing (milling) instead of v-scoring*',
+    '%MOMM*%',
+    '%FSLAX46Y46*%',
+    '%LPD*%',
+    `%ADD10C,${routeWidth.toFixed(6)}*%`, // Route width
+    'D10*',
+    'G01*', // Linear interpolation mode
+  ]
+
+  const draws: string[] = []
+
+  for (const edge of routedEdges) {
+    const x1 = Math.round(edge.x1 * 1000000)
+    const y1 = Math.round(edge.y1 * 1000000)
+    const x2 = Math.round(edge.x2 * 1000000)
+    const y2 = Math.round(edge.y2 * 1000000)
+    draws.push(`X${x1}Y${y1}D02*`) // Move to start
+    draws.push(`X${x2}Y${y2}D01*`) // Draw to end
+  }
+
+  return [...header, ...draws, 'M02*'].join('\n')
+}
+
 // =============================================================================
 // Panel Gerber Merging
 // =============================================================================
@@ -269,7 +416,7 @@ export async function mergeIntoPanelGerbers(
   mainBoardGerbers: MergedGerbers,
   remoteBoardGerbers: Array<{ board: RemoteBoard; gerbers: MergedGerbers }>,
   panelConfig: PanelConfiguration
-): Promise<MergedGerbers & { vScore: string }> {
+): Promise<MergedGerbers & { vScore: string; routedEdges: string }> {
   // Build GerberBlock array for unified merge
   const gerberBlocks: GerberBlock[] = []
 
@@ -331,6 +478,9 @@ export async function mergeIntoPanelGerbers(
   // Generate v-score layer
   const vScore = generateVScoreGerber(panelConfig.vScoreLines)
 
+  // Generate routed edges layer (for boards shorter than the tallest)
+  const routedEdges = generateRoutedEdgesGerber(panelConfig.routedEdges ?? [])
+
   // Generate panel outline (edge cuts)
   const { gerber: panelOutline } = generatePanelOutline(panelConfig.panelSize)
 
@@ -338,6 +488,7 @@ export async function mergeIntoPanelGerbers(
     ...merged,
     edgeCuts: panelOutline, // Replace edge cuts with panel outline
     vScore,
+    routedEdges,
   }
 }
 

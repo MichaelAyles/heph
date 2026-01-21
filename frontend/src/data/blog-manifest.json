@@ -1,0 +1,395 @@
+{
+  "generatedAt": "2026-01-21T19:30:00.000Z",
+  "entries": [
+    {
+      "slug": "blog0042",
+      "number": 42,
+      "title": "Blog 42: Panelization - Why Multiple Boards Share One Manufacturing Run",
+      "date": "2026-01-21",
+      "excerpt": "Blog 40 covered merging Gerber files into a single main board. But PHAESTUS designs often include remote boards - button panels, display breakouts, USB connectors that sit away from the main PCB. T...",
+      "thumbnailPath": "/blogs/blog0042/panel-preview.png",
+      "markdownPath": "/blogs/blog0042/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0041",
+      "number": 41,
+      "title": "Blog 41: KiCad on Railway - Automated Manufacturing File Generation",
+      "date": "2026-01-21",
+      "excerpt": "The block import workflow used to require users to export five different files from KiCad: schematic, PCB, STEP model, Gerbers, and pick-and-place CSV. Each export has its own dialog, its own setti...",
+      "thumbnailPath": "/blogs/blog0041/railway-logo.png",
+      "markdownPath": "/blogs/blog0041/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0040",
+      "number": 40,
+      "title": "Blog 40: Gerber Merging - Why We Gave Up on KiCad Native Files",
+      "date": "2026-01-21",
+      "excerpt": "PHAESTUS merges pre-validated circuit blocks into complete PCBs. For months, we tried to do this at the KiCad level - parsing `.kicad_pcb` files, transforming S-expressions, reconciling net names. ...",
+      "thumbnailPath": "/blogs/blog0040/2026-01-19 22_30_56-_remote-4ch-io-block [remote-4ch-io-block] — Schematic Editor.png",
+      "markdownPath": "/blogs/blog0040/blog.md",
+      "readingTime": 4
+    },
+    {
+      "slug": "blog0039",
+      "number": 39,
+      "title": "Blog 39: The PCB Design Stage - From Block Selection to Manufacturing Files",
+      "date": "January 19, 2026",
+      "excerpt": "Traditional PCB design requires: - Learning KiCad or Altium (weeks of tutorials) - Understanding schematic symbols and footprints - Manual routing (hours per board) - DRC rule configuration - Gerbe...",
+      "thumbnailPath": "/blogs/blog0039/grid-view.png",
+      "markdownPath": "/blogs/blog0039/blog.md",
+      "readingTime": 4
+    },
+    {
+      "slug": "blog0038",
+      "number": 38,
+      "title": "Blog 38: Real 3D PCB Preview - From Colored Boxes to STEP Models",
+      "date": "January 19, 2026",
+      "excerpt": "The PCB 3D viewer was rendering colored boxes. Not actual PCB models - just rectangles with category colors (indigo for MCU, red for power). It looked like a Minecraft build of a circuit board. We ...",
+      "thumbnailPath": "/blogs/blog0038/2026-01-19 14_58_24-.png",
+      "markdownPath": "/blogs/blog0038/blog.md",
+      "readingTime": 4
+    },
+    {
+      "slug": "blog0037",
+      "number": 37,
+      "title": "Blog 37: Edge-Driven Orchestration - From Hardcoded Prompts to Graph Navigation",
+      "date": "January 18, 2026",
+      "excerpt": "PHAESTUS has an orchestrator - a multi-agent system that guides users through hardware design stages. It works, but the prompts live in three places: 1. **Hardcoded in TypeScript** - `src/prompts/f...",
+      "thumbnailPath": "/blogs/blog0037/2026-01-18 17_41_52-NVIDIA GeForce Overlay.png",
+      "markdownPath": "/blogs/blog0037/blog.md",
+      "readingTime": 7
+    },
+    {
+      "slug": "blog0036",
+      "number": 36,
+      "title": "Blog 36: BlockViewer - Inspecting Hardware Blocks with KiCanvas",
+      "date": "January 18, 2026",
+      "excerpt": "We've built a system that imports KiCad designs and generates block definitions. But once a block is in the database, viewing it means: 1. Download the JSON 2. Open in a text editor 3. Cross-refere...",
+      "thumbnailPath": "/blogs/blog0036/2026-01-18 17_04_16-NVIDIA GeForce Overlay.png",
+      "markdownPath": "/blogs/blog0036/blog.md",
+      "readingTime": 7
+    },
+    {
+      "slug": "blog0035",
+      "number": 35,
+      "title": "Blog 35: Integrating TOKN - A KiCad Parser That Actually Works",
+      "date": "January 17, 2026",
+      "excerpt": "Blog 34 shipped with a bug. A nasty one. Users uploading KiCad 8 schematics got: `\"model encountered unsupported child token 'hide'\"`. The kicadts library we were using hadn't been updated for KiCa...",
+      "thumbnailPath": "/blogs/blog0035/logo.png",
+      "markdownPath": "/blogs/blog0035/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0034",
+      "number": 34,
+      "title": "Blog 34: LLM-Assisted Block Import - From KiCad Files to block.json",
+      "date": "January 17, 2026",
+      "excerpt": "In Blog 33, we introduced formal block specifications. Great for DRC validation. Terrible for actually creating blocks. A typical `block.json` is 80-150 lines. You need to: - List every component w...",
+      "thumbnailPath": "/blogs/blog0034/2026-01-17 19_53_30-ESP32 — PCB Editor.png",
+      "markdownPath": "/blogs/blog0034/blog.md",
+      "readingTime": 8
+    },
+    {
+      "slug": "blog0033",
+      "number": 33,
+      "title": "Blog 33: Formal PCB Block Specifications - Why Circuit Modules Need Schemas",
+      "date": "January 17, 2026",
+      "excerpt": "When we started PHAESTUS, blocks were loose concepts. A sensor block had a schematic, a PCB layout, maybe some notes in a README. Combining them meant manually checking: - Does this I2C sensor conf...",
+      "thumbnailPath": "/blogs/blog0033/2026-01-17 19_54_45-1x1-jst-ph-battery-connector — PCB Editor.png",
+      "markdownPath": "/blogs/blog0033/blog.md",
+      "readingTime": 7
+    },
+    {
+      "slug": "blog0032",
+      "number": 32,
+      "title": "Blog 32: Build vs Buy - Why We Deleted Our Custom Graph Editor",
+      "date": "January 16, 2026",
+      "excerpt": "When we started building PHAESTUS's AI orchestrator - a multi-agent system that guides users through hardware design - we needed to debug and visualize our LangGraph state machine. The obvious answ...",
+      "thumbnailPath": "/blogs/blog0032/langgraph-node-editor.png",
+      "markdownPath": "/blogs/blog0032/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0031",
+      "number": 31,
+      "title": "Blog 31: OpenSCAD Rendering - From 2 Minutes to 2 Seconds",
+      "date": "January 15, 2026",
+      "excerpt": "Clicking \"Render\" on the enclosure page was painful. A moderately complex design - rounded corners, a few cutouts - took 2 minutes to render. Users would click, wait, wonder if it crashed, maybe cl...",
+      "thumbnailPath": "/blogs/blog0031/Screenshot 2026-01-15 at 23.21.08.png",
+      "markdownPath": "/blogs/blog0031/blog.md",
+      "readingTime": 4
+    },
+    {
+      "slug": "blog0030",
+      "number": 30,
+      "title": "Blog 30: OAuth in a Weekend",
+      "date": "January 15, 2026",
+      "excerpt": "We're in a Google hackathon. Users need to log in. Our current auth is username/password stored in D1 with bcrypt hashing. Works fine for internal testing, but asking hackathon judges to create acc...",
+      "thumbnailPath": "/blogs/blog0030/2026-01-18 17_00_55-NVIDIA GeForce Overlay.png",
+      "markdownPath": "/blogs/blog0030/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0029",
+      "number": 29,
+      "title": "0029 - Product Walkthrough: From Idea to Manufacturing Files",
+      "date": "2025-01-07",
+      "excerpt": "**Phase**: Documentation This walkthrough demonstrates the complete PHAESTUS product development flow, from an initial idea to downloadable manufacturing files. We'll create a soil moisture monitor...",
+      "thumbnailPath": "/blogs/blog0029/01-landing-page.png",
+      "markdownPath": "/blogs/blog0029/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0028",
+      "number": 28,
+      "title": "0028 - Orchestrator UX Polish: Always-Available AI Assistant",
+      "date": "2025-01-07",
+      "excerpt": "**Phase**: Post-Pipeline Polish The orchestrator was functional but rough around the edges: 1. **Dead ends** - Complete projects showed \"Project not eligible for automation\". Users couldn't ask que...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0028/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0027",
+      "number": 27,
+      "title": "0027 - Conversation Export: Complete Audit Trail",
+      "date": "2025-01-07",
+      "excerpt": "**Phase**: 5 of 5 - Pipeline Coordination (Final) The design process involves dozens of LLM conversations - feasibility analysis, refinement questions, enclosure generation iterations, firmware mod...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0027/blog.md",
+      "readingTime": 4
+    },
+    {
+      "slug": "blog0026",
+      "number": 26,
+      "title": "0026 - Stage Completion Summaries: Pipeline Coordination",
+      "date": "2025-01-07",
+      "excerpt": "**Phase**: 4 of 5 - Pipeline Coordination The orchestrator treated stages as isolated button presses. You'd complete the PCB stage, click to Enclosure, and have no idea what PCB artifacts were just...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0026/blog.md",
+      "readingTime": 4
+    },
+    {
+      "slug": "blog0025",
+      "number": 25,
+      "title": "0025 - Project File Manager: Unified Artifact Browsing",
+      "date": "2025-01-07",
+      "excerpt": "**Phase**: 3 of 5 - Pipeline Coordination Each stage in PHAESTUS generates artifacts - specs become markdown, PCB blocks become KiCad schematics, enclosures become STL files, firmware becomes code....",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0025/blog.md",
+      "readingTime": 3
+    },
+    {
+      "slug": "blog0024",
+      "number": 24,
+      "title": "Building a 3D PCB Previewer: Colored Boxes on a Green Board",
+      "date": "2026-01-21",
+      "excerpt": "The enclosure stage needs to know what the PCB looks like to generate accurate enclosures. But more importantly, users need to understand their design spatially before committing. Today I built a 3...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0024/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0023",
+      "number": 23,
+      "title": "Wiring Up the PCB Merge: From Orphaned Code to Working Feature",
+      "date": "2026-01-21",
+      "excerpt": "Sometimes the most impactful fixes are the simplest: calling code that already exists. Today I discovered that `mergeBlockSchematics()` - a 485-line function for merging KiCad schematics - was sitt...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0023/blog.md",
+      "readingTime": 3
+    },
+    {
+      "slug": "blog0022",
+      "number": 22,
+      "title": "Vision-Enabled Enclosure Generation: Teaching AI to See Design Intent",
+      "date": "2026-01-21",
+      "excerpt": "The enclosure generation in PHAESTUS was functional but fundamentally limited. It could generate OpenSCAD code based on PCB dimensions and component specs, but it was essentially blind to what the ...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0022/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0021",
+      "number": 21,
+      "title": "PHAESTUS: Building an AI Hardware Design Platform in 7 Days",
+      "date": "2026-01-21",
+      "excerpt": "PHAESTUS is an AI-powered hardware design platform that transforms natural language descriptions into manufacturable electronics. Built for the Gemini 3 API Developer Competition, it demonstrates h...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0021/blog.md",
+      "readingTime": 13
+    },
+    {
+      "slug": "blog0020",
+      "number": 20,
+      "title": "Public Gallery: Showcase AI-Designed Hardware",
+      "date": "2026-01-21",
+      "excerpt": "Create a public gallery page that showcases completed PHAESTUS projects without requiring authentication, allowing visitors to browse and learn about AI-designed hardware before signing up. For the...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0020/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0019",
+      "number": 19,
+      "title": "The PHAESTUS Orchestrator: Marathon AI for Hardware Design",
+      "date": "2026-01-21",
+      "excerpt": "Implement an autonomous \"marathon agent\" orchestrator that drives hardware design from natural language description through to manufacturable output, with minimal user intervention in \"Vibe It\" mod...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0019/blog.md",
+      "readingTime": 7
+    },
+    {
+      "slug": "blog0018",
+      "number": 18,
+      "title": "Export Stage: Download Your Complete Hardware Design",
+      "date": "2026-01-21",
+      "excerpt": "Implement a fully functional Export stage that lets users download all their project artifacts: specifications, OpenSCAD enclosure files, firmware source code, and a complete project package. After...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0018/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0017",
+      "number": 17,
+      "title": "Firmware Generation: AI-Powered ESP32 Code + Manual Build Workflow",
+      "date": "2026-01-21",
+      "excerpt": "Implement AI-generated firmware for ESP32-C6 with Monaco editor integration, downloadable source code, and a manual compilation workflow using PlatformIO. After designing the PCB and enclosure, use...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0017/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0016",
+      "number": 16,
+      "title": "Enclosure Generation: OpenSCAD + WebAssembly",
+      "date": "2026-01-21",
+      "excerpt": "Implement AI-generated parametric enclosures using OpenSCAD, with browser-based rendering via WebAssembly and React Three Fiber 3D visualization. When users complete their PCB design, they need an ...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0016/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0015",
+      "number": 15,
+      "title": "PCB Block Merging: kicadts Integration",
+      "date": "2026-01-21",
+      "excerpt": "Implement the core algorithms for merging multiple KiCad block schematics into a single unified design. This includes auto-placement of blocks on the grid and generating interconnect wires between ...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0015/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0014",
+      "number": 14,
+      "title": "PCB Stage Foundation: KiCanvas Integration",
+      "date": "2026-01-21",
+      "excerpt": "Build the foundation for the PCB stage: block manifest schema for KiCad file storage, admin upload endpoints, and KiCanvas integration for schematic viewing. The PCB stage needs to: 1. Store KiCad ...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0014/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0013",
+      "number": 13,
+      "title": "User Control Modes: Three Levels of AI Automation",
+      "date": "2026-01-21",
+      "excerpt": "Not every user wants the same level of AI automation. Some prefer to \"vibe it\" and let AI handle everything, while others want to approve every decision. This post covers implementing three control...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0013/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0012",
+      "number": 12,
+      "title": "Workspace UI Architecture: Multi-Stage Hardware Design",
+      "date": "2026-01-21",
+      "excerpt": "Transform PHAESTUS from a spec-generation tool into a complete hardware development workspace. Users will navigate through 5 distinct stages: Spec, PCB, Enclosure, Firmware, and Export. This post c...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0012/blog.md",
+      "readingTime": 7
+    },
+    {
+      "slug": "blog0011",
+      "number": 11,
+      "title": "Production Hardening: Security & Resilience",
+      "date": "2026-01-21",
+      "excerpt": "Before opening PHAESTUS to real users, we need to address security gaps and improve resilience. This post covers the production hardening work completed today. Passwords were stored in plaintext. T...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0011/blog.md",
+      "readingTime": 7
+    },
+    {
+      "slug": "blog0010",
+      "number": 10,
+      "title": "Iterative Blueprint Design with Feedback",
+      "date": "2026-01-21",
+      "excerpt": "When PHAESTUS generates product blueprints, users see 4 different design variations. Previously, if a design was close but not quite right, the only options were: - Accept it as-is - Regenerate all...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0010/blog.md",
+      "readingTime": 4
+    },
+    {
+      "slug": "blog0009",
+      "number": 9,
+      "title": "Test Suite & Production Deployment",
+      "date": "2026-01-21",
+      "excerpt": "Get PHAESTUS to production with confidence: 1. Add comprehensive test coverage 2. Deploy to Cloudflare Pages 3. Configure production secrets and bindings Vitest was chosen over Jest because: - Nati...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0009/blog.md",
+      "readingTime": 6
+    },
+    {
+      "slug": "blog0008",
+      "number": 8,
+      "title": "Admin Debug Logging System",
+      "date": "2026-01-21",
+      "excerpt": "Debugging production issues was painful: - No visibility into what the API was doing - console.log statements disappeared after requests ended - No way to correlate logs across a single request - L...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0008/blog.md",
+      "readingTime": 5
+    },
+    {
+      "slug": "blog0007",
+      "number": 7,
+      "title": "Product Specification Pipeline: From Idea to Locked Spec",
+      "date": "2026-01-21",
+      "excerpt": "The original flow jumped straight from \"describe your hardware\" to \"here's your PCB layout\". This caused problems: - Users got designs for impossible projects (self-driving cars, medical devices) -...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0007/blog.md",
+      "readingTime": 4
+    },
+    {
+      "slug": "blog0006",
+      "number": 6,
+      "title": "LLM Cost Tracking: Know What You're Spending",
+      "date": "2026-01-21",
+      "excerpt": "We're building an AI-powered hardware design tool. Every requirements extraction, block selection, and design iteration costs money. Without visibility into costs: - Development burns through API c...",
+      "thumbnailPath": "0005screenshot.png",
+      "markdownPath": "/blogs/blog0006/blog.md",
+      "readingTime": 3
+    },
+    {
+      "slug": "blog0004",
+      "number": 4,
+      "title": "Authentication Architecture: Simple Now, Scalable Later",
+      "date": "2026-01-21",
+      "excerpt": "Phaestus needs authentication for several reasons: - **User data isolation**: Projects, conversations, and LLM usage must be tied to specific users - **API key protection**: OpenRouter API keys liv...",
+      "thumbnailPath": "/blogs/blog0004/0005screenshot.png",
+      "markdownPath": "/blogs/blog0004/blog.md",
+      "readingTime": 3
+    },
+    {
+      "slug": "blog0001",
+      "number": 1,
+      "title": "Blog 0001: Frontend Foundation",
+      "date": "2026-01-21",
+      "excerpt": "Built the initial frontend for PHAESTUS, an agentic hardware design platform for the Gemini API Developer Competition. Set up the complete project scaffold with React, Vite, TypeScript, Tailwind, a...",
+      "thumbnailPath": "/blogs/blog0001/0002screenshot.png",
+      "markdownPath": "/blogs/blog0001/blog.md",
+      "readingTime": 4
+    }
+  ]
+}
