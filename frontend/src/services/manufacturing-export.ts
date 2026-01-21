@@ -25,9 +25,7 @@ import type { MergedGerbers, GerberBlock } from './gerber-merge'
 import { mergeGerbers, parseBoardDimensionsFromEdgeCuts } from './gerber-merge'
 import {
   calculatePanelLayout,
-  generateVScoreGerber,
-  generateRoutedEdgesGerber,
-  GRID_SIZE_MM,
+  mergeIntoPanelGerbers,
 } from './panel-merge'
 import { generateManufacturingBOM, bomToCSV } from './bom-generator'
 import {
@@ -301,86 +299,29 @@ export async function generateManufacturingPackage(
   // 4. Calculate panel layout and merge into panel
   // ==========================================================================
 
-  let panelGerbers: MergedGerbers
+  let panelGerbers: MergedGerbers & { vScore?: string; routedEdges?: string }
   let panelConfig: PanelConfiguration | null = null
-  let vScoreGerber = ''
-  let routedEdgesGerber = ''
 
   if (remoteBoardGerbers.length > 0) {
-    // Multi-board panel
+    // Multi-board panel - use the proper mergeIntoPanelGerbers function
     panelConfig = calculatePanelLayout(
       { width: mainBoardDims.width, height: mainBoardDims.height },
       remoteBoards
     )
 
-    // Build panel gerber blocks
-    const panelBlocks: GerberBlock[] = []
+    // Use the proper panel merge function from panel-merge.ts
+    const panelResult = await mergeIntoPanelGerbers(
+      mainBoardGerbers,
+      remoteBoardGerbers,
+      panelConfig
+    )
 
-    // Main board at panel position
-    const mainGridX = panelConfig.mainBoardPosition.x / GRID_SIZE_MM
-    const mainGridY = panelConfig.mainBoardPosition.y / GRID_SIZE_MM
-
-    panelBlocks.push({
-      name: 'main-board',
-      gridX: mainGridX,
-      gridY: mainGridY,
-      layers: {
-        topCopper: mainBoardGerbers.topCopper,
-        bottomCopper: mainBoardGerbers.bottomCopper,
-        innerCopper1: mainBoardGerbers.innerCopper1,
-        innerCopper2: mainBoardGerbers.innerCopper2,
-        topMask: mainBoardGerbers.topMask,
-        bottomMask: mainBoardGerbers.bottomMask,
-        topSilk: mainBoardGerbers.topSilk,
-        bottomSilk: mainBoardGerbers.bottomSilk,
-        edgeCuts: mainBoardGerbers.edgeCuts,
-        drill: mainBoardGerbers.drill,
-      },
-    })
-
-    // Remote boards at panel positions
-    for (const { board, gerbers } of remoteBoardGerbers) {
-      const position = panelConfig.remoteBoards.find((r) => r.remoteBoardId === board.id)
-      if (!position) continue
-
-      const gridX = position.position.x / GRID_SIZE_MM
-      const gridY = position.position.y / GRID_SIZE_MM
-
-      panelBlocks.push({
-        name: board.slug,
-        gridX,
-        gridY,
-        layers: {
-          topCopper: gerbers.topCopper,
-          bottomCopper: gerbers.bottomCopper,
-          innerCopper1: gerbers.innerCopper1,
-          innerCopper2: gerbers.innerCopper2,
-          topMask: gerbers.topMask,
-          bottomMask: gerbers.bottomMask,
-          topSilk: gerbers.topSilk,
-          bottomSilk: gerbers.bottomSilk,
-          edgeCuts: gerbers.edgeCuts,
-          drill: gerbers.drill,
-        },
-      })
-    }
-
-    panelGerbers = mergeGerbers(panelBlocks)
-
-    // Generate v-score and routed edges
-    vScoreGerber = generateVScoreGerber(panelConfig.vScoreLines)
-    if (panelConfig.routedEdges.length > 0) {
-      routedEdgesGerber = generateRoutedEdgesGerber(panelConfig.routedEdges)
-    }
-
-    // Generate panel outline for edge cuts
-    const panelOutline = generatePanelOutlineGerber(panelConfig.panelSize)
-    panelGerbers.edgeCuts = panelOutline
+    panelGerbers = panelResult
 
     summary.panelSize = panelConfig.panelSize
     summary.totalBoards = 1 + remoteBoards.length
     summary.hasVScore = panelConfig.vScoreLines.length > 0
-    summary.hasRoutedEdges = panelConfig.routedEdges.length > 0
+    summary.hasRoutedEdges = (panelConfig.routedEdges?.length ?? 0) > 0
   } else {
     // Single board (no panel)
     panelGerbers = mainBoardGerbers
@@ -443,12 +384,12 @@ export async function generateManufacturingPackage(
     gerberFolder.file(`${projectSlug}-Edge_Cuts.gm1`, panelGerbers.edgeCuts)
     gerberFolder.file(`${projectSlug}.drl`, panelGerbers.drill)
 
-    // Add v-score and routed edges if present
-    if (vScoreGerber) {
-      gerberFolder.file(`${projectSlug}-VScore.gbr`, vScoreGerber)
+    // Add v-score and routed edges if present (from panel merge)
+    if (panelGerbers.vScore) {
+      gerberFolder.file(`${projectSlug}-VScore.gbr`, panelGerbers.vScore)
     }
-    if (routedEdgesGerber) {
-      gerberFolder.file(`${projectSlug}-RoutedEdges.gbr`, routedEdgesGerber)
+    if (panelGerbers.routedEdges) {
+      gerberFolder.file(`${projectSlug}-RoutedEdges.gbr`, panelGerbers.routedEdges)
     }
   }
 
