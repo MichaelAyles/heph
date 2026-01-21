@@ -19,9 +19,21 @@ import type {
 } from '../db/schema'
 import {
   mergeGerbers,
+  parseBoardDimensionsFromEdgeCuts,
   type GerberBlock,
   type MergedGerbers,
 } from './gerber-merge'
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface BoardWithGerbers {
+  board: RemoteBoard
+  gerbers: MergedGerbers
+  /** Actual dimensions parsed from gerber edge cuts */
+  actualSize: { width: number; height: number }
+}
 
 // =============================================================================
 // Constants
@@ -44,10 +56,14 @@ export const GRID_SIZE_MM = 12.7
 
 /**
  * Calculate panel layout for main board and remote boards
+ *
+ * @param mainBoardSize - Actual dimensions of the main board (from gerber edge cuts)
+ * @param remoteBoardsWithSizes - Remote boards with their actual gerber dimensions
+ * @param options - Panel configuration options
  */
 export function calculatePanelLayout(
   mainBoardSize: { width: number; height: number },
-  remoteBoards: RemoteBoard[],
+  remoteBoardsWithSizes: Array<{ board: RemoteBoard; actualSize: { width: number; height: number } }>,
   options: Partial<typeof PANEL_DEFAULTS> = {}
 ): PanelConfiguration {
   const config = { ...PANEL_DEFAULTS, ...options }
@@ -65,12 +81,18 @@ export function calculatePanelLayout(
   const remoteBoardPositions: PanelConfiguration['remoteBoards'] = []
   let maxHeight = mainBoardSize.height
 
-  for (const remoteBoard of remoteBoards) {
-    const boardWidth = remoteBoard.boardSize.width
-    const boardHeight = remoteBoard.boardSize.height
+  // Build a map of actual sizes for v-score calculation
+  const actualSizes = new Map<string, { width: number; height: number }>()
+
+  for (const { board, actualSize } of remoteBoardsWithSizes) {
+    // Use ACTUAL gerber dimensions, not the RemoteBoard.boardSize property
+    const boardWidth = actualSize.width
+    const boardHeight = actualSize.height
+
+    actualSizes.set(board.id, actualSize)
 
     remoteBoardPositions.push({
-      remoteBoardId: remoteBoard.id,
+      remoteBoardId: board.id,
       position: {
         x: currentX,
         y: config.margin,
@@ -86,23 +108,26 @@ export function calculatePanelLayout(
   const panelWidth = currentX - config.spacing + config.margin + config.boardMargin * 2
   const panelHeight = maxHeight + config.margin * 2 + config.boardMargin * 2
 
-  // Generate v-score lines
-  const vScoreLines = generateVScoreLines(
+  // Generate v-score lines using actual sizes
+  const vScoreLines = generateVScoreLinesWithActualSizes(
     mainBoardPosition,
     mainBoardSize,
     remoteBoardPositions,
-    remoteBoards,
+    actualSizes,
     { width: panelWidth, height: panelHeight },
-    config.margin
+    config.margin,
+    config.boardMargin
   )
 
   // Generate routed edges (for boards shorter than the tallest)
-  const routedEdges = generateRoutedEdges(
+  const routedEdges = generateRoutedEdgesWithActualSizes(
     mainBoardPosition,
     mainBoardSize,
     remoteBoardPositions,
-    remoteBoards,
-    config.margin
+    actualSizes,
+    config.margin,
+    config.boardMargin,
+    config.routeBitDiameter
   )
 
   return {
@@ -116,7 +141,24 @@ export function calculatePanelLayout(
 }
 
 /**
- * Generate v-score lines for panel separation
+ * Legacy calculatePanelLayout that uses RemoteBoard.boardSize
+ * @deprecated Use calculatePanelLayout with actual gerber sizes instead
+ */
+export function calculatePanelLayoutLegacy(
+  mainBoardSize: { width: number; height: number },
+  remoteBoards: RemoteBoard[],
+  options: Partial<typeof PANEL_DEFAULTS> = {}
+): PanelConfiguration {
+  // Convert to new format using boardSize property
+  const remoteBoardsWithSizes = remoteBoards.map(board => ({
+    board,
+    actualSize: { width: board.boardSize.width, height: board.boardSize.height }
+  }))
+  return calculatePanelLayout(mainBoardSize, remoteBoardsWithSizes, options)
+}
+
+/**
+ * Generate v-score lines for panel separation using actual gerber-derived sizes
  *
  * V-scores are placed boardMargin (1mm) OUTSIDE the board edge, so:
  * v-score | 1mm gap | board copper | 1mm gap | v-score
@@ -127,32 +169,30 @@ export function calculatePanelLayout(
  * - Top edges of shorter boards: routed (can't v-score partial width)
  * - Top edge of tallest board(s): v-score at top + boardMargin
  */
-export function generateVScoreLines(
+export function generateVScoreLinesWithActualSizes(
   mainBoardPosition: { x: number; y: number },
   mainBoardSize: { width: number; height: number },
   remoteBoardPositions: PanelConfiguration['remoteBoards'],
-  remoteBoards: RemoteBoard[],
+  actualSizes: Map<string, { width: number; height: number }>,
   panelSize: { width: number; height: number },
-  _margin: number,
+  margin: number,
   boardMargin: number = PANEL_DEFAULTS.boardMargin
 ): VScoreLine[] {
   const lines: VScoreLine[] = []
 
-  // Find the maximum height (boards align at bottom, so max height = top of panel content)
-  const allHeights = [
-    mainBoardSize.height,
-    ...remoteBoards.map((b) => b.boardSize.height),
-  ]
+  // Collect all actual heights and board info for top v-score calculation
+  const allHeights = [mainBoardSize.height]
+  for (const pos of remoteBoardPositions) {
+    const size = actualSizes.get(pos.remoteBoardId)
+    if (size) allHeights.push(size.height)
+  }
   const maxHeight = Math.max(...allHeights)
 
-  // Board bottoms are at Y = _margin (e.g., Y=5)
-  // Board tops are at Y = _margin + height
-  // V-score at BOTTOM: 1mm below board bottom = _margin - boardMargin
-  const bottomVScoreY = _margin - boardMargin
-  // V-score at TOP of tallest: 1mm above tallest board top = _margin + maxHeight + boardMargin
-  const topVScoreY = _margin + maxHeight + boardMargin
+  // V-score positions
+  const bottomVScoreY = margin - boardMargin
+  const topVScoreY = margin + maxHeight + boardMargin
 
-  // Main board left edge - vertical v-score (offset left by boardMargin)
+  // Main board left edge
   lines.push({
     orientation: 'vertical',
     position: mainBoardPosition.x - boardMargin,
@@ -160,7 +200,7 @@ export function generateVScoreLines(
     endMm: panelSize.height,
   })
 
-  // Main board right edge - vertical v-score (offset right by boardMargin)
+  // Main board right edge
   lines.push({
     orientation: 'vertical',
     position: mainBoardPosition.x + mainBoardSize.width + boardMargin,
@@ -168,7 +208,7 @@ export function generateVScoreLines(
     endMm: panelSize.height,
   })
 
-  // Bottom edge (all boards) - horizontal v-score below board bottoms
+  // Bottom edge (all boards share this - spans full width)
   lines.push({
     orientation: 'horizontal',
     position: bottomVScoreY,
@@ -176,26 +216,36 @@ export function generateVScoreLines(
     endMm: panelSize.width,
   })
 
-  // Top edge - only v-score if main board is the tallest (aligns with panel top)
-  // Otherwise it will be routed (handled separately in generateRoutedEdges)
-  if (Math.abs(mainBoardSize.height - maxHeight) < 0.1) {
-    lines.push({
-      orientation: 'horizontal',
-      position: topVScoreY,
-      startMm: 0,
-      endMm: panelSize.width,
-    })
+  // Top edge v-scores - ONLY span across boards at max height
+  // We need to calculate which horizontal segments get v-scored vs routed
+  // Build a list of board regions with their heights
+  interface BoardRegion {
+    leftVScore: number  // left v-score position
+    rightVScore: number // right v-score position
+    height: number
   }
 
-  // Remote board edges
-  for (let i = 0; i < remoteBoardPositions.length; i++) {
-    const pos = remoteBoardPositions[i]
-    const board = remoteBoards.find((b) => b.id === pos.remoteBoardId)
-    if (!board) continue
+  const regions: BoardRegion[] = []
 
-    const { width, height } = board.boardSize
+  // Main board region
+  regions.push({
+    leftVScore: mainBoardPosition.x - boardMargin,
+    rightVScore: mainBoardPosition.x + mainBoardSize.width + boardMargin,
+    height: mainBoardSize.height,
+  })
 
-    // Left edge - vertical v-score (offset left by boardMargin)
+  // Remote board regions
+  for (const pos of remoteBoardPositions) {
+    const size = actualSizes.get(pos.remoteBoardId)
+    if (!size) continue
+
+    regions.push({
+      leftVScore: pos.position.x - boardMargin,
+      rightVScore: pos.position.x + size.width + boardMargin,
+      height: size.height,
+    })
+
+    // Left edge v-score
     lines.push({
       orientation: 'vertical',
       position: pos.position.x - boardMargin,
@@ -203,31 +253,123 @@ export function generateVScoreLines(
       endMm: panelSize.height,
     })
 
-    // Right edge - vertical v-score (offset right by boardMargin)
+    // Right edge v-score
     lines.push({
       orientation: 'vertical',
-      position: pos.position.x + width + boardMargin,
+      position: pos.position.x + size.width + boardMargin,
       startMm: 0,
       endMm: panelSize.height,
     })
+  }
 
-    // Bottom edge is already covered by the full-width bottom v-score
+  // Sort regions by left position
+  regions.sort((a, b) => a.leftVScore - b.leftVScore)
 
-    // Top edge - only v-score if this board is the tallest
-    if (Math.abs(height - maxHeight) < 0.1) {
-      // This board is tallest, its top aligns with panel content top
+  // Generate top v-score segments only for boards at max height
+  // Each segment runs from left panel edge (or previous board's right v-score) to board's right v-score
+  for (const region of regions) {
+    if (Math.abs(region.height - maxHeight) < 0.1) {
+      // This board is at max height - v-score its top
+      // The v-score runs from left panel edge to this board's right v-score
+      // (or could be segmented if there are gaps, but typically v-scores run full width)
+      // For simplicity and manufacturing, we create a segment for each max-height board
       lines.push({
         orientation: 'horizontal',
         position: topVScoreY,
-        startMm: 0,
-        endMm: panelSize.width,
+        startMm: region.leftVScore,
+        endMm: region.rightVScore,
       })
     }
-    // Shorter boards get routed top edges (handled in generateRoutedEdges)
+    // Boards shorter than max height get routed tops (handled in generateRoutedEdges)
   }
 
-  // Deduplicate lines at same position
   return deduplicateVScoreLines(lines)
+}
+
+/**
+ * Generate routed edges using actual gerber-derived sizes
+ */
+export function generateRoutedEdgesWithActualSizes(
+  mainBoardPosition: { x: number; y: number },
+  mainBoardSize: { width: number; height: number },
+  remoteBoardPositions: PanelConfiguration['remoteBoards'],
+  actualSizes: Map<string, { width: number; height: number }>,
+  margin: number,
+  boardMargin: number = PANEL_DEFAULTS.boardMargin,
+  routeBitDiameter: number = PANEL_DEFAULTS.routeBitDiameter
+): RoutedEdge[] {
+  const edges: RoutedEdge[] = []
+  const bitRadius = routeBitDiameter / 2
+
+  // Collect all actual heights
+  const allHeights = [mainBoardSize.height]
+  for (const pos of remoteBoardPositions) {
+    const size = actualSizes.get(pos.remoteBoardId)
+    if (size) allHeights.push(size.height)
+  }
+  const maxHeight = Math.max(...allHeights)
+
+  // Check main board
+  if (mainBoardSize.height < maxHeight - 0.1) {
+    const boardTop = margin + mainBoardSize.height
+    const routeY = boardTop + boardMargin + bitRadius
+    edges.push({
+      x1: mainBoardPosition.x - boardMargin,
+      y1: routeY,
+      x2: mainBoardPosition.x + mainBoardSize.width + boardMargin,
+      y2: routeY,
+    })
+  }
+
+  // Check remote boards - use ACTUAL sizes
+  for (const pos of remoteBoardPositions) {
+    const size = actualSizes.get(pos.remoteBoardId)
+    if (!size) continue
+
+    const { width, height } = size
+
+    if (height < maxHeight - 0.1) {
+      const boardTop = margin + height
+      const routeY = boardTop + boardMargin + bitRadius
+      edges.push({
+        x1: pos.position.x - boardMargin,
+        y1: routeY,
+        x2: pos.position.x + width + boardMargin,
+        y2: routeY,
+      })
+    }
+  }
+
+  return edges
+}
+
+/**
+ * Generate v-score lines for panel separation
+ * @deprecated Use generateVScoreLinesWithActualSizes instead
+ */
+export function generateVScoreLines(
+  mainBoardPosition: { x: number; y: number },
+  mainBoardSize: { width: number; height: number },
+  remoteBoardPositions: PanelConfiguration['remoteBoards'],
+  remoteBoards: RemoteBoard[],
+  panelSize: { width: number; height: number },
+  margin: number,
+  boardMargin: number = PANEL_DEFAULTS.boardMargin
+): VScoreLine[] {
+  // Convert to actualSizes map
+  const actualSizes = new Map<string, { width: number; height: number }>()
+  for (const board of remoteBoards) {
+    actualSizes.set(board.id, { width: board.boardSize.width, height: board.boardSize.height })
+  }
+  return generateVScoreLinesWithActualSizes(
+    mainBoardPosition,
+    mainBoardSize,
+    remoteBoardPositions,
+    actualSizes,
+    panelSize,
+    margin,
+    boardMargin
+  )
 }
 
 /**
@@ -411,12 +553,28 @@ export function generateRoutedEdgesGerber(
 
 /**
  * Merge main board and remote board gerbers into panelized output
+ *
+ * This function parses actual board dimensions from gerber edge cuts
+ * and uses them for accurate panel assembly.
  */
 export async function mergeIntoPanelGerbers(
   mainBoardGerbers: MergedGerbers,
   remoteBoardGerbers: Array<{ board: RemoteBoard; gerbers: MergedGerbers }>,
-  panelConfig: PanelConfiguration
+  panelConfig: PanelConfiguration,
+  /** Optional: pre-calculated actual sizes. If not provided, will be parsed from gerbers */
+  actualRemoteSizes?: Map<string, { width: number; height: number }>
 ): Promise<MergedGerbers & { vScore: string; routedEdges: string }> {
+  // Build actual sizes map from gerbers if not provided
+  const remoteSizes = actualRemoteSizes ?? new Map<string, { width: number; height: number }>()
+
+  if (!actualRemoteSizes) {
+    for (const { board, gerbers } of remoteBoardGerbers) {
+      if (gerbers.edgeCuts) {
+        const dims = parseBoardDimensionsFromEdgeCuts(gerbers.edgeCuts)
+        remoteSizes.set(board.id, { width: dims.width, height: dims.height })
+      }
+    }
+  }
   // Build GerberBlock array for unified merge
   const gerberBlocks: GerberBlock[] = []
 

@@ -37,6 +37,10 @@ export const CONNECTOR_TYPES = [
   { id: 'DUPONT-4', name: 'Dupont 4-pin', pins: 4 },
 ] as const
 
+// Grid sizing constants (must match gerber-merge.ts and pcb-grid.ts)
+const GRID_SIZE_MM = 12.7
+const VERTICAL_OVERLAP_MM = 1.0
+
 export const REMOTE_BOARD_TEMPLATES: Array<{
   type: RemoteBoardType
   name: string
@@ -100,8 +104,9 @@ export function createRemoteBoard(
     type,
     placedBlocks: [],
     boardSize: {
-      width: gridWidth * 12.7,
-      height: gridHeight * 12.7,
+      width: gridWidth * GRID_SIZE_MM,
+      // Height accounts for vertical overlap: each row seam saves VERTICAL_OVERLAP_MM
+      height: gridHeight * GRID_SIZE_MM - (gridHeight - 1) * VERTICAL_OVERLAP_MM,
       unit: 'mm',
     },
     connectionMapping: template?.suggestedSignals.map((signal) => ({
@@ -352,8 +357,9 @@ export function recalculateBoardSize(
     gridWidth: maxX,
     gridHeight: maxY,
     boardSize: {
-      width: maxX * 12.7,
-      height: maxY * 12.7,
+      width: maxX * GRID_SIZE_MM,
+      // Height accounts for vertical overlap: each row seam saves VERTICAL_OVERLAP_MM
+      height: maxX > 0 ? maxY * GRID_SIZE_MM - (maxY - 1) * VERTICAL_OVERLAP_MM : 0,
       unit: 'mm',
     },
   }

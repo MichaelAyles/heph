@@ -261,7 +261,11 @@ export async function generateManufacturingPackage(
   // ==========================================================================
 
   const remoteBoards = pcbArtifacts.remoteBoards || []
-  const remoteBoardGerbers: Array<{ board: RemoteBoard; gerbers: MergedGerbers }> = []
+  const remoteBoardGerbers: Array<{
+    board: RemoteBoard
+    gerbers: MergedGerbers
+    actualSize: { width: number; height: number }
+  }> = []
 
   for (const remote of remoteBoards) {
     const remoteBlocks: GerberBlock[] = []
@@ -291,7 +295,17 @@ export async function generateManufacturingPackage(
 
     if (remoteBlocks.length > 0) {
       const gerbers = mergeGerbers(remoteBlocks)
-      remoteBoardGerbers.push({ board: remote, gerbers })
+
+      // Parse ACTUAL dimensions from merged gerber edge cuts
+      const actualSize = gerbers.edgeCuts
+        ? parseBoardDimensionsFromEdgeCuts(gerbers.edgeCuts)
+        : { width: remote.boardSize.width, height: remote.boardSize.height, minX: 0, minY: 0 }
+
+      remoteBoardGerbers.push({
+        board: remote,
+        gerbers,
+        actualSize: { width: actualSize.width, height: actualSize.height },
+      })
     }
   }
 
@@ -303,17 +317,29 @@ export async function generateManufacturingPackage(
   let panelConfig: PanelConfiguration | null = null
 
   if (remoteBoardGerbers.length > 0) {
-    // Multi-board panel - use the proper mergeIntoPanelGerbers function
+    // Multi-board panel - use ACTUAL gerber dimensions for layout calculation
+    const remoteBoardsWithActualSizes = remoteBoardGerbers.map(({ board, actualSize }) => ({
+      board,
+      actualSize,
+    }))
+
     panelConfig = calculatePanelLayout(
       { width: mainBoardDims.width, height: mainBoardDims.height },
-      remoteBoards
+      remoteBoardsWithActualSizes
     )
 
-    // Use the proper panel merge function from panel-merge.ts
+    // Build actual sizes map for mergeIntoPanelGerbers
+    const actualSizesMap = new Map<string, { width: number; height: number }>()
+    for (const { board, actualSize } of remoteBoardGerbers) {
+      actualSizesMap.set(board.id, actualSize)
+    }
+
+    // Use the proper panel merge function from panel-merge.ts with actual sizes
     const panelResult = await mergeIntoPanelGerbers(
       mainBoardGerbers,
-      remoteBoardGerbers,
-      panelConfig
+      remoteBoardGerbers.map(({ board, gerbers }) => ({ board, gerbers })),
+      panelConfig,
+      actualSizesMap
     )
 
     panelGerbers = panelResult

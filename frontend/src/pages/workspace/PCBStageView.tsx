@@ -158,7 +158,12 @@ export function PCBStageView() {
       width: boardSize.widthMm,
       height: boardSize.heightMm,
     }
-    return calculatePanelLayout(mainBoardSizeMm, remoteBoards)
+    // Map remote boards to include actual size (use boardSize since we don't have gerbers yet)
+    const remoteBoardsWithSizes = remoteBoards.map((board) => ({
+      board,
+      actualSize: { width: board.boardSize.width, height: board.boardSize.height },
+    }))
+    return calculatePanelLayout(mainBoardSizeMm, remoteBoardsWithSizes)
   }, [remoteBoards, boardSize])
 
   // Generate documentation

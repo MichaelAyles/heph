@@ -581,8 +581,11 @@ Open files in a Gerber viewer like https://tracespace.io/view/
 
       // Calculate panel layout using actual board sizes with margins
       const mainBoardSize = { width: mainOutline.width, height: mainOutline.height }
-      const remoteBoardsWithMargins = remoteBoardGerbers.map((rbg) => rbg.board)
-      const panelConfig = calculatePanelLayout(mainBoardSize, remoteBoardsWithMargins)
+      const remoteBoardsWithActualSizes = remoteBoardGerbers.map((rbg) => ({
+        board: rbg.board,
+        actualSize: { width: rbg.board.boardSize.width, height: rbg.board.boardSize.height },
+      }))
+      const panelConfig = calculatePanelLayout(mainBoardSize, remoteBoardsWithActualSizes)
 
       // Merge into panel if we have remote boards, otherwise just use main board
       let panelGerbers: MergedGerbers & { vScore: string; routedEdges: string }

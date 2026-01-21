@@ -28,6 +28,7 @@ import { clsx } from 'clsx'
 import type { BlockCategory } from '@/schemas/block'
 import type { PcbBlock } from '@/db/schema'
 import { BlockImportWizard } from '@/components/admin/blocks/BlockImportWizard'
+import { BlockBOMEditor } from '@/components/admin/blocks/BlockBOMEditor'
 import { BlockViewer } from '@/components/blocks'
 
 interface BlockSummary {
@@ -81,6 +82,7 @@ export function AdminBlocksPage() {
   const [isUploaderOpen, setIsUploaderOpen] = useState(false)
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false)
   const [isViewerOpen, setIsViewerOpen] = useState(false)
+  const [isBOMEditorOpen, setIsBOMEditorOpen] = useState(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -288,6 +290,13 @@ export function AdminBlocksPage() {
                   View
                 </button>
                 <button
+                  onClick={() => setIsBOMEditorOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-500/20 text-emerald-400 text-sm font-medium hover:bg-emerald-500/30 transition-colors"
+                >
+                  <Edit className="w-4 h-4" strokeWidth={1.5} />
+                  Edit BOM
+                </button>
+                <button
                   onClick={() => {
                     setIsUploaderOpen(true)
                   }}
@@ -303,7 +312,7 @@ export function AdminBlocksPage() {
                   className="flex items-center gap-2 px-4 py-2 bg-surface-800 text-steel text-sm font-medium hover:bg-surface-700 transition-colors"
                 >
                   <Edit className="w-4 h-4" strokeWidth={1.5} />
-                  Edit Definition
+                  Edit JSON
                 </button>
                 <button
                   onClick={() => {
@@ -366,6 +375,17 @@ export function AdminBlocksPage() {
           <BlockViewerModal
             slug={selectedBlock.slug}
             onClose={() => setIsViewerOpen(false)}
+          />
+        )}
+
+        {/* BOM Editor Modal */}
+        {isBOMEditorOpen && selectedBlock && (
+          <BlockBOMEditor
+            slug={selectedBlock.slug}
+            onClose={() => {
+              setIsBOMEditorOpen(false)
+              queryClient.invalidateQueries({ queryKey: ['admin-blocks'] })
+            }}
           />
         )}
       </div>

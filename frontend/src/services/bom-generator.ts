@@ -31,7 +31,8 @@ export interface BOMEntry {
   footprint: string
   quantity: number
   manufacturer: string | null
-  mpn: string | null
+  mpn: string | null // Manufacturer Part Number
+  lcscPartNumber: string | null // LCSC Part Number (C######)
   nofit: boolean
   nofitReason?: string
   boardName: string // "Main" or remote board name
@@ -187,6 +188,7 @@ function collectComponentsFromPlacedBlocks(
           quantity: component.quantity || 1,
           manufacturer: component.manufacturer || null,
           mpn: component.mpn || null,
+          lcscPartNumber: component.lcscPartNumber || null,
           nofit: isNofit,
           nofitReason: tapState?.reason,
           boardName,
@@ -271,6 +273,54 @@ export function bomToCSV(bom: ManufacturingBOM): string {
   }
 
   // Convert to CSV
+  const csvContent = [
+    headers.map(escapeCSVField).join(','),
+    ...rows.map((row) => row.map(escapeCSVField).join(',')),
+  ].join('\n')
+
+  return csvContent
+}
+
+/**
+ * Convert BOM to LCSC-compatible CSV format
+ *
+ * LCSC expects these columns:
+ * - Quantity
+ * - Manufacture Part Number (required - LCSC matches on this)
+ * - Manufacturer (optional)
+ * - Description (optional)
+ * - LCSC Part Number (optional, C###### format)
+ * - Package (optional)
+ * - Customer Part Number (optional - we use designators)
+ */
+export function bomToLCSCCSV(bom: ManufacturingBOM): string {
+  const headers = [
+    'Quantity',
+    'Manufacture Part Number',
+    'Manufacturer',
+    'Description',
+    'LCSC Part Number',
+    'Package',
+    'Customer Part Number',
+  ]
+
+  // Filter out NoFit entries (DNP components shouldn't be ordered)
+  const fitEntries = bom.entries.filter((entry) => !entry.nofit)
+
+  const rows = fitEntries.map((entry) => [
+    entry.quantity.toString(),
+    // MPN: prefer explicit mpn, fall back to value for passives
+    entry.mpn || entry.value,
+    entry.manufacturer || '',
+    // Description: value + footprint for context
+    `${entry.value} ${entry.footprint}`.trim(),
+    entry.lcscPartNumber || '',
+    entry.footprint,
+    // Customer Part Number: designator list
+    entry.references.join(', '),
+  ])
+
+  // Convert to CSV (no summary for LCSC format)
   const csvContent = [
     headers.map(escapeCSVField).join(','),
     ...rows.map((row) => row.map(escapeCSVField).join(',')),

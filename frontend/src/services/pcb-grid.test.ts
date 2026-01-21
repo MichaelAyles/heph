@@ -24,6 +24,7 @@ import {
   getEffectiveSize,
   getEdgeMount,
   GRID_UNIT_MM,
+  VERTICAL_OVERLAP_MM,
 } from './pcb-grid'
 import type { BlockDefinition } from '../schemas/block'
 
@@ -953,7 +954,8 @@ describe('calculateBoardSize', () => {
     const size = calculateBoardSize(grid)
 
     expect(size.widthMm).toBe(2 * GRID_UNIT_MM)
-    expect(size.heightMm).toBe(2 * GRID_UNIT_MM)
+    // Height accounts for vertical overlap: 2 rows - 1 seam × 1mm overlap
+    expect(size.heightMm).toBe(2 * GRID_UNIT_MM - (2 - 1) * VERTICAL_OVERLAP_MM)
   })
 })
 

@@ -122,8 +122,8 @@ describe('gerber-merge', () => {
 
     // 2 columns × 12.7mm = 25.4mm
     expect(outline.width).toBe(25.4)
-    // 2 rows × 12.7mm = 25.4mm
-    expect(outline.height).toBe(25.4)
+    // 2 rows × 12.7mm - 1mm overlap = 24.4mm (vertical overlap for bus connector merging)
+    expect(outline.height).toBe(24.4)
 
     // Should generate valid edge cuts
     expect(outline.gerber).toContain('G04 Board outline')
@@ -161,7 +161,8 @@ describe('gerber-merge', () => {
     const result = mergeGerbers(blocks)
 
     // Y coordinates are normalized to origin first, then offset by grid
-    // Original minY=1000000, so Y1000000 becomes 0, then + 12700000 grid offset = 12700000
-    expect(result.topCopper).toContain('Y12700000')
+    // Original minY=1000000, so Y1000000 becomes 0, then + (12.7 - 1.0)mm grid offset
+    // 11.7mm = 11700000 gerber units (vertical overlap for bus connector merging)
+    expect(result.topCopper).toContain('Y11700000')
   })
 })

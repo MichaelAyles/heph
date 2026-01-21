@@ -11,6 +11,8 @@ import type { PlacedBlock } from '../db/schema'
 
 // Grid unit size in mm (0.5" = 12.7mm)
 export const GRID_UNIT_MM = 12.7
+// Vertical overlap for bus connector merging - blocks overlap by 1mm vertically
+export const VERTICAL_OVERLAP_MM = 1.0
 
 // =============================================================================
 // Types
@@ -682,7 +684,8 @@ export function calculateBoardSize(grid: GridState): {
     width: maxX,
     height: maxY,
     widthMm: maxX * GRID_UNIT_MM,
-    heightMm: maxY * GRID_UNIT_MM,
+    // Height accounts for vertical overlap: each row seam saves VERTICAL_OVERLAP_MM
+    heightMm: maxY * GRID_UNIT_MM - (maxY - 1) * VERTICAL_OVERLAP_MM,
   }
 }
 

@@ -37,6 +37,9 @@ export interface MergedGerbers {
 }
 
 const GRID_SIZE_MM = 12.7
+// Vertical overlap for bus connector merging - blocks overlap by 1mm vertically
+// This ensures the bus connector pads merge perfectly when stacked
+const VERTICAL_OVERLAP_MM = 1.0
 
 /**
  * Find bounding box of coordinates in Gerber content
@@ -120,8 +123,9 @@ function transformGerberCoords(
   gridY: number
 ): string {
   // Grid offset in Gerber units (mm * 1,000,000 for 6 decimal places)
+  // Y offset uses reduced spacing (GRID_SIZE_MM - VERTICAL_OVERLAP_MM) for bus connector merging
   const gridOffsetX = Math.round(gridX * GRID_SIZE_MM * 1000000)
-  const gridOffsetY = Math.round(gridY * GRID_SIZE_MM * 1000000)
+  const gridOffsetY = Math.round(gridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM) * 1000000)
 
   // Process line by line to avoid transforming aperture definitions
   const lines = content.split('\n')
@@ -160,8 +164,9 @@ function transformDrillCoords(
   gridX: number,
   gridY: number
 ): string {
+  // Y offset uses reduced spacing for bus connector merging
   const gridOffsetX = gridX * GRID_SIZE_MM
-  const gridOffsetY = gridY * GRID_SIZE_MM
+  const gridOffsetY = gridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM)
 
   return content.replace(/X(-?\d+\.?\d*)Y(-?\d+\.?\d*)/g, (_, x, y) => {
     const newX = (parseFloat(x) - originX + gridOffsetX).toFixed(4)
@@ -317,16 +322,19 @@ function renumberToolSelections(body: string, offset: number): string {
 }
 
 /**
- * Calculate unified bounds across all Gerber layers of a block
- * This ensures all layers use the same origin for proper alignment
+ * Calculate unified bounds for a block using edge cuts (board outline)
+ * This ensures all layers use the same origin for proper grid alignment
  *
- * IMPORTANT: When edge cuts layer is available, use ONLY its bounds for normalization.
- * This prevents components that overhang the board edge (like USB connectors) from
- * shifting the origin and causing misalignment.
+ * IMPORTANT: Uses edge cuts for alignment because:
+ * - Edge cuts define the physical board boundary on the 12.7mm grid
+ * - All KiCad blocks are designed with edge cuts at grid boundaries
+ * - Copper content can vary in position within the board
+ * - Silkscreen can overhang board edges
+ *
+ * Falls back to copper layers only if edge cuts aren't available.
  */
 function findUnifiedBounds(block: GerberBlock): { minX: number; minY: number } {
-  // Prefer edge cuts layer bounds - this defines the physical board boundary
-  // regardless of component overhang on silkscreen or copper layers
+  // Prefer edge cuts - defines the physical board boundary on the grid
   const edgeCuts = block.layers.edgeCuts
   if (edgeCuts) {
     const bounds = findGerberBounds(edgeCuts)
@@ -336,26 +344,20 @@ function findUnifiedBounds(block: GerberBlock): { minX: number; minY: number } {
     }
   }
 
-  // Fallback: scan all layers (for blocks without edge cuts)
+  // Fallback: use copper layers (for blocks without edge cuts)
   let minX = Infinity
   let minY = Infinity
 
-  // Check all Gerber layers (not drill - it uses different format)
-  const gerberLayers: (keyof GerberBlock['layers'])[] = [
-    'topCopper', 'innerCopper1', 'innerCopper2', 'bottomCopper',
-    'topSilk', 'bottomSilk', 'topMask', 'bottomMask'
+  const copperLayers: (keyof GerberBlock['layers'])[] = [
+    'topCopper', 'innerCopper1', 'innerCopper2', 'bottomCopper'
   ]
 
-  for (const layerKey of gerberLayers) {
+  for (const layerKey of copperLayers) {
     const content = block.layers[layerKey]
     if (!content) continue
 
     const bounds = findGerberBounds(content)
-    // Only include layers that actually have coordinates
-    // Skip layers where bounds returned Infinity (no coordinates found)
     if (bounds.minX !== 0 || bounds.minY !== 0) {
-      // Check if these are real coordinates vs the Infinity->0 fallback
-      // by looking for actual coordinate patterns
       const hasCoords = /X-?\d+Y-?\d+D0[123]\*/.test(content)
       if (hasCoords) {
         if (bounds.minX < minX) minX = bounds.minX
@@ -611,7 +613,8 @@ export function calculateBoardOutline(blocks: GerberBlock[]): {
   }
 
   const width = maxX * GRID_SIZE_MM
-  const height = maxY * GRID_SIZE_MM
+  // Height accounts for vertical overlap: each row seam saves VERTICAL_OVERLAP_MM
+  const height = maxY * GRID_SIZE_MM - (maxY - 1) * VERTICAL_OVERLAP_MM
 
   // Generate edge cuts Gerber (rectangle)
   const w = Math.round(width * 1000000)

@@ -692,3 +692,155 @@ pnpm export-block <path-to-kicad-project> [--upload] [--slug name]
 - `GET /api/settings` - User settings
 - `PUT /api/settings` - Update settings
 - `GET /api/settings/usage` - Usage/cost tracking
+
+## Manufacturing Output System
+
+**CURRENT SPRINT FOCUS**: Get a real board manufactured and ordered!
+
+### End-to-End Flow
+
+```
+KiCad Files → Block Import → Database + R2 → PCB Stage → Manufacturing Export → ZIP → Fab House
+```
+
+### Block Import Pipeline (Admin)
+
+1. **Upload**: User provides `.kicad_sch`, `.kicad_pcb`, gerber ZIP, STEP, position file
+2. **Parse**: TOKN parser extracts components, nets, board dimensions (~92% token reduction)
+3. **Generate**: LLM creates `block.json` with bus taps, I2C addresses, power specs
+4. **Validate**: Zod schema + semantic validation (edge connections, reserved addresses)
+5. **Store**: Definition → D1 `pcb_blocks`, Files → R2 `blocks/{slug}/`
+
+**Key Files**:
+- `src/components/admin/blocks/BlockImportWizard.tsx` - 3-step wizard UI
+- `src/lib/tokn/` - KiCad S-expression parser
+- `src/prompts/block-generation.ts` - LLM prompt for block.json generation
+- `functions/api/admin/blocks/generate.ts` - API endpoint for LLM generation
+- `functions/api/admin/blocks/upload.ts` - R2 file upload
+
+### Gerber Merging (`src/services/gerber-merge.ts`)
+
+**Critical Constants**:
+```typescript
+const GRID_SIZE_MM = 12.7        // 0.5" grid unit
+const VERTICAL_OVERLAP_MM = 1.0  // Bus connector overlap
+```
+
+**Coordinate Transform**:
+1. Find unified bounds using **edge cuts** (not copper/silkscreen)
+2. Normalize block to origin: `normalized = raw - minX/minY`
+3. Offset by grid: `X = gridX * 12.7mm`, `Y = gridY * 11.7mm` (reduced for overlap)
+
+**Why 1mm Vertical Overlap?**
+- Bus connector pads need to merge at block seams
+- Without overlap, pads would be 1mm apart
+- Height formula: `maxY * 12.7 - (maxY - 1) * 1.0`
+
+### Panel Generation (`src/services/panel-merge.ts`)
+
+**Layout**: Main board + remote boards arranged horizontally with spacing
+
+**V-Score Lines**:
+- Vertical: Full panel height at each board edge
+- Bottom: Full panel width (all boards share bottom edge)
+- Top: Only spans max-height boards; shorter boards get routed edges
+
+**Key Functions**:
+- `calculatePanelLayout()` - Uses ACTUAL gerber dimensions, not RemoteBoard.boardSize
+- `generateVScoreLinesWithActualSizes()` - Mixed-height aware
+- `generateRoutedEdgesWithActualSizes()` - Routes tops of shorter boards
+- `mergeIntoPanelGerbers()` - Combines all into manufacturing output
+
+### BOM & Centroid Generation
+
+**BOM** (`src/services/bom-generator.ts`):
+- Aggregates components by value+footprint
+- Prefixes references: `prefixReference("R1", "bme280-sensor")` → `"BME280_R1"`
+- Marks nofit components (0R resistors not populated)
+- Exports: Standard CSV and LCSC-compatible CSV
+
+**Centroid** (`src/services/centroid-merge.ts`):
+- Parses KiCad `.pos` files
+- Applies grid offset + panel offset for final coordinates
+- Filters out nofit components (SMT won't place them)
+- Exports: CSV and KiCad `.pos` format
+
+### Manufacturing Export ZIP
+
+```
+{project}-manufacturing.zip
+├── gerbers/
+│   ├── *-F_Cu.gtl, *-B_Cu.gbl      (copper)
+│   ├── *-In1_Cu.g1, *-In2_Cu.g2    (inner layers)
+│   ├── *-F_Mask.gts, *-B_Mask.gbs  (solder mask)
+│   ├── *-F_SilkS.gto, *-B_SilkS.gbo (silkscreen)
+│   ├── *-Edge_Cuts.gm1             (board outline)
+│   ├── *.drl                        (drill)
+│   ├── *-VScore.gbr                 (v-score lines)
+│   └── *-RoutedEdges.gbr            (routed cuts)
+├── *-bom.csv                        (component list)
+├── *-bom-lcsc.csv                   (LCSC format)
+├── *-centroid.csv                   (pick-and-place)
+├── *-tap-config.json                (0R resistor states)
+└── README.txt
+```
+
+### Manufacturing Data Flow
+
+```
+PCBArtifacts (placedBlocks, remoteBoards, resistorTapStates)
+         ↓
+Load gerber ZIPs + position files from R2
+         ↓
+mergeGerbers() → per-board merged gerbers
+         ↓
+parseBoardDimensionsFromEdgeCuts() → actual sizes
+         ↓
+calculatePanelLayout() → panel configuration
+         ↓
+mergeIntoPanelGerbers() → panel gerbers + v-score + routed edges
+         ↓
+generateManufacturingBOM() → component aggregation
+         ↓
+mergePanelizedCentroid() → pick-and-place coordinates
+         ↓
+Package ZIP → Download → Send to fab house
+```
+
+### Required Block Files (R2 Storage)
+
+Each block in `blocks/{slug}/` needs:
+- `{slug}.kicad_sch` - Schematic source
+- `{slug}.kicad_pcb` - PCB layout source
+- `{slug}.step` - 3D model for enclosure
+- `{slug}-gerbers.zip` - Manufacturing gerbers (10 layers)
+- `{slug}-pos.csv` - Component positions
+- `block.json` - Full definition
+
+### Test Script
+
+```bash
+cd frontend && pnpm tsx scripts/generate-test-manufacturing.ts
+```
+- Fetches block data from production API
+- Generates test panel with main + remote boards
+- Outputs to `test-output/test-project/`
+- View with `gerbv/gerbv.exe`
+
+### Common Manufacturing Issues
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Blocks misaligned | Using copper/silk for bounds | Use edge cuts layer |
+| V-score over short board | Full-width top v-score | Split by max-height |
+| Components not merged | Wrong board size | Parse actual gerber dimensions |
+| BOM missing data | No MPN/LCSC in block.json | Add to components array |
+
+### LCSC BOM Format
+
+```csv
+Quantity,Manufacture Part Number,Manufacturer,Description,LCSC Part Number,Package,Customer Part Number
+10,RC0402FR-0710KL,Yageo,10k 0402,C25744,0402,"BME280_R1, BME280_R2..."
+```
+
+Requires `mpn` and optionally `lcscPartNumber` in `BlockComponentSchema`.

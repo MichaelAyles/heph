@@ -52,6 +52,9 @@ export interface MergedCentroid {
 // =============================================================================
 
 const GRID_SIZE_MM = 12.7
+// Vertical overlap for bus connector merging - blocks overlap by 1mm vertically
+// Must match VERTICAL_OVERLAP_MM in gerber-merge.ts
+const VERTICAL_OVERLAP_MM = 1.0
 
 // =============================================================================
 // Reference Prefixing (synchronized with BOM generator)
@@ -168,9 +171,9 @@ export function mergeMainBoardCentroid(
 
     const parsed = parsePositionFile(posContent, 'Main')
 
-    // Calculate offset based on grid position
+    // Calculate offset based on grid position (Y uses reduced spacing for bus connector overlap)
     const offsetX = placedBlock.gridX * GRID_SIZE_MM
-    const offsetY = placedBlock.gridY * GRID_SIZE_MM
+    const offsetY = placedBlock.gridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM)
 
     for (const entry of parsed.entries) {
       entries.push({
@@ -200,9 +203,9 @@ export function mergeRemoteBoardCentroid(
 
     const parsed = parsePositionFile(posContent, remoteBoard.name)
 
-    // Calculate offset based on grid position within the remote board
+    // Calculate offset based on grid position within the remote board (Y uses reduced spacing for bus connector overlap)
     const offsetX = placedBlock.gridX * GRID_SIZE_MM
-    const offsetY = placedBlock.gridY * GRID_SIZE_MM
+    const offsetY = placedBlock.gridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM)
 
     for (const entry of parsed.entries) {
       entries.push({

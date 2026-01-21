@@ -338,6 +338,7 @@ export const BlockComponentSchema = z.object({
   footprint: z.string().describe('0402, 0603, QFN-48'),
   manufacturer: z.string().optional(),
   mpn: z.string().optional().describe('Manufacturer part number'),
+  lcscPartNumber: z.string().optional().describe('LCSC part number (C######)'),
   quantity: z.number().int().positive(),
   nofit: z
     .boolean()
