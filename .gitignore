@@ -4,6 +4,13 @@ agents.md
 .claude/
 /kicad_seed_data/
 chat.txt
+TODO.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Cloudflare local state
 .wrangler/
@@ -11,11 +18,15 @@ chat.txt
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Temp files
 tmpclaude-*
 .playwright-mcp/
 *~*.lck
+*.log
+*.bak
+*.orig
 
 # LangGraph local state
 .langgraph_api/
