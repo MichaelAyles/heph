@@ -137,6 +137,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const body = (await request.json()) as {
       definition: unknown
+      overwrite?: boolean
     }
 
     // Validate block definition
@@ -151,19 +152,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const definition = validationResult.data
 
     // Check if slug already exists
-    const existing = await env.DB.prepare('SELECT id FROM pcb_blocks WHERE slug = ?')
+    const existing = await env.DB.prepare('SELECT id, files FROM pcb_blocks WHERE slug = ?')
       .bind(definition.slug)
-      .first()
+      .first<{ id: string; files: string | null }>()
 
-    if (existing) {
+    if (existing && !body.overwrite) {
       return Response.json(
-        { error: `Block with slug "${definition.slug}" already exists` },
+        {
+          error: `Block with slug "${definition.slug}" already exists`,
+          exists: true,
+          hint: 'Set overwrite=true to replace existing block',
+        },
         { status: 409 }
       )
     }
 
-    // Generate UUID for new block
-    const id = crypto.randomUUID()
     const now = new Date().toISOString()
 
     // Extract legacy fields from definition for backwards compatibility
@@ -181,10 +184,48 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       package: c.footprint,
     })) ?? []
 
-    // Insert into database
     // For remote blocks, gridSize is undefined - default to 0x0
     const widthUnits = definition.gridSize?.[0] ?? 0
     const heightUnits = definition.gridSize?.[1] ?? 0
+
+    if (existing && body.overwrite) {
+      // Update existing block, preserving files
+      await env.DB.prepare(
+        `UPDATE pcb_blocks SET
+          name = ?, category = ?, description = ?,
+          width_units = ?, height_units = ?, taps = ?, i2c_addresses = ?, spi_cs = ?,
+          power = ?, components = ?, definition = ?, version = ?, updated_at = ?
+        WHERE slug = ?`
+      )
+        .bind(
+          definition.name,
+          definition.category,
+          definition.description,
+          widthUnits,
+          heightUnits,
+          JSON.stringify(taps),
+          i2cAddresses ? JSON.stringify(i2cAddresses) : null,
+          spiCs,
+          JSON.stringify(power),
+          JSON.stringify(components),
+          JSON.stringify(definition),
+          definition.version,
+          now,
+          definition.slug
+        )
+        .run()
+
+      return Response.json({
+        success: true,
+        id: existing.id,
+        slug: definition.slug,
+        message: `Block "${definition.name}" updated.`,
+        overwritten: true,
+      })
+    }
+
+    // Insert new block
+    const id = crypto.randomUUID()
 
     await env.DB.prepare(
       `INSERT INTO pcb_blocks (

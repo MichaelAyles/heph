@@ -15,3 +15,5 @@ bucket_name = "phaestus-assets"
 
 [vars]
 ENVIRONMENT = "development"
+# Note: KICAD_SERVICE_URL is set via secret for production
+# For local dev, add to .dev.vars: KICAD_SERVICE_URL=http://localhost:3001

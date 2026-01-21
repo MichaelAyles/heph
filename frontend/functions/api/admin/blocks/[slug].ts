@@ -259,34 +259,55 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    // Get block to find its files
-    const block = await env.DB.prepare('SELECT id, files FROM pcb_blocks WHERE slug = ?')
+    // Get block to verify it exists
+    const block = await env.DB.prepare('SELECT id FROM pcb_blocks WHERE slug = ?')
       .bind(slug)
-      .first<{ id: string; files: string | null }>()
+      .first<{ id: string }>()
 
     if (!block) {
       return Response.json({ error: `Block "${slug}" not found` }, { status: 404 })
     }
 
-    // Delete files from R2
-    const files = block.files ? JSON.parse(block.files) : {}
+    // Delete ALL files from R2 under the block's prefix
     const r2Prefix = `blocks/${slug}/`
     const deletedFiles: string[] = []
 
-    for (const filename of Object.values(files)) {
-      if (filename) {
-        const key = `${r2Prefix}${filename}`
+    // List all objects with the prefix and delete them
+    const listed = await env.STORAGE.list({ prefix: r2Prefix })
+    for (const object of listed.objects) {
+      try {
+        await env.STORAGE.delete(object.key)
+        deletedFiles.push(object.key.replace(r2Prefix, ''))
+      } catch {
+        // R2 file deletion failed - continue with other files
+      }
+    }
+
+    // Handle truncated results (more than 1000 objects)
+    let truncated = listed.truncated
+    let cursor = listed.cursor
+    while (truncated) {
+      const next = await env.STORAGE.list({ prefix: r2Prefix, cursor })
+      for (const object of next.objects) {
         try {
-          await env.STORAGE.delete(key)
-          deletedFiles.push(filename as string)
+          await env.STORAGE.delete(object.key)
+          deletedFiles.push(object.key.replace(r2Prefix, ''))
         } catch {
-          // R2 file deletion failed - continue with other files
+          // Continue on error
         }
       }
+      truncated = next.truncated
+      cursor = next.cursor
     }
 
     // Delete from database
     await env.DB.prepare('DELETE FROM pcb_blocks WHERE slug = ?').bind(slug).run()
+
+    const logger = createLogger(env)
+    await logger.info('api', 'Block deleted', {
+      slug,
+      deletedFiles: deletedFiles.length,
+    })
 
     return Response.json({
       success: true,

@@ -20,6 +20,9 @@ export interface Env {
   // WorkOS OAuth
   WORKOS_CLIENT_ID: string
   WORKOS_API_KEY: string
+
+  // KiCad microservice URL
+  KICAD_SERVICE_URL?: string
 }
 
 // Extend the context with our typed env

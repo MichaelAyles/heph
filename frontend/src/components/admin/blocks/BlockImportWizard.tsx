@@ -27,6 +27,7 @@ import {
   List,
   Archive,
   Unplug,
+  Wand2,
 } from 'lucide-react'
 import JSZip from 'jszip'
 import { clsx } from 'clsx'
@@ -89,6 +90,16 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
   const [gerberFiles, setGerberFiles] = useState<Map<string, ArrayBuffer> | null>(null)
   const [posFile, setPosFile] = useState<File | null>(null)
   const [isExtractingZip, setIsExtractingZip] = useState(false)
+  // State for auto-generated manufacturing files
+  const [generatedManufacturing, setGeneratedManufacturing] = useState<{
+    gerbers: boolean
+    step: boolean
+    pos: boolean
+  } | null>(null)
+  // State for block exists conflict (generate-files endpoint)
+  const [blockExistsConflict, setBlockExistsConflict] = useState(false)
+  // State for save conflict (blocks endpoint)
+  const [saveExistsConflict, setSaveExistsConflict] = useState(false)
   const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null)
   const [editedJson, setEditedJson] = useState('')
   const [jsonError, setJsonError] = useState<string | null>(null)
@@ -130,9 +141,55 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
     },
   })
 
+  // Generate manufacturing files from KiCad source files using the KiCad microservice
+  const generateFilesMutation = useMutation({
+    mutationFn: async (overwrite: boolean = false) => {
+      if (!schematicFile || !pcbFile || !slug) {
+        throw new Error('Schematic, PCB, and slug are required')
+      }
+
+      const formData = new FormData()
+      formData.append('slug', slug)
+      formData.append('schematic', schematicFile)
+      formData.append('pcb', pcbFile)
+      if (overwrite) {
+        formData.append('overwrite', 'true')
+      }
+
+      const res = await fetch('/api/admin/blocks/generate-files', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        // Handle block exists conflict
+        if (res.status === 409 && result.exists) {
+          setBlockExistsConflict(true)
+          throw new Error(`Block "${slug}" already exists. Click "Overwrite" to replace.`)
+        }
+        const errorMsg = result.details
+          ? `${result.error}: ${result.details}`
+          : result.error || 'Manufacturing file generation failed'
+        throw new Error(errorMsg)
+      }
+
+      return result as {
+        success: boolean
+        generatedFiles: { gerbers: boolean; step: boolean; pos: boolean }
+        latencyMs: number
+      }
+    },
+    onSuccess: (data) => {
+      setGeneratedManufacturing(data.generatedFiles)
+      setBlockExistsConflict(false)
+    },
+  })
+
   // Save block to database
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (overwrite: boolean = false) => {
       // Validate JSON first
       let definition: unknown
       try {
@@ -145,24 +202,34 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
       const res = await fetch('/api/admin/blocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ definition }),
+        body: JSON.stringify({ definition, overwrite }),
       })
 
       const result = await res.json()
 
       if (!res.ok) {
+        if (res.status === 409 && result.exists) {
+          setSaveExistsConflict(true)
+          throw new Error(`Block "${slug}" already exists. Click "Overwrite" to replace.`)
+        }
         if (result.errors) {
           throw new Error(`Validation errors:\n${result.errors.join('\n')}`)
         }
         throw new Error(result.error || 'Failed to save block')
       }
 
-      // Now upload the KiCad files
-      if (schematicFile || pcbFile || stepFile || gerberFiles || posFile) {
+      setSaveExistsConflict(false)
+
+      // Upload KiCad files if not already generated via the KiCad service
+      // When files are auto-generated, they're already stored in R2 by the generate-files endpoint
+      const needsSourceFileUpload = schematicFile && !generatedManufacturing
+      const needsManufacturingUpload = (stepFile || gerberFiles || posFile) && !generatedManufacturing
+
+      if (needsSourceFileUpload || needsManufacturingUpload) {
         const uploadFormData = new FormData()
         uploadFormData.append('slug', slug)
-        if (schematicFile) uploadFormData.append('schematic', schematicFile)
-        if (pcbFile) uploadFormData.append('pcb', pcbFile)
+        if (schematicFile && needsSourceFileUpload) uploadFormData.append('schematic', schematicFile)
+        if (pcbFile && needsSourceFileUpload) uploadFormData.append('pcb', pcbFile)
         if (stepFile) uploadFormData.append('step', stepFile)
         if (posFile) uploadFormData.append('pos', posFile)
         uploadFormData.append('blockJson', editedJson)
@@ -185,6 +252,23 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
           throw new Error(
             `Block definition saved, but file upload failed: ${uploadResult.error || 'Unknown error'}. ` +
             `You may need to re-upload files manually.`
+          )
+        }
+      } else if (generatedManufacturing) {
+        // Files were auto-generated, just update the block.json
+        const uploadFormData = new FormData()
+        uploadFormData.append('slug', slug)
+        uploadFormData.append('blockJson', editedJson)
+
+        const uploadRes = await fetch('/api/admin/blocks/upload', {
+          method: 'POST',
+          body: uploadFormData,
+        })
+
+        if (!uploadRes.ok) {
+          const uploadResult = await uploadRes.json()
+          throw new Error(
+            `Failed to update block definition: ${uploadResult.error || 'Unknown error'}`
           )
         }
       }
@@ -212,7 +296,7 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
     }
     // Don't set step to 'saving' - use saveMutation.isPending instead
     // This allows the button to re-enable on error
-    saveMutation.mutate()
+    saveMutation.mutate(false)
   }, [editedJson, saveMutation])
 
   const handleSchematicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,8 +326,13 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
   }
 
   const isValidSlug = /^[a-z0-9-]+$/.test(slug) && slug.length >= 3 && slug.length <= 50
-  // All 5 file types are required for new imports
-  const canGenerate = schematicFile && pcbFile && stepFile && gerberFiles && posFile && isValidSlug
+  // Manufacturing files can come from either:
+  // 1. Manual uploads (stepFile, gerberFiles, posFile), OR
+  // 2. Auto-generated from KiCad microservice (generatedManufacturing)
+  const hasManufacturingFiles =
+    (stepFile && gerberFiles && posFile) ||
+    (generatedManufacturing?.gerbers && generatedManufacturing?.step)
+  const canGenerate = schematicFile && pcbFile && hasManufacturingFiles && isValidSlug
 
   // Handle gerber ZIP extraction
   const handleGerberZipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -334,7 +423,10 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
                 <input
                   type="text"
                   value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                  onChange={(e) => {
+                    setSlug(e.target.value.toLowerCase())
+                    setBlockExistsConflict(false)
+                  }}
                   placeholder="sensor-bme280"
                   className={clsx(
                     'w-full px-3 py-2 bg-surface-800 border text-steel text-sm',
@@ -396,25 +488,116 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
 
               {/* Required files status */}
               <div className="p-3 bg-surface-800 border border-surface-700 text-sm">
-                <div className="text-steel-dim mb-2">All 5 file types are required:</div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="text-steel-dim mb-2">Required source files:</div>
+                <div className="grid grid-cols-2 gap-2 text-xs mb-3">
                   <div className={clsx(schematicFile ? 'text-emerald-400' : 'text-steel-dim')}>
                     {schematicFile ? '✓' : '○'} Schematic (.kicad_sch)
                   </div>
                   <div className={clsx(pcbFile ? 'text-emerald-400' : 'text-steel-dim')}>
                     {pcbFile ? '✓' : '○'} PCB Layout (.kicad_pcb)
                   </div>
-                  <div className={clsx(stepFile ? 'text-emerald-400' : 'text-steel-dim')}>
-                    {stepFile ? '✓' : '○'} 3D Model (.step)
+                </div>
+
+                <div className="text-steel-dim mb-2">Manufacturing files (generate or upload):</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className={clsx(
+                    stepFile || generatedManufacturing?.step ? 'text-emerald-400' : 'text-steel-dim'
+                  )}>
+                    {stepFile ? '✓' : generatedManufacturing?.step ? '✓ Generated' : '○'} 3D Model (.step)
                   </div>
-                  <div className={clsx(gerberFiles ? 'text-emerald-400' : 'text-steel-dim')}>
-                    {gerberFiles ? '✓' : '○'} Gerbers (.zip)
+                  <div className={clsx(
+                    gerberFiles || generatedManufacturing?.gerbers ? 'text-emerald-400' : 'text-steel-dim'
+                  )}>
+                    {gerberFiles ? '✓' : generatedManufacturing?.gerbers ? '✓ Generated' : '○'} Gerbers (.zip)
                   </div>
-                  <div className={clsx(posFile ? 'text-emerald-400' : 'text-steel-dim')}>
-                    {posFile ? '✓' : '○'} Pick & Place (.pos/.csv)
+                  <div className={clsx(
+                    posFile || generatedManufacturing?.pos ? 'text-emerald-400' : 'text-steel-dim'
+                  )}>
+                    {posFile ? '✓' : generatedManufacturing?.pos ? '✓ Generated' : '○'} Pick & Place (.csv)
                   </div>
                 </div>
               </div>
+
+              {/* Generate Manufacturing Files button */}
+              {schematicFile && pcbFile && isValidSlug && (
+                <div className="p-4 bg-surface-800 border border-copper/30 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Wand2 className="w-5 h-5 text-copper shrink-0 mt-0.5" strokeWidth={1.5} />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-steel mb-1">
+                        Auto-Generate Manufacturing Files
+                      </div>
+                      <div className="text-xs text-steel-dim mb-3">
+                        Generate Gerbers, STEP model, and Pick & Place files from your KiCad source files
+                        using the KiCad CLI. This may take 30-60 seconds.
+                      </div>
+                      <button
+                        onClick={() => generateFilesMutation.mutate(false)}
+                        disabled={generateFilesMutation.isPending || !!generatedManufacturing}
+                        className={clsx(
+                          'flex items-center gap-2 px-3 py-1.5 text-sm font-medium transition-colors',
+                          generatedManufacturing
+                            ? 'bg-emerald-600/20 text-emerald-400 cursor-default'
+                            : 'bg-copper text-ash hover:bg-copper/90 disabled:opacity-50 disabled:cursor-not-allowed'
+                        )}
+                      >
+                        {generateFilesMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
+                            Generating...
+                          </>
+                        ) : generatedManufacturing ? (
+                          <>
+                            <CheckCircle className="w-4 h-4" strokeWidth={1.5} />
+                            Files Generated
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-4 h-4" strokeWidth={1.5} />
+                            Generate Files
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {generateFilesMutation.error && (
+                    <div className="text-xs text-red-400 bg-red-500/10 p-2 flex items-center justify-between gap-2">
+                      <span>
+                        {generateFilesMutation.error instanceof Error
+                          ? generateFilesMutation.error.message
+                          : 'Generation failed'}
+                      </span>
+                      {blockExistsConflict && (
+                        <button
+                          onClick={() => generateFilesMutation.mutate(true)}
+                          disabled={generateFilesMutation.isPending}
+                          className="px-2 py-1 bg-amber-600 text-white text-xs font-medium hover:bg-amber-500 disabled:opacity-50"
+                        >
+                          Overwrite
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {generatedManufacturing && (
+                    <div className="text-xs text-steel-dim">
+                      Generated: {generatedManufacturing.gerbers && 'Gerbers'}{' '}
+                      {generatedManufacturing.step && '• STEP'}{' '}
+                      {generatedManufacturing.pos && '• Pick & Place'}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Divider */}
+              {schematicFile && pcbFile && isValidSlug && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-surface-700" />
+                  <span className="text-xs text-steel-dim">or upload manually</span>
+                  <div className="flex-1 h-px bg-surface-700" />
+                </div>
+              )}
 
               {/* File uploads */}
               <div className="grid grid-cols-2 gap-4">
@@ -862,14 +1045,26 @@ export function BlockImportWizard({ onClose, onSuccess }: BlockImportWizardProps
             )}
 
             {step === 'review' && (
-              <button
-                onClick={handleSave}
-                disabled={saveMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                {saveMutation.isPending ? 'Saving...' : 'Save Block'}
-              </button>
+              <div className="flex items-center gap-2">
+                {saveExistsConflict && (
+                  <button
+                    onClick={() => saveMutation.mutate(true)}
+                    disabled={saveMutation.isPending}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {saveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Overwrite
+                  </button>
+                )}
+                <button
+                  onClick={handleSave}
+                  disabled={saveMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 bg-copper text-ash text-sm font-medium hover:bg-copper/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {saveMutation.isPending ? 'Saving...' : 'Save Block'}
+                </button>
+              </div>
             )}
           </div>
         </div>

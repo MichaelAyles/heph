@@ -1,0 +1,8 @@
+node_modules
+src
+*.ts
+tsconfig.json
+.git
+.gitignore
+README.md
+railway.json
