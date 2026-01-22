@@ -6,7 +6,7 @@
  * - Block library (editable=false) for browsing available blocks
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { clsx } from 'clsx'
 import {
   Cpu,
@@ -32,7 +32,9 @@ import {
   Upload,
   Loader2,
   Unplug,
-  Library,
+  Search,
+  Check,
+  Sparkles,
 } from 'lucide-react'
 import type { BlockDefinition, BusSignal, BlockComponentDef } from '@/schemas/block'
 import type { PcbBlock, BlockFiles } from '@/db/schema'
@@ -596,6 +598,285 @@ function EdgesTab({ definition }: { definition: BlockDefinition }) {
 }
 
 // =============================================================================
+// LCSC Part Picker Popover
+// =============================================================================
+
+interface PartLibraryItem {
+  value: string
+  footprint: string
+  manufacturer?: string
+  mpn?: string
+  lcscPartNumber?: string
+  fromBlock: string
+}
+
+interface LcscPartPickerProps {
+  isOpen: boolean
+  onClose: () => void
+  onSelect: (part: PartLibraryItem) => void
+  partsLibrary: PartLibraryItem[]
+  targetValue: string
+  targetFootprint: string
+  anchorRef: React.RefObject<HTMLElement | null>
+}
+
+function LcscPartPicker({
+  isOpen,
+  onClose,
+  onSelect,
+  partsLibrary,
+  targetValue,
+  targetFootprint,
+  anchorRef,
+}: LcscPartPickerProps) {
+  const [search, setSearch] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+
+  // Focus search input when opening
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 50)
+    } else {
+      setSearch('')
+    }
+  }, [isOpen])
+
+  // Close on click outside
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(e.target as Node)
+      ) {
+        onClose()
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen, onClose, anchorRef])
+
+  // Close on Escape
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
+  // Score parts for matching
+  const scoredParts = useMemo(() => {
+    return partsLibrary.map((part) => {
+      let score = 0
+
+      // Exact value match
+      if (part.value.toLowerCase() === targetValue.toLowerCase()) {
+        score += 100
+      } else if (part.value.toLowerCase().includes(targetValue.toLowerCase())) {
+        score += 50
+      } else if (targetValue.toLowerCase().includes(part.value.toLowerCase())) {
+        score += 30
+      }
+
+      // Footprint matching
+      const normalizeFootprint = (fp: string) =>
+        fp.toLowerCase().replace(/[_\-\s]/g, '')
+      const normTarget = normalizeFootprint(targetFootprint)
+      const normPart = normalizeFootprint(part.footprint)
+
+      if (normPart === normTarget) {
+        score += 50
+      } else if (normPart.includes(normTarget) || normTarget.includes(normPart)) {
+        score += 25
+      }
+
+      // Package size matching (0402, 0603, 0805, etc.)
+      const sizeMatch = /\d{4}/.exec(targetFootprint)
+      const partSizeMatch = /\d{4}/.exec(part.footprint)
+      if (sizeMatch && partSizeMatch && sizeMatch[0] === partSizeMatch[0]) {
+        score += 20
+      }
+
+      return { ...part, score }
+    })
+  }, [partsLibrary, targetValue, targetFootprint])
+
+  // Filter and sort parts
+  const filteredParts = useMemo(() => {
+    let parts = scoredParts
+
+    // Apply search filter
+    if (search.trim()) {
+      const searchLower = search.toLowerCase()
+      parts = parts.filter(
+        (p) =>
+          p.value.toLowerCase().includes(searchLower) ||
+          p.footprint.toLowerCase().includes(searchLower) ||
+          p.mpn?.toLowerCase().includes(searchLower) ||
+          p.lcscPartNumber?.toLowerCase().includes(searchLower) ||
+          p.manufacturer?.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // Sort by score (highest first), then alphabetically
+    return parts.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return a.value.localeCompare(b.value)
+    })
+  }, [scoredParts, search])
+
+  // Get recommended part (highest score > 100)
+  const recommendedPart = filteredParts.find((p) => p.score >= 100)
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      ref={popoverRef}
+      className="fixed z-50 bg-surface-800 border border-surface-600 rounded-lg shadow-2xl overflow-hidden"
+      style={{
+        width: '420px',
+        maxHeight: '480px',
+        // Position below anchor, shifted left to avoid going off-screen
+        top: anchorRef.current
+          ? anchorRef.current.getBoundingClientRect().bottom + 8
+          : 200,
+        right: 24,
+      }}
+    >
+      {/* Header with search */}
+      <div className="sticky top-0 bg-surface-800 border-b border-surface-700 p-3 z-10">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-white">Select LCSC Part</span>
+          <button
+            onClick={onClose}
+            className="p-1 text-steel hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-dim" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by value, footprint, MPN, or LCSC..."
+            className="w-full pl-9 pr-3 py-2 bg-surface-900 border border-surface-600 rounded text-sm text-white placeholder:text-steel-dim focus:outline-none focus:border-copper"
+          />
+        </div>
+        <div className="mt-2 text-xs text-steel-dim">
+          Looking for: <span className="text-copper">{targetValue}</span> ·{' '}
+          <span className="text-steel">{targetFootprint}</span>
+        </div>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="overflow-y-auto" style={{ maxHeight: '360px' }}>
+        {/* Recommendation */}
+        {recommendedPart && !search && (
+          <div className="p-3 bg-emerald-500/10 border-b border-emerald-500/20">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-medium text-emerald-400">
+                Recommended Match
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                onSelect(recommendedPart)
+                onClose()
+              }}
+              className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/20 transition-colors"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium text-white">
+                  {recommendedPart.value}
+                </span>
+                <span className="text-sm font-mono text-emerald-400">
+                  {recommendedPart.lcscPartNumber}
+                </span>
+              </div>
+              <div className="text-xs text-steel">
+                {recommendedPart.footprint}
+                {recommendedPart.mpn && ` · ${recommendedPart.mpn}`}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs text-emerald-400">
+                  Matches value and footprint - use this
+                </span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Parts list */}
+        <div className="divide-y divide-surface-700/50">
+          {filteredParts.length === 0 ? (
+            <div className="p-6 text-center text-steel-dim text-sm">
+              No matching parts found
+            </div>
+          ) : (
+            filteredParts
+              .filter((p) => !recommendedPart || p !== recommendedPart || search)
+              .map((part, i) => (
+                <button
+                  key={`${part.lcscPartNumber}-${i}`}
+                  onClick={() => {
+                    onSelect(part)
+                    onClose()
+                  }}
+                  className="w-full text-left px-3 py-2.5 hover:bg-surface-700 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-white">
+                        {part.value}
+                      </span>
+                      {part.score >= 50 && (
+                        <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded">
+                          {part.score >= 100 ? 'exact' : 'similar'}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm font-mono text-emerald-400">
+                      {part.lcscPartNumber}
+                    </span>
+                  </div>
+                  <div className="text-xs text-steel-dim mt-0.5 truncate">
+                    {part.footprint}
+                    {part.manufacturer && ` · ${part.manufacturer}`}
+                    {part.mpn && ` · ${part.mpn}`}
+                  </div>
+                  <div className="text-[10px] text-steel-dim mt-0.5">
+                    from {part.fromBlock}
+                  </div>
+                </button>
+              ))
+          )}
+        </div>
+      </div>
+
+      {/* Footer with count */}
+      <div className="sticky bottom-0 bg-surface-800 border-t border-surface-700 px-3 py-2 text-xs text-steel-dim">
+        {filteredParts.length} parts in library
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
 // Components Tab (Editable BOM)
 // =============================================================================
 
@@ -610,7 +891,13 @@ function ComponentsTab({
   const queryClient = useQueryClient()
   const [components, setComponents] = useState<BlockComponentDef[]>(definition?.components || [])
   const [hasChanges, setHasChanges] = useState(false)
-  const [libraryOpen, setLibraryOpen] = useState<string | null>(null) // key of the group to pick for
+  const [pickerOpen, setPickerOpen] = useState<{
+    key: string
+    value: string
+    footprint: string
+    indices: number[]
+  } | null>(null)
+  const pickerAnchorRef = useRef<HTMLButtonElement>(null)
 
   // Fetch all blocks to build parts library
   const { data: allBlocksData } = useQuery({
@@ -625,9 +912,9 @@ function ComponentsTab({
   })
 
   // Build parts library from all blocks with LCSC numbers
-  const partsLibrary = (() => {
+  const partsLibrary = useMemo((): PartLibraryItem[] => {
     if (!allBlocksData?.blocks) return []
-    const parts: Array<{ value: string; footprint: string; manufacturer?: string; mpn?: string; lcscPartNumber?: string; fromBlock: string }> = []
+    const parts: PartLibraryItem[] = []
     const seen = new Set<string>()
 
     for (const b of allBlocksData.blocks) {
@@ -648,7 +935,7 @@ function ComponentsTab({
       }
     }
     return parts.sort((a, b) => a.value.localeCompare(b.value))
-  })()
+  }, [allBlocksData])
 
   // Reset when definition changes
   useEffect(() => {
@@ -886,7 +1173,7 @@ function ComponentsTab({
                                 className="w-28 px-1.5 py-0.5 bg-surface-800 border border-surface-600 text-steel text-xs focus:outline-none focus:border-copper"
                               />
                             </td>
-                            <td className="py-1.5 relative">
+                            <td className="py-1.5">
                               <div className="flex items-center gap-1">
                                 <input
                                   type="text"
@@ -894,7 +1181,7 @@ function ComponentsTab({
                                   onChange={(e) => updateGroup('lcscPartNumber', e.target.value)}
                                   placeholder="C######"
                                   className={clsx(
-                                    'w-20 px-1.5 py-0.5 bg-surface-800 border text-xs focus:outline-none focus:border-copper',
+                                    'w-24 px-1.5 py-0.5 bg-surface-800 border text-xs focus:outline-none focus:border-copper rounded',
                                     comp.lcscPartNumber
                                       ? 'border-emerald-500/50 text-emerald-400'
                                       : 'border-surface-600 text-steel'
@@ -902,55 +1189,31 @@ function ComponentsTab({
                                 />
                                 {partsLibrary.length > 0 && (
                                   <button
-                                    onClick={() => setLibraryOpen(libraryOpen === key ? null : key)}
-                                    className="p-1 text-steel-dim hover:text-copper transition-colors"
+                                    ref={pickerOpen?.key === key ? pickerAnchorRef : undefined}
+                                    onClick={() =>
+                                      setPickerOpen(
+                                        pickerOpen?.key === key
+                                          ? null
+                                          : {
+                                              key,
+                                              value: comp.value,
+                                              footprint: comp.footprint,
+                                              indices,
+                                            }
+                                      )
+                                    }
+                                    className={clsx(
+                                      'p-1.5 rounded transition-colors',
+                                      pickerOpen?.key === key
+                                        ? 'bg-copper text-surface-900'
+                                        : 'text-steel-dim hover:text-copper hover:bg-surface-700'
+                                    )}
                                     title="Pick from library"
                                   >
-                                    <Library className="w-3.5 h-3.5" />
+                                    <Search className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                               </div>
-                              {/* Library picker dropdown */}
-                              {libraryOpen === key && (
-                                <div className="absolute right-0 top-full mt-1 z-20 w-80 max-h-64 overflow-auto bg-surface-800 border border-surface-600 rounded shadow-lg">
-                                  <div className="p-2 border-b border-surface-700 text-xs text-steel-dim">
-                                    Select from parts library ({partsLibrary.length} parts)
-                                  </div>
-                                  <div className="divide-y divide-surface-700/50">
-                                    {partsLibrary.map((part, pi) => (
-                                      <button
-                                        key={pi}
-                                        onClick={() => {
-                                          // Apply part info to all components in group
-                                          setComponents((prev) => {
-                                            const updated = [...prev]
-                                            indices.forEach((i) => {
-                                              updated[i] = {
-                                                ...updated[i],
-                                                manufacturer: part.manufacturer,
-                                                mpn: part.mpn,
-                                                lcscPartNumber: part.lcscPartNumber,
-                                              }
-                                            })
-                                            return updated
-                                          })
-                                          setHasChanges(true)
-                                          setLibraryOpen(null)
-                                        }}
-                                        className="w-full text-left px-2 py-1.5 hover:bg-surface-700 transition-colors"
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-xs text-white font-medium">{part.value}</span>
-                                          <span className="text-xs text-emerald-400">{part.lcscPartNumber}</span>
-                                        </div>
-                                        <div className="text-xs text-steel-dim truncate">
-                                          {part.footprint} · {part.mpn || 'No MPN'} · from {part.fromBlock}
-                                        </div>
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
                             </td>
                           </>
                         )}
@@ -962,6 +1225,34 @@ function ComponentsTab({
             </table>
           </div>
         </div>
+      )}
+
+      {/* LCSC Part Picker Popover */}
+      {pickerOpen && (
+        <LcscPartPicker
+          isOpen={!!pickerOpen}
+          onClose={() => setPickerOpen(null)}
+          onSelect={(part) => {
+            // Apply part info to all components in the group
+            setComponents((prev) => {
+              const updated = [...prev]
+              pickerOpen.indices.forEach((i) => {
+                updated[i] = {
+                  ...updated[i],
+                  manufacturer: part.manufacturer,
+                  mpn: part.mpn,
+                  lcscPartNumber: part.lcscPartNumber,
+                }
+              })
+              return updated
+            })
+            setHasChanges(true)
+          }}
+          partsLibrary={partsLibrary}
+          targetValue={pickerOpen.value}
+          targetFootprint={pickerOpen.footprint}
+          anchorRef={pickerAnchorRef}
+        />
       )}
 
       {/* No-fit components (read-only) */}
