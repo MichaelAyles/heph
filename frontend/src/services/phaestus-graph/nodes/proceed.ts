@@ -8,6 +8,7 @@
 import type { PhaestusState } from '../state'
 import { addMessage, setProjectId } from '../state'
 import type { D1Database } from '../types'
+import { logger } from '../../../lib/logger'
 
 /**
  * Generate success message with next steps
@@ -111,7 +112,7 @@ export async function proceedNode(
       const projectId = await createProject(state, db)
       newState = setProjectId(newState, projectId)
     } catch (err) {
-      console.error('Failed to create project:', err)
+      logger.error('project', 'Failed to create project', { error: err })
       // Continue without project ID - can be created later
     }
   }

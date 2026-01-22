@@ -4,29 +4,30 @@
  * All LLM requests go through /api/llm/* to keep API keys server-side
  */
 
+// Re-export shared types from central location
+export type {
+  ImageContent,
+  TextContent,
+  MessageContent,
+  ChatMessage,
+  ChatResponse,
+  StreamCallbacks,
+  ToolParameter,
+  ToolDefinition,
+  ToolCall,
+} from '../../functions/lib/message-types'
+
+import type {
+  ChatMessage,
+  ChatResponse,
+  StreamCallbacks,
+  ToolDefinition,
+  ToolCall,
+} from '../../functions/lib/message-types'
+
 // =============================================================================
-// MESSAGE CONTENT TYPES (for vision/multimodal support)
+// LLM Service Types (frontend-specific)
 // =============================================================================
-
-export interface ImageContent {
-  type: 'image'
-  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
-  data: string // base64 encoded
-}
-
-export interface TextContent {
-  type: 'text'
-  text: string
-}
-
-export type MessageContent = string | (TextContent | ImageContent)[]
-
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system' | 'tool'
-  content: MessageContent
-  toolCalls?: ToolCall[]
-  toolCallId?: string
-}
 
 export interface ChatOptions {
   messages: ChatMessage[]
@@ -36,50 +37,9 @@ export interface ChatOptions {
   projectId?: string
 }
 
-export interface ChatResponse {
-  content: string
-  model: string
-  usage?: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-  }
-}
-
-export interface StreamCallbacks {
-  onToken: (token: string) => void
-  onComplete: (response: ChatResponse) => void
-  onError: (error: Error) => void
-}
-
 // =============================================================================
-// TOOL CALLING TYPES
+// TOOL CALLING TYPES (frontend-specific extensions)
 // =============================================================================
-
-export interface ToolParameter {
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array'
-  description: string
-  enum?: string[]
-  items?: { type: string; properties?: Record<string, ToolParameter>; required?: string[] }
-  properties?: Record<string, ToolParameter>
-  required?: string[]
-}
-
-export interface ToolDefinition {
-  name: string
-  description: string
-  parameters: {
-    type: 'object'
-    properties: Record<string, ToolParameter>
-    required?: string[]
-  }
-}
-
-export interface ToolCall {
-  id: string
-  name: string
-  arguments: Record<string, unknown>
-}
 
 export interface ToolChatOptions {
   messages: ChatMessage[]

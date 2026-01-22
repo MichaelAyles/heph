@@ -63,13 +63,14 @@ const VERTICAL_OVERLAP_MM = 1.0
 /**
  * Prefix reference designator with block slug for uniqueness
  * This MUST match the logic in bom-generator.ts for consistency
- * e.g., "R1" + "bme280-sensor" -> "BME280_R1"
+ * e.g., "R1" + "bme280-sensor" -> "BME280_SENSOR_R1"
+ *
+ * Uses full slug (converted to uppercase, hyphens to underscores) to avoid
+ * prefix collisions between similar block names like bme280-sensor vs bme688-sensor
  */
 export function prefixReference(ref: string, blockSlug: string): string {
-  const prefix = blockSlug
-    .split('-')
-    .map((part) => part.substring(0, 3).toUpperCase())
-    .join('')
+  // Convert slug to uppercase and replace hyphens with underscores
+  const prefix = blockSlug.toUpperCase().replace(/-/g, '_')
   return `${prefix}_${ref}`
 }
 
@@ -333,8 +334,9 @@ export function centroidToPos(centroid: MergedCentroid): string {
   ]
 
   for (const entry of centroid.entries) {
+    // Use 4 decimal places for consistency with CSV export and standard manufacturing tolerances
     lines.push(
-      `${entry.reference} ${entry.value} ${entry.footprint} ${entry.posX.toFixed(6)} ${entry.posY.toFixed(6)} ${entry.rotation.toFixed(6)} ${entry.side}`
+      `${entry.reference} ${entry.value} ${entry.footprint} ${entry.posX.toFixed(4)} ${entry.posY.toFixed(4)} ${entry.rotation.toFixed(1)} ${entry.side}`
     )
   }
 

@@ -23,22 +23,8 @@ import type { Env } from '../../env'
 import { runGraph, type LLMClient, type GraphConfig } from '../../../src/services/phaestus-graph'
 import { createLogger } from '../../lib/logger'
 import { convertToGeminiFormat } from '../../lib/gemini'
-
-interface PagesFunction<E> {
-  (context: {
-    request: Request
-    env: E
-    params: Record<string, string>
-    data: Record<string, unknown>
-  }): Promise<Response>
-}
-
-interface User {
-  id: string
-  username: string
-  displayName: string | null
-  isAdmin?: boolean
-}
+import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
+import type { PagesFunction, User } from '../../lib/message-types'
 
 interface ChatRequest {
   message: string
@@ -81,12 +67,12 @@ async function createLLMClient(env: Env): Promise<LLMClient> {
           content: msg.content,
         }))
 
-        response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        response = await fetch(OPENROUTER_API_URL, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://phaestus.dev',
+            'HTTP-Referer': APP_URL,
             'X-Title': 'Phaestus',
           },
           body: JSON.stringify({

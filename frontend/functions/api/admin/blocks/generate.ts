@@ -15,6 +15,7 @@ import { parseBlockJson } from '../../../lib/block-validator'
 import type { BlockCategory } from '../../../../src/schemas/block'
 import { convertToTokn } from '../../../../src/lib/tokn'
 import { createLogger } from '../../../lib/logger'
+import { OPENROUTER_API_URL, APP_URL } from '../../../lib/config'
 
 interface GenerateRequest {
   slug: string
@@ -33,12 +34,12 @@ async function callLLM(
 ): Promise<string> {
   const model = env.TEXT_MODEL_SLUG || 'google/gemini-2.0-flash-001'
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://phaestus.app',
+      'HTTP-Referer': APP_URL,
       'X-Title': 'PHAESTUS Block Generator',
     },
     body: JSON.stringify({

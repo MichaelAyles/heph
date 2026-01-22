@@ -8,66 +8,22 @@
 import type { Env } from '../../env'
 import { calculateCost } from './pricing'
 import { createLogger } from '../../lib/logger'
+import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
+import type {
+  PagesFunction,
+  User,
+  ToolParameter,
+  ToolDefinition,
+  ToolCall,
+  ChatMessage,
+} from '../../lib/message-types'
 
-interface PagesFunction<E> {
-  (context: {
-    request: Request
-    env: E
-    params: Record<string, string>
-    data: Record<string, unknown>
-  }): Promise<Response>
-}
-
-interface User {
-  id: string
-  username: string
-  displayName: string | null
-  isAdmin?: boolean
-}
-
-// =============================================================================
-// TOOL DEFINITIONS
-// =============================================================================
-
-export interface ToolParameter {
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array'
-  description: string
-  enum?: string[]
-  items?: { type: string }
-  properties?: Record<string, ToolParameter>
-  required?: string[]
-}
-
-export interface ToolDefinition {
-  name: string
-  description: string
-  parameters: {
-    type: 'object'
-    properties: Record<string, ToolParameter>
-    required?: string[]
-  }
-}
-
-export interface ToolCall {
-  id: string
-  name: string
-  arguments: Record<string, unknown>
-}
+// Re-export types for external consumers
+export type { ToolParameter, ToolDefinition, ToolCall, ChatMessage }
 
 export interface ToolResult {
   toolCallId: string
   content: string
-}
-
-// =============================================================================
-// MESSAGE TYPES
-// =============================================================================
-
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string
-  toolCalls?: ToolCall[]
-  toolCallId?: string
 }
 
 export interface ToolChatRequest {
@@ -418,12 +374,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         requestBody.tool_choice = 'auto'
       }
 
-      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      response = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://phaestus.app',
+          'HTTP-Referer': APP_URL,
           'X-Title': 'Phaestus Orchestrator',
         },
         body: JSON.stringify(requestBody),

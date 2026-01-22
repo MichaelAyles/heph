@@ -2,27 +2,8 @@ import type { Env } from '../../env'
 import { calculateCost } from './pricing'
 import { createLogger } from '../../lib/logger'
 import { convertToGeminiFormat } from '../../lib/gemini'
-
-interface PagesFunction<E> {
-  (context: {
-    request: Request
-    env: E
-    params: Record<string, string>
-    data: Record<string, unknown>
-  }): Promise<Response>
-}
-
-interface User {
-  id: string
-  username: string
-  displayName: string | null
-  isAdmin?: boolean
-}
-
-interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-}
+import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
+import type { PagesFunction, User, ChatMessage } from '../../lib/message-types'
 
 interface StreamRequest {
   messages: ChatMessage[]
@@ -76,12 +57,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
       }
 
-      upstreamResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      upstreamResponse = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://phaestus.dev',
+          'HTTP-Referer': APP_URL,
           'X-Title': 'Phaestus',
         },
         body: JSON.stringify({

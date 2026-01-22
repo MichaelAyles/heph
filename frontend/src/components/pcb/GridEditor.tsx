@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { logger } from '../../lib/logger'
 import {
   AlertCircle,
   AlertTriangle,
@@ -239,7 +240,7 @@ export function GridEditor({
         const finalGrid = placeBlock(newGrid, blockDef, x, y, 0)
         onBlocksChange(toPlacedBlocks(finalGrid))
       } catch (error) {
-        console.error('Failed to place block:', error)
+        logger.error('pcb', 'Failed to place block', { error })
       }
 
       setDragState({ blockId: null, isExternal: false, offsetX: 0, offsetY: 0 })

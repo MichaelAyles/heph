@@ -11,6 +11,7 @@ import { OrbitControls, Html, PerspectiveCamera } from '@react-three/drei'
 import * as THREE from 'three'
 import { Loader2, RotateCcw, Maximize2, Minimize2 } from 'lucide-react'
 import { clsx } from 'clsx'
+import { logger } from '../../lib/logger'
 
 // Dynamically import OCCT to avoid loading WASM on every page
 let occtPromise: Promise<typeof import('occt-import-js')> | null = null
@@ -171,7 +172,7 @@ async function loadStepModel(url: string): Promise<StepModelData | null> {
     console.log('[StepViewer] Success! Meshes:', coloredMeshes.length)
     return { meshes: coloredMeshes, boundingBox: finalBox }
   } catch (error) {
-    console.error('[StepViewer] Failed to load STEP file:', url, error)
+    logger.error('pcb', 'Failed to load STEP file', { url, error })
     return null
   }
 }

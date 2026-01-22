@@ -23,8 +23,9 @@ interface BlogManifest {
 
 // Import manifest directly - wrangler will bundle it
 import manifest from '../src/data/blog-manifest.json'
+import { APP_URL } from './lib/config'
 
-const SITE_URL = 'https://phaestus.app'
+const SITE_URL = APP_URL
 const FEED_TITLE = 'PHAESTUS Development Blog'
 const FEED_DESCRIPTION =
   'Development updates from PHAESTUS - an AI-powered hardware design platform that transforms natural language specifications into manufacturable hardware designs.'

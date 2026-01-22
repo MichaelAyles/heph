@@ -2,46 +2,12 @@
  * Gemini API utility functions
  */
 
-// =============================================================================
-// MESSAGE CONTENT TYPES (matching frontend llm.ts types)
-// =============================================================================
-
-interface ImageContent {
-  type: 'image'
-  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
-  data: string // base64 encoded
-}
-
-interface TextContent {
-  type: 'text'
-  text: string
-}
-
-type MessageContent = string | (TextContent | ImageContent)[]
-
-interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: MessageContent
-}
-
-// Gemini API types
-interface GeminiTextPart {
-  text: string
-}
-
-interface GeminiInlineDataPart {
-  inlineData: {
-    mimeType: string
-    data: string
-  }
-}
-
-type GeminiPart = GeminiTextPart | GeminiInlineDataPart
-
-interface GeminiContent {
-  role: string
-  parts: GeminiPart[]
-}
+import type {
+  ChatMessage,
+  MessageContent,
+  GeminiPart,
+  GeminiContent,
+} from './message-types'
 
 /**
  * Build Gemini parts from message content

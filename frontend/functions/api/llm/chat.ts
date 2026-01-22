@@ -2,72 +2,16 @@ import type { Env } from '../../env'
 import { calculateCost } from './pricing'
 import { createLogger } from '../../lib/logger'
 import { convertToGeminiFormat } from '../../lib/gemini'
-
-interface PagesFunction<E> {
-  (context: {
-    request: Request
-    env: E
-    params: Record<string, string>
-    data: Record<string, unknown>
-  }): Promise<Response>
-}
-
-interface User {
-  id: string
-  username: string
-  displayName: string | null
-  isAdmin?: boolean
-}
-
-// =============================================================================
-// MESSAGE CONTENT TYPES (for vision/multimodal support)
-// =============================================================================
-
-interface ImageContent {
-  type: 'image'
-  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
-  data: string // base64 encoded
-}
-
-interface TextContent {
-  type: 'text'
-  text: string
-}
-
-type MessageContent = string | (TextContent | ImageContent)[]
-
-interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: MessageContent
-}
-
-interface ChatRequest {
-  messages: ChatMessage[]
-  model?: string
-  temperature?: number
-  maxTokens?: number
-  projectId?: string
-}
-
-// OpenAI/OpenRouter content format for vision
-interface OpenAITextContent {
-  type: 'text'
-  text: string
-}
-
-interface OpenAIImageContent {
-  type: 'image_url'
-  image_url: {
-    url: string
-  }
-}
-
-type OpenAIContent = string | (OpenAITextContent | OpenAIImageContent)[]
-
-interface OpenAIMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: OpenAIContent
-}
+import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
+import type {
+  PagesFunction,
+  User,
+  ChatMessage,
+  ChatRequest,
+  MessageContent,
+  OpenAIMessage,
+  OpenAIContent,
+} from '../../lib/message-types'
 
 /**
  * Convert our internal message format to OpenAI/OpenRouter format
@@ -147,12 +91,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // Convert messages to OpenRouter format (handles multipart/vision content)
       const openRouterMessages = convertToOpenRouterFormat(messages)
 
-      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      response = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://phaestus.dev',
+          'HTTP-Referer': APP_URL,
           'X-Title': 'Phaestus',
         },
         body: JSON.stringify({

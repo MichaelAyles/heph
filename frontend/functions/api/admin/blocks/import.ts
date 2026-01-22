@@ -21,6 +21,7 @@
  */
 
 import JSZip from 'jszip'
+import { createLogger } from '../../../lib/logger'
 
 interface Env {
   DB: D1Database
@@ -259,7 +260,8 @@ export const onRequestPost = async (context: Context): Promise<Response> => {
         : `Block "${slug}" created with ${Object.keys(uploadedFiles).length} file(s)`,
     })
   } catch (error) {
-    console.error('Block import error:', error)
+    const logger = createLogger(env, data.user)
+    await logger.error('api', 'Block import error', { error: String(error) })
     return Response.json(
       { error: error instanceof Error ? error.message : 'Import failed' },
       { status: 500 }
