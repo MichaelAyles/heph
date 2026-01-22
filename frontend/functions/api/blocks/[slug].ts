@@ -39,6 +39,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     edges: row.edges ? JSON.parse(row.edges as string) : undefined,
     files: row.files ? JSON.parse(row.files as string) : undefined,
     netMappings: row.net_mappings ? JSON.parse(row.net_mappings as string) : undefined,
+    // Full block definition with LCSC part numbers
+    definition: row.definition ? JSON.parse(row.definition as string) : undefined,
   }
 
   return Response.json({ block })
