@@ -56,6 +56,22 @@ const REMOTE_BOARDS: RemoteBoard[] = [
 // Gerber Loading
 // =============================================================================
 
+interface BlockDefinitionComponent {
+  reference: string
+  value: string
+  footprint: string
+  manufacturer?: string
+  mpn?: string
+  lcscPartNumber?: string
+}
+
+interface BlockDefinition {
+  components?: BlockDefinitionComponent[]
+}
+
+// Cache block definitions for BOM enrichment
+const blockDefinitions = new Map<string, BlockDefinition>()
+
 async function loadBlockGerbersFromApi(slug: string): Promise<MergedGerbers | null> {
   try {
     // Fetch from production API
@@ -67,6 +83,12 @@ async function loadBlockGerbersFromApi(slug: string): Promise<MergedGerbers | nu
 
     const data = await res.json()
     const block = data.block // API returns { block: {...} }
+
+    // Cache definition for BOM enrichment
+    if (block?.definition) {
+      blockDefinitions.set(slug, block.definition)
+    }
+
     if (!block?.files?.gerbers) {
       console.log(`  Block ${slug}: No gerbers file reference`)
       return null
@@ -204,6 +226,9 @@ interface BOMEntry {
   footprint: string
   quantity: number
   dnp: boolean
+  manufacturer?: string
+  mpn?: string
+  lcscPartNumber?: string
 }
 
 function generateComponentBOM(
@@ -220,6 +245,19 @@ function generateComponentBOM(
 
     const entries = parsePositionFile(posContent)
 
+    // Get block definition for LCSC lookup
+    const definition = blockDefinitions.get(block.blockSlug)
+    const componentMap = new Map<string, BlockDefinitionComponent>()
+    if (definition?.components) {
+      for (const comp of definition.components) {
+        // Handle grouped references like "R1, R2, R3, R4"
+        const refs = comp.reference.split(/,\s*/)
+        for (const ref of refs) {
+          componentMap.set(ref.trim(), comp)
+        }
+      }
+    }
+
     for (const entry of entries) {
       // Create unique reference with board prefix and block ID
       const uniqueRef = `${boardPrefix}${block.blockId}_${entry.ref}`
@@ -230,6 +268,9 @@ function generateComponentBOM(
         ref: uniqueRef,
       })
 
+      // Look up LCSC/MPN from definition
+      const defComp = componentMap.get(entry.ref)
+
       // Aggregate BOM by value+package
       const bomKey = `${entry.val}|${entry.package}`
       const existing = bomMap.get(bomKey)
@@ -237,6 +278,12 @@ function generateComponentBOM(
       if (existing) {
         existing.references.push(uniqueRef)
         existing.quantity++
+        // Merge LCSC info if this entry has it and existing doesn't
+        if (!existing.lcscPartNumber && defComp?.lcscPartNumber) {
+          existing.lcscPartNumber = defComp.lcscPartNumber
+          existing.manufacturer = defComp.manufacturer
+          existing.mpn = defComp.mpn
+        }
       } else {
         bomMap.set(bomKey, {
           references: [uniqueRef],
@@ -244,6 +291,9 @@ function generateComponentBOM(
           footprint: entry.package,
           quantity: 1,
           dnp: false,
+          manufacturer: defComp?.manufacturer,
+          mpn: defComp?.mpn,
+          lcscPartNumber: defComp?.lcscPartNumber,
         })
       }
     }
@@ -305,12 +355,13 @@ function bomToLCSCCSV(bomMap: Map<string, BOMEntry>): string {
 
   const rows = sortedEntries.map((entry) => [
     entry.quantity.toString(),
-    // MPN: use value (for passives like "100nF", "10k") or footprint-based names
-    entry.value,
-    '', // Manufacturer - would come from block definitions
+    // MPN from block definition or fall back to value
+    entry.mpn || entry.value,
+    entry.manufacturer || '',
     // Description: value + footprint for context
     `${entry.value} ${entry.footprint}`,
-    '', // LCSC Part Number - would come from block definitions
+    // LCSC Part Number from block definition
+    entry.lcscPartNumber || '',
     entry.footprint,
     // Customer Part Number: designator list
     entry.references.sort().join(', '),
