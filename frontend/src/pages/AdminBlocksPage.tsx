@@ -48,6 +48,10 @@ interface BlockSummary {
     present: string[]
     missing: string[]
   }
+  bomStatus: {
+    uniquePartTypes: number
+    withLcsc: number
+  }
 }
 
 type CategoryFilter = 'all' | BlockCategory
@@ -247,6 +251,18 @@ export function AdminBlocksPage() {
                         </span>
                       )
                     })()}
+                    {/* BOM/LCSC status */}
+                    {block.bomStatus.uniquePartTypes > 0 && (
+                      block.bomStatus.withLcsc === block.bomStatus.uniquePartTypes ? (
+                        <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
+                          {block.bomStatus.withLcsc}/{block.bomStatus.uniquePartTypes} LCSC
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400">
+                          {block.bomStatus.withLcsc}/{block.bomStatus.uniquePartTypes} LCSC
+                        </span>
+                      )
+                    )}
                     {block.isValidated ? (
                       <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400">
                         validated

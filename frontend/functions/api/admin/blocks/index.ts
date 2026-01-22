@@ -46,6 +46,10 @@ interface BlockSummary {
     present: string[]
     missing: string[]
   }
+  bomStatus: {
+    uniquePartTypes: number
+    withLcsc: number
+  }
   definition?: unknown // Include full definition when requested
 }
 
@@ -91,6 +95,31 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const filesList = Object.values(files).filter(Boolean) as string[]
       const requirements = getBlockFileRequirements(row.slug)
 
+      // Calculate BOM status from definition
+      let bomStatus = { uniquePartTypes: 0, withLcsc: 0 }
+      let parsedDefinition: { components?: Array<{ value: string; footprint: string; lcscPartNumber?: string; nofit?: boolean }> } | null = null
+
+      if (row.definition) {
+        try {
+          parsedDefinition = JSON.parse(row.definition)
+          if (parsedDefinition?.components) {
+            // Group by value+footprint to get unique part types (excluding nofit)
+            const uniqueParts = new Map<string, { hasLcsc: boolean }>()
+            for (const comp of parsedDefinition.components) {
+              if (comp.nofit) continue
+              const key = `${comp.value}|${comp.footprint}`
+              if (!uniqueParts.has(key)) {
+                uniqueParts.set(key, { hasLcsc: !!comp.lcscPartNumber })
+              }
+            }
+            bomStatus.uniquePartTypes = uniqueParts.size
+            bomStatus.withLcsc = Array.from(uniqueParts.values()).filter(p => p.hasLcsc).length
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
       const summary: BlockSummary = {
         id: row.id,
         slug: row.slug,
@@ -111,15 +140,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           present: requirements.required.filter((f) => filesList.includes(f)),
           missing: requirements.required.filter((f) => !filesList.includes(f)),
         },
+        bomStatus,
       }
 
       // Include full definition when requested
-      if (withDefinition && row.definition) {
-        try {
-          summary.definition = JSON.parse(row.definition)
-        } catch {
-          // Ignore parse errors
-        }
+      if (withDefinition && parsedDefinition) {
+        summary.definition = parsedDefinition
       }
 
       return summary
