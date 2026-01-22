@@ -17,6 +17,7 @@ import {
   MessageSquare,
   FileText,
   SlidersHorizontal,
+  Network,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
@@ -41,6 +42,7 @@ const adminNavigation = [
   { name: 'Blocks', href: '/admin/blocks', icon: Layers },
   { name: 'LLMs', href: '/admin/llms', icon: Cpu },
   { name: 'Prompts', href: '/admin/system-prompts', icon: SlidersHorizontal },
+  { name: 'LangGraph', href: '/admin/langgraph', icon: Network },
   { name: 'Blog', href: '/admin/blog', icon: FileText },
   { name: 'Logs', href: '/admin/logs', icon: ScrollText },
 ]
