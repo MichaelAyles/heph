@@ -19,6 +19,8 @@ import {
   Eye,
   X,
   Unplug,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { BlockCategory } from '@/schemas/block'
@@ -503,6 +505,8 @@ function BlockViewerModal({
   slug: string
   onClose: () => void
 }) {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-block', slug],
     queryFn: async () => {
@@ -513,19 +517,40 @@ function BlockViewerModal({
   })
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface-900 border border-surface-700 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col rounded-lg">
+    <div className={clsx(
+      'fixed inset-0 bg-black/70 flex items-center justify-center z-50',
+      !isFullscreen && 'p-4'
+    )}>
+      <div className={clsx(
+        'bg-surface-900 border border-surface-700 overflow-hidden flex flex-col',
+        isFullscreen
+          ? 'w-full h-full rounded-none'
+          : 'w-full max-w-5xl max-h-[90vh] rounded-lg'
+      )}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-surface-700">
+        <div className="flex items-center justify-between p-4 border-b border-surface-700 shrink-0">
           <h2 className="text-lg font-medium text-white">
             {data?.block?.name || 'Block Details'}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-steel-dim hover:text-white transition-colors rounded-lg hover:bg-surface-700"
-          >
-            <X className="w-5 h-5" strokeWidth={1.5} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-2 text-steel-dim hover:text-white transition-colors rounded-lg hover:bg-surface-700"
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-5 h-5" strokeWidth={1.5} />
+              ) : (
+                <Maximize2 className="w-5 h-5" strokeWidth={1.5} />
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-steel-dim hover:text-white transition-colors rounded-lg hover:bg-surface-700"
+            >
+              <X className="w-5 h-5" strokeWidth={1.5} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
