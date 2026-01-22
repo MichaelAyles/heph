@@ -1,7 +1,7 @@
 /**
  * Chat API Endpoint
  *
- * POST /api/chat - Main chat endpoint for the PHAESTUS graph
+ * POST /api/chat - Main chat endpoint for the PHAESTUS LangGraph
  *
  * Request:
  * {
@@ -20,7 +20,7 @@
  */
 
 import type { Env } from '../../env'
-import { runGraph, type LLMClient, type GraphConfig } from '../../../src/services/phaestus-graph'
+import { runGraph, type LLMClient, type GraphConfig } from '../../../src/services/langgraph'
 import { createLogger } from '../../lib/logger'
 import { convertToGeminiFormat } from '../../lib/gemini'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
