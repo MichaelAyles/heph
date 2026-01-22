@@ -1,6 +1,16 @@
 {
-  "generatedAt": "2026-01-22T11:45:19.869Z",
+  "generatedAt": "2026-01-22T14:07:28.767Z",
   "entries": [
+    {
+      "slug": "blog0043",
+      "number": 43,
+      "title": "Blog 43: We Ordered Our First Board!",
+      "date": "2026-01-22",
+      "excerpt": "After weeks of wrestling with Gerber files, debugging coordinate systems, and learning more about PCB manufacturing than I ever expected, we finally did it. The order is in. Real boards are being f...",
+      "thumbnailPath": "/blogs/blog0043/2026-01-22 13_51_50-NVIDIA GeForce Overlay.png",
+      "markdownPath": "/blogs/blog0043/blog.md",
+      "readingTime": 5
+    },
     {
       "slug": "blog0042",
       "number": 42,
