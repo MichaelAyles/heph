@@ -1,249 +1,163 @@
 /**
  * LangGraph State Definition
  *
- * Defines the state annotation for the PHAESTUS hardware design assistant.
- * Uses LangGraph's Annotation system for proper state management with reducers.
+ * Defines the state schema for the PHAESTUS hardware design assistant.
+ * Uses LangGraph's StateSchema with MessagesValue for proper message handling.
  */
 
-import { Annotation } from '@langchain/langgraph'
-import type { CapabilityAssessment, ChatRoute } from '../../db/schema'
+import {
+  StateSchema,
+  MessagesValue,
+  ReducedValue,
+} from '@langchain/langgraph'
+import { z } from 'zod'
+import type { BaseMessage } from '@langchain/core/messages'
 
 // =============================================================================
-// Message Types
+// Zod Schemas for State Fields
 // =============================================================================
 
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  timestamp: string
-}
+export const ProjectSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.string(),
+  description: z.string().nullable(),
+  updatedAt: z.string(),
+})
+
+export type ProjectSummary = z.infer<typeof ProjectSummarySchema>
+
+export const BlockSummarySchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  category: z.string(),
+  description: z.string(),
+})
+
+export type BlockSummary = z.infer<typeof BlockSummarySchema>
+
+export const UserIntentSchema = z.enum([
+  'new_project',
+  'load_project',
+  'question',
+  'unknown',
+])
+
+export type UserIntent = z.infer<typeof UserIntentSchema>
+
+export const DebugStepSchema = z.object({
+  node: z.string(),
+  timestamp: z.string(),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
+  durationMs: z.number().optional(),
+})
+
+export type DebugStep = z.infer<typeof DebugStepSchema>
+
+export const DebugInfoSchema = z.object({
+  steps: z.array(DebugStepSchema).default([]),
+  systemPromptName: z.string().nullable().default(null),
+  systemPromptContent: z.string().nullable().default(null),
+  hardRejectionCriteriaCount: z.number().default(0),
+  hardRejectionMatched: z.string().nullable().default(null),
+  llmPrompt: z.string().nullable().default(null),
+  llmRawResponse: z.string().nullable().default(null),
+  startTime: z.string(),
+  endTime: z.string().nullable().default(null),
+  totalDurationMs: z.number().nullable().default(null),
+})
+
+export type DebugInfo = z.infer<typeof DebugInfoSchema>
+
+// Capability assessment schema (matches db/schema.ts)
+export const CapabilityAssessmentSchema = z
+  .object({
+    canBuild: z.boolean(),
+    confidence: z.number(),
+    missingCapabilities: z.array(z.string()).optional(),
+    suggestions: z.array(z.string()).optional(),
+    reasoning: z.string().optional(),
+  })
+  .nullable()
+
+// Chat route schema (matches db/schema.ts)
+export const ChatRouteSchema = z
+  .enum(['REJECT', 'CLARIFY', 'PROCEED'])
+  .nullable()
 
 // =============================================================================
-// Block Summary (for context)
-// =============================================================================
-
-export interface BlockSummary {
-  slug: string
-  name: string
-  category: string
-  description: string
-}
-
-// =============================================================================
-// Project Summary (for routing)
-// =============================================================================
-
-export interface ProjectSummary {
-  id: string
-  name: string
-  status: string
-  description: string | null
-  updatedAt: string
-}
-
-// =============================================================================
-// Intent Detection
-// =============================================================================
-
-export type UserIntent =
-  | 'new_project'      // User wants to create something new
-  | 'load_project'     // User wants to work on existing project
-  | 'question'         // User is asking a question
-  | 'unknown'          // Couldn't determine intent
-
-// =============================================================================
-// Debug Info
-// =============================================================================
-
-export interface DebugStep {
-  node: string
-  timestamp: string
-  input?: unknown
-  output?: unknown
-  durationMs?: number
-}
-
-export interface DebugInfo {
-  steps: DebugStep[]
-  systemPromptName: string | null
-  systemPromptContent: string | null
-  hardRejectionCriteriaCount: number
-  hardRejectionMatched: string | null
-  llmPrompt: string | null
-  llmRawResponse: string | null
-  startTime: string
-  endTime: string | null
-  totalDurationMs: number | null
-}
-
-// =============================================================================
-// State Annotation
+// State Schema
 // =============================================================================
 
 /**
- * PHAESTUS Graph State Annotation
+ * PHAESTUS Graph State Schema
  *
- * This defines the shape of the state that flows through the graph.
- * Each field can have a reducer that defines how updates are merged.
- *
- * - Simple fields use Annotation<Type> which stores the last value
- * - Fields with reducers use Annotation<Type>({ reducer: ... })
+ * Uses LangGraph's StateSchema with:
+ * - MessagesValue for proper message handling with IDs
+ * - ReducedValue for accumulated state (debug steps)
+ * - Zod schemas for type safety
  */
-export const PhaestusStateAnnotation = Annotation.Root({
-  // User input - simple last-value storage
-  userRequest: Annotation<string>,
-  userFeedback: Annotation<string | null>,
+export const PhaestusStateSchema = new StateSchema({
+  // Conversation messages - uses LangGraph's built-in message reducer
+  messages: MessagesValue,
 
-  // User context - their existing projects (for routing)
-  userProjects: Annotation<ProjectSummary[]>({
-    reducer: (current, update) => update ?? current,
-    default: () => [],
-  }),
+  // User's original request text
+  userRequest: z.string().default(''),
 
-  // Intent detection - what does the user want to do?
-  intent: Annotation<UserIntent>({
-    reducer: (current, update) => update ?? current,
-    default: () => 'unknown',
-  }),
+  // User feedback during refinement
+  userFeedback: z.string().nullable().default(null),
 
-  // Matched project (if intent is load_project)
-  matchedProject: Annotation<ProjectSummary | null>,
+  // User's existing projects (for routing)
+  userProjects: z.array(ProjectSummarySchema).default([]),
 
-  // Assessment results (for new project flow)
-  capabilityAssessment: Annotation<CapabilityAssessment | null>,
+  // Intent detection result
+  intent: UserIntentSchema.default('unknown'),
 
-  // Control flow
-  iterationCount: Annotation<number>({
-    reducer: (current, update) => update ?? current,
-    default: () => 0,
-  }),
-  route: Annotation<ChatRoute>,
+  // Matched project if intent is load_project
+  matchedProject: ProjectSummarySchema.nullable().default(null),
 
-  // Conversation - messages accumulate
-  messages: Annotation<ChatMessage[]>({
-    reducer: (current, update) => {
-      // Append new messages to existing ones
-      if (Array.isArray(update)) {
-        return [...current, ...update]
-      }
-      return current
-    },
-    default: () => [],
-  }),
+  // Capability assessment (for new project flow)
+  capabilityAssessment: CapabilityAssessmentSchema.default(null),
+
+  // Iteration count for refinement loops
+  iterationCount: z.number().default(0),
+
+  // Routing decision
+  route: ChatRouteSchema.default(null),
 
   // Session tracking
-  sessionId: Annotation<string>,
+  sessionId: z.string().default(''),
 
   // Project context (set when project created or loaded)
-  projectId: Annotation<string | null>,
-  availableBlocks: Annotation<BlockSummary[]>({
-    reducer: (current, update) => update ?? current,
-    default: () => [],
-  }),
+  projectId: z.string().nullable().default(null),
+
+  // Available PCB blocks
+  availableBlocks: z.array(BlockSummarySchema).default([]),
 
   // Error state
-  error: Annotation<string | null>,
+  error: z.string().nullable().default(null),
 
-  // Debug info - accumulates steps
-  debug: Annotation<DebugInfo>({
-    reducer: (current, update) => {
-      // Merge debug info, accumulating steps
-      return {
-        ...current,
-        ...update,
-        steps: [...(current.steps || []), ...(update.steps || [])],
-      }
-    },
-    default: () => ({
-      steps: [],
-      systemPromptName: null,
-      systemPromptContent: null,
-      hardRejectionCriteriaCount: 0,
-      hardRejectionMatched: null,
-      llmPrompt: null,
-      llmRawResponse: null,
-      startTime: new Date().toISOString(),
-      endTime: null,
-      totalDurationMs: null,
+  // Debug info - uses reducer to accumulate steps
+  debug: new ReducedValue(DebugInfoSchema, {
+    reducer: (current, update) => ({
+      ...current,
+      ...update,
+      steps: [...(current.steps || []), ...(update.steps || [])],
     }),
   }),
 })
 
 // Type helpers
-export type PhaestusState = typeof PhaestusStateAnnotation.State
-export type PhaestusStateUpdate = typeof PhaestusStateAnnotation.Update
+export type PhaestusState = typeof PhaestusStateSchema.State
+export type PhaestusStateUpdate = typeof PhaestusStateSchema.Update
 
 // =============================================================================
 // Helper Functions
 // =============================================================================
 
 /**
- * Create initial state for a new conversation
- */
-export function createInitialState(
-  userRequest: string,
-  options?: {
-    sessionId?: string
-    userProjects?: ProjectSummary[]
-  }
-): PhaestusState {
-  const now = new Date().toISOString()
-  const id = options?.sessionId ?? crypto.randomUUID()
-
-  return {
-    userRequest,
-    userFeedback: null,
-    userProjects: options?.userProjects ?? [],
-    intent: 'unknown',
-    matchedProject: null,
-    capabilityAssessment: null,
-    iterationCount: 0,
-    route: null,
-    messages: [
-      {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: userRequest,
-        timestamp: now,
-      },
-    ],
-    sessionId: id,
-    projectId: null,
-    availableBlocks: [],
-    error: null,
-    debug: {
-      steps: [],
-      systemPromptName: null,
-      systemPromptContent: null,
-      hardRejectionCriteriaCount: 0,
-      hardRejectionMatched: null,
-      llmPrompt: null,
-      llmRawResponse: null,
-      startTime: now,
-      endTime: null,
-      totalDurationMs: null,
-    },
-  }
-}
-
-/**
- * Create a new message
- */
-export function createMessage(
-  role: ChatMessage['role'],
-  content: string
-): ChatMessage {
-  return {
-    id: crypto.randomUUID(),
-    role,
-    content,
-    timestamp: new Date().toISOString(),
-  }
-}
-
-/**
- * Create a debug step
+ * Create a debug step entry
  */
 export function createDebugStep(
   node: string,
@@ -258,4 +172,39 @@ export function createDebugStep(
     output,
     durationMs,
   }
+}
+
+/**
+ * Create initial debug info
+ */
+export function createInitialDebugInfo(): DebugInfo {
+  return {
+    steps: [],
+    systemPromptName: null,
+    systemPromptContent: null,
+    hardRejectionCriteriaCount: 0,
+    hardRejectionMatched: null,
+    llmPrompt: null,
+    llmRawResponse: null,
+    startTime: new Date().toISOString(),
+    endTime: null,
+    totalDurationMs: null,
+  }
+}
+
+/**
+ * Get the text content from a message
+ */
+export function getMessageContent(message: BaseMessage): string {
+  if (typeof message.content === 'string') {
+    return message.content
+  }
+  // Handle complex content (e.g., multimodal)
+  if (Array.isArray(message.content)) {
+    return message.content
+      .filter((c) => typeof c === 'string' || (c && 'text' in c))
+      .map((c) => (typeof c === 'string' ? c : (c as { text: string }).text))
+      .join('')
+  }
+  return ''
 }

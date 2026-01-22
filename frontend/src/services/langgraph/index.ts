@@ -8,33 +8,39 @@
  * import { runGraph } from '@/services/langgraph'
  *
  * const result = await runGraph('I want to build a plant monitor', {
- *   db: env.DB,
- *   llm: llmClient,
+ *   userProjects: [], // User's existing projects
+ *   threadId: 'session-123', // For conversation persistence
  * })
  *
  * console.log(result.response)  // Assistant's response
- * console.log(result.route)     // 'REJECT' | 'CLARIFY' | 'PROCEED' | null
- * console.log(result.projectId) // Set when project created
+ * console.log(result.intent)    // 'new_project' | 'load_project' | 'question'
+ * console.log(result.projectId) // Set when project loaded
  * ```
  */
 
 // Graph exports
-export { runGraph, buildGraph } from './graph'
-export type { GraphConfig, GraphResult, LLMClient } from './graph'
+export { runGraph, buildGraph, compiledGraph } from './graph'
+export type { GraphConfig, GraphResult } from './graph'
 
 // State exports
 export {
-  PhaestusStateAnnotation,
-  createInitialState,
-  createMessage,
+  PhaestusStateSchema,
   createDebugStep,
+  createInitialDebugInfo,
+  getMessageContent,
+  // Schemas for validation
+  ProjectSummarySchema,
+  BlockSummarySchema,
+  UserIntentSchema,
+  DebugStepSchema,
+  DebugInfoSchema,
 } from './state'
+
 export type {
   PhaestusState,
   PhaestusStateUpdate,
-  ChatMessage,
-  BlockSummary,
   ProjectSummary,
+  BlockSummary,
   UserIntent,
   DebugStep,
   DebugInfo,

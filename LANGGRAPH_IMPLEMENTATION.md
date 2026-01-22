@@ -10,56 +10,64 @@ Tracking the incremental migration from custom `phaestus-graph` to actual LangGr
 ## Current Graph Structure
 
 ```
-START → start → END
+START → start → [new_project | load_project | question] → END
 ```
+
+Uses `addConditionalEdges` for intent-based routing.
 
 ## State Schema
 
+Using LangGraph's modern `StateSchema` with `MessagesValue` and Zod:
+
 ```typescript
-PhaestusStateAnnotation {
+const PhaestusStateSchema = new StateSchema({
+  // Conversation messages - LangGraph's built-in message reducer
+  messages: MessagesValue,
+
   // User input
-  userRequest: string
-  userFeedback: string | null
+  userRequest: z.string().default(''),
+  userFeedback: z.string().nullable().default(null),
 
   // User context
-  userProjects: ProjectSummary[]      // Fetched from DB for routing
+  userProjects: z.array(ProjectSummarySchema).default([]),
 
   // Intent detection
-  intent: UserIntent                   // 'new_project' | 'load_project' | 'question' | 'unknown'
-  matchedProject: ProjectSummary | null
+  intent: UserIntentSchema.default('unknown'),
+  matchedProject: ProjectSummarySchema.nullable().default(null),
 
   // Assessment (for new project flow)
-  capabilityAssessment: CapabilityAssessment | null
+  capabilityAssessment: CapabilityAssessmentSchema.default(null),
 
   // Control flow
-  iterationCount: number
-  route: ChatRoute                     // 'REJECT' | 'CLARIFY' | 'PROCEED' | null
-
-  // Conversation
-  messages: ChatMessage[]              // Accumulates via reducer
+  iterationCount: z.number().default(0),
+  route: ChatRouteSchema.default(null),
 
   // Session & Project
-  sessionId: string
-  projectId: string | null
-  availableBlocks: BlockSummary[]
+  sessionId: z.string().default(''),
+  projectId: z.string().nullable().default(null),
+  availableBlocks: z.array(BlockSummarySchema).default([]),
 
   // Error handling
-  error: string | null
+  error: z.string().nullable().default(null),
 
-  // Debug
-  debug: DebugInfo                     // Steps accumulate via reducer
-}
+  // Debug - uses ReducedValue for step accumulation
+  debug: new ReducedValue(DebugInfoSchema, {
+    reducer: (current, update) => ({
+      ...current,
+      ...update,
+      steps: [...(current.steps || []), ...(update.steps || [])],
+    }),
+  }),
+})
 ```
 
 ## Implemented Nodes
 
 ### `start`
-**File**: `src/services/langgraph/graph.ts`
+Entry point that detects user intent and routes accordingly.
 
-Entry point that detects user intent and prepares routing.
-
-**Input**: User message, user's existing projects
-**Output**: Intent, matched project (if any), initial response message
+**Input**: User message (from `messages`), user's existing projects
+**Output**: Intent, matched project (if any)
 
 **Intent Detection** (pattern-based):
 | Intent | Triggers |
@@ -68,11 +76,55 @@ Entry point that detects user intent and prepares routing.
 | `load_project` | "continue working on", "open project", project name mentioned |
 | `question` | Starts with what/how/why, ends with ? |
 
-**Behavior by Intent**:
-- `new_project`: "I'll help you design: {request}"
-- `load_project` + match: "Loading project {name}..."
-- `load_project` + no match: Lists user's projects
-- `question`: Placeholder for LLM routing
+### `new_project`
+Handles new project creation flow. Responds with acknowledgment.
+
+### `load_project`
+Handles loading existing projects. Shows project list if no match.
+
+### `question`
+Handles general questions. (Placeholder for LLM routing)
+
+---
+
+## Key Patterns Used
+
+### 1. StateSchema with MessagesValue
+```typescript
+import { StateSchema, MessagesValue } from '@langchain/langgraph'
+
+const State = new StateSchema({
+  messages: MessagesValue,  // Built-in message reducer with ID handling
+  // ...other fields with Zod schemas
+})
+```
+
+### 2. GraphNode Typing
+```typescript
+const myNode: GraphNode<typeof PhaestusStateSchema> = async (state) => {
+  return { messages: [new AIMessage({ id: crypto.randomUUID(), content: "..." })] }
+}
+```
+
+### 3. Conditional Edges
+```typescript
+.addConditionalEdges('start', routeByIntent)
+// where routeByIntent returns 'new_project' | 'load_project' | 'question'
+```
+
+### 4. Module-Level Compilation
+```typescript
+const checkpointer = new MemorySaver()
+const compiledGraph = buildGraph().compile({ checkpointer })
+export { compiledGraph }
+```
+
+### 5. Thread-Based Checkpointing
+```typescript
+await compiledGraph.invoke(input, {
+  configurable: { thread_id: sessionId }
+})
+```
 
 ---
 
@@ -104,16 +156,6 @@ Generates follow-up questions.
 Creates project in database.
 - Sets `projectId`
 - Transitions to workbench
-
-### `load_project`
-Loads existing project into state.
-- Fetches full project from DB
-- Sets `projectId` and project data
-
-### `answer_question`
-Handles general questions (not project requests).
-- LLM call for Q&A
-- No project creation
 
 ---
 
@@ -173,10 +215,10 @@ Handles general questions (not project requests).
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/services/langgraph/state.ts` | ~220 | State annotation with reducers |
-| `src/services/langgraph/graph.ts` | ~320 | Graph definition, nodes, runner |
-| `src/services/langgraph/index.ts` | ~40 | Public exports |
-| `functions/api/chat/index.ts` | ~240 | API endpoint, fetches user projects |
+| `src/services/langgraph/state.ts` | ~210 | StateSchema with Zod + MessagesValue |
+| `src/services/langgraph/graph.ts` | ~420 | Graph definition, nodes, conditional edges, runner |
+| `src/services/langgraph/index.ts` | ~47 | Public exports |
+| `functions/api/chat/index.ts` | ~137 | API endpoint, fetches user projects |
 
 ---
 
@@ -210,7 +252,17 @@ LangGraph uses `node:async_hooks` which needs Node.js compatibility mode in Clou
 
 ## Changelog
 
-### 2026-01-22
+### 2026-01-22 (Evening)
+- **Refactored to modern LangGraph patterns**:
+  - Replaced `Annotation.Root()` with `StateSchema` + Zod
+  - Replaced custom `ChatMessage` with `MessagesValue` and LangChain messages
+  - Added `addConditionalEdges` for intent-based routing
+  - Module-level graph compilation (singleton)
+  - Added `MemorySaver` checkpointer
+  - Proper `GraphNode<typeof Schema>` typing
+  - Simplified API endpoint (removed unused LLM client)
+
+### 2026-01-22 (Initial)
 - Initial LangGraph setup with `start` node
 - State annotation with user projects, intent, matched project
 - Intent detection via pattern matching
