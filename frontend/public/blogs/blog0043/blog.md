@@ -14,9 +14,9 @@ If you've been following this blog, you know the journey hasn't been smooth. Wha
 
 **The BOM That Wouldn't Match** - Different blocks using slightly different component values. Is it "100n" or "100nF"? Is the footprint "R_0402_1005Metric" or "0402"? JLCPCB's system is picky, and rightly so - you don't want ambiguity when a robot is placing thousands of parts per hour.
 
-**The 0201 Incident** - Discovering our blocks had 0201 footprints (0.6mm x 0.3mm - smaller than a grain of sand) when we meant to use 0402s. Swapping every passive in five different KiCad projects was not how I planned to spend that evening.
+**The 0201 Incident** - Realising that JLCPCB charge extra for 0201 (0.6mm x 0.3mm - smaller than a grain of sand) and me being tight, having to redesign all the blocks to use only 0402 or greater.. Swapping every passive in five different KiCad projects and re-laying out the boards was not how I planned to spend that evening.
 
-**Panelization Pain** - Our remote IO board is taller than the main board. You can't v-score a line that only goes partway across a panel. So now we v-score the short boards and route the tall ones. The panel merge code has more edge cases than I'd like to admit.
+**Panelization Pain** - Our remote IO board is taller than the main board. You can't v-score a line that only goes partway across a panel. So now we v-score the tall boards and route the tall ones. The panel merge code has more edge cases than I'd like to admit, however it should dynamically adjust, if we used a 2 channel IO board, it should route the top edge of the IO board and v-score the main.
 
 **The Designator Nightmare** - When you merge multiple blocks onto one panel, suddenly you have three different "R1" resistors. The solution? Prefix everything: M_ESP32-1_R1, M_BATT-1_R1, R_REMOTE-1_R1. Our centroid file looks like alphabet soup, but at least every component has a unique name.
 
@@ -35,7 +35,7 @@ The panel contains two boards that will snap apart after assembly:
 **Remote IO Board** (right side) - A 4-channel input/output panel:
 - AW9523B I2C GPIO expander
 - 4 tactile buttons
-- 4 status LEDs
+- 4 RGB LEDs
 - Connected via FFC cable
 
 The whole thing is built from our modular block library - snap together pre-validated circuits like LEGO, merge the Gerbers, generate the BOM, and ship it.
@@ -71,7 +71,7 @@ The boards should arrive in about two weeks. Then comes the moment of truth:
 
 If everything works, we'll have validated the entire PHAESTUS pipeline - from AI-assisted design through block selection, Gerber merging, BOM generation, and real-world manufacturing.
 
-If something's wrong... well, that's what Blog 44 will be about.
+If something's wrong... well, that's what a future blog will be about.
 
 ## A Moment of Pride
 
