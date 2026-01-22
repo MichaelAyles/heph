@@ -344,9 +344,9 @@ function bomToLCSCCSV(bomMap: Map<string, BOMEntry>): string {
     'Customer Part Number',
   ]
 
-  // Filter out DNP entries (they shouldn't be ordered)
+  // Filter out DNP entries and entries without LCSC numbers (they can't be ordered)
   const sortedEntries = Array.from(bomMap.values())
-    .filter((entry) => !entry.dnp)
+    .filter((entry) => !entry.dnp && entry.lcscPartNumber)
     .sort((a, b) => {
       const valCompare = a.value.localeCompare(b.value)
       if (valCompare !== 0) return valCompare
@@ -387,13 +387,50 @@ function bomToLCSCCSV(bomMap: Map<string, BOMEntry>): string {
 
 const GRID_SIZE_MM = 12.7
 
+/**
+ * Check if a component should be included in pick-and-place
+ * - Must be top-side (JLCPCB only does single-sided assembly)
+ * - Must have LCSC part number (nofit components excluded)
+ */
+function shouldIncludeInCentroid(
+  entry: PositionEntry,
+  blockSlug: string,
+  ref: string
+): boolean {
+  // Filter out bottom-side components
+  if (entry.side.toLowerCase() === 'bottom') {
+    return false
+  }
+
+  // Check if component has LCSC number in definition
+  const definition = blockDefinitions.get(blockSlug)
+  if (!definition?.components) {
+    return true // No definition, include by default
+  }
+
+  // Find component in definition (handle grouped refs)
+  for (const comp of definition.components) {
+    const refs = comp.reference.split(/,\s*/)
+    if (refs.some(r => r.trim() === ref)) {
+      // Found it - include only if it has LCSC number
+      return !!comp.lcscPartNumber
+    }
+  }
+
+  return true // Not found in definition, include by default
+}
+
 function generateComponentCentroid(
   positionFiles: Map<string, string>,
   mainBoardBlocks: PlacedBlock[],
   remoteBoards: RemoteBoard[],
   panelConfig: PanelConfiguration
-): string {
+): { csv: string; stats: { total: number; included: number; filteredBottom: number; filteredNofit: number } } {
   const lines = ['Ref,Val,Package,PosX,PosY,Rot,Side']
+  let total = 0
+  let included = 0
+  let filteredBottom = 0
+  let filteredNofit = 0
 
   // Process main board components
   for (const block of mainBoardBlocks) {
@@ -408,7 +445,20 @@ function generateComponentCentroid(
     const blockOriginY = panelConfig.mainBoardPosition.y + block.gridY * GRID_SIZE_MM
 
     for (const entry of entries) {
+      total++
       const uniqueRef = `M_${block.blockId}_${entry.ref}`
+
+      // Filter check
+      if (entry.side.toLowerCase() === 'bottom') {
+        filteredBottom++
+        continue
+      }
+      if (!shouldIncludeInCentroid(entry, block.blockSlug, entry.ref)) {
+        filteredNofit++
+        continue
+      }
+
+      included++
 
       // Find the bounding box of this block's components to normalize
       const allX = entries.map((e) => e.posX)
@@ -442,7 +492,20 @@ function generateComponentCentroid(
       const blockOriginY = remoteBoardConfig.position.y + block.gridY * GRID_SIZE_MM
 
       for (const entry of entries) {
+        total++
         const uniqueRef = `R_${remoteBoard.id}_${block.blockId}_${entry.ref}`
+
+        // Filter check
+        if (entry.side.toLowerCase() === 'bottom') {
+          filteredBottom++
+          continue
+        }
+        if (!shouldIncludeInCentroid(entry, block.blockSlug, entry.ref)) {
+          filteredNofit++
+          continue
+        }
+
+        included++
 
         // Normalize to block origin
         const allX = entries.map((e) => e.posX)
@@ -460,7 +523,10 @@ function generateComponentCentroid(
     }
   }
 
-  return lines.join('\n')
+  return {
+    csv: lines.join('\n'),
+    stats: { total, included, filteredBottom, filteredNofit }
+  }
 }
 
 // =============================================================================
@@ -731,11 +797,11 @@ async function main() {
   fs.writeFileSync(path.join(OUTPUT_DIR, `${PROJECT_SLUG}-bom-lcsc.csv`), lcscBomCsv)
   console.log(`  Written: bom-lcsc.csv (LCSC format)`)
 
-  // Centroid - component level with panel coordinates
-  const centroidCsv = generateComponentCentroid(positionFiles, MAIN_BOARD_BLOCKS, REMOTE_BOARDS, panelConfig)
-  const centroidLines = centroidCsv.split('\n').length - 1 // exclude header
-  fs.writeFileSync(path.join(OUTPUT_DIR, `${PROJECT_SLUG}-centroid.csv`), centroidCsv)
-  console.log(`  Written: centroid.csv (${centroidLines} components)`)
+  // Centroid - component level with panel coordinates (filtered for assembly)
+  const centroidResult = generateComponentCentroid(positionFiles, MAIN_BOARD_BLOCKS, REMOTE_BOARDS, panelConfig)
+  fs.writeFileSync(path.join(OUTPUT_DIR, `${PROJECT_SLUG}-centroid.csv`), centroidResult.csv)
+  console.log(`  Written: centroid.csv (${centroidResult.stats.included} components for assembly)`)
+  console.log(`    Filtered: ${centroidResult.stats.filteredBottom} bottom-side, ${centroidResult.stats.filteredNofit} nofit/no-LCSC`)
 
   // Panel config JSON
   fs.writeFileSync(
