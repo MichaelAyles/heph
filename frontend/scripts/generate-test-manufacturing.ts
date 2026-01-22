@@ -322,26 +322,20 @@ function bomToCSV(bomMap: Map<string, BOMEntry>): string {
 }
 
 /**
- * Convert BOM to LCSC-compatible CSV format
+ * Convert BOM to JLCPCB-compatible CSV format
  *
- * LCSC expects these columns:
- * - Quantity
- * - Manufacture Part Number (required - LCSC matches on this)
- * - Manufacturer (optional)
- * - Description (optional)
- * - LCSC Part Number (optional, C###### format)
- * - Package (optional)
- * - Customer Part Number (optional - we use designators)
+ * JLCPCB expects these columns:
+ * - Comment (value/description)
+ * - Designator (component references)
+ * - Footprint (package)
+ * - LCSC Part # (Cxxxxxx format)
  */
 function bomToLCSCCSV(bomMap: Map<string, BOMEntry>): string {
   const headers = [
-    'Quantity',
-    'Manufacture Part Number',
-    'Manufacturer',
-    'Description',
-    'LCSC Part Number',
-    'Package',
-    'Customer Part Number',
+    'Comment',
+    'Designator',
+    'Footprint',
+    'LCSC Part #',
   ]
 
   // Filter out DNP entries and entries without LCSC numbers (they can't be ordered)
@@ -354,17 +348,14 @@ function bomToLCSCCSV(bomMap: Map<string, BOMEntry>): string {
     })
 
   const rows = sortedEntries.map((entry) => [
-    entry.quantity.toString(),
-    // MPN from block definition or fall back to value
-    entry.mpn || entry.value,
-    entry.manufacturer || '',
-    // Description: value + footprint for context
-    `${entry.value} ${entry.footprint}`,
-    // LCSC Part Number from block definition
-    entry.lcscPartNumber || '',
-    entry.footprint,
-    // Customer Part Number: designator list
+    // Comment: value (e.g., "100nF", "10k", "AW9523B")
+    entry.value,
+    // Designator: component references
     entry.references.sort().join(', '),
+    // Footprint: package
+    entry.footprint,
+    // LCSC Part #
+    entry.lcscPartNumber || '',
   ])
 
   // Escape fields for CSV
@@ -426,7 +417,7 @@ function generateComponentCentroid(
   remoteBoards: RemoteBoard[],
   panelConfig: PanelConfiguration
 ): { csv: string; stats: { total: number; included: number; filteredBottom: number; filteredNofit: number } } {
-  // JLCPCB CPL format: Designator, Mid X, Mid Y, Layer, Rotation
+  // JLCPCB CPL format: Designator, Mid X (with mm), Mid Y (with mm), Layer, Rotation
   const lines = ['Designator,Mid X,Mid Y,Layer,Rotation']
   let total = 0
   let included = 0
@@ -471,10 +462,10 @@ function generateComponentCentroid(
       const posX = blockOriginX + (entry.posX - minX)
       const posY = blockOriginY + (entry.posY - minY)
 
-      // JLCPCB format: Designator, Mid X, Mid Y, Layer, Rotation
+      // JLCPCB format: Designator, Mid X (mm), Mid Y (mm), Layer, Rotation
       const layer = entry.side.toLowerCase() === 'top' ? 'Top' : 'Bottom'
       lines.push(
-        `"${uniqueRef}",${posX.toFixed(4)},${posY.toFixed(4)},${layer},${entry.rot.toFixed(1)}`
+        `${uniqueRef},${posX.toFixed(4)}mm,${posY.toFixed(4)}mm,${layer},${entry.rot.toFixed(0)}`
       )
     }
   }
@@ -519,10 +510,10 @@ function generateComponentCentroid(
         const posX = blockOriginX + (entry.posX - minX)
         const posY = blockOriginY + (entry.posY - minY)
 
-        // JLCPCB format: Designator, Mid X, Mid Y, Layer, Rotation
+        // JLCPCB format: Designator, Mid X (mm), Mid Y (mm), Layer, Rotation
         const layer = entry.side.toLowerCase() === 'top' ? 'Top' : 'Bottom'
         lines.push(
-          `"${uniqueRef}",${posX.toFixed(4)},${posY.toFixed(4)},${layer},${entry.rot.toFixed(1)}`
+          `${uniqueRef},${posX.toFixed(4)}mm,${posY.toFixed(4)}mm,${layer},${entry.rot.toFixed(0)}`
         )
       }
     }
