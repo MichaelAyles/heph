@@ -23,6 +23,7 @@ import { BlogPage } from '@/pages/BlogPage'
 import { BlogPostPage } from '@/pages/BlogPostPage'
 import { AdminBlogPage } from '@/pages/AdminBlogPage'
 import { AdminSystemPromptsPage } from '@/pages/AdminSystemPromptsPage'
+import { AdminComponentsPage } from '@/pages/AdminComponentsPage'
 import {
   SpecStageView,
   PCBStageView,
@@ -69,6 +70,7 @@ function AuthenticatedApp() {
         <Route path="admin/llms" element={<AdminLLMsPage />} />
         <Route path="admin/blog" element={<AdminBlogPage />} />
         <Route path="admin/system-prompts" element={<AdminSystemPromptsPage />} />
+        <Route path="admin/components" element={<AdminComponentsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

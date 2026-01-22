@@ -18,6 +18,12 @@ import {
   mergeIntoPanelGerbers,
 } from '../src/services/panel-merge'
 import type { PlacedBlock, RemoteBoard, PanelConfiguration } from '../src/db/schema'
+import {
+  type JlcpcbComponent,
+  type FootprintPattern,
+  applyRotationOffset,
+  getRotationOffset,
+} from '../src/services/jlcpcb-components'
 
 // =============================================================================
 // Configuration - matching what the user had selected
@@ -394,9 +400,12 @@ function shouldIncludeInCentroid(
 
 function generateComponentCentroid(
   positionFiles: Map<string, string>,
+  blockDimensions: Map<string, { width: number; height: number; minX: number; minY: number }>,
   mainBoardBlocks: PlacedBlock[],
   remoteBoards: RemoteBoard[],
-  panelConfig: PanelConfiguration
+  panelConfig: PanelConfiguration,
+  jlcpcbComponents: JlcpcbComponent[],
+  footprintPatterns: FootprintPattern[]
 ): { csv: string; stats: { total: number; included: number; filteredBottom: number; filteredNofit: number } } {
   // JLCPCB CPL format: Designator, Mid X (with mm), Mid Y (with mm), Layer, Rotation
   const lines = ['Designator,Mid X,Mid Y,Layer,Rotation']
@@ -405,10 +414,25 @@ function generateComponentCentroid(
   let filteredBottom = 0
   let filteredNofit = 0
 
+  // Helper to get LCSC part number from block definition
+  const getLcscPartNumber = (blockSlug: string, ref: string): string | undefined => {
+    const definition = blockDefinitions.get(blockSlug)
+    if (!definition?.components) return undefined
+
+    for (const comp of definition.components) {
+      const refs = comp.reference.split(/,\s*/)
+      if (refs.some((r) => r.trim() === ref)) {
+        return comp.lcscPartNumber
+      }
+    }
+    return undefined
+  }
+
   // Process main board components
   for (const block of mainBoardBlocks) {
     const posContent = positionFiles.get(block.blockSlug)
-    if (!posContent) continue
+    const dims = blockDimensions.get(block.blockSlug)
+    if (!posContent || !dims) continue
 
     const entries = parsePositionFile(posContent)
 
@@ -433,20 +457,19 @@ function generateComponentCentroid(
 
       included++
 
-      // Find the bounding box of this block's components to normalize
-      const allX = entries.map((e) => e.posX)
-      const allY = entries.map((e) => e.posY)
-      const minX = Math.min(...allX)
-      const minY = Math.min(...allY)
+      // FIX: Use board edge cuts origin for normalization, not component bounding box
+      const posX = blockOriginX + (entry.posX - dims.minX)
+      const posY = blockOriginY + (entry.posY - dims.minY)
 
-      // Offset position: normalize to block origin then add panel offset
-      const posX = blockOriginX + (entry.posX - minX)
-      const posY = blockOriginY + (entry.posY - minY)
+      // Apply JLCPCB rotation offset
+      const lcscPartNumber = getLcscPartNumber(block.blockSlug, entry.ref)
+      const rotationOffset = getRotationOffset(lcscPartNumber, entry.package, jlcpcbComponents, footprintPatterns)
+      const adjustedRotation = applyRotationOffset(entry.rot, rotationOffset)
 
       // JLCPCB format: Designator, Mid X (mm), Mid Y (mm), Layer, Rotation
       const layer = entry.side.toLowerCase() === 'top' ? 'Top' : 'Bottom'
       lines.push(
-        `${uniqueRef},${posX.toFixed(4)}mm,${posY.toFixed(4)}mm,${layer},${entry.rot.toFixed(0)}`
+        `${uniqueRef},${posX.toFixed(4)}mm,${posY.toFixed(4)}mm,${layer},${adjustedRotation.toFixed(0)}`
       )
     }
   }
@@ -458,7 +481,8 @@ function generateComponentCentroid(
 
     for (const block of remoteBoard.placedBlocks) {
       const posContent = positionFiles.get(block.blockSlug)
-      if (!posContent) continue
+      const dims = blockDimensions.get(block.blockSlug)
+      if (!posContent || !dims) continue
 
       const entries = parsePositionFile(posContent)
 
@@ -482,19 +506,19 @@ function generateComponentCentroid(
 
         included++
 
-        // Normalize to block origin
-        const allX = entries.map((e) => e.posX)
-        const allY = entries.map((e) => e.posY)
-        const minX = Math.min(...allX)
-        const minY = Math.min(...allY)
+        // FIX: Use board edge cuts origin for normalization
+        const posX = blockOriginX + (entry.posX - dims.minX)
+        const posY = blockOriginY + (entry.posY - dims.minY)
 
-        const posX = blockOriginX + (entry.posX - minX)
-        const posY = blockOriginY + (entry.posY - minY)
+        // Apply JLCPCB rotation offset
+        const lcscPartNumber = getLcscPartNumber(block.blockSlug, entry.ref)
+        const rotationOffset = getRotationOffset(lcscPartNumber, entry.package, jlcpcbComponents, footprintPatterns)
+        const adjustedRotation = applyRotationOffset(entry.rot, rotationOffset)
 
         // JLCPCB format: Designator, Mid X (mm), Mid Y (mm), Layer, Rotation
         const layer = entry.side.toLowerCase() === 'top' ? 'Top' : 'Bottom'
         lines.push(
-          `${uniqueRef},${posX.toFixed(4)}mm,${posY.toFixed(4)}mm,${layer},${entry.rot.toFixed(0)}`
+          `${uniqueRef},${posX.toFixed(4)}mm,${posY.toFixed(4)}mm,${layer},${adjustedRotation.toFixed(0)}`
         )
       }
     }
@@ -533,12 +557,20 @@ async function main() {
   // Load gerbers for all blocks
   const blockGerbers = new Map<string, MergedGerbers>()
   const positionFiles = new Map<string, string>()
+  const blockDimensions = new Map<string, { width: number; height: number; minX: number; minY: number }>()
 
   for (const slug of uniqueSlugs) {
     console.log(`\nLoading ${slug}...`)
     const gerbers = await loadBlockGerbersFromApi(slug)
     if (gerbers) {
       blockGerbers.set(slug, gerbers)
+
+      // Extract board dimensions from edge cuts for centroid normalization
+      if (gerbers.edgeCuts) {
+        const dims = parseBoardDimensionsFromEdgeCuts(gerbers.edgeCuts)
+        blockDimensions.set(slug, dims)
+        console.log(`  Board dims: ${dims.width.toFixed(2)} x ${dims.height.toFixed(2)} mm, origin (${dims.minX.toFixed(2)}, ${dims.minY.toFixed(2)})`)
+      }
     }
 
     const posFile = await loadPositionFileFromApi(slug)
@@ -552,6 +584,41 @@ async function main() {
   if (blockGerbers.size === 0) {
     console.error('No gerbers loaded! Cannot generate manufacturing files.')
     process.exit(1)
+  }
+
+  // ==========================================================================
+  // Load JLCPCB component rotation data
+  // ==========================================================================
+
+  console.log('\nLoading JLCPCB rotation offsets...')
+  let jlcpcbComponents: JlcpcbComponent[] = []
+  let footprintPatterns: FootprintPattern[] = []
+
+  try {
+    // Try to fetch from production API (admin endpoints)
+    const [componentsRes, patternsRes] = await Promise.all([
+      fetch('https://phaestus.app/api/admin/components?limit=10000'),
+      fetch('https://phaestus.app/api/admin/components/patterns'),
+    ])
+
+    if (componentsRes.ok) {
+      const data = await componentsRes.json()
+      jlcpcbComponents = data.components || []
+      console.log(`  Loaded ${jlcpcbComponents.length} component rotation offsets`)
+    } else {
+      console.log(`  Warning: Could not fetch components (${componentsRes.status}), using empty list`)
+    }
+
+    if (patternsRes.ok) {
+      const data = await patternsRes.json()
+      footprintPatterns = data.patterns || []
+      console.log(`  Loaded ${footprintPatterns.length} footprint patterns`)
+    } else {
+      console.log(`  Warning: Could not fetch patterns (${patternsRes.status}), using empty list`)
+    }
+  } catch (error) {
+    console.log(`  Warning: Could not fetch rotation data: ${error}`)
+    console.log('  Continuing without rotation corrections...')
   }
 
   // ==========================================================================
@@ -771,7 +838,7 @@ async function main() {
   console.log(`  Written: bom.csv (JLCPCB format, ${combinedBOM.size} unique parts)`)
 
   // Centroid - component level with panel coordinates (filtered for assembly)
-  const centroidResult = generateComponentCentroid(positionFiles, MAIN_BOARD_BLOCKS, REMOTE_BOARDS, panelConfig)
+  const centroidResult = generateComponentCentroid(positionFiles, blockDimensions, MAIN_BOARD_BLOCKS, REMOTE_BOARDS, panelConfig, jlcpcbComponents, footprintPatterns)
   fs.writeFileSync(path.join(OUTPUT_DIR, `${PROJECT_SLUG}-centroid.csv`), centroidResult.csv)
   console.log(`  Written: centroid.csv (${centroidResult.stats.included} components for assembly)`)
   console.log(`    Filtered: ${centroidResult.stats.filteredBottom} bottom-side, ${centroidResult.stats.filteredNofit} nofit/no-LCSC`)
