@@ -6,7 +6,7 @@
  */
 
 import { Annotation } from '@langchain/langgraph'
-import type { CapabilityAssessment, ChatRoute, Project } from '../../db/schema'
+import type { CapabilityAssessment, ChatRoute } from '../../db/schema'
 
 // =============================================================================
 // Message Types
