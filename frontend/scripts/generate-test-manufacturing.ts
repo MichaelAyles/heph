@@ -302,25 +302,6 @@ function generateComponentBOM(
   return { bom: bomMap, entries: allEntries }
 }
 
-function bomToCSV(bomMap: Map<string, BOMEntry>): string {
-  const lines = ['Reference,Value,Footprint,Qty,DNP']
-
-  // Sort by value then footprint
-  const sortedEntries = Array.from(bomMap.values()).sort((a, b) => {
-    const valCompare = a.value.localeCompare(b.value)
-    if (valCompare !== 0) return valCompare
-    return a.footprint.localeCompare(b.footprint)
-  })
-
-  for (const entry of sortedEntries) {
-    const refs = entry.references.sort().join(' ')
-    const dnp = entry.dnp ? 'DNP' : ''
-    lines.push(`"${refs}","${entry.value}","${entry.footprint}",${entry.quantity},${dnp}`)
-  }
-
-  return lines.join('\n')
-}
-
 /**
  * Convert BOM to JLCPCB-compatible CSV format
  *
@@ -784,14 +765,10 @@ async function main() {
     }
   }
 
-  const bomCsv = bomToCSV(combinedBOM)
+  // JLCPCB-format BOM (Comment, Designator, Footprint, LCSC Part #)
+  const bomCsv = bomToLCSCCSV(combinedBOM)
   fs.writeFileSync(path.join(OUTPUT_DIR, `${PROJECT_SLUG}-bom.csv`), bomCsv)
-  console.log(`  Written: bom.csv (${combinedBOM.size} unique parts, ${allPlacedBlocks.length} blocks)`)
-
-  // LCSC-format BOM
-  const lcscBomCsv = bomToLCSCCSV(combinedBOM)
-  fs.writeFileSync(path.join(OUTPUT_DIR, `${PROJECT_SLUG}-bom-lcsc.csv`), lcscBomCsv)
-  console.log(`  Written: bom-lcsc.csv (LCSC format)`)
+  console.log(`  Written: bom.csv (JLCPCB format, ${combinedBOM.size} unique parts)`)
 
   // Centroid - component level with panel coordinates (filtered for assembly)
   const centroidResult = generateComponentCentroid(positionFiles, MAIN_BOARD_BLOCKS, REMOTE_BOARDS, panelConfig)
