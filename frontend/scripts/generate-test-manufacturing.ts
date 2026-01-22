@@ -426,7 +426,8 @@ function generateComponentCentroid(
   remoteBoards: RemoteBoard[],
   panelConfig: PanelConfiguration
 ): { csv: string; stats: { total: number; included: number; filteredBottom: number; filteredNofit: number } } {
-  const lines = ['Ref,Val,Package,PosX,PosY,Rot,Side']
+  // JLCPCB CPL format: Designator, Mid X, Mid Y, Layer, Rotation
+  const lines = ['Designator,Mid X,Mid Y,Layer,Rotation']
   let total = 0
   let included = 0
   let filteredBottom = 0
@@ -470,8 +471,10 @@ function generateComponentCentroid(
       const posX = blockOriginX + (entry.posX - minX)
       const posY = blockOriginY + (entry.posY - minY)
 
+      // JLCPCB format: Designator, Mid X, Mid Y, Layer, Rotation
+      const layer = entry.side.toLowerCase() === 'top' ? 'Top' : 'Bottom'
       lines.push(
-        `"${uniqueRef}","${entry.val}","${entry.package}",${posX.toFixed(4)},${posY.toFixed(4)},${entry.rot.toFixed(1)},${entry.side}`
+        `"${uniqueRef}",${posX.toFixed(4)},${posY.toFixed(4)},${layer},${entry.rot.toFixed(1)}`
       )
     }
   }
@@ -516,8 +519,10 @@ function generateComponentCentroid(
         const posX = blockOriginX + (entry.posX - minX)
         const posY = blockOriginY + (entry.posY - minY)
 
+        // JLCPCB format: Designator, Mid X, Mid Y, Layer, Rotation
+        const layer = entry.side.toLowerCase() === 'top' ? 'Top' : 'Bottom'
         lines.push(
-          `"${uniqueRef}","${entry.val}","${entry.package}",${posX.toFixed(4)},${posY.toFixed(4)},${entry.rot.toFixed(1)},${entry.side}`
+          `"${uniqueRef}",${posX.toFixed(4)},${posY.toFixed(4)},${layer},${entry.rot.toFixed(1)}`
         )
       }
     }
