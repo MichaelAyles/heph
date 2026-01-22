@@ -20,11 +20,50 @@
  */
 
 import type { Env } from '../../env'
-import { runGraph, type LLMClient, type GraphConfig } from '../../../src/services/langgraph'
+import { runGraph, type LLMClient, type GraphConfig, type ProjectSummary } from '../../../src/services/langgraph'
 import { createLogger } from '../../lib/logger'
 import { convertToGeminiFormat } from '../../lib/gemini'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
 import type { PagesFunction, User } from '../../lib/message-types'
+
+// =============================================================================
+// Project Fetching
+// =============================================================================
+
+interface ProjectRow {
+  id: string
+  name: string
+  status: string
+  description: string | null
+  updated_at: string
+}
+
+/**
+ * Fetch user's projects for intent routing
+ */
+async function fetchUserProjects(
+  db: Env['DB'],
+  userId: string
+): Promise<ProjectSummary[]> {
+  const result = await db
+    .prepare(
+      `SELECT id, name, status, description, updated_at
+       FROM projects
+       WHERE user_id = ?
+       ORDER BY updated_at DESC
+       LIMIT 20`
+    )
+    .bind(userId)
+    .all<ProjectRow>()
+
+  return result.results.map((row) => ({
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    description: row.description,
+    updatedAt: row.updated_at,
+  }))
+}
 
 interface ChatRequest {
   message: string
@@ -165,26 +204,35 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Create LLM client
     const llm = await createLLMClient(env)
 
+    // Fetch user's projects for intent routing
+    const userProjects = await fetchUserProjects(env.DB, user.id)
+
     // Build graph config
     const config: GraphConfig = {
       db: env.DB,
       llm,
+      userProjects,
+      userId: user.id,
     }
 
     // Run the graph
     const result = await runGraph(message, config, sessionId)
 
     await logger.info('api', 'Chat completed', {
+      intent: result.intent,
       route: result.route,
       projectId: result.projectId,
+      matchedProject: result.matchedProject?.name,
       sessionId: result.sessionId,
     })
 
     // Return response with debug info
     return Response.json({
       response: result.response,
+      intent: result.intent,
       route: result.route,
       assessment: result.state.capabilityAssessment,
+      matchedProject: result.matchedProject,
       projectId: result.projectId,
       sessionId: result.sessionId,
       debug: result.state.debug,

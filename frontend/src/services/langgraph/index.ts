@@ -34,6 +34,8 @@ export type {
   PhaestusStateUpdate,
   ChatMessage,
   BlockSummary,
+  ProjectSummary,
+  UserIntent,
   DebugStep,
   DebugInfo,
 } from './state'

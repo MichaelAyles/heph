@@ -6,7 +6,7 @@
  */
 
 import { Annotation } from '@langchain/langgraph'
-import type { CapabilityAssessment, ChatRoute } from '../../db/schema'
+import type { CapabilityAssessment, ChatRoute, Project } from '../../db/schema'
 
 // =============================================================================
 // Message Types
@@ -29,6 +29,28 @@ export interface BlockSummary {
   category: string
   description: string
 }
+
+// =============================================================================
+// Project Summary (for routing)
+// =============================================================================
+
+export interface ProjectSummary {
+  id: string
+  name: string
+  status: string
+  description: string | null
+  updatedAt: string
+}
+
+// =============================================================================
+// Intent Detection
+// =============================================================================
+
+export type UserIntent =
+  | 'new_project'      // User wants to create something new
+  | 'load_project'     // User wants to work on existing project
+  | 'question'         // User is asking a question
+  | 'unknown'          // Couldn't determine intent
 
 // =============================================================================
 // Debug Info
@@ -73,7 +95,22 @@ export const PhaestusStateAnnotation = Annotation.Root({
   userRequest: Annotation<string>,
   userFeedback: Annotation<string | null>,
 
-  // Assessment results
+  // User context - their existing projects (for routing)
+  userProjects: Annotation<ProjectSummary[]>({
+    reducer: (current, update) => update ?? current,
+    default: () => [],
+  }),
+
+  // Intent detection - what does the user want to do?
+  intent: Annotation<UserIntent>({
+    reducer: (current, update) => update ?? current,
+    default: () => 'unknown',
+  }),
+
+  // Matched project (if intent is load_project)
+  matchedProject: Annotation<ProjectSummary | null>,
+
+  // Assessment results (for new project flow)
   capabilityAssessment: Annotation<CapabilityAssessment | null>,
 
   // Control flow
@@ -98,7 +135,7 @@ export const PhaestusStateAnnotation = Annotation.Root({
   // Session tracking
   sessionId: Annotation<string>,
 
-  // Project context (set when project created)
+  // Project context (set when project created or loaded)
   projectId: Annotation<string | null>,
   availableBlocks: Annotation<BlockSummary[]>({
     reducer: (current, update) => update ?? current,
@@ -146,14 +183,20 @@ export type PhaestusStateUpdate = typeof PhaestusStateAnnotation.Update
  */
 export function createInitialState(
   userRequest: string,
-  sessionId?: string
+  options?: {
+    sessionId?: string
+    userProjects?: ProjectSummary[]
+  }
 ): PhaestusState {
   const now = new Date().toISOString()
-  const id = sessionId ?? crypto.randomUUID()
+  const id = options?.sessionId ?? crypto.randomUUID()
 
   return {
     userRequest,
     userFeedback: null,
+    userProjects: options?.userProjects ?? [],
+    intent: 'unknown',
+    matchedProject: null,
     capabilityAssessment: null,
     iterationCount: 0,
     route: null,
