@@ -6,7 +6,7 @@
 
 import { create } from 'zustand'
 import type { CapabilityAssessment, ChatRoute } from '../db/schema'
-import type { DebugInfo } from '../services/phaestus-graph'
+import type { DebugInfo } from '../types/debug'
 
 // =============================================================================
 // Types

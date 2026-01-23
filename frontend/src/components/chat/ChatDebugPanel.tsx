@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import type { DebugInfo, DebugStep } from '../../services/phaestus-graph'
+import type { DebugInfo, DebugStep } from '../../types/debug'
 
 interface ChatDebugPanelProps {
   debugInfo: DebugInfo | null

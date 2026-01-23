@@ -5,8 +5,10 @@
  * The LLM recommends which blocks to use and how to arrange them on the grid.
  */
 
+import { z } from 'zod'
 import type { BlockDefinition } from '../schemas/block'
 import type { FinalSpec } from '../db/schema'
+import { extractAndValidateJson } from '../../functions/lib/json'
 
 // =============================================================================
 // Types
@@ -42,6 +44,24 @@ export interface PCBSuggestionResponse {
   boardSize: { width: number; height: number }
   notes: string
 }
+
+// Zod schema for response validation with sensible defaults
+const PCBBlockSchema = z.object({
+  slug: z.string(),
+  gridX: z.number(),
+  gridY: z.number(),
+  rotation: z.union([z.literal(0), z.literal(180)]).optional().default(0),
+  reason: z.string().optional().default(''),
+})
+
+const PCBSuggestionResponseSchema = z.object({
+  blocks: z.array(PCBBlockSchema),
+  boardSize: z.object({
+    width: z.number(),
+    height: z.number(),
+  }).optional(),
+  notes: z.string().optional().default(''),
+})
 
 // =============================================================================
 // Block Catalog Builder
@@ -232,68 +252,35 @@ export function buildPCBSelectionUserPrompt(request: PCBSuggestionRequest): stri
  * Parse and validate the LLM response
  */
 export function parsePCBSuggestionResponse(content: string): PCBSuggestionResponse | null {
-  // Extract JSON from response
-  const jsonMatch = content.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
+  const result = extractAndValidateJson(content, PCBSuggestionResponseSchema)
+  if (!result.success) {
     return null
   }
 
-  try {
-    const parsed = JSON.parse(jsonMatch[0])
+  const parsed = result.data
 
-    // Validate structure
-    if (!Array.isArray(parsed.blocks)) {
-      return null
-    }
-
-    // Validate each block
+  // Calculate board size if not provided
+  let boardSize = parsed.boardSize
+  if (!boardSize) {
+    let maxX = 0
+    let maxY = 0
     for (const block of parsed.blocks) {
-      if (
-        typeof block.slug !== 'string' ||
-        typeof block.gridX !== 'number' ||
-        typeof block.gridY !== 'number'
-      ) {
-        return null
-      }
-      // Default rotation to 0 if not specified
-      if (block.rotation === undefined) {
-        block.rotation = 0
-      }
-      // Ensure rotation is valid
-      if (block.rotation !== 0 && block.rotation !== 180) {
-        block.rotation = 0
-      }
-      // Default reason if not provided
-      if (!block.reason) {
-        block.reason = ''
-      }
+      maxX = Math.max(maxX, block.gridX + 1)
+      maxY = Math.max(maxY, block.gridY + 1)
     }
+    boardSize = { width: Math.max(2, maxX), height: Math.max(4, maxY) }
+  }
 
-    // Validate board size
-    if (
-      !parsed.boardSize ||
-      typeof parsed.boardSize.width !== 'number' ||
-      typeof parsed.boardSize.height !== 'number'
-    ) {
-      // Calculate from blocks if not provided
-      let maxX = 0
-      let maxY = 0
-      for (const block of parsed.blocks) {
-        // Assuming 1x1 blocks if we can't determine size
-        maxX = Math.max(maxX, block.gridX + 1)
-        maxY = Math.max(maxY, block.gridY + 1)
-      }
-      parsed.boardSize = { width: Math.max(2, maxX), height: Math.max(4, maxY) }
-    }
-
-    // Default notes if not provided
-    if (!parsed.notes) {
-      parsed.notes = ''
-    }
-
-    return parsed as PCBSuggestionResponse
-  } catch {
-    return null
+  return {
+    blocks: parsed.blocks.map((b) => ({
+      slug: b.slug,
+      gridX: b.gridX,
+      gridY: b.gridY,
+      rotation: b.rotation as 0 | 180,
+      reason: b.reason,
+    })),
+    boardSize,
+    notes: parsed.notes,
   }
 }
 

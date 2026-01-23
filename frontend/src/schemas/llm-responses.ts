@@ -24,33 +24,63 @@ import { z } from 'zod'
 // Feasibility Analysis Schemas
 // =============================================================================
 
-export const FeasibilityCategorySchema = z.object({
-  score: z.number().min(0).max(100),
+// Suggested revisions when a project is rejected
+export const SuggestedRevisionsSchema = z
+  .object({
+    summary: z.string(),
+    changes: z.array(z.string()),
+    revisedDescription: z.string(),
+  })
+  .optional()
+
+// Open questions from feasibility analysis
+export const OpenQuestionSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  options: z.array(z.string()).optional().default([]),
+  category: z.string().optional(),
+  impact: z.string().optional(),
+})
+
+// Category schemas for feasibility analysis
+const CommunicationCategorySchema = z.object({
+  type: z.string(),
+  confidence: z.number(),
   notes: z.string(),
 })
 
-export const FeasibilityResponseSchema = z.object({
-  manufacturable: z.boolean(),
-  rejectionReason: z.string().optional(),
-  suggestedRevisions: z.array(z.string()).optional(),
-  communication: FeasibilityCategorySchema.optional(),
-  processing: FeasibilityCategorySchema.optional(),
-  power: FeasibilityCategorySchema.optional(),
-  inputs: FeasibilityCategorySchema.optional(),
-  outputs: FeasibilityCategorySchema.optional(),
-  overallScore: z.number().min(0).max(100).optional(),
-  openQuestions: z
-    .array(
-      z.object({
-        id: z.string(),
-        question: z.string(),
-        options: z.array(z.string()).optional(),
-        category: z.string().optional(),
-        impact: z.string().optional(),
-      })
-    )
-    .optional(),
+const ProcessingCategorySchema = z.object({
+  level: z.string(),
+  confidence: z.number(),
+  notes: z.string(),
 })
+
+const PowerCategorySchema = z.object({
+  options: z.array(z.string()),
+  confidence: z.number(),
+  notes: z.string(),
+})
+
+const ItemsCategorySchema = z.object({
+  items: z.array(z.string()),
+  confidence: z.number(),
+})
+
+// Feasibility response - permissive schema that accepts LLM variations
+export const FeasibilityResponseSchema = z
+  .object({
+    manufacturable: z.boolean(),
+    rejectionReason: z.string().optional(),
+    suggestedRevisions: SuggestedRevisionsSchema,
+    communication: CommunicationCategorySchema.optional(),
+    processing: ProcessingCategorySchema.optional(),
+    power: PowerCategorySchema.optional(),
+    inputs: ItemsCategorySchema.optional(),
+    outputs: ItemsCategorySchema.optional(),
+    overallScore: z.number().min(0).max(100).optional(),
+    openQuestions: z.array(OpenQuestionSchema).optional().default([]),
+  })
+  .passthrough()
 
 export type FeasibilityResponse = z.infer<typeof FeasibilityResponseSchema>
 
@@ -58,29 +88,12 @@ export type FeasibilityResponse = z.infer<typeof FeasibilityResponseSchema>
 // Refinement Schemas
 // =============================================================================
 
-export const RefinementResponseSchema = z.object({
-  decisions: z
-    .array(
-      z.object({
-        questionId: z.string(),
-        answer: z.string(),
-        notes: z.string().optional(),
-      })
-    )
-    .optional(),
-  openQuestions: z
-    .array(
-      z.object({
-        id: z.string(),
-        question: z.string(),
-        options: z.array(z.string()).optional(),
-        category: z.string().optional(),
-        impact: z.string().optional(),
-      })
-    )
-    .optional(),
-  complete: z.boolean().optional(),
-})
+export const RefinementResponseSchema = z
+  .object({
+    complete: z.boolean().optional(),
+    additionalQuestions: z.array(OpenQuestionSchema).optional().default([]),
+  })
+  .passthrough()
 
 export type RefinementResponse = z.infer<typeof RefinementResponseSchema>
 
@@ -88,58 +101,14 @@ export type RefinementResponse = z.infer<typeof RefinementResponseSchema>
 // Final Spec Schemas
 // =============================================================================
 
-export const FinalSpecResponseSchema = z.object({
-  projectName: z.string(),
-  summary: z.string(),
-  microcontroller: z.string(),
-  connectivity: z.array(z.string()).optional(),
-  power: z
-    .object({
-      source: z.string(),
-      voltage: z.string().optional(),
-      features: z.array(z.string()).optional(),
-    })
-    .optional(),
-  inputs: z
-    .array(
-      z.object({
-        type: z.string(),
-        count: z.number().optional(),
-        notes: z.string().optional(),
-      })
-    )
-    .optional(),
-  outputs: z
-    .array(
-      z.object({
-        type: z.string(),
-        count: z.number().optional(),
-        notes: z.string().optional(),
-      })
-    )
-    .optional(),
-  enclosure: z
-    .object({
-      style: z.string(),
-      material: z.string().optional(),
-      width: z.number().optional(),
-      height: z.number().optional(),
-      depth: z.number().optional(),
-    })
-    .optional(),
-  estimatedBOM: z
-    .array(
-      z.object({
-        item: z.string(),
-        quantity: z.number(),
-        unitCost: z.number(),
-        notes: z.string().optional(),
-      })
-    )
-    .optional(),
-  totalCost: z.number().optional(),
-  manufacturingNotes: z.array(z.string()).optional(),
-})
+// Final spec - matches FinalSpec interface from schema.ts
+// Using permissive schema since LLM may include extra fields
+export const FinalSpecResponseSchema = z
+  .object({
+    name: z.string(),
+    summary: z.string(),
+  })
+  .passthrough()
 
 export type FinalSpecResponse = z.infer<typeof FinalSpecResponseSchema>
 

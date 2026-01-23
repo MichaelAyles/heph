@@ -9,6 +9,7 @@
 import { z } from 'zod'
 import type { PlacedBlock, FinalSpec, ResistorTapState } from '../db/schema'
 import type { BlockDefinition, BusTap, I2cAddressConfig } from '../schemas/block'
+import { extractAndValidateJson } from '../../functions/lib/json'
 
 // =============================================================================
 // Zod Schema for LLM Response
@@ -268,17 +269,8 @@ export function buildTapConfigMessages(
  * Parse and validate LLM response for tap configuration
  */
 export function parseTapConfigResponse(content: string): TapConfigResponse | null {
-  // Extract JSON from response
-  const jsonMatch = content.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) return null
-
-  try {
-    const parsed = JSON.parse(jsonMatch[0])
-    const result = TapConfigResponseSchema.safeParse(parsed)
-    return result.success ? result.data : null
-  } catch {
-    return null
-  }
+  const result = extractAndValidateJson(content, TapConfigResponseSchema)
+  return result.success ? result.data : null
 }
 
 /**

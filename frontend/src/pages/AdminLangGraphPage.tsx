@@ -54,6 +54,7 @@ import type {
   NodeState,
 } from '@/services/langgraph/execution-tracer'
 import { getNodeStatesAtStep } from '@/services/langgraph/execution-tracer'
+import { logger } from '@/lib/logger'
 
 type Tab = 'debugger' | 'nodes' | 'edges' | 'threads' | 'test' | 'config'
 
@@ -223,7 +224,7 @@ export function AdminLangGraphPage() {
               }
               setCurrentRun(run)
             } catch {
-              console.warn('Failed to parse SSE event:', line)
+              logger.warn('orchestrator', 'Failed to parse SSE event', { line })
             }
           }
         }
@@ -282,7 +283,7 @@ export function AdminLangGraphPage() {
       setIsPlaying(true)
       setShowHistory(false)
     } catch (error) {
-      console.error('Failed to load execution:', error)
+      logger.error('orchestrator', 'Failed to load execution', { error })
     }
   }, [])
 
@@ -295,7 +296,7 @@ export function AdminLangGraphPage() {
       if (!res.ok) throw new Error('Failed to delete execution')
       refetchHistory()
     } catch (error) {
-      console.error('Failed to delete execution:', error)
+      logger.error('orchestrator', 'Failed to delete execution', { error })
     }
   }, [refetchHistory])
 

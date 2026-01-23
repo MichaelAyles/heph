@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import mermaid from 'mermaid'
 import { RefreshCw, AlertCircle } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface GraphNode {
   name: string
@@ -100,7 +101,7 @@ export function GraphViewer({
           }
         }
       } catch (err) {
-        console.error('Mermaid render error:', err)
+        logger.error('ui', 'Mermaid render error', { error: err })
         setRenderError(err instanceof Error ? err.message : 'Failed to render diagram')
       }
     }

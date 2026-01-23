@@ -37,6 +37,8 @@ import {
   buildFirmwareInputFromSpec,
   type FirmwareProject,
 } from '@/prompts/firmware'
+import { extractAndValidateJson } from '@/../functions/lib/json'
+import { FirmwareProjectSchema } from '@/schemas/llm-responses'
 
 interface FileNode {
   name: string
@@ -526,13 +528,12 @@ export function FirmwareStageView() {
         projectId: project.id,
       })
 
-      // Extract JSON from response
-      const jsonMatch = response.content.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        throw new Error('No JSON found in LLM response')
+      // Parse and validate response
+      const parseResult = extractAndValidateJson(response.content, FirmwareProjectSchema)
+      if (!parseResult.success) {
+        throw new Error(`Failed to parse firmware response: ${parseResult.error}`)
       }
-
-      const result = JSON.parse(jsonMatch[0]) as FirmwareProject
+      const result = parseResult.data as FirmwareProject
       if (!result.files || result.files.length === 0) {
         throw new Error('No files generated')
       }
@@ -589,13 +590,12 @@ export function FirmwareStageView() {
         projectId: project.id,
       })
 
-      // Extract JSON from response
-      const jsonMatch = response.content.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        throw new Error('No JSON found in LLM response')
+      // Parse and validate response
+      const parseResult = extractAndValidateJson(response.content, FirmwareProjectSchema)
+      if (!parseResult.success) {
+        throw new Error(`Failed to parse modification response: ${parseResult.error}`)
       }
-
-      const result = JSON.parse(jsonMatch[0]) as FirmwareProject
+      const result = parseResult.data as FirmwareProject
       if (!result.files || result.files.length === 0) {
         throw new Error('No files in response')
       }

@@ -22,6 +22,12 @@ import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '@/prompts/fea
 import { REFINEMENT_SYSTEM_PROMPT, buildRefinementPrompt } from '@/prompts/refinement'
 import { buildBlueprintPrompts } from '@/prompts/blueprint'
 import { FINAL_SPEC_SYSTEM_PROMPT, buildFinalSpecPrompt } from '@/prompts/finalSpec'
+import { extractAndValidateJson } from '@/../functions/lib/json'
+import {
+  FeasibilityResponseSchema,
+  RefinementResponseSchema,
+  FinalSpecResponseSchema,
+} from '@/schemas/llm-responses'
 import type {
   Project,
   ProjectSpec,
@@ -171,11 +177,11 @@ function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilitySte
           projectId: project.id,
         })
 
-        const fullContent = response.content
-        const jsonMatch = fullContent.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) throw new Error('No JSON in response')
-
-        const result = JSON.parse(jsonMatch[0])
+        const parseResult = extractAndValidateJson(response.content, FeasibilityResponseSchema)
+        if (!parseResult.success) {
+          throw new Error(`Failed to parse feasibility response: ${parseResult.error}`)
+        }
+        const result = parseResult.data
 
         if (!result.manufacturable) {
           onReject(
@@ -186,12 +192,12 @@ function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilitySte
         }
 
         const feasibility: FeasibilityAnalysis = {
-          communication: result.communication,
-          processing: result.processing,
-          power: result.power,
-          inputs: result.inputs,
-          outputs: result.outputs,
-          overallScore: result.overallScore,
+          communication: result.communication ?? { type: 'unknown', confidence: 0, notes: '' },
+          processing: result.processing ?? { level: 'unknown', confidence: 0, notes: '' },
+          power: result.power ?? { options: [], confidence: 0, notes: '' },
+          inputs: result.inputs ?? { items: [], confidence: 0 },
+          outputs: result.outputs ?? { items: [], confidence: 0 },
+          overallScore: result.overallScore ?? 0,
           manufacturable: result.manufacturable,
           rejectionReason: result.rejectionReason,
         }
@@ -475,24 +481,23 @@ function RefinementStep({ project, spec, onDecisions, onComplete }: RefinementSt
           projectId: project.id,
         })
 
-        const fullContent = response.content
-        const jsonMatch = fullContent.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) {
+        const parseResult = extractAndValidateJson(response.content, RefinementResponseSchema)
+        if (!parseResult.success) {
+          logger.warn('project', 'Failed to parse refinement response', { error: parseResult.error })
           onComplete()
           return
         }
-
-        const result = JSON.parse(jsonMatch[0])
+        const result = parseResult.data
 
         if (result.complete) {
           onComplete()
-        } else if (result.additionalQuestions?.length > 0) {
+        } else if (result.additionalQuestions && result.additionalQuestions.length > 0) {
           setPendingQuestions(result.additionalQuestions)
         } else {
           onComplete()
         }
       } catch (err) {
-        logger.error('project', 'Failed to parse refinement response', { error: err })
+        logger.error('project', 'Refinement request failed', { error: err })
         onComplete()
       } finally {
         setIsChecking(false)
@@ -1014,11 +1019,12 @@ function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) 
           projectId: project.id,
         })
 
-        const fullContent = response.content
-        const jsonMatch = fullContent.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) throw new Error('No JSON in response')
-
-        const result = JSON.parse(jsonMatch[0]) as FinalSpec
+        const parseResult = extractAndValidateJson(response.content, FinalSpecResponseSchema)
+        if (!parseResult.success) {
+          throw new Error(`Failed to parse final spec response: ${parseResult.error}`)
+        }
+        // Schema validates minimum fields; cast to full FinalSpec (LLM provides all fields)
+        const result = parseResult.data as unknown as FinalSpec
         result.locked = true
         result.lockedAt = new Date().toISOString()
         onComplete(result)

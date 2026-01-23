@@ -11,6 +11,7 @@ import { plot as plotTree } from '@tracespace/plotter'
 import { render as renderImage } from '@tracespace/renderer'
 import { Loader2, AlertCircle, ZoomIn, ZoomOut, RotateCcw, Layers, Eye, EyeOff } from 'lucide-react'
 import { clsx } from 'clsx'
+import { logger } from '@/lib/logger'
 
 // Bounding box type: [minX, minY, maxX, maxY]
 type BoundingBox = [number, number, number, number]
@@ -152,7 +153,7 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
               bounds: imageTree.size as BoundingBox,
             })
           } catch (parseError) {
-            console.warn(`Failed to parse ${filename}:`, parseError)
+            logger.warn('pcb', `Failed to parse gerber file`, { filename, error: parseError })
             parsed.push({
               name: layerName,
               filename,
