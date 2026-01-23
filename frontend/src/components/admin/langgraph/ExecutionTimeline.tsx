@@ -98,22 +98,25 @@ export function ExecutionTimeline({
   const [isDragging, setIsDragging] = useState(false)
 
   // Convert events to timeline steps
-  const steps = useMemo(() => eventsToTimeline(events), [events])
+  const steps = useMemo(() => eventsToTimeline(events || []), [events])
 
   // Calculate total duration from events if not provided
   const calculatedDuration = useMemo(() => {
     if (totalDuration) return totalDuration
-    if (events.length < 2) return 0
-    return events[events.length - 1].timestamp - events[0].timestamp
+    if (!events || events.length < 2) return 0
+    const first = events[0]
+    const last = events[events.length - 1]
+    if (!first || !last) return 0
+    return last.timestamp - first.timestamp
   }, [events, totalDuration])
 
   // Get position for a step (percentage along the track)
   const getStepPosition = useCallback(
-    (step: TimelineStep) => {
-      if (events.length < 2) return 50
+    (step: TimelineStep | undefined) => {
+      if (!step || events.length < 2 || !events[0]) return 50
       const startTime = events[0].timestamp
       const elapsed = step.timestamp - startTime
-      return (elapsed / calculatedDuration) * 100
+      return calculatedDuration > 0 ? (elapsed / calculatedDuration) * 100 : 50
     },
     [events, calculatedDuration]
   )
@@ -221,7 +224,7 @@ export function ExecutionTimeline({
   // Get current step info
   const currentStepInfo = steps[currentStep]
 
-  if (events.length === 0) {
+  if (!events || events.length === 0) {
     return (
       <div className="bg-surface-800 rounded-lg p-4 text-center text-steel-dim text-sm">
         No execution events to display
