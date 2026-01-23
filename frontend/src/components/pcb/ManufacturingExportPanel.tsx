@@ -28,12 +28,13 @@ import type {
   PcbBlock,
   PCBArtifacts,
   PanelConfiguration,
+  ProjectSpec,
 } from '../../db/schema'
 import type { BlockDefinition } from '../../schemas/block'
 
 interface ManufacturingExportPanelProps {
   project: { id: string; name: string; description?: string | null }
-  spec?: { finalSpec?: unknown } | null
+  spec?: ProjectSpec | null
   selectedBlocks: PlacedBlock[]
   blockDefinitions: Map<string, BlockDefinition>
   blocks: PcbBlock[]

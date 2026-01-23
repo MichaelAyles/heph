@@ -10,9 +10,9 @@ interface SelectedBlocksBarProps {
   onRemoveBlock: (blockId: string) => void
   summary?: {
     blockCount: number
-    i2cDevices: string[]
-    spiDevices: string[]
-    gpioUsage: string[]
+    i2cDevices: Array<{ address: number; blockName: string }>
+    spiDevices: Array<{ csPin: string; blockName: string }>
+    gpioUsage: Array<{ gpio: string; blockName: string }>
   } | null
 }
 
