@@ -3,7 +3,9 @@
  *
  * Provides:
  * - React Flow-based graph visualization with real-time debugging
+ * - SSE streaming for live execution events
  * - Execution timeline with scrubbing
+ * - Execution history with replay
  * - Node inspection with state diff
  * - Node (orchestrator prompt) editing
  * - Edge management
@@ -13,7 +15,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   GitBranch,
   Play,
@@ -25,6 +27,11 @@ import {
   Bug,
   Loader2,
   RefreshCw,
+  History,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Trash2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -46,14 +53,7 @@ import type {
   ExecutionRun,
   NodeState,
 } from '@/services/langgraph/execution-tracer'
-import {
-  createGraphStartEvent,
-  createNodeEnterEvent,
-  createNodeExitEvent,
-  createEdgeTakenEvent,
-  createGraphEndEvent,
-  getNodeStatesAtStep,
-} from '@/services/langgraph/execution-tracer'
+import { getNodeStatesAtStep } from '@/services/langgraph/execution-tracer'
 
 type Tab = 'debugger' | 'graph' | 'nodes' | 'edges' | 'threads' | 'test' | 'config'
 
@@ -63,24 +63,38 @@ interface GraphData {
   edges: Array<{ from: string; to: string; conditional: boolean; label?: string }>
 }
 
-interface ChatResponse {
-  response: string
-  intent: string
-  route: string | null
-  projectId: string | null
-  sessionId: string
-  debug?: {
-    startTime: string
-    endTime: string
-    totalDurationMs: number
-    steps: Array<{
-      node: string
-      timestamp: string
-      input: Record<string, unknown>
-      output: Record<string, unknown>
-      durationMs: number
-    }>
-  }
+interface ExecutionHistoryItem {
+  id: string
+  thread_id: string | null
+  user_id: string | null
+  input: string
+  started_at: number
+  ended_at: number | null
+  duration_ms: number | null
+  success: number
+  error: string | null
+  created_at: string
+}
+
+interface ExecutionHistoryResponse {
+  runs: ExecutionHistoryItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+interface ExecutionRunResponse {
+  id: string
+  threadId: string | null
+  userId: string | null
+  input: string
+  events: ExecutionEvent[]
+  startedAt: number
+  endedAt: number | null
+  durationMs: number | null
+  success: boolean
+  error: string | null
+  createdAt: string
 }
 
 export function AdminLangGraphPage() {
@@ -96,6 +110,9 @@ export function AdminLangGraphPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackSpeed, setPlaybackSpeed] = useState(500) // ms between steps
   const playbackTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const [isExecuting, setIsExecuting] = useState(false)
+  const [executeError, setExecuteError] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   // Fetch graph data
   const {
@@ -134,87 +151,160 @@ export function AdminLangGraphPage() {
     }))
   }, [graphData])
 
-  // Execute graph mutation
-  const executeMutation = useMutation({
-    mutationFn: async (message: string) => {
-      const res = await fetch('/api/chat', {
+  // Fetch execution history
+  const {
+    data: historyData,
+    isLoading: isLoadingHistory,
+    refetch: refetchHistory,
+  } = useQuery({
+    queryKey: ['admin-langgraph-executions'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/langgraph/executions?limit=20')
+      if (!res.ok) throw new Error('Failed to fetch execution history')
+      return res.json() as Promise<ExecutionHistoryResponse>
+    },
+    enabled: showHistory,
+  })
+
+  // Execute graph via SSE
+  const executeGraph = useCallback(async (message: string) => {
+    setIsExecuting(true)
+    setExecuteError(null)
+
+    const events: ExecutionEvent[] = []
+    const threadId = crypto.randomUUID()
+
+    try {
+      const res = await fetch('/api/admin/langgraph/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          sessionId: crypto.randomUUID(),
-        }),
+        body: JSON.stringify({ message, threadId }),
       })
+
       if (!res.ok) {
         const error = await res.json()
-        throw new Error(error.error || 'Failed to run graph')
-      }
-      return res.json() as Promise<ChatResponse>
-    },
-    onSuccess: (data) => {
-      // Convert debug steps to execution events
-      const events: ExecutionEvent[] = []
-      const runId = crypto.randomUUID()
-
-      // Graph start
-      events.push(createGraphStartEvent(runId, debuggerInput, data.sessionId))
-
-      if (data.debug?.steps) {
-        for (let i = 0; i < data.debug.steps.length; i++) {
-          const step = data.debug.steps[i]
-
-          // Add edge from previous node (or __start__)
-          const prevNode = i === 0 ? '__start__' : data.debug.steps[i - 1].node
-          events.push(
-            createEdgeTakenEvent(prevNode, step.node, step.node !== 'start', `intent: ${data.intent}`)
-          )
-
-          // Node enter
-          events.push(createNodeEnterEvent(step.node, step.input))
-
-          // Node exit
-          events.push(createNodeExitEvent(step.node, step.output, step.durationMs))
-        }
-
-        // Add final edge to __end__
-        if (data.debug.steps.length > 0) {
-          const lastNode = data.debug.steps[data.debug.steps.length - 1].node
-          events.push(createEdgeTakenEvent(lastNode, '__end__', false))
-        }
+        throw new Error(error.error || 'Failed to execute graph')
       }
 
-      // Graph end
-      events.push(
-        createGraphEndEvent(
-          { response: data.response, intent: data.intent, route: data.route },
-          data.debug?.totalDurationMs || 0,
-          true
-        )
-      )
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
 
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      // Start playing immediately
+      setCurrentStep(0)
+      setIsPlaying(true)
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Parse SSE events
+        const lines = buffer.split('\n\n')
+        buffer = lines.pop() || '' // Keep incomplete data in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6)) as ExecutionEvent
+              events.push(event)
+
+              // Update current run with new events
+              const run: ExecutionRun = {
+                id: threadId,
+                threadId,
+                input: message,
+                events: [...events],
+                startedAt: events[0]?.timestamp || Date.now(),
+                success: true,
+              }
+              setCurrentRun(run)
+            } catch {
+              console.warn('Failed to parse SSE event:', line)
+            }
+          }
+        }
+      }
+
+      // Final update with all events
+      const graphEndEvent = events.find(e => e.type === 'graph_end')
       const run: ExecutionRun = {
-        id: runId,
-        threadId: data.sessionId,
-        input: debuggerInput,
+        id: threadId,
+        threadId,
+        input: message,
         events,
         startedAt: events[0]?.timestamp || Date.now(),
-        endedAt: events[events.length - 1]?.timestamp,
-        durationMs: data.debug?.totalDurationMs,
+        endedAt: graphEndEvent?.timestamp,
+        durationMs: graphEndEvent && 'totalDurationMs' in graphEndEvent ? graphEndEvent.totalDurationMs : undefined,
         success: true,
+      }
+      setCurrentRun(run)
+      setCurrentStep(events.length - 1)
+      setIsPlaying(false)
+
+      // Refetch history to show new run
+      if (showHistory) {
+        refetchHistory()
+      }
+    } catch (error) {
+      setExecuteError(error instanceof Error ? error.message : 'Unknown error')
+      setIsPlaying(false)
+    } finally {
+      setIsExecuting(false)
+    }
+  }, [showHistory, refetchHistory])
+
+  // Load execution from history
+  const loadExecution = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/langgraph/executions/${id}`)
+      if (!res.ok) throw new Error('Failed to load execution')
+
+      const data = await res.json() as ExecutionRunResponse
+
+      const run: ExecutionRun = {
+        id: data.id,
+        threadId: data.threadId || undefined,
+        input: data.input,
+        events: data.events,
+        startedAt: data.startedAt,
+        endedAt: data.endedAt || undefined,
+        durationMs: data.durationMs || undefined,
+        success: data.success,
+        error: data.error || undefined,
       }
 
       setCurrentRun(run)
       setCurrentStep(0)
       setIsPlaying(true)
-    },
-  })
+      setShowHistory(false)
+    } catch (error) {
+      console.error('Failed to load execution:', error)
+    }
+  }, [])
+
+  // Delete execution from history
+  const deleteExecution = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/langgraph/executions/${id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('Failed to delete execution')
+      refetchHistory()
+    } catch (error) {
+      console.error('Failed to delete execution:', error)
+    }
+  }, [refetchHistory])
 
   // Handle debugger execution
   const handleExecute = useCallback(() => {
     if (debuggerInput.trim()) {
-      executeMutation.mutate(debuggerInput.trim())
+      executeGraph(debuggerInput.trim())
     }
-  }, [debuggerInput, executeMutation])
+  }, [debuggerInput, executeGraph])
 
   // Playback logic
   useEffect(() => {
@@ -364,10 +454,10 @@ export function AdminLangGraphPage() {
                   />
                   <button
                     onClick={handleExecute}
-                    disabled={!debuggerInput.trim() || executeMutation.isPending}
+                    disabled={!debuggerInput.trim() || isExecuting}
                     className="flex items-center gap-2 px-4 py-2 bg-copper text-surface-900 rounded font-medium hover:bg-copper/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {executeMutation.isPending ? (
+                    {isExecuting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Running...
@@ -378,6 +468,18 @@ export function AdminLangGraphPage() {
                         Execute
                       </>
                     )}
+                  </button>
+                  <button
+                    onClick={() => setShowHistory(!showHistory)}
+                    className={clsx(
+                      'flex items-center gap-2 px-3 py-2 rounded font-medium transition-colors',
+                      showHistory
+                        ? 'bg-copper/20 text-copper border border-copper/50'
+                        : 'bg-surface-700 text-steel hover:bg-surface-600'
+                    )}
+                    title="Show execution history"
+                  >
+                    <History className="w-4 h-4" />
                   </button>
                 </div>
 
@@ -397,12 +499,74 @@ export function AdminLangGraphPage() {
                 </div>
 
                 {/* Error display */}
-                {executeMutation.isError && (
+                {executeError && (
                   <div className="mt-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-sm text-red-400">
-                    {executeMutation.error.message}
+                    {executeError}
                   </div>
                 )}
               </div>
+
+              {/* Execution History Panel */}
+              {showHistory && (
+                <div className="flex-shrink-0 bg-surface-800 rounded-lg p-4 max-h-64 overflow-auto">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <History className="w-4 h-4 text-steel-dim" />
+                      <h3 className="text-sm font-medium text-steel">Execution History</h3>
+                    </div>
+                    <button
+                      onClick={() => refetchHistory()}
+                      className="p-1 rounded hover:bg-surface-700 transition-colors"
+                      title="Refresh history"
+                    >
+                      <RefreshCw className="w-3 h-3 text-steel-dim" />
+                    </button>
+                  </div>
+                  {isLoadingHistory ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 text-steel-dim animate-spin" />
+                    </div>
+                  ) : historyData?.runs.length === 0 ? (
+                    <p className="text-xs text-steel-dim text-center py-4">No execution history yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {historyData?.runs.map((run) => (
+                        <div
+                          key={run.id}
+                          className="flex items-center gap-3 p-2 bg-surface-900 rounded hover:bg-surface-700 cursor-pointer transition-colors"
+                          onClick={() => loadExecution(run.id)}
+                        >
+                          {run.success ? (
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-steel truncate">{run.input}</p>
+                            <div className="flex items-center gap-2 text-xs text-steel-dim">
+                              <Clock className="w-3 h-3" />
+                              {new Date(run.created_at).toLocaleString()}
+                              {run.duration_ms && (
+                                <span className="text-copper">{run.duration_ms}ms</span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteExecution(run.id)
+                            }}
+                            className="p-1 rounded hover:bg-surface-600 transition-colors"
+                            title="Delete execution"
+                          >
+                            <Trash2 className="w-3 h-3 text-steel-dim hover:text-red-400" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Graph and Inspector */}
               <div className="flex-1 flex gap-4 min-h-0">
