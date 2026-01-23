@@ -167,6 +167,23 @@ export async function fetchGraphStructure(db: D1Database): Promise<GraphStructur
   return { nodes, edges: graphEdges }
 }
 
+// Mermaid reserved keywords that need escaping
+const MERMAID_RESERVED = new Set(['end', 'graph', 'subgraph', 'direction', 'click', 'style', 'classDef', 'class', 'linkStyle'])
+
+/**
+ * Escape node name if it's a Mermaid reserved keyword
+ */
+function escapeMermaidId(name: string): string {
+  if (MERMAID_RESERVED.has(name.toLowerCase())) {
+    return `${name}_node`
+  }
+  // Also escape names with special characters
+  if (/[^a-zA-Z0-9_]/.test(name)) {
+    return name.replace(/[^a-zA-Z0-9_]/g, '_')
+  }
+  return name
+}
+
 /**
  * Generate Mermaid diagram from graph structure
  */
@@ -175,12 +192,13 @@ export function generateMermaidDiagram(structure: GraphStructure): string {
 
   // Add node definitions with styling
   for (const node of structure.nodes) {
+    const id = escapeMermaidId(node.name)
     if (node.type === 'start') {
-      lines.push(`    ${node.name}([${node.displayName || node.name}])`)
+      lines.push(`    ${id}([${node.displayName || node.name}])`)
     } else if (node.type === 'end') {
-      lines.push(`    ${node.name}([${node.displayName || node.name}])`)
+      lines.push(`    ${id}([${node.displayName || node.name}])`)
     } else {
-      lines.push(`    ${node.name}[${node.displayName || node.name}]`)
+      lines.push(`    ${id}[${node.displayName || node.name}]`)
     }
   }
 
@@ -188,10 +206,12 @@ export function generateMermaidDiagram(structure: GraphStructure): string {
 
   // Add edges
   for (const edge of structure.edges) {
+    const fromId = escapeMermaidId(edge.from)
+    const toId = escapeMermaidId(edge.to)
     if (edge.conditional) {
-      lines.push(`    ${edge.from} -.-> ${edge.to}`)
+      lines.push(`    ${fromId} -.-> ${toId}`)
     } else {
-      lines.push(`    ${edge.from} --> ${edge.to}`)
+      lines.push(`    ${fromId} --> ${toId}`)
     }
   }
 
@@ -203,22 +223,22 @@ export function generateMermaidDiagram(structure: GraphStructure): string {
   lines.push('    classDef reviewer fill:#f59e0b,stroke:#d97706,color:#fff')
   lines.push('    classDef node fill:#1e293b,stroke:#475569,color:#e2e8f0')
 
-  // Apply classes
+  // Apply classes (use escaped IDs)
   const startEndNodes = structure.nodes
     .filter((n) => n.type === 'start' || n.type === 'end')
-    .map((n) => n.name)
+    .map((n) => escapeMermaidId(n.name))
   const agentNodes = structure.nodes
     .filter((n) => n.category === 'agent')
-    .map((n) => n.name)
+    .map((n) => escapeMermaidId(n.name))
   const generatorNodes = structure.nodes
     .filter((n) => n.category === 'generator')
-    .map((n) => n.name)
+    .map((n) => escapeMermaidId(n.name))
   const reviewerNodes = structure.nodes
     .filter((n) => n.category === 'reviewer')
-    .map((n) => n.name)
+    .map((n) => escapeMermaidId(n.name))
   const regularNodes = structure.nodes
     .filter((n) => n.type === 'node' && !n.category)
-    .map((n) => n.name)
+    .map((n) => escapeMermaidId(n.name))
 
   if (startEndNodes.length > 0) {
     lines.push(`    class ${startEndNodes.join(',')} startEnd`)
