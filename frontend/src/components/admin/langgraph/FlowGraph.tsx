@@ -63,6 +63,8 @@ export interface FlowGraphProps {
   selectedNode?: string
   /** Callback when a node is clicked */
   onNodeClick?: (nodeName: string) => void
+  /** Callback when a node is double-clicked (e.g., to edit) */
+  onNodeDoubleClick?: (nodeName: string) => void
   /** Whether the graph is loading */
   isLoading?: boolean
   /** Error message */
@@ -151,6 +153,7 @@ export function FlowGraph({
   edgeStates: externalEdgeStates,
   selectedNode,
   onNodeClick,
+  onNodeDoubleClick,
   isLoading,
   error,
   showMinimap = false,
@@ -256,10 +259,21 @@ export function FlowGraph({
     [onNodeClick]
   )
 
+  // Handle node double-click
+  const handleNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      const nodeData = node.data as FlowNodeData
+      if (nodeData.nodeType !== 'start' && nodeData.nodeType !== 'end') {
+        onNodeDoubleClick?.(node.id)
+      }
+    },
+    [onNodeDoubleClick]
+  )
+
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-[400px] bg-surface-800 rounded-lg">
+      <div className="flex items-center justify-center h-full min-h-[300px] bg-surface-800 rounded-lg">
         <div className="w-6 h-6 border-2 border-copper border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -268,20 +282,21 @@ export function FlowGraph({
   // Error state
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-[400px] bg-surface-800 rounded-lg gap-2">
+      <div className="flex flex-col items-center justify-center h-full min-h-[300px] bg-surface-800 rounded-lg gap-2">
         <div className="text-red-400 text-sm">{error}</div>
       </div>
     )
   }
 
   return (
-    <div className="h-[400px] bg-surface-900 rounded-lg overflow-hidden border border-surface-700">
+    <div className="h-full min-h-[300px] bg-surface-900 rounded-lg overflow-hidden border border-surface-700">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
@@ -315,30 +330,6 @@ export function FlowGraph({
           />
         )}
       </ReactFlow>
-
-      {/* Legend */}
-      <div className="absolute bottom-2 left-2 flex flex-wrap gap-3 text-[10px] text-steel-dim bg-surface-900/90 px-2 py-1 rounded">
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded-full bg-indigo-500" />
-          Start/End
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded bg-blue-500/50" />
-          Agent
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded bg-emerald-500/50" />
-          Generator
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded bg-amber-500/50" />
-          Reviewer
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded bg-copper" />
-          Active
-        </div>
-      </div>
     </div>
   )
 }

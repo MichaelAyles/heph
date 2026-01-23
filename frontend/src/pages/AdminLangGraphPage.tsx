@@ -55,7 +55,7 @@ import type {
 } from '@/services/langgraph/execution-tracer'
 import { getNodeStatesAtStep } from '@/services/langgraph/execution-tracer'
 
-type Tab = 'debugger' | 'graph' | 'nodes' | 'edges' | 'threads' | 'test' | 'config'
+type Tab = 'debugger' | 'nodes' | 'edges' | 'threads' | 'test' | 'config'
 
 interface GraphData {
   mermaid: string
@@ -377,7 +377,6 @@ export function AdminLangGraphPage() {
 
   const tabs = [
     { id: 'debugger' as const, label: 'Debugger', icon: Bug },
-    { id: 'graph' as const, label: 'Graph', icon: Network },
     { id: 'nodes' as const, label: 'Nodes', icon: Settings },
     { id: 'edges' as const, label: 'Edges', icon: GitBranch },
     { id: 'threads' as const, label: 'Threads', icon: Database },
@@ -435,12 +434,15 @@ export function AdminLangGraphPage() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 overflow-hidden flex min-h-0">
         {/* Main Panel */}
-        <div className="flex-1 overflow-auto p-6">
-          {/* NEW: Debugger Tab */}
+        <div className={clsx(
+          'flex-1 overflow-auto',
+          activeTab === 'debugger' ? 'p-4 flex flex-col' : 'p-6'
+        )}>
+          {/* Debugger Tab */}
           {activeTab === 'debugger' && (
-            <div className="h-full flex flex-col gap-4">
+            <div className="flex-1 flex flex-col gap-3 min-h-0">
               {/* Input and Controls */}
               <div className="flex-shrink-0 bg-surface-800 rounded-lg p-4">
                 <div className="flex gap-3">
@@ -571,40 +573,71 @@ export function AdminLangGraphPage() {
               {/* Graph and Inspector */}
               <div className="flex-1 flex gap-4 min-h-0">
                 {/* Graph View */}
-                <div className="flex-1 flex flex-col gap-4">
-                  <FlowGraph
-                    nodes={flowNodes}
-                    edges={flowEdges}
-                    events={currentRun?.events}
-                    currentStep={currentStep}
-                    selectedNode={selectedNode}
-                    onNodeClick={(name) => {
-                      setSelectedNode(name === selectedNode ? undefined : name)
-                    }}
-                    isLoading={isLoadingGraph}
-                    error={graphError?.message}
-                    showMinimap
-                    showControls
-                  />
+                <div className="flex-1 flex flex-col gap-3 min-h-0">
+                  <div className="flex-1 min-h-0">
+                    <FlowGraph
+                      nodes={flowNodes}
+                      edges={flowEdges}
+                      events={currentRun?.events}
+                      currentStep={currentStep}
+                      selectedNode={selectedNode}
+                      onNodeClick={(name) => {
+                        setSelectedNode(name === selectedNode ? undefined : name)
+                      }}
+                      onNodeDoubleClick={(name) => {
+                        // Navigate to node editor on double-click
+                        setSelectedNode(name)
+                        setActiveTab('nodes')
+                      }}
+                      isLoading={isLoadingGraph}
+                      error={graphError?.message}
+                      showMinimap
+                      showControls
+                    />
+                  </div>
 
                   {/* Timeline */}
                   {currentRun && (
-                    <ExecutionTimeline
-                      events={currentRun.events}
-                      currentStep={currentStep}
-                      onStepChange={(step) => {
-                        setCurrentStep(step)
-                        setIsPlaying(false)
-                      }}
-                      isPlaying={isPlaying}
-                      onPlayPause={handlePlayPause}
-                      totalDuration={currentRun.durationMs}
-                    />
+                    <div className="flex-shrink-0">
+                      <ExecutionTimeline
+                        events={currentRun.events}
+                        currentStep={currentStep}
+                        onStepChange={(step) => {
+                          setCurrentStep(step)
+                          setIsPlaying(false)
+                        }}
+                        isPlaying={isPlaying}
+                        onPlayPause={handlePlayPause}
+                        totalDuration={currentRun.durationMs}
+                      />
+                    </div>
                   )}
+
+                  {/* Legend */}
+                  <div className="flex-shrink-0 flex flex-wrap gap-4 text-xs text-steel-dim px-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                      Start/End
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded bg-blue-500" />
+                      Agent
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded bg-emerald-500" />
+                      Generator
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded bg-amber-500" />
+                      Reviewer
+                    </div>
+                    <span className="text-steel-dim/50">|</span>
+                    <span>Click to inspect, double-click to edit</span>
+                  </div>
                 </div>
 
                 {/* Node Inspector Panel */}
-                <div className="w-96 flex-shrink-0 border-l border-surface-700 pl-4 overflow-auto">
+                <div className="w-80 flex-shrink-0 border-l border-surface-700 pl-4 overflow-auto">
                   <div className="flex items-center gap-2 mb-3">
                     <Eye className="w-4 h-4 text-steel-dim" />
                     <h3 className="text-sm font-medium text-steel">Node Inspector</h3>
@@ -616,49 +649,6 @@ export function AdminLangGraphPage() {
                     inputState={selectedNodeInput}
                     outputState={selectedNodeOutput}
                   />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'graph' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-sm font-medium text-steel mb-3">Workflow Graph (Mermaid)</h2>
-                <p className="text-xs text-steel-dim mb-3">
-                  Static view using Mermaid. Use the Debugger tab for interactive visualization.
-                </p>
-                <GraphViewer
-                  mermaidCode={graphData?.mermaid || ''}
-                  nodes={graphData?.nodes || []}
-                  edges={graphData?.edges || []}
-                  highlightNode={highlightedNode || selectedNode}
-                  onNodeClick={(name) => {
-                    setSelectedNode(name)
-                    setActiveTab('nodes')
-                  }}
-                  isLoading={isLoadingGraph}
-                  error={graphError?.message}
-                />
-              </div>
-
-              {/* Graph Legend */}
-              <div className="flex flex-wrap gap-4 text-xs text-steel-dim">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-indigo-500" />
-                  Start/End nodes
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-surface-700 border border-surface-600" />
-                  Regular nodes
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-0.5 bg-surface-600" />
-                  Static edge
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-0.5 border-t border-dashed border-surface-600" />
-                  Conditional edge
                 </div>
               </div>
             </div>
