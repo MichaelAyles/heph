@@ -12,7 +12,7 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { GitBranch, Play, Database, Settings, Network, Eye } from 'lucide-react'
+import { GitBranch, Play, Database, Settings, Network, Eye, Cog } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
   GraphViewer,
@@ -21,9 +21,10 @@ import {
   ThreadViewer,
   TestRunner,
   StateInspector,
+  ConfigEditor,
 } from '@/components/admin/langgraph'
 
-type Tab = 'graph' | 'nodes' | 'edges' | 'threads' | 'test'
+type Tab = 'graph' | 'nodes' | 'edges' | 'threads' | 'test' | 'config'
 
 interface GraphData {
   mermaid: string
@@ -57,6 +58,7 @@ export function AdminLangGraphPage() {
     { id: 'edges' as const, label: 'Edges', icon: GitBranch },
     { id: 'threads' as const, label: 'Threads', icon: Database },
     { id: 'test' as const, label: 'Test', icon: Play },
+    { id: 'config' as const, label: 'Config', icon: Cog },
   ]
 
   // Get available node names for edge editor
@@ -212,6 +214,16 @@ export function AdminLangGraphPage() {
                   error={graphError?.message}
                 />
               </div>
+            </div>
+          )}
+
+          {activeTab === 'config' && (
+            <div>
+              <h2 className="text-sm font-medium text-steel mb-3">Platform Configuration</h2>
+              <p className="text-xs text-steel-dim mb-4">
+                Configure system prompts and hard rejection criteria for capability assessment.
+              </p>
+              <ConfigEditor />
             </div>
           )}
         </div>

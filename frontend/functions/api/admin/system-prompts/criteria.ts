@@ -5,7 +5,7 @@
  * POST /api/admin/system-prompts/criteria - Create new criterion
  */
 
-import type { Env } from '../../../env'
+import type { Env } from '../../../env.d'
 import { createLogger } from '../../../lib/logger'
 
 interface PagesFunction<E> {

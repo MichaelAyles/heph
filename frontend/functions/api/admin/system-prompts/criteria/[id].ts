@@ -6,7 +6,7 @@
  * DELETE /api/admin/system-prompts/criteria/:id - Delete criterion
  */
 
-import type { Env } from '../../../../env'
+import type { Env } from '../../../../env.d'
 import { createLogger } from '../../../../lib/logger'
 
 interface PagesFunction<E> {
