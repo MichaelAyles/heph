@@ -8,22 +8,11 @@ import {
   ArrowRight,
   Loader2,
   CheckCircle2,
-  XCircle,
   Grid3X3,
-  Wand2,
-  Box,
-  Download,
-  FileText,
   Sparkles,
-  LayoutGrid,
-  Network,
   Layers,
   ChevronDown,
   ChevronRight,
-  LayoutPanelTop,
-  Factory,
-  Settings2,
-  Package,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
@@ -35,6 +24,9 @@ import { GerberViewer } from '../../components/pcb/GerberViewer'
 import { RemoteBoardManager } from '../../components/pcb/RemoteBoardManager'
 import { PanelPreview } from '../../components/pcb/PanelPreview'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
+import { PCBViewerToolbar, type ViewMode } from '../../components/pcb/PCBViewerToolbar'
+import { SelectedBlocksBar } from '../../components/pcb/SelectedBlocksBar'
+import { ManufacturingExportPanel } from '../../components/pcb/ManufacturingExportPanel'
 import { mergeBlockSchematics, mergeBlockPCBs } from '../../services/pcb-merge'
 import { generatePCBDocument } from '../../services/pcb-document'
 import {
@@ -46,21 +38,11 @@ import {
 import { validateGrid, fromPlacedBlocks, calculateBoardSize } from '../../services/pcb-grid'
 import { getMainBoardSignals } from '../../services/remote-board'
 import { calculatePanelLayout } from '../../services/panel-merge'
-import { generateManufacturingPackage } from '../../services/manufacturing-export'
-import {
-  buildTapConfigMessages,
-  parseTapConfigResponse,
-  toResistorTapStates,
-  hasConflicts,
-  type TapConfigResponse,
-} from '../../prompts/tap-configuration'
-import { TapConfigTable, TapConfigSummary } from '../../components/pcb/TapConfigTable'
 import { logger } from '../../lib/logger'
 import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment, RemoteBoard, ResistorTapState } from '../../db/schema'
 import type { BlockDefinition } from '../../schemas/block'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
-type ViewMode = 'grid' | 'bus' | 'gerbers' | '3d' | 'docs' | 'panel' | 'mfg'
 
 export function PCBStageView() {
   const { project } = useWorkspaceContext()
@@ -77,14 +59,7 @@ export function PCBStageView() {
   const [isLoadingGerbers, setIsLoadingGerbers] = useState(false)
   const [remoteBoards, setRemoteBoards] = useState<RemoteBoard[]>([])
   const [showRemoteBoards, setShowRemoteBoards] = useState(false)
-
-  // Manufacturing export state
-  const [isTapConfiguring, setIsTapConfiguring] = useState(false)
-  const [tapConfigError, setTapConfigError] = useState<string | null>(null)
-  const [tapConfigResponse, setTapConfigResponse] = useState<TapConfigResponse | null>(null)
   const [configuredTapStates, setConfiguredTapStates] = useState<ResistorTapState[]>([])
-  const [isExportingMfg, setIsExportingMfg] = useState(false)
-  const [exportError, setExportError] = useState<string | null>(null)
 
   const specComplete = project?.status === 'complete'
   const spec = project?.spec
@@ -502,122 +477,17 @@ export function PCBStageView() {
     URL.revokeObjectURL(url)
   }, [documentOutput, project?.name])
 
-  // Handle tap configuration via LLM
-  const handleConfigureTaps = useCallback(async () => {
-    if (selectedBlocks.length === 0 || !project) return
-
-    setIsTapConfiguring(true)
-    setTapConfigError(null)
-
-    try {
-      // Build context for tap configuration
-      const messages = buildTapConfigMessages({
-        projectName: project.name,
-        projectDescription: project.description || undefined,
-        finalSpec: spec?.finalSpec,
-        placedBlocks: selectedBlocks,
-        blockDefinitions,
-      })
-
-      // Call LLM
-      const res = await fetch('/api/llm/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages,
-          temperature: 0.3,
-          projectId: project.id,
-        }),
-      })
-
-      if (!res.ok) throw new Error('Failed to configure taps')
-
-      const data = await res.json()
-      const response = parseTapConfigResponse(data.content)
-
-      if (!response) {
-        throw new Error('Failed to parse tap configuration response')
-      }
-
-      setTapConfigResponse(response)
-
-      // Convert to ResistorTapState array
-      const tapStates = toResistorTapStates(response, blockDefinitions)
+  // Handle tap states change from manufacturing panel
+  const handleTapStatesChange = useCallback(
+    (tapStates: ResistorTapState[]) => {
       setConfiguredTapStates(tapStates)
-
-      // Save to project
-      await savePCBMutation.mutateAsync({
+      savePCBMutation.mutate({
         placedBlocks: selectedBlocks,
         resistorTapStates: tapStates,
-      })
-
-      logger.info('pcb', 'Tap configuration complete', {
-        taps: tapStates.length,
-        conflicts: response.conflicts.length,
-      })
-    } catch (error) {
-      logger.error('pcb', 'Tap configuration failed', { error })
-      setTapConfigError(error instanceof Error ? error.message : 'Tap configuration failed')
-    } finally {
-      setIsTapConfiguring(false)
-    }
-  }, [selectedBlocks, project, spec?.finalSpec, blockDefinitions, savePCBMutation])
-
-  // Handle tap toggle (manual override)
-  const handleToggleTap = useCallback(
-    (blockSlug: string, reference: string, newState: boolean) => {
-      setConfiguredTapStates((prev) => {
-        const updated = prev.map((tap) =>
-          tap.blockSlug === blockSlug && tap.reference === reference
-            ? { ...tap, populated: newState, reason: 'Manually overridden' }
-            : tap
-        )
-
-        // Save updated states
-        savePCBMutation.mutate({
-          placedBlocks: selectedBlocks,
-          resistorTapStates: updated,
-        })
-
-        return updated
       })
     },
     [selectedBlocks, savePCBMutation]
   )
-
-  // Handle manufacturing export
-  const handleExportManufacturing = useCallback(async () => {
-    if (!blocksData?.blocks || !project) return
-
-    setIsExportingMfg(true)
-    setExportError(null)
-
-    try {
-      const projectSlug = project.name.toLowerCase().replace(/\s+/g, '-')
-
-      const result = await generateManufacturingPackage({
-        projectSlug,
-        pcbArtifacts: pcbArtifacts || { placedBlocks: selectedBlocks },
-        blocks: blocksData.blocks,
-        tapStates: configuredTapStates,
-      })
-
-      // Download the ZIP
-      const url = URL.createObjectURL(result.blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = result.filename
-      a.click()
-      URL.revokeObjectURL(url)
-
-      logger.info('pcb', 'Manufacturing export complete', { summary: result.summary })
-    } catch (error) {
-      logger.error('pcb', 'Manufacturing export failed', { error })
-      setExportError(error instanceof Error ? error.message : 'Manufacturing export failed')
-    } finally {
-      setIsExportingMfg(false)
-    }
-  }, [blocksData?.blocks, project, pcbArtifacts, selectedBlocks, configuredTapStates])
 
   // Update currentStep based on existing data
   useMemo(() => {
@@ -764,144 +634,21 @@ export function PCBStageView() {
         {/* Main panel */}
         <main className="flex-1 flex flex-col min-h-0 p-4 gap-4">
           {/* View mode toolbar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 bg-surface-800 rounded p-0.5">
-              <ViewModeButton
-                mode="grid"
-                currentMode={viewMode}
-                onClick={() => setViewMode('grid')}
-                icon={LayoutGrid}
-                label="Grid"
-              />
-              <ViewModeButton
-                mode="bus"
-                currentMode={viewMode}
-                onClick={() => setViewMode('bus')}
-                icon={Network}
-                label="Bus"
-              />
-              <ViewModeButton
-                mode="gerbers"
-                currentMode={viewMode}
-                onClick={() => {
-                  setViewMode('gerbers')
-                  loadGerbers()
-                }}
-                icon={Layers}
-                label="Gerbers"
-                disabled={selectedBlocks.length === 0}
-              />
-              <ViewModeButton
-                mode="3d"
-                currentMode={viewMode}
-                onClick={() => setViewMode('3d')}
-                icon={Box}
-                label="3D"
-                disabled={selectedBlocks.length === 0}
-              />
-              <ViewModeButton
-                mode="docs"
-                currentMode={viewMode}
-                onClick={() => setViewMode('docs')}
-                icon={FileText}
-                label="Docs"
-                disabled={selectedBlocks.length === 0}
-              />
-              <ViewModeButton
-                mode="panel"
-                currentMode={viewMode}
-                onClick={() => setViewMode('panel')}
-                icon={LayoutPanelTop}
-                label="Panel"
-                disabled={!panelConfig}
-              />
-              <ViewModeButton
-                mode="mfg"
-                currentMode={viewMode}
-                onClick={() => setViewMode('mfg')}
-                icon={Factory}
-                label="Mfg"
-                disabled={selectedBlocks.length === 0 || !pcbArtifacts?.schematicData}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Board size info */}
-              {boardSize && boardSize.width > 0 && (
-                <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded font-mono">
-                  {boardSize.widthMm.toFixed(1)}×{boardSize.heightMm.toFixed(1)}mm (
-                  {boardSize.width}×{boardSize.height} units)
-                </span>
-              )}
-
-              {/* Validation status */}
-              {validationResult && (
-                <div
-                  className={clsx(
-                    'flex items-center gap-1 px-2 py-1 rounded text-xs',
-                    validationResult.valid
-                      ? 'bg-emerald-500/10 text-emerald-400'
-                      : 'bg-red-500/10 text-red-400'
-                  )}
-                >
-                  {validationResult.valid ? (
-                    <>
-                      <CheckCircle2 className="w-3 h-3" />
-                      Valid
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="w-3 h-3" />
-                      {validationResult.errors.length} error(s)
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Download buttons */}
-              {documentOutput && viewMode === 'docs' && (
-                <button
-                  onClick={handleDownloadDocs}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-surface-700 hover:bg-surface-600 text-steel rounded transition-colors"
-                >
-                  <Download className="w-3 h-3" />
-                  Download MD
-                </button>
-              )}
-              {/* Generate button - always visible when blocks are selected */}
-              {selectedBlocks.length > 0 && (
-                <button
-                  onClick={handleMergeSchematic}
-                  disabled={isMerging || !validationResult?.valid}
-                  className={clsx(
-                    'flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors',
-                    isMerging
-                      ? 'bg-surface-700 text-steel-dim cursor-wait'
-                      : validationResult?.valid
-                        ? 'bg-copper text-surface-900 hover:bg-copper-light'
-                        : 'bg-surface-700 text-steel-dim cursor-not-allowed'
-                  )}
-                >
-                  {isMerging ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : pcbArtifacts?.schematicData ? (
-                    <>
-                      <Wand2 className="w-4 h-4" />
-                      Regenerate
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="w-4 h-4" />
-                      Generate
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
+          <PCBViewerToolbar
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onLoadGerbers={loadGerbers}
+            selectedBlocksCount={selectedBlocks.length}
+            panelConfig={panelConfig}
+            hasSchematicData={!!pcbArtifacts?.schematicData}
+            boardSize={boardSize}
+            validationResult={validationResult}
+            documentOutput={documentOutput}
+            onDownloadDocs={handleDownloadDocs}
+            onGenerate={handleMergeSchematic}
+            isMerging={isMerging}
+            hasExistingSchematic={!!pcbArtifacts?.schematicData}
+          />
 
           {/* Main viewer area */}
           <div className="flex-1 bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
@@ -984,224 +731,20 @@ export function PCBStageView() {
                     panelConfig={panelConfig}
                   />
                 </div>
-              ) : viewMode === 'mfg' ? (
-                <div className="p-6 max-w-4xl mx-auto overflow-auto">
-                  <div className="space-y-6">
-                    {/* Header */}
-                    <div>
-                      <h3 className="text-lg font-semibold text-steel mb-2">Manufacturing Export</h3>
-                      <p className="text-sm text-steel-dim">
-                        Configure 0R resistor taps and export manufacturing files (Gerbers, BOM, Centroid)
-                      </p>
-                    </div>
-
-                    {/* Step 1: Configure Taps */}
-                    <div className="bg-surface-800 rounded-lg border border-surface-700 p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-copper/20 text-copper flex items-center justify-center text-sm font-semibold">
-                            1
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-steel">Configure 0R Taps</h4>
-                            <p className="text-xs text-steel-dim">
-                              AI determines I2C addresses and signal routing
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleConfigureTaps}
-                          disabled={isTapConfiguring || selectedBlocks.length === 0}
-                          className={clsx(
-                            'flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors',
-                            isTapConfiguring
-                              ? 'bg-surface-700 text-steel-dim cursor-wait'
-                              : configuredTapStates.length > 0
-                                ? 'bg-surface-700 text-steel hover:bg-surface-600'
-                                : 'bg-copper text-surface-900 hover:bg-copper-light'
-                          )}
-                        >
-                          {isTapConfiguring ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Configuring...
-                            </>
-                          ) : configuredTapStates.length > 0 ? (
-                            <>
-                              <Settings2 className="w-4 h-4" />
-                              Reconfigure
-                            </>
-                          ) : (
-                            <>
-                              <Settings2 className="w-4 h-4" />
-                              Configure Taps
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Error display */}
-                      {tapConfigError && (
-                        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
-                          {tapConfigError}
-                        </div>
-                      )}
-
-                      {/* Tap configuration table */}
-                      {configuredTapStates.length > 0 ? (
-                        <TapConfigTable
-                          tapStates={configuredTapStates}
-                          conflicts={tapConfigResponse?.conflicts}
-                          onToggleTap={handleToggleTap}
-                          className="mt-2"
-                        />
-                      ) : (
-                        <div className="text-center py-6 text-steel-dim text-sm">
-                          No tap configuration yet. Click "Configure Taps" to analyze your design.
-                        </div>
-                      )}
-
-                      {/* Notes from LLM */}
-                      {tapConfigResponse?.notes && (
-                        <div className="mt-4 p-3 bg-surface-900 rounded text-xs text-steel-dim">
-                          <span className="font-medium text-steel">Notes:</span> {tapConfigResponse.notes}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Step 2: Preview Panel */}
-                    <div className="bg-surface-800 rounded-lg border border-surface-700 p-4">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-surface-700 text-steel-dim flex items-center justify-center text-sm font-semibold">
-                          2
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-medium text-steel">Panel Layout</h4>
-                          <p className="text-xs text-steel-dim">
-                            {panelConfig
-                              ? `${panelConfig.panelSize.width.toFixed(1)}×${panelConfig.panelSize.height.toFixed(1)}mm • ${remoteBoards.length + 1} boards`
-                              : boardSize
-                                ? `${boardSize.widthMm.toFixed(1)}×${boardSize.heightMm.toFixed(1)}mm • Single board`
-                                : 'Generate schematic first'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {panelConfig && boardSize ? (
-                        <div className="bg-surface-900 rounded p-4 flex justify-center">
-                          <PanelPreview
-                            mainBoardSize={{ width: boardSize.widthMm, height: boardSize.heightMm }}
-                            remoteBoards={remoteBoards}
-                            panelConfig={panelConfig}
-                          />
-                        </div>
-                      ) : boardSize ? (
-                        <div className="bg-surface-900 rounded p-4 text-center text-steel-dim text-sm">
-                          Single board layout: {boardSize.widthMm.toFixed(1)}×{boardSize.heightMm.toFixed(1)}mm
-                        </div>
-                      ) : (
-                        <div className="bg-surface-900 rounded p-4 text-center text-steel-dim text-sm">
-                          Generate schematic to see panel layout
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Step 3: Export */}
-                    <div className="bg-surface-800 rounded-lg border border-surface-700 p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-surface-700 text-steel-dim flex items-center justify-center text-sm font-semibold">
-                            3
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-steel">Export Manufacturing Files</h4>
-                            <p className="text-xs text-steel-dim">
-                              Gerbers, BOM, Centroid as ZIP
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleExportManufacturing}
-                          disabled={isExportingMfg || !pcbArtifacts?.schematicData}
-                          className={clsx(
-                            'flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors',
-                            isExportingMfg
-                              ? 'bg-surface-700 text-steel-dim cursor-wait'
-                              : !pcbArtifacts?.schematicData
-                                ? 'bg-surface-700 text-steel-dim cursor-not-allowed'
-                                : 'bg-emerald-600 text-white hover:bg-emerald-500'
-                          )}
-                        >
-                          {isExportingMfg ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Exporting...
-                            </>
-                          ) : (
-                            <>
-                              <Package className="w-4 h-4" />
-                              Export ZIP
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Error display */}
-                      {exportError && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
-                          {exportError}
-                        </div>
-                      )}
-
-                      {/* Export contents preview */}
-                      <div className="bg-surface-900 rounded p-3 text-xs font-mono text-steel-dim">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                          <div>gerbers/</div>
-                          <div className="text-surface-500">10 layer files</div>
-                          {panelConfig && (
-                            <>
-                              <div className="pl-2">├ VScore.gbr</div>
-                              <div className="text-surface-500">V-score lines</div>
-                              {panelConfig.routedEdges.length > 0 && (
-                                <>
-                                  <div className="pl-2">├ RoutedEdges.gbr</div>
-                                  <div className="text-surface-500">Milled edges</div>
-                                </>
-                              )}
-                            </>
-                          )}
-                          <div>bom.csv</div>
-                          <div className="text-surface-500">
-                            Bill of Materials
-                            {configuredTapStates.length > 0 && (
-                              <span className="text-amber-400">
-                                {' '}({configuredTapStates.filter((t) => !t.populated).length} DNP)
-                              </span>
-                            )}
-                          </div>
-                          <div>centroid.csv</div>
-                          <div className="text-surface-500">Pick & place</div>
-                          {configuredTapStates.length > 0 && (
-                            <>
-                              <div>tap-config.json</div>
-                              <div className="text-surface-500">0R config reference</div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Tap config summary at bottom */}
-                    {configuredTapStates.length > 0 && (
-                      <div className="flex items-center justify-center gap-2 text-xs text-steel-dim">
-                        <TapConfigSummary
-                          tapStates={configuredTapStates}
-                          hasConflicts={tapConfigResponse ? hasConflicts(tapConfigResponse) : false}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
+              ) : viewMode === 'mfg' && project && blocksData?.blocks ? (
+                <ManufacturingExportPanel
+                  project={{ id: project.id, name: project.name, description: project.description }}
+                  spec={spec}
+                  selectedBlocks={selectedBlocks}
+                  blockDefinitions={blockDefinitions}
+                  blocks={blocksData.blocks}
+                  pcbArtifacts={pcbArtifacts}
+                  remoteBoards={remoteBoards}
+                  panelConfig={panelConfig}
+                  boardSize={boardSize ? { widthMm: boardSize.widthMm, heightMm: boardSize.heightMm } : null}
+                  initialTapStates={configuredTapStates}
+                  onTapStatesChange={handleTapStatesChange}
+                />
               ) : (
                 <div className="flex-1 flex items-center justify-center h-full">
                   <div className="text-center">
@@ -1221,42 +764,12 @@ export function PCBStageView() {
             </div>
           </div>
 
-          {/* Selected blocks chips */}
-          {selectedBlocks.length > 0 && (
-            <div className="bg-surface-900 rounded-lg border border-surface-700 p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-steel">Selected Blocks</h3>
-                {documentOutput?.summary && (
-                  <span className="text-xs text-steel-dim">
-                    {documentOutput.summary.blockCount} blocks •{' '}
-                    {documentOutput.summary.i2cDevices.length} I2C •{' '}
-                    {documentOutput.summary.spiDevices.length} SPI •{' '}
-                    {documentOutput.summary.gpioUsage.length} GPIO
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedBlocks.map((placed) => (
-                  <div
-                    key={placed.blockId}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-surface-800 border border-surface-600 rounded"
-                  >
-                    <span className="text-sm text-steel">{placed.blockSlug}</span>
-                    <span className="text-xs text-steel-dim font-mono">
-                      ({placed.gridX},{placed.gridY})
-                    </span>
-                    <button
-                      onClick={() => handleRemoveBlock(placed.blockId)}
-                      className="text-red-400 hover:text-red-300"
-                      title="Remove block"
-                    >
-                      <XCircle className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Selected blocks bar */}
+          <SelectedBlocksBar
+            selectedBlocks={selectedBlocks}
+            onRemoveBlock={handleRemoveBlock}
+            summary={documentOutput?.summary}
+          />
         </main>
       </div>
     </div>
@@ -1300,45 +813,6 @@ function StepIndicator({ step, label, active, complete, onClick, canClick }: Ste
         <span className="w-4 h-4 flex items-center justify-center text-xs">{step}</span>
       )}
       <span>{label}</span>
-    </button>
-  )
-}
-
-interface ViewModeButtonProps {
-  mode: ViewMode
-  currentMode: ViewMode
-  onClick: () => void
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  disabled?: boolean
-  disabledReason?: string | null
-}
-
-function ViewModeButton({
-  mode,
-  currentMode,
-  onClick,
-  icon: Icon,
-  label,
-  disabled,
-  disabledReason,
-}: ViewModeButtonProps) {
-  const isActive = mode === currentMode
-  const title = disabled && disabledReason ? `${label}: ${disabledReason}` : label
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={clsx(
-        'px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors',
-        isActive ? 'bg-copper text-surface-900' : 'text-steel-dim hover:text-steel',
-        disabled && 'opacity-50 cursor-not-allowed'
-      )}
-      title={title}
-    >
-      <Icon className="w-3 h-3" />
-      {label}
     </button>
   )
 }
