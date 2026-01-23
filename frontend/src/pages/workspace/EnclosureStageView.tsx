@@ -1,22 +1,12 @@
+/**
+ * EnclosureStageView - Main enclosure design stage with generation, editing, and preview
+ */
+
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
-import {
-  Box,
-  ArrowRight,
-  Loader2,
-  Play,
-  Download,
-  RefreshCw,
-  Wand2,
-  MessageSquare,
-  CheckCircle2,
-  XCircle,
-} from 'lucide-react'
-import { clsx } from 'clsx'
-import Editor from '@monaco-editor/react'
+import { ArrowRight } from 'lucide-react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { logger } from '@/lib/logger'
-import { STLViewer } from '@/components/enclosure/STLViewer'
 import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import {
   renderOpenSCAD,
@@ -44,12 +34,17 @@ import {
 } from '@/prompts/enclosure-validation'
 import { llm, fetchImageAsBase64, getMimeTypeFromUrl } from '@/services/llm'
 import type { ImageContent, TextContent } from '@/services/llm'
-import { EnclosureComparison } from '@/components/enclosure/EnclosureComparison'
 import type { STLViewerRef } from '@/components/enclosure/STLViewer'
-
-type EnclosureStep = 'generate' | 'edit' | 'preview'
-
-const MAX_VALIDATION_ITERATIONS = 3
+import {
+  ComparisonModal,
+  EditorPanel,
+  EnclosureStepIndicator,
+  GenerateStep,
+  NotReadyState,
+  PreviewPanel,
+  type EnclosureStep,
+  MAX_VALIDATION_ITERATIONS,
+} from '@/components/enclosure'
 
 export function EnclosureStageView() {
   const { project } = useWorkspaceContext()
@@ -592,26 +587,12 @@ export function EnclosureStageView() {
     URL.revokeObjectURL(url)
   }, [openScadCode, project?.name])
 
+  // Blueprint info
+  const blueprintIndex = spec?.selectedBlueprint ?? 0
+  const blueprintUrl = spec?.blueprints?.[blueprintIndex]?.url
+
   if (!pcbComplete) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 rounded-full bg-surface-800 flex items-center justify-center mx-auto mb-4">
-            <Box className="w-8 h-8 text-surface-500" strokeWidth={1.5} />
-          </div>
-          <h2 className="text-xl font-semibold text-steel mb-2">Enclosure Design</h2>
-          <p className="text-steel-dim mb-4">
-            Complete the PCB stage first. The enclosure will be generated based on your board
-            dimensions and component placement.
-          </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-surface-500">
-            <span>Design PCB</span>
-            <ArrowRight className="w-4 h-4" />
-            <span>Generate Enclosure</span>
-          </div>
-        </div>
-      </div>
-    )
+    return <NotReadyState />
   }
 
   return (
@@ -628,21 +609,21 @@ export function EnclosureStageView() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               {/* Step indicators */}
-              <StepIndicator
+              <EnclosureStepIndicator
                 step={1}
                 label="Generate"
                 active={currentStep === 'generate'}
                 complete={currentStep !== 'generate'}
               />
               <ArrowRight className="w-4 h-4 text-surface-600" />
-              <StepIndicator
+              <EnclosureStepIndicator
                 step={2}
                 label="Edit"
                 active={currentStep === 'edit'}
                 complete={currentStep === 'preview'}
               />
               <ArrowRight className="w-4 h-4 text-surface-600" />
-              <StepIndicator
+              <EnclosureStepIndicator
                 step={3}
                 label="Preview"
                 active={currentStep === 'preview'}
@@ -667,328 +648,62 @@ export function EnclosureStageView() {
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
         {currentStep === 'generate' ? (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <div className="text-center max-w-lg">
-              <div className="w-16 h-16 rounded-full bg-copper/10 flex items-center justify-center mx-auto mb-4">
-                <Wand2 className="w-8 h-8 text-copper" strokeWidth={1.5} />
-              </div>
-              <h3 className="text-lg font-semibold text-steel mb-2">Generate Enclosure</h3>
-              <p className="text-steel-dim mb-6">
-                The AI will generate a parametric OpenSCAD enclosure based on your PCB dimensions (
-                {pcbArtifacts?.boardSize?.width ?? 50}mm x {pcbArtifacts?.boardSize?.height ?? 40}
-                mm) and component placement.
-              </p>
-
-              {!wasmLoaded && (
-                <p className="text-xs text-surface-500 mb-4">
-                  <Loader2 className="w-3 h-3 inline-block animate-spin mr-1" />
-                  Loading OpenSCAD engine...
-                </p>
-              )}
-
-              {/* Validation Status During Generation */}
-              {isGenerating && validationStatus && (
-                <div className="mb-6 p-4 bg-surface-800 rounded-lg border border-surface-700">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Loader2 className="w-4 h-4 text-copper animate-spin" />
-                    <span className="text-sm text-steel font-medium">{validationStatus}</span>
-                  </div>
-                  {validationIteration > 0 && (
-                    <div className="flex gap-1 justify-center mt-2">
-                      {Array.from({ length: MAX_VALIDATION_ITERATIONS }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={clsx(
-                            'w-2 h-2 rounded-full transition-colors',
-                            i < validationIteration ? 'bg-copper' : 'bg-surface-600'
-                          )}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {validationIssues.length > 0 && (
-                    <div className="mt-3 text-left text-xs space-y-1 max-h-32 overflow-y-auto">
-                      {validationIssues.slice(0, 5).map((issue, i) => (
-                        <div
-                          key={i}
-                          className={clsx(
-                            'flex items-start gap-2 p-2 rounded',
-                            issue.severity === 'critical' && 'bg-red-500/10 text-red-400',
-                            issue.severity === 'warning' && 'bg-yellow-500/10 text-yellow-400',
-                            issue.severity === 'suggestion' && 'bg-blue-500/10 text-blue-400'
-                          )}
-                        >
-                          <span className="uppercase font-semibold shrink-0">
-                            {issue.severity.slice(0, 4)}
-                          </span>
-                          <span className="text-steel-dim">{issue.description}</span>
-                        </div>
-                      ))}
-                      {validationIssues.length > 5 && (
-                        <p className="text-surface-500">
-                          +{validationIssues.length - 5} more issues
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                className={clsx(
-                  'px-6 py-3 rounded-lg font-medium transition-all',
-                  isGenerating
-                    ? 'bg-surface-700 text-steel-dim cursor-not-allowed'
-                    : 'bg-copper text-surface-900 hover:bg-copper-light'
-                )}
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 inline-block animate-spin mr-2" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="w-4 h-4 inline-block mr-2" />
-                    Generate Enclosure
-                  </>
-                )}
-              </button>
-
-              {renderError && (
-                <p className="mt-4 text-red-400 text-sm">
-                  <XCircle className="w-4 h-4 inline-block mr-1" />
-                  {renderError}
-                </p>
-              )}
-            </div>
-          </div>
+          <GenerateStep
+            pcbWidth={pcbArtifacts?.boardSize?.width ?? 50}
+            pcbHeight={pcbArtifacts?.boardSize?.height ?? 40}
+            wasmLoaded={wasmLoaded}
+            isGenerating={isGenerating}
+            validationStatus={validationStatus}
+            validationIteration={validationIteration}
+            validationIssues={validationIssues}
+            renderError={renderError}
+            onGenerate={handleGenerate}
+          />
         ) : (
           <div className="flex-1 grid grid-cols-2 gap-4 p-4 min-h-0 overflow-hidden">
             {/* Left: OpenSCAD Editor */}
-            <div className="bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-steel">OpenSCAD Code</h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleDownloadSource}
-                    className="text-xs text-copper hover:text-copper-light flex items-center gap-1"
-                    title="Download OpenSCAD source"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    .scad
-                  </button>
-                  <button
-                    onClick={handleRender}
-                    disabled={isRendering || !openScadCode}
-                    className={clsx(
-                      'px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1.5 transition-colors',
-                      isRendering || !openScadCode
-                        ? 'bg-surface-700 text-steel-dim cursor-not-allowed'
-                        : 'bg-copper text-surface-900 hover:bg-copper-light'
-                    )}
-                  >
-                    {isRendering ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Rendering...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3.5 h-3.5" />
-                        Render
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0">
-                <Editor
-                  height="100%"
-                  language="c"
-                  theme="vs-dark"
-                  value={openScadCode}
-                  onChange={(value) => setOpenScadCode(value || '')}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    wordWrap: 'on',
-                    automaticLayout: true,
-                  }}
-                />
-              </div>
-              {/* Feedback input */}
-              <div className="px-4 py-3 border-t border-surface-700">
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-500" />
-                    <input
-                      type="text"
-                      value={feedback}
-                      onChange={(e) => setFeedback(e.target.value)}
-                      placeholder="Describe changes (e.g., 'make the corners more rounded')"
-                      className="w-full pl-10 pr-4 py-2 bg-surface-800 border border-surface-600 rounded text-sm text-steel placeholder:text-surface-500 focus:outline-none focus:border-copper"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && feedback.trim()) {
-                          handleRegenerate()
-                        }
-                      }}
-                    />
-                  </div>
-                  <button
-                    onClick={handleRegenerate}
-                    disabled={isGenerating || !feedback.trim()}
-                    className={clsx(
-                      'px-3 py-2 rounded text-sm font-medium flex items-center gap-1.5 transition-colors',
-                      isGenerating || !feedback.trim()
-                        ? 'bg-surface-700 text-steel-dim cursor-not-allowed'
-                        : 'bg-surface-700 text-steel hover:bg-surface-600'
-                    )}
-                  >
-                    {isGenerating ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-4 h-4" />
-                    )}
-                    Regenerate
-                  </button>
-                </div>
-                {/* Validation status during regeneration */}
-                {isGenerating && validationStatus && (
-                  <div className="mt-2 flex items-center gap-2 text-xs text-steel-dim">
-                    <Loader2 className="w-3 h-3 animate-spin text-copper" />
-                    <span>{validationStatus}</span>
-                    {validationIteration > 0 && (
-                      <span className="text-surface-500">
-                        (iteration {validationIteration}/{MAX_VALIDATION_ITERATIONS})
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+            <EditorPanel
+              openScadCode={openScadCode}
+              onCodeChange={setOpenScadCode}
+              feedback={feedback}
+              onFeedbackChange={setFeedback}
+              isGenerating={isGenerating}
+              isRendering={isRendering}
+              validationStatus={validationStatus}
+              validationIteration={validationIteration}
+              onRender={handleRender}
+              onRegenerate={handleRegenerate}
+              onDownloadSource={handleDownloadSource}
+            />
 
             {/* Right: 3D Preview */}
-            <div className="bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-steel">3D Preview</h3>
-                <div className="flex items-center gap-2">
-                  {stlData && spec?.blueprints?.[spec?.selectedBlueprint ?? 0]?.url && (
-                    <button
-                      onClick={performVisualValidation}
-                      disabled={isVisualValidating}
-                      className="text-xs text-steel hover:text-copper flex items-center gap-1"
-                      title="Compare render to blueprint"
-                    >
-                      {isVisualValidating ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                      )}
-                      Compare
-                    </button>
-                  )}
-                  {stlData && (
-                    <button
-                      onClick={handleDownload}
-                      className="text-xs text-copper hover:text-copper-light flex items-center gap-1"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Download STL
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="flex-1 min-h-0">
-                {stlBlobUrl || stlData ? (
-                  <STLViewer
-                    ref={stlViewerRef}
-                    src={stlBlobUrl || undefined}
-                    data={stlData || undefined}
-                    className="w-full h-full"
-                    color="#8B7355"
-                    showGrid={true}
-                    autoRotate={false}
-                  />
-                ) : (
-                  <div className="flex-1 flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <Box className="w-12 h-12 text-surface-600 mx-auto mb-3" strokeWidth={1} />
-                      <p className="text-steel-dim text-sm mb-2">
-                        {isRendering ? 'Rendering...' : 'Click "Render" to generate 3D preview'}
-                      </p>
-                      {renderError && (
-                        <p className="text-red-400 text-xs mt-2">
-                          <XCircle className="w-3 h-3 inline-block mr-1" />
-                          {renderError}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <PreviewPanel
+              stlBlobUrl={stlBlobUrl}
+              stlData={stlData}
+              stlViewerRef={stlViewerRef}
+              isRendering={isRendering}
+              renderError={renderError}
+              hasBlueprint={!!blueprintUrl}
+              isVisualValidating={isVisualValidating}
+              onDownload={handleDownload}
+              onPerformVisualValidation={performVisualValidation}
+            />
           </div>
         )}
 
         {/* Comparison Modal */}
-        {showComparison && spec?.blueprints?.[spec?.selectedBlueprint ?? 0]?.url && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-            <div className="bg-surface-900 rounded-xl border border-surface-700 p-6 max-w-4xl max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-steel">Blueprint Comparison</h3>
-                <button
-                  onClick={() => setShowComparison(false)}
-                  className="text-steel-dim hover:text-steel"
-                >
-                  <XCircle className="w-5 h-5" />
-                </button>
-              </div>
-              <EnclosureComparison
-                blueprintUrl={spec.blueprints[spec.selectedBlueprint ?? 0].url}
-                renderBase64={renderScreenshot}
-                validationResult={visualValidationResult}
-                isValidating={isVisualValidating}
-                onAccept={handleAcceptDesign}
-                onRegenerate={handleRegenerateFromComparison}
-              />
-            </div>
-          </div>
+        {showComparison && blueprintUrl && (
+          <ComparisonModal
+            blueprintUrl={blueprintUrl}
+            renderScreenshot={renderScreenshot}
+            validationResult={visualValidationResult}
+            isValidating={isVisualValidating}
+            onClose={() => setShowComparison(false)}
+            onAccept={handleAcceptDesign}
+            onRegenerate={handleRegenerateFromComparison}
+          />
         )}
       </div>
-    </div>
-  )
-}
-
-interface StepIndicatorProps {
-  step: number
-  label: string
-  active: boolean
-  complete: boolean
-}
-
-function StepIndicator({ step, label, active, complete }: StepIndicatorProps) {
-  return (
-    <div
-      className={clsx(
-        'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm',
-        active && 'bg-copper/20 text-copper',
-        complete && 'bg-emerald-500/20 text-emerald-400',
-        !active && !complete && 'text-steel-dim'
-      )}
-    >
-      {complete ? (
-        <CheckCircle2 className="w-4 h-4" strokeWidth={1.5} />
-      ) : active ? (
-        <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
-      ) : (
-        <span className="w-4 h-4 flex items-center justify-center text-xs">{step}</span>
-      )}
-      <span>{label}</span>
     </div>
   )
 }
