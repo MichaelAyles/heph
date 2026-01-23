@@ -5,30 +5,11 @@
  * Compile server integration is planned for Phase 6 - currently using manual PlatformIO workflow.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import Editor from '@monaco-editor/react'
 import JSZip from 'jszip'
-import {
-  Code,
-  ArrowRight,
-  Upload,
-  FileCode,
-  FolderCode,
-  Loader2,
-  Check,
-  X,
-  Sparkles,
-  FileArchive,
-  ChevronRight,
-  ChevronDown,
-  MessageSquare,
-  Send,
-} from 'lucide-react'
-import { clsx } from 'clsx'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { logger } from '@/lib/logger'
-import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import { llm } from '@/services/llm'
 import {
   FIRMWARE_SYSTEM_PROMPT,
@@ -39,263 +20,22 @@ import {
 } from '@/prompts/firmware'
 import { extractAndValidateJson } from '@/../functions/lib/json'
 import { FirmwareProjectSchema } from '@/schemas/llm-responses'
-
-interface FileNode {
-  name: string
-  path: string
-  type: 'file' | 'folder'
-  children?: FileNode[]
-  content?: string
-  language?: string
-}
-
-// Default starter template when no firmware has been generated yet
-const STARTER_TEMPLATE: FileNode[] = [
-  {
-    name: 'platformio.ini',
-    path: 'platformio.ini',
-    type: 'file',
-    language: 'ini',
-    content: `; PlatformIO Project Configuration
-; PHAESTUS Generated - Customize and compile locally
-
-[env:esp32c6]
-platform = espressif32
-board = esp32-c6-devkitm-1
-framework = arduino
-monitor_speed = 115200
-
-; Uncomment to add libraries
-; lib_deps =
-;     adafruit/Adafruit BME280 Library
-;     fastled/FastLED
-
-build_flags =
-    -DCORE_DEBUG_LEVEL=3
-`,
-  },
-  {
-    name: 'include',
-    path: 'include',
-    type: 'folder',
-    children: [
-      {
-        name: 'config.h',
-        path: 'include/config.h',
-        type: 'file',
-        language: 'cpp',
-        content: `#ifndef CONFIG_H
-#define CONFIG_H
-
-// ============================================
-// PIN DEFINITIONS
-// ============================================
-#define PIN_LED         8      // Built-in LED
-#define PIN_BUTTON      9      // User button (optional)
-
-// I2C Bus
-#define PIN_SDA         6
-#define PIN_SCL         7
-
-// ============================================
-// CONFIGURATION
-// ============================================
-#define WIFI_SSID       "your_ssid"
-#define WIFI_PASS       "your_password"
-#define DEVICE_NAME     "phaestus-device"
-
-// Timing
-#define LOOP_INTERVAL_MS  1000
-
-// Debug
-#define DEBUG_ENABLED   1
-
-#if DEBUG_ENABLED
-  #define DEBUG_PRINT(x) Serial.print(x)
-  #define DEBUG_PRINTLN(x) Serial.println(x)
-#else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTLN(x)
-#endif
-
-#endif // CONFIG_H
-`,
-      },
-    ],
-  },
-  {
-    name: 'src',
-    path: 'src',
-    type: 'folder',
-    children: [
-      {
-        name: 'main.cpp',
-        path: 'src/main.cpp',
-        type: 'file',
-        language: 'cpp',
-        content: `/**
- * PHAESTUS Generated Firmware
- * Target: ESP32-C6
- * Framework: Arduino
- */
-
-#include <Arduino.h>
-#include "config.h"
-
-void setup() {
-    Serial.begin(115200);
-    delay(1000);
-
-    Serial.println("=================================");
-    Serial.println("PHAESTUS Device Starting...");
-    Serial.println("=================================");
-
-    // Initialize LED
-    pinMode(PIN_LED, OUTPUT);
-    digitalWrite(PIN_LED, LOW);
-
-    Serial.println("Setup complete!");
-}
-
-void loop() {
-    static unsigned long lastBlink = 0;
-    static bool ledState = false;
-
-    // Blink LED every second
-    if (millis() - lastBlink >= LOOP_INTERVAL_MS) {
-        lastBlink = millis();
-        ledState = !ledState;
-        digitalWrite(PIN_LED, ledState);
-        DEBUG_PRINTLN(ledState ? "LED ON" : "LED OFF");
-    }
-}
-`,
-      },
-    ],
-  },
-]
-
-function flattenFiles(nodes: FileNode[]): { path: string; content: string }[] {
-  const result: { path: string; content: string }[] = []
-  for (const node of nodes) {
-    if (node.type === 'file' && node.content) {
-      result.push({ path: node.path, content: node.content })
-    }
-    if (node.children) {
-      result.push(...flattenFiles(node.children))
-    }
-  }
-  return result
-}
-
-function buildFileTree(files: FirmwareProject['files']): FileNode[] {
-  const root: FileNode[] = []
-
-  for (const file of files) {
-    const parts = file.path.split('/')
-    let current = root
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i]
-      const isLast = i === parts.length - 1
-
-      if (isLast) {
-        current.push({
-          name: part,
-          path: file.path,
-          type: 'file',
-          content: file.content,
-          language: file.language === 'h' ? 'cpp' : file.language === 'ini' ? 'ini' : 'cpp',
-        })
-      } else {
-        let folder = current.find((n) => n.name === part && n.type === 'folder')
-        if (!folder) {
-          folder = {
-            name: part,
-            path: parts.slice(0, i + 1).join('/'),
-            type: 'folder',
-            children: [],
-          }
-          current.push(folder)
-        }
-        current = folder.children!
-      }
-    }
-  }
-
-  return root
-}
-
-interface FileTreeItemProps {
-  node: FileNode
-  depth: number
-  selectedPath: string | null
-  expandedFolders: Set<string>
-  onSelect: (node: FileNode) => void
-  onToggleFolder: (path: string) => void
-}
-
-function FileTreeItem({
-  node,
-  depth,
-  selectedPath,
-  expandedFolders,
-  onSelect,
-  onToggleFolder,
-}: FileTreeItemProps) {
-  const isExpanded = expandedFolders.has(node.path)
-  const isSelected = selectedPath === node.path
-
-  if (node.type === 'folder') {
-    return (
-      <div>
-        <button
-          onClick={() => onToggleFolder(node.path)}
-          className={clsx(
-            'w-full flex items-center gap-1.5 px-2 py-1 text-sm text-left hover:bg-surface-800 rounded transition-colors',
-            'text-steel-dim hover:text-steel'
-          )}
-          style={{ paddingLeft: `${8 + depth * 12}px` }}
-        >
-          {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          <FolderCode className="w-4 h-4 text-copper" strokeWidth={1.5} />
-          <span>{node.name}</span>
-        </button>
-        {isExpanded && node.children && (
-          <div>
-            {node.children.map((child) => (
-              <FileTreeItem
-                key={child.path}
-                node={child}
-                depth={depth + 1}
-                selectedPath={selectedPath}
-                expandedFolders={expandedFolders}
-                onSelect={onSelect}
-                onToggleFolder={onToggleFolder}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <button
-      onClick={() => onSelect(node)}
-      className={clsx(
-        'w-full flex items-center gap-1.5 px-2 py-1 text-sm text-left rounded transition-colors',
-        isSelected
-          ? 'bg-copper/20 text-copper'
-          : 'text-steel-dim hover:text-steel hover:bg-surface-800'
-      )}
-      style={{ paddingLeft: `${20 + depth * 12}px` }}
-    >
-      <FileCode className="w-4 h-4" strokeWidth={1.5} />
-      <span>{node.name}</span>
-    </button>
-  )
-}
+import {
+  EditorPanel,
+  FileTreePanel,
+  FirmwareHeader,
+  FooterActions,
+  NotReadyState,
+  type FileNode,
+  type UploadedBinary,
+  STARTER_TEMPLATE,
+  flattenFiles,
+  buildFileTree,
+  findNode,
+  updateFileContent as updateFileContentInTree,
+  getFilesForSave,
+  generateReadme,
+} from '@/components/firmware'
 
 export function FirmwareStageView() {
   const { project } = useWorkspaceContext()
@@ -320,8 +60,7 @@ export function FirmwareStageView() {
   const [isModifying, setIsModifying] = useState(false)
 
   // Upload state
-  const [uploadedBinary, setUploadedBinary] = useState<{ name: string; size: number } | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadedBinary, setUploadedBinary] = useState<UploadedBinary | null>(null)
 
   const spec = project?.spec
   const enclosureComplete = spec?.stages?.enclosure?.status === 'complete'
@@ -353,39 +92,6 @@ export function FirmwareStageView() {
       }
     }
   }, [fileTree, selectedFile])
-
-  function findNode(nodes: FileNode[], path: string): FileNode | null {
-    for (const node of nodes) {
-      if (node.path === path) return node
-      if (node.children) {
-        const found = findNode(node.children, path)
-        if (found) return found
-      }
-    }
-    return null
-  }
-
-  // Helper to convert fileTree to FirmwareProject files format
-  const getFilesForSave = useCallback(
-    (
-      currentFileTree: FileNode[],
-      currentPath?: string,
-      currentContent?: string
-    ): FirmwareProject['files'] => {
-      const files = flattenFiles(currentFileTree)
-      return files.map((f) => ({
-        path: f.path,
-        // Use current editor content for the active file
-        content: currentPath && f.path === currentPath ? currentContent || '' : f.content || '',
-        language: (f.path.endsWith('.h') ? 'h' : f.path.endsWith('.ini') ? 'ini' : 'cpp') as
-          | 'cpp'
-          | 'h'
-          | 'ini'
-          | 'json',
-      }))
-    },
-    []
-  )
 
   // Save firmware to project
   const saveMutation = useMutation({
@@ -449,7 +155,7 @@ export function FirmwareStageView() {
       // Save current file first if dirty
       if (selectedFile && isDirty && editorContent !== selectedFile.content) {
         // Update local state
-        updateFileContent(selectedFile.path, editorContent)
+        setFileTree((prev) => updateFileContentInTree(prev, selectedFile.path, editorContent))
 
         // Save to server with updated content
         const filesToSave = getFilesForSave(fileTree, selectedFile.path, editorContent)
@@ -465,7 +171,7 @@ export function FirmwareStageView() {
       setEditorContent(node.content || '')
       setIsDirty(false)
     },
-    [selectedFile, editorContent, isDirty, fileTree, getFilesForSave, saveMutation]
+    [selectedFile, editorContent, isDirty, fileTree, saveMutation]
   )
 
   const handleToggleFolder = useCallback((path: string) => {
@@ -479,23 +185,6 @@ export function FirmwareStageView() {
       return next
     })
   }, [])
-
-  function updateFileContent(path: string, content: string) {
-    setFileTree((prev) => {
-      const update = (nodes: FileNode[]): FileNode[] => {
-        return nodes.map((node) => {
-          if (node.path === path) {
-            return { ...node, content }
-          }
-          if (node.children) {
-            return { ...node, children: update(node.children) }
-          }
-          return node
-        })
-      }
-      return update(prev)
-    })
-  }
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
@@ -645,7 +334,7 @@ export function FirmwareStageView() {
   const handleDownloadSource = async () => {
     // Save current editor changes first
     if (selectedFile && editorContent !== selectedFile.content) {
-      updateFileContent(selectedFile.path, editorContent)
+      setFileTree((prev) => updateFileContentInTree(prev, selectedFile.path, editorContent))
     }
 
     const zip = new JSZip()
@@ -656,41 +345,7 @@ export function FirmwareStageView() {
     }
 
     // Add README with build instructions
-    zip.file(
-      'README.md',
-      `# ${project?.name || 'PHAESTUS'} Firmware
-
-Generated by PHAESTUS Hardware Design Platform
-
-## Building with PlatformIO
-
-1. Install PlatformIO: https://platformio.org/install
-2. Open this folder in VS Code with PlatformIO extension
-3. Click "Build" in the PlatformIO toolbar
-4. Click "Upload" to flash to your ESP32-C6
-
-## Manual Build
-
-\`\`\`bash
-# Install PlatformIO CLI
-pip install platformio
-
-# Build
-cd ${project?.name?.toLowerCase().replace(/\s+/g, '-') || 'firmware'}
-pio run
-
-# Upload to device
-pio run -t upload
-\`\`\`
-
-## Binary Output
-
-After building, find the binary at:
-\`.pio/build/esp32c6/firmware.bin\`
-
-Upload this .bin file back to PHAESTUS for distribution.
-`
-    )
+    zip.file('README.md', generateReadme(project?.name || 'PHAESTUS'))
 
     const blob = await zip.generateAsync({ type: 'blob' })
     const url = URL.createObjectURL(blob)
@@ -722,218 +377,53 @@ Upload this .bin file back to PHAESTUS for distribution.
   }
 
   if (!enclosureComplete) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 rounded-full bg-surface-800 flex items-center justify-center mx-auto mb-4">
-            <Code className="w-8 h-8 text-surface-500" strokeWidth={1.5} />
-          </div>
-          <h2 className="text-xl font-semibold text-steel mb-2">Firmware Development</h2>
-          <p className="text-steel-dim mb-4">
-            Complete the enclosure stage first. Firmware will be generated based on your hardware
-            configuration and pin assignments.
-          </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-surface-500">
-            <span>Generate Enclosure</span>
-            <ArrowRight className="w-4 h-4" />
-            <span>Write Firmware</span>
-          </div>
-        </div>
-      </div>
-    )
+    return <NotReadyState />
   }
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Header */}
-      <div className="flex-none flex-shrink-0 px-6 py-4 border-b border-surface-700 bg-surface-900">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-steel mb-0.5">Firmware Development</h2>
-            <p className="text-steel-dim text-sm">
-              Edit, download, and compile firmware for your ESP32-C6
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {uploadedBinary && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-emerald-400 text-sm">
-                <Check className="w-4 h-4" />
-                {uploadedBinary.name} ({(uploadedBinary.size / 1024).toFixed(1)} KB)
-              </div>
-            )}
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-ash bg-copper hover:bg-copper-light disabled:opacity-50 rounded transition-colors"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Generate Firmware
-                </>
-              )}
-            </button>
-            <button
-              onClick={() => setShowChat(!showChat)}
-              className={clsx(
-                'flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded transition-colors',
-                showChat
-                  ? 'bg-copper/20 text-copper'
-                  : 'text-steel bg-surface-800 hover:bg-surface-700 border border-surface-600'
-              )}
-            >
-              <MessageSquare className="w-4 h-4" />
-              Modify
-            </button>
-            {/* User mark complete button */}
-            <StageCompleteButton
-              stage="firmware"
-              spec={spec || null}
-              projectId={project?.id || ''}
-              canComplete={!!spec?.firmware?.files?.length}
-              onComplete={() => {
-                queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
-                queryClient.invalidateQueries({ queryKey: ['projects'] })
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Error display */}
-        {generationError && (
-          <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
-            <X className="w-4 h-4 flex-shrink-0" />
-            {generationError}
-          </div>
-        )}
-
-        {/* Chat input */}
-        {showChat && (
-          <div className="mt-4 flex gap-2">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isModifying && handleModify()}
-              placeholder="Describe what you want to change... (e.g., 'add WiFi reconnection logic', 'use FastLED instead of NeoPixel')"
-              className="flex-1 px-3 py-2 bg-surface-800 border border-surface-600 rounded text-steel placeholder:text-surface-500 text-sm focus:outline-none focus:border-copper"
-            />
-            <button
-              onClick={handleModify}
-              disabled={isModifying || !chatInput.trim()}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-ash bg-copper hover:bg-copper-light disabled:opacity-50 rounded transition-colors"
-            >
-              {isModifying ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-              Apply
-            </button>
-          </div>
-        )}
-      </div>
+      <FirmwareHeader
+        spec={spec || null}
+        projectId={project?.id || ''}
+        uploadedBinary={uploadedBinary}
+        isGenerating={isGenerating}
+        generationError={generationError}
+        showChat={showChat}
+        chatInput={chatInput}
+        isModifying={isModifying}
+        hasFirmwareFiles={!!spec?.firmware?.files?.length}
+        onGenerate={handleGenerate}
+        onToggleChat={() => setShowChat(!showChat)}
+        onChatInputChange={setChatInput}
+        onModify={handleModify}
+        onComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
+          queryClient.invalidateQueries({ queryKey: ['projects'] })
+        }}
+      />
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
         {/* File tree */}
-        <div className="w-56 flex-none border-r border-surface-700 bg-surface-900 flex flex-col">
-          <div className="px-3 py-2 border-b border-surface-700">
-            <h3 className="text-xs font-medium text-steel-dim uppercase tracking-wide">Files</h3>
-          </div>
-          <div className="flex-1 py-2 overflow-auto">
-            {fileTree.map((node) => (
-              <FileTreeItem
-                key={node.path}
-                node={node}
-                depth={0}
-                selectedPath={selectedFile?.path || null}
-                expandedFolders={expandedFolders}
-                onSelect={handleSelectFile}
-                onToggleFolder={handleToggleFolder}
-              />
-            ))}
-          </div>
-        </div>
+        <FileTreePanel
+          fileTree={fileTree}
+          selectedPath={selectedFile?.path || null}
+          expandedFolders={expandedFolders}
+          onSelectFile={handleSelectFile}
+          onToggleFolder={handleToggleFolder}
+        />
 
         {/* Editor */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {selectedFile ? (
-            <>
-              <div className="flex-none px-4 py-2 border-b border-surface-700 bg-surface-800">
-                <div className="flex items-center gap-2 text-sm">
-                  <FileCode className="w-4 h-4 text-steel-dim" strokeWidth={1.5} />
-                  <span className="text-steel">{selectedFile.path}</span>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0">
-                <Editor
-                  height="100%"
-                  language={selectedFile.language || 'cpp'}
-                  value={editorContent}
-                  onChange={handleEditorChange}
-                  theme="vs-dark"
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
-                    tabSize: 4,
-                    wordWrap: 'off',
-                  }}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-steel-dim">
-              <p className="text-sm">Select a file to edit</p>
-            </div>
-          )}
-        </div>
+        <EditorPanel
+          selectedFile={selectedFile}
+          editorContent={editorContent}
+          onEditorChange={handleEditorChange}
+        />
       </div>
 
       {/* Footer actions */}
-      <div className="flex-none px-6 py-4 border-t border-surface-700 bg-surface-900">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 text-sm text-steel-dim">
-            <span className="flex items-center gap-1.5">
-              <Code className="w-4 h-4" />
-              ESP32-C6 • Arduino Framework
-            </span>
-            <span className="text-surface-600">|</span>
-            <span>Compile with PlatformIO</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleDownloadSource}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-steel bg-surface-800 hover:bg-surface-700 border border-surface-600 rounded transition-colors"
-            >
-              <FileArchive className="w-4 h-4" />
-              Download Source (.zip)
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".bin,.hex,.elf"
-              onChange={handleUploadBinary}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-ash bg-copper hover:bg-copper-light rounded transition-colors"
-            >
-              <Upload className="w-4 h-4" />
-              Upload Binary (.bin)
-            </button>
-          </div>
-        </div>
-      </div>
+      <FooterActions onDownloadSource={handleDownloadSource} onUploadBinary={handleUploadBinary} />
     </div>
   )
 }
