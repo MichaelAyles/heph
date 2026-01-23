@@ -12,7 +12,7 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { GitBranch, Play, Database, Settings, Network, Eye, Monitor } from 'lucide-react'
+import { GitBranch, Play, Database, Settings, Network, Eye } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
   GraphViewer,
@@ -65,20 +65,8 @@ export function AdminLangGraphPage() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Mobile Warning - shown on small screens */}
-      <div className="md:hidden flex flex-col items-center justify-center h-full p-8 text-center">
-        <Monitor className="w-16 h-16 text-copper mb-4" />
-        <h2 className="text-lg font-semibold text-steel mb-2">Desktop Required</h2>
-        <p className="text-sm text-steel-dim max-w-xs">
-          The LangGraph admin interface requires a larger screen. Please use a desktop or tablet in
-          landscape mode.
-        </p>
-      </div>
-
-      {/* Desktop Content - hidden on small screens */}
-      <div className="hidden md:flex md:flex-col h-full overflow-hidden">
-        {/* Header */}
-        <header className="flex-shrink-0 px-6 py-4 border-b border-surface-700 bg-surface-900">
+      {/* Header */}
+      <header className="flex-shrink-0 px-6 py-4 border-b border-surface-700 bg-surface-900">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Network className="w-6 h-6 text-copper" />
@@ -227,8 +215,6 @@ export function AdminLangGraphPage() {
             </div>
           )}
         </div>
-      </div>
-      {/* End Desktop Content */}
       </div>
     </div>
   )

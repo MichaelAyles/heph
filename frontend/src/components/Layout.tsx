@@ -18,6 +18,7 @@ import {
   FileText,
   SlidersHorizontal,
   Network,
+  Monitor,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
@@ -58,8 +59,27 @@ export function Layout() {
 
   return (
     <div className="h-screen flex overflow-hidden">
+      {/* Mobile Warning - shown on small screens */}
+      <div className="md:hidden flex flex-col items-center justify-center h-full w-full p-8 text-center bg-ash">
+        <img src="/logo.png" alt="Phaestus" className="h-12 w-auto object-contain mb-6" />
+        <Monitor className="w-16 h-16 text-copper mb-4" />
+        <h2 className="text-lg font-semibold text-steel mb-2">Desktop Required</h2>
+        <p className="text-sm text-steel-dim max-w-xs mb-6">
+          PHAESTUS is a hardware design platform that requires a larger screen. Please use a desktop
+          or tablet in landscape mode.
+        </p>
+        <button
+          onClick={logout}
+          className="flex items-center gap-2 px-4 py-2 text-sm text-steel-dim hover:text-steel bg-surface-800 hover:bg-surface-700 rounded transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign out
+        </button>
+      </div>
+
+      {/* Desktop Layout - hidden on small screens */}
       {/* Sidebar */}
-      <aside className="w-64 bg-surface-900 border-r border-surface-700 flex flex-col flex-shrink-0">
+      <aside className="hidden md:flex w-64 bg-surface-900 border-r border-surface-700 flex-col flex-shrink-0">
         {/* Logo */}
         <Link
           to="/"
@@ -182,7 +202,7 @@ export function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-h-0 bg-ash overflow-hidden">
+      <main className="hidden md:flex flex-1 flex-col min-h-0 bg-ash overflow-hidden">
         <Outlet />
       </main>
     </div>
