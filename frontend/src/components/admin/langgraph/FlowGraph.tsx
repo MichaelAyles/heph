@@ -327,23 +327,14 @@ export function FlowGraph({
     (_: React.MouseEvent, node: Node) => {
       if (!onPositionsChange) return
 
-      // Get all current positions and report the changed one
-      setNodes((currentNodes) => {
-        const positions = currentNodes.map((n) => ({
-          nodeName: n.id,
-          x: n.position.x,
-          y: n.position.y,
-        }))
-        // Debounce: only save the dragged node
-        onPositionsChange([{
-          nodeName: node.id,
-          x: node.position.x,
-          y: node.position.y,
-        }])
-        return currentNodes
-      })
+      // Save the dragged node's position
+      onPositionsChange([{
+        nodeName: node.id,
+        x: node.position.x,
+        y: node.position.y,
+      }])
     },
-    [onPositionsChange, setNodes]
+    [onPositionsChange]
   )
 
   // Handle node click

@@ -54,7 +54,7 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
         if (!result.manufacturable) {
           onReject(
             result.rejectionReason || 'Project is not manufacturable',
-            result.suggestedRevisions
+            result.suggestedRevisions ?? undefined  // Convert null to undefined
           )
           return
         }
@@ -63,11 +63,17 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
           communication: result.communication ?? { type: 'unknown', confidence: 0, notes: '' },
           processing: result.processing ?? { level: 'unknown', confidence: 0, notes: '' },
           power: result.power ?? { options: [], confidence: 0, notes: '' },
-          inputs: result.inputs ?? { items: [], confidence: 0 },
-          outputs: result.outputs ?? { items: [], confidence: 0 },
+          inputs: {
+            items: result.inputs?.items ?? [],
+            confidence: result.inputs?.confidence ?? 0,
+          },
+          outputs: {
+            items: result.outputs?.items ?? [],
+            confidence: result.outputs?.confidence ?? 0,
+          },
           overallScore: result.overallScore ?? 0,
           manufacturable: result.manufacturable,
-          rejectionReason: result.rejectionReason,
+          rejectionReason: result.rejectionReason ?? undefined,  // Convert null to undefined
         }
 
         const questions: OpenQuestion[] = result.openQuestions || []
