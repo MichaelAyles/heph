@@ -1,11 +1,11 @@
 /**
  * Dynamic Graph Builder
  *
- * Builds the LangGraph workflow dynamically from database tables:
- * - orchestrator_prompts: Node definitions with system prompts
- * - orchestrator_edges: Workflow transitions between nodes
+ * Provides graph structure for visualization. The new subgraph architecture
+ * defines graphs in code, so this module exports static structure derived from
+ * the code-defined graphs.
  *
- * This enables runtime modification of the graph structure through the admin UI.
+ * Legacy DB-based functions are kept for backward compatibility but deprecated.
  */
 
 // =============================================================================
@@ -70,9 +70,7 @@ export interface GraphStructure {
 export async function fetchGraphStructure(db: D1Database): Promise<GraphStructure> {
   // Fetch active prompts
   const promptsResult = await db
-    .prepare(
-      `SELECT * FROM orchestrator_prompts WHERE is_active = 1 ORDER BY node_name`
-    )
+    .prepare(`SELECT * FROM orchestrator_prompts WHERE is_active = 1 ORDER BY node_name`)
     .all<OrchestratorPrompt>()
 
   // Fetch active edges
@@ -115,9 +113,7 @@ export async function fetchGraphStructure(db: D1Database): Promise<GraphStructur
 
     // Helper to get position from prompt
     const getPosition = (p: OrchestratorPrompt | undefined) =>
-      p?.position_x != null && p?.position_y != null
-        ? { x: p.position_x, y: p.position_y }
-        : null
+      p?.position_x != null && p?.position_y != null ? { x: p.position_x, y: p.position_y } : null
 
     if (nodeName === '__start__' || nodeName === 'start') {
       nodes.push({
@@ -180,7 +176,17 @@ export async function fetchGraphStructure(db: D1Database): Promise<GraphStructur
 }
 
 // Mermaid reserved keywords that need escaping
-const MERMAID_RESERVED = new Set(['end', 'graph', 'subgraph', 'direction', 'click', 'style', 'classDef', 'class', 'linkStyle'])
+const MERMAID_RESERVED = new Set([
+  'end',
+  'graph',
+  'subgraph',
+  'direction',
+  'click',
+  'style',
+  'classDef',
+  'class',
+  'linkStyle',
+])
 
 /**
  * Escape node name if it's a Mermaid reserved keyword
@@ -273,6 +279,7 @@ export function generateMermaidDiagram(structure: GraphStructure): string {
 
 /**
  * Get full graph data for the API response (includes prompts for visualization)
+ * @deprecated Use getCodeDefinedGraphData for the new subgraph architecture
  */
 export async function getGraphData(db: D1Database): Promise<{
   mermaid: string
@@ -311,5 +318,306 @@ export async function getGraphData(db: D1Database): Promise<{
       conditional: e.conditional,
       label: e.label,
     })),
+  }
+}
+
+// =============================================================================
+// Code-Defined Graph Structure (New Architecture)
+// =============================================================================
+
+/**
+ * Subgraph node and edge definitions derived from code
+ */
+export interface SubgraphDefinition {
+  name: string
+  displayName: string
+  stage: string | null
+  nodes: Array<{
+    name: string
+    displayName: string
+    type: 'start' | 'end' | 'node'
+  }>
+  edges: Array<{
+    from: string
+    to: string
+    conditional: boolean
+    label?: string
+  }>
+}
+
+export interface CodeDefinedGraphData {
+  /** The parent orchestrator graph */
+  orchestrator: SubgraphDefinition
+  /** Stage subgraphs */
+  subgraphs: {
+    spec: SubgraphDefinition
+    pcb: SubgraphDefinition
+    enclosure: SubgraphDefinition
+    firmware: SubgraphDefinition
+    export: SubgraphDefinition
+  }
+  /** Flat list of all node names for easy lookup */
+  allNodes: string[]
+}
+
+/**
+ * Helper to format node name as display name
+ */
+function formatNodeName(name: string): string {
+  return name
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+/**
+ * Get code-defined graph structure for visualization
+ * This replaces the DB-based graph fetching for the new subgraph architecture
+ */
+export function getCodeDefinedGraphData(): CodeDefinedGraphData {
+  // Orchestrator (parent graph) nodes
+  const orchestratorNodes = [
+    'router',
+    'spec_stage',
+    'pcb_stage',
+    'enclosure_stage',
+    'firmware_stage',
+    'export_stage',
+  ] as const
+
+  // Spec subgraph nodes
+  const specNodes = [
+    'feasibility_check',
+    'refinement_loop',
+    'blueprint_generation',
+    'finalization',
+  ] as const
+
+  // PCB subgraph nodes
+  const pcbNodes = ['block_selection', 'placement_optimization', 'bus_routing'] as const
+
+  // Enclosure subgraph nodes
+  const enclosureNodes = ['dimension_analysis', 'openscad_generation', 'review_loop'] as const
+
+  // Firmware subgraph nodes
+  const firmwareNodes = ['component_analysis', 'code_generation', 'review_loop'] as const
+
+  // Export subgraph nodes
+  const exportNodes = ['gerber_merge', 'bom_generation', 'zip_packaging'] as const
+
+  // Build orchestrator graph definition
+  const orchestrator: SubgraphDefinition = {
+    name: 'orchestrator',
+    displayName: 'Orchestrator',
+    stage: null,
+    nodes: [
+      { name: '__start__', displayName: 'Start', type: 'start' },
+      ...orchestratorNodes.map((name) => ({
+        name,
+        displayName: formatNodeName(name),
+        type: 'node' as const,
+      })),
+      { name: '__end__', displayName: 'End', type: 'end' },
+    ],
+    edges: [
+      { from: '__start__', to: 'router', conditional: false },
+      { from: 'router', to: 'spec_stage', conditional: true, label: 'stage=spec' },
+      { from: 'router', to: 'pcb_stage', conditional: true, label: 'stage=pcb' },
+      { from: 'router', to: 'enclosure_stage', conditional: true, label: 'stage=enclosure' },
+      { from: 'router', to: 'firmware_stage', conditional: true, label: 'stage=firmware' },
+      { from: 'router', to: 'export_stage', conditional: true, label: 'stage=export' },
+      { from: 'router', to: '__end__', conditional: true, label: 'error' },
+      { from: 'spec_stage', to: 'router', conditional: true, label: 'continue' },
+      { from: 'spec_stage', to: '__end__', conditional: true, label: 'complete/error' },
+      { from: 'pcb_stage', to: 'router', conditional: true, label: 'continue' },
+      { from: 'pcb_stage', to: '__end__', conditional: true, label: 'complete/error' },
+      { from: 'enclosure_stage', to: 'router', conditional: true, label: 'continue' },
+      { from: 'enclosure_stage', to: '__end__', conditional: true, label: 'complete/error' },
+      { from: 'firmware_stage', to: 'router', conditional: true, label: 'continue' },
+      { from: 'firmware_stage', to: '__end__', conditional: true, label: 'complete/error' },
+      { from: 'export_stage', to: 'router', conditional: true, label: 'continue' },
+      { from: 'export_stage', to: '__end__', conditional: true, label: 'complete/error' },
+    ],
+  }
+
+  // Build spec subgraph definition
+  const spec: SubgraphDefinition = {
+    name: 'spec',
+    displayName: 'Spec Stage',
+    stage: 'spec',
+    nodes: [
+      { name: '__start__', displayName: 'Start', type: 'start' },
+      ...specNodes.map((name) => ({
+        name,
+        displayName: formatNodeName(name),
+        type: 'node' as const,
+      })),
+      { name: '__end__', displayName: 'End', type: 'end' },
+    ],
+    edges: [
+      { from: '__start__', to: 'feasibility_check', conditional: false },
+      { from: 'feasibility_check', to: 'refinement_loop', conditional: true, label: 'pass' },
+      { from: 'feasibility_check', to: '__end__', conditional: true, label: 'reject' },
+      {
+        from: 'refinement_loop',
+        to: 'refinement_loop',
+        conditional: true,
+        label: 'more questions',
+      },
+      { from: 'refinement_loop', to: 'blueprint_generation', conditional: true, label: 'complete' },
+      { from: 'refinement_loop', to: '__end__', conditional: true, label: 'waiting' },
+      {
+        from: 'blueprint_generation',
+        to: 'blueprint_generation',
+        conditional: true,
+        label: 'retry',
+      },
+      { from: 'blueprint_generation', to: 'finalization', conditional: true, label: 'ready' },
+      { from: 'finalization', to: '__end__', conditional: false },
+    ],
+  }
+
+  // Build PCB subgraph definition
+  const pcb: SubgraphDefinition = {
+    name: 'pcb',
+    displayName: 'PCB Stage',
+    stage: 'pcb',
+    nodes: [
+      { name: '__start__', displayName: 'Start', type: 'start' },
+      ...pcbNodes.map((name) => ({
+        name,
+        displayName: formatNodeName(name),
+        type: 'node' as const,
+      })),
+      { name: '__end__', displayName: 'End', type: 'end' },
+    ],
+    edges: [
+      { from: '__start__', to: 'block_selection', conditional: false },
+      {
+        from: 'block_selection',
+        to: 'placement_optimization',
+        conditional: true,
+        label: 'blocks selected',
+      },
+      { from: 'block_selection', to: '__end__', conditional: true, label: 'no blocks' },
+      {
+        from: 'placement_optimization',
+        to: 'placement_optimization',
+        conditional: true,
+        label: 'retry',
+      },
+      { from: 'placement_optimization', to: 'bus_routing', conditional: true, label: 'placed' },
+      { from: 'bus_routing', to: 'block_selection', conditional: true, label: 'invalid' },
+      { from: 'bus_routing', to: '__end__', conditional: true, label: 'valid' },
+    ],
+  }
+
+  // Build Enclosure subgraph definition
+  const enclosure: SubgraphDefinition = {
+    name: 'enclosure',
+    displayName: 'Enclosure Stage',
+    stage: 'enclosure',
+    nodes: [
+      { name: '__start__', displayName: 'Start', type: 'start' },
+      ...enclosureNodes.map((name) => ({
+        name,
+        displayName: formatNodeName(name),
+        type: 'node' as const,
+      })),
+      { name: '__end__', displayName: 'End', type: 'end' },
+    ],
+    edges: [
+      { from: '__start__', to: 'dimension_analysis', conditional: false },
+      {
+        from: 'dimension_analysis',
+        to: 'openscad_generation',
+        conditional: true,
+        label: 'dimensions ready',
+      },
+      { from: 'dimension_analysis', to: '__end__', conditional: true, label: 'error' },
+      { from: 'openscad_generation', to: 'openscad_generation', conditional: true, label: 'retry' },
+      { from: 'openscad_generation', to: 'review_loop', conditional: true, label: 'valid' },
+      { from: 'review_loop', to: 'openscad_generation', conditional: true, label: 'regenerate' },
+      { from: 'review_loop', to: '__end__', conditional: true, label: 'complete/waiting' },
+    ],
+  }
+
+  // Build Firmware subgraph definition
+  const firmware: SubgraphDefinition = {
+    name: 'firmware',
+    displayName: 'Firmware Stage',
+    stage: 'firmware',
+    nodes: [
+      { name: '__start__', displayName: 'Start', type: 'start' },
+      ...firmwareNodes.map((name) => ({
+        name,
+        displayName: formatNodeName(name),
+        type: 'node' as const,
+      })),
+      { name: '__end__', displayName: 'End', type: 'end' },
+    ],
+    edges: [
+      { from: '__start__', to: 'component_analysis', conditional: false },
+      {
+        from: 'component_analysis',
+        to: 'code_generation',
+        conditional: true,
+        label: 'components found',
+      },
+      { from: 'component_analysis', to: '__end__', conditional: true, label: 'no components' },
+      { from: 'code_generation', to: 'code_generation', conditional: true, label: 'retry' },
+      { from: 'code_generation', to: 'review_loop', conditional: true, label: 'files generated' },
+      { from: 'review_loop', to: 'code_generation', conditional: true, label: 'regenerate' },
+      { from: 'review_loop', to: '__end__', conditional: true, label: 'complete/waiting' },
+    ],
+  }
+
+  // Build Export subgraph definition
+  const exportGraph: SubgraphDefinition = {
+    name: 'export',
+    displayName: 'Export Stage',
+    stage: 'export',
+    nodes: [
+      { name: '__start__', displayName: 'Start', type: 'start' },
+      ...exportNodes.map((name) => ({
+        name,
+        displayName: formatNodeName(name),
+        type: 'node' as const,
+      })),
+      { name: '__end__', displayName: 'End', type: 'end' },
+    ],
+    edges: [
+      { from: '__start__', to: 'gerber_merge', conditional: false },
+      { from: 'gerber_merge', to: 'gerber_merge', conditional: true, label: 'retry' },
+      { from: 'gerber_merge', to: 'bom_generation', conditional: true, label: 'merged' },
+      { from: 'bom_generation', to: 'bom_generation', conditional: true, label: 'retry' },
+      { from: 'bom_generation', to: 'zip_packaging', conditional: true, label: 'generated' },
+      { from: 'zip_packaging', to: 'gerber_merge', conditional: true, label: 'error (gerbers)' },
+      { from: 'zip_packaging', to: 'bom_generation', conditional: true, label: 'error (bom)' },
+      { from: 'zip_packaging', to: 'zip_packaging', conditional: true, label: 'retry' },
+      { from: 'zip_packaging', to: '__end__', conditional: true, label: 'complete' },
+    ],
+  }
+
+  // Collect all node names
+  const allNodes = [
+    ...orchestratorNodes,
+    ...specNodes,
+    ...pcbNodes,
+    ...enclosureNodes,
+    ...firmwareNodes,
+    ...exportNodes,
+  ]
+
+  return {
+    orchestrator,
+    subgraphs: {
+      spec,
+      pcb,
+      enclosure,
+      firmware,
+      export: exportGraph,
+    },
+    allNodes,
   }
 }

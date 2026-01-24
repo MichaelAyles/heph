@@ -2,28 +2,21 @@
  * AdminLangGraphPage - LangGraph workflow visualization and management
  *
  * Provides:
- * - React Flow-based graph visualization with real-time debugging
+ * - React Flow-based graph visualization with subgraph support
  * - SSE streaming for live execution events
  * - Execution timeline with scrubbing
  * - Execution history with replay
  * - Node inspection with state diff
- * - Node (orchestrator prompt) editing
- * - Edge management
  * - Thread viewer with checkpoint history
- * - Interactive test runner
- * - State inspector
+ * - Static structure view of code-defined graphs
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  GitBranch,
+  Network,
   Play,
   Database,
-  Settings,
-  Network,
-  Eye,
-  Cog,
   Bug,
   Loader2,
   RefreshCw,
@@ -32,47 +25,33 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
+  Eye,
+  GitBranch,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
-  GraphViewer,
-  NodeEditor,
-  EdgeEditor,
   ThreadViewer,
-  TestRunner,
   StateInspector,
-  ConfigEditor,
   FlowGraph,
   ExecutionTimeline,
   NodeDetail,
+  SubgraphSelector,
+  getDefaultSubgraphOptions,
+  StructureViewer,
   type GraphNodeDef,
   type GraphEdgeDef,
-} from '@/components/admin/langgraph'
+  type SubgraphId,
+} from '../components/admin/langgraph'
 import type {
   ExecutionEvent,
   ExecutionRun,
   NodeState,
-} from '@/services/langgraph/execution-tracer'
-import { getNodeStatesAtStep } from '@/services/langgraph/execution-tracer'
-import { logger } from '@/lib/logger'
+} from '../services/langgraph/execution-tracer'
+import { getNodeStatesAtStep } from '../services/langgraph/execution-tracer'
+import { logger } from '../lib/logger'
+import type { CodeDefinedGraphData, SubgraphDefinition } from '../types/langgraph'
 
-type Tab = 'debugger' | 'nodes' | 'edges' | 'threads' | 'test' | 'config'
-
-interface GraphData {
-  mermaid: string
-  nodes: Array<{
-    name: string
-    type: 'start' | 'end' | 'node'
-    category?: 'agent' | 'generator' | 'reviewer'
-    displayName?: string
-    description?: string
-    stage?: string | null
-    systemPrompt?: string
-    tokenEstimate?: number
-    position?: { x: number; y: number } | null
-  }>
-  edges: Array<{ from: string; to: string; conditional: boolean; label?: string }>
-}
+type Tab = 'debugger' | 'threads' | 'structure'
 
 interface ExecutionHistoryItem {
   id: string
@@ -108,11 +87,32 @@ interface ExecutionRunResponse {
   createdAt: string
 }
 
+/**
+ * Convert SubgraphDefinition to FlowGraph format
+ */
+function subgraphToFlowNodes(subgraph: SubgraphDefinition): GraphNodeDef[] {
+  return subgraph.nodes.map((node) => ({
+    name: node.name,
+    type: node.type,
+    displayName: node.displayName,
+    stage: subgraph.stage,
+  }))
+}
+
+function subgraphToFlowEdges(subgraph: SubgraphDefinition): GraphEdgeDef[] {
+  return subgraph.edges.map((edge) => ({
+    from: edge.from,
+    to: edge.to,
+    conditional: edge.conditional,
+    label: edge.label,
+  }))
+}
+
 export function AdminLangGraphPage() {
   const [activeTab, setActiveTab] = useState<Tab>('debugger')
   const [selectedNode, setSelectedNode] = useState<string | undefined>()
-  const [highlightedNode, setHighlightedNode] = useState<string | undefined>()
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>()
+  const [selectedGraph, setSelectedGraph] = useState<SubgraphId>('orchestrator')
 
   // Debugger state
   const [debuggerInput, setDebuggerInput] = useState('')
@@ -125,26 +125,7 @@ export function AdminLangGraphPage() {
   const [executeError, setExecuteError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
 
-  // Save node positions to database
-  const savePositions = useCallback(
-    async (positions: Array<{ nodeName: string; x: number; y: number }>) => {
-      try {
-        const res = await fetch('/api/admin/langgraph/positions', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ positions }),
-        })
-        if (!res.ok) {
-          console.error('Failed to save positions')
-        }
-      } catch (err) {
-        console.error('Error saving positions:', err)
-      }
-    },
-    []
-  )
-
-  // Fetch graph data
+  // Fetch code-defined graph data
   const {
     data: graphData,
     isLoading: isLoadingGraph,
@@ -155,36 +136,49 @@ export function AdminLangGraphPage() {
     queryFn: async () => {
       const res = await fetch('/api/admin/langgraph/graph')
       if (!res.ok) throw new Error('Failed to fetch graph')
-      return res.json() as Promise<GraphData>
+      return res.json() as Promise<CodeDefinedGraphData>
     },
   })
 
-  // Convert GraphData to FlowGraph format
-  const flowNodes = useMemo<GraphNodeDef[]>(() => {
-    const nodes = graphData?.nodes
-    if (!nodes) return []
-    return nodes.map((n) => ({
-      name: n.name,
-      type: n.type,
-      category: n.category,
-      displayName: n.displayName,
-      description: n.description,
-      stage: n.stage,
-      systemPrompt: n.systemPrompt,
-      tokenEstimate: n.tokenEstimate,
-      position: n.position,
-    }))
-  }, [graphData])
+  // Get the currently selected graph's nodes and edges
+  const { flowNodes, flowEdges } = useMemo(() => {
+    if (!graphData) {
+      return { flowNodes: [], flowEdges: [] }
+    }
 
-  const flowEdges = useMemo<GraphEdgeDef[]>(() => {
-    const edges = graphData?.edges
-    if (!edges) return []
-    return edges.map((e) => ({
-      from: e.from,
-      to: e.to,
-      conditional: e.conditional,
-      label: e.label,
-    }))
+    let subgraph: SubgraphDefinition
+    if (selectedGraph === 'orchestrator') {
+      subgraph = graphData.orchestrator
+    } else {
+      subgraph = graphData.subgraphs[selectedGraph]
+    }
+
+    return {
+      flowNodes: subgraphToFlowNodes(subgraph),
+      flowEdges: subgraphToFlowEdges(subgraph),
+    }
+  }, [graphData, selectedGraph])
+
+  // Build subgraph options from data
+  const subgraphOptions = useMemo(() => {
+    if (!graphData) {
+      return getDefaultSubgraphOptions()
+    }
+
+    return [
+      {
+        id: 'orchestrator' as const,
+        label: graphData.orchestrator.displayName,
+        description: 'Parent graph coordinating all stages',
+        nodeCount: graphData.orchestrator.nodes.length,
+      },
+      ...Object.entries(graphData.subgraphs).map(([key, subgraph]) => ({
+        id: key as SubgraphId,
+        label: subgraph.displayName,
+        description: `${subgraph.nodes.filter((n) => n.type === 'node').length} processing nodes`,
+        nodeCount: subgraph.nodes.length,
+      })),
+    ]
   }, [graphData])
 
   // Fetch execution history
@@ -203,95 +197,101 @@ export function AdminLangGraphPage() {
   })
 
   // Execute graph via SSE
-  const executeGraph = useCallback(async (message: string) => {
-    setIsExecuting(true)
-    setExecuteError(null)
+  const executeGraph = useCallback(
+    async (message: string) => {
+      setIsExecuting(true)
+      setExecuteError(null)
 
-    const events: ExecutionEvent[] = []
-    const threadId = crypto.randomUUID()
+      const events: ExecutionEvent[] = []
+      const threadId = crypto.randomUUID()
 
-    try {
-      const res = await fetch('/api/admin/langgraph/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, threadId }),
-      })
+      try {
+        const res = await fetch('/api/admin/langgraph/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, threadId }),
+        })
 
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Failed to execute graph')
-      }
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || 'Failed to execute graph')
+        }
 
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('No response body')
 
-      const decoder = new TextDecoder()
-      let buffer = ''
+        const decoder = new TextDecoder()
+        let buffer = ''
 
-      // Start playing immediately
-      setCurrentStep(0)
-      setIsPlaying(true)
+        // Start playing immediately
+        setCurrentStep(0)
+        setIsPlaying(true)
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
+          buffer += decoder.decode(value, { stream: true })
 
-        // Parse SSE events
-        const lines = buffer.split('\n\n')
-        buffer = lines.pop() || '' // Keep incomplete data in buffer
+          // Parse SSE events
+          const lines = buffer.split('\n\n')
+          buffer = lines.pop() || '' // Keep incomplete data in buffer
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6)) as ExecutionEvent
-              events.push(event)
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(line.slice(6)) as ExecutionEvent
+                events.push(event)
 
-              // Update current run with new events
-              const run: ExecutionRun = {
-                id: threadId,
-                threadId,
-                input: message,
-                events: [...events],
-                startedAt: events[0]?.timestamp || Date.now(),
-                success: true,
+                // Update current run with new events
+                const run: ExecutionRun = {
+                  id: threadId,
+                  threadId,
+                  input: message,
+                  events: [...events],
+                  startedAt: events[0]?.timestamp || Date.now(),
+                  success: true,
+                }
+                setCurrentRun(run)
+              } catch {
+                logger.warn('orchestrator', 'Failed to parse SSE event', { line })
               }
-              setCurrentRun(run)
-            } catch {
-              logger.warn('orchestrator', 'Failed to parse SSE event', { line })
             }
           }
         }
-      }
 
-      // Final update with all events
-      const graphEndEvent = events.find(e => e.type === 'graph_end')
-      const run: ExecutionRun = {
-        id: threadId,
-        threadId,
-        input: message,
-        events,
-        startedAt: events[0]?.timestamp || Date.now(),
-        endedAt: graphEndEvent?.timestamp,
-        durationMs: graphEndEvent && 'totalDurationMs' in graphEndEvent ? graphEndEvent.totalDurationMs : undefined,
-        success: true,
-      }
-      setCurrentRun(run)
-      setCurrentStep(events.length - 1)
-      setIsPlaying(false)
+        // Final update with all events
+        const graphEndEvent = events.find((e) => e.type === 'graph_end')
+        const run: ExecutionRun = {
+          id: threadId,
+          threadId,
+          input: message,
+          events,
+          startedAt: events[0]?.timestamp || Date.now(),
+          endedAt: graphEndEvent?.timestamp,
+          durationMs:
+            graphEndEvent && 'totalDurationMs' in graphEndEvent
+              ? graphEndEvent.totalDurationMs
+              : undefined,
+          success: true,
+        }
+        setCurrentRun(run)
+        setCurrentStep(events.length - 1)
+        setIsPlaying(false)
 
-      // Refetch history to show new run
-      if (showHistory) {
-        refetchHistory()
+        // Refetch history to show new run
+        if (showHistory) {
+          refetchHistory()
+        }
+      } catch (error) {
+        setExecuteError(error instanceof Error ? error.message : 'Unknown error')
+        setIsPlaying(false)
+      } finally {
+        setIsExecuting(false)
       }
-    } catch (error) {
-      setExecuteError(error instanceof Error ? error.message : 'Unknown error')
-      setIsPlaying(false)
-    } finally {
-      setIsExecuting(false)
-    }
-  }, [showHistory, refetchHistory])
+    },
+    [showHistory, refetchHistory]
+  )
 
   // Load execution from history
   const loadExecution = useCallback(async (id: string) => {
@@ -299,7 +299,7 @@ export function AdminLangGraphPage() {
       const res = await fetch(`/api/admin/langgraph/executions/${id}`)
       if (!res.ok) throw new Error('Failed to load execution')
 
-      const data = await res.json() as ExecutionRunResponse
+      const data = (await res.json()) as ExecutionRunResponse
 
       const run: ExecutionRun = {
         id: data.id,
@@ -323,17 +323,20 @@ export function AdminLangGraphPage() {
   }, [])
 
   // Delete execution from history
-  const deleteExecution = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`/api/admin/langgraph/executions/${id}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) throw new Error('Failed to delete execution')
-      refetchHistory()
-    } catch (error) {
-      logger.error('orchestrator', 'Failed to delete execution', { error })
-    }
-  }, [refetchHistory])
+  const deleteExecution = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`/api/admin/langgraph/executions/${id}`, {
+          method: 'DELETE',
+        })
+        if (!res.ok) throw new Error('Failed to delete execution')
+        refetchHistory()
+      } catch (error) {
+        logger.error('orchestrator', 'Failed to delete execution', { error })
+      }
+    },
+    [refetchHistory]
+  )
 
   // Handle debugger execution
   const handleExecute = useCallback(() => {
@@ -413,16 +416,9 @@ export function AdminLangGraphPage() {
 
   const tabs = [
     { id: 'debugger' as const, label: 'Debugger', icon: Bug },
-    { id: 'nodes' as const, label: 'Nodes', icon: Settings },
-    { id: 'edges' as const, label: 'Edges', icon: GitBranch },
     { id: 'threads' as const, label: 'Threads', icon: Database },
-    { id: 'test' as const, label: 'Test', icon: Play },
-    { id: 'config' as const, label: 'Config', icon: Cog },
+    { id: 'structure' as const, label: 'Structure', icon: GitBranch },
   ]
-
-  // Get available node names for edge editor
-  const availableNodes =
-    graphData?.nodes.filter((n) => n.type === 'node').map((n) => n.name) || []
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -433,7 +429,9 @@ export function AdminLangGraphPage() {
             <Network className="w-6 h-6 text-copper" />
             <div>
               <h1 className="text-lg font-semibold text-steel">LangGraph</h1>
-              <p className="text-xs text-steel-dim">Workflow visualization and real-time debugging</p>
+              <p className="text-xs text-steel-dim">
+                Subgraph architecture with real-time debugging
+              </p>
             </div>
           </div>
           <button
@@ -472,10 +470,12 @@ export function AdminLangGraphPage() {
       {/* Content */}
       <div className="flex-1 overflow-hidden flex min-h-0">
         {/* Main Panel */}
-        <div className={clsx(
-          'flex-1 overflow-auto',
-          activeTab === 'debugger' ? 'p-4 flex flex-col' : 'p-6'
-        )}>
+        <div
+          className={clsx(
+            'flex-1 overflow-auto',
+            activeTab === 'debugger' ? 'p-4 flex flex-col' : 'p-6'
+          )}
+        >
           {/* Debugger Tab */}
           {activeTab === 'debugger' && (
             <div className="flex-1 flex flex-col gap-3 min-h-0">
@@ -521,19 +521,27 @@ export function AdminLangGraphPage() {
                   </button>
                 </div>
 
-                {/* Playback speed */}
-                <div className="flex items-center gap-4 mt-3 text-xs text-steel-dim">
-                  <span>Playback speed:</span>
-                  <select
-                    value={playbackSpeed}
-                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                    className="px-2 py-1 bg-surface-900 border border-surface-700 rounded text-steel"
-                  >
-                    <option value={1000}>Slow (1s)</option>
-                    <option value={500}>Normal (0.5s)</option>
-                    <option value={200}>Fast (0.2s)</option>
-                    <option value={100}>Very Fast (0.1s)</option>
-                  </select>
+                {/* Graph selector and playback speed */}
+                <div className="flex items-center gap-4 mt-3">
+                  <SubgraphSelector
+                    selectedGraph={selectedGraph}
+                    onSelect={setSelectedGraph}
+                    options={subgraphOptions}
+                  />
+
+                  <div className="flex items-center gap-2 text-xs text-steel-dim">
+                    <span>Playback:</span>
+                    <select
+                      value={playbackSpeed}
+                      onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                      className="px-2 py-1 bg-surface-900 border border-surface-700 rounded text-steel"
+                    >
+                      <option value={1000}>Slow (1s)</option>
+                      <option value={500}>Normal (0.5s)</option>
+                      <option value={200}>Fast (0.2s)</option>
+                      <option value={100}>Very Fast (0.1s)</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Error display */}
@@ -565,7 +573,9 @@ export function AdminLangGraphPage() {
                       <Loader2 className="w-5 h-5 text-steel-dim animate-spin" />
                     </div>
                   ) : historyData?.runs.length === 0 ? (
-                    <p className="text-xs text-steel-dim text-center py-4">No execution history yet</p>
+                    <p className="text-xs text-steel-dim text-center py-4">
+                      No execution history yet
+                    </p>
                   ) : (
                     <div className="space-y-2">
                       {historyData?.runs.map((run) => (
@@ -620,12 +630,6 @@ export function AdminLangGraphPage() {
                       onNodeClick={(name) => {
                         setSelectedNode(name === selectedNode ? undefined : name)
                       }}
-                      onNodeDoubleClick={(name) => {
-                        // Navigate to node editor on double-click
-                        setSelectedNode(name)
-                        setActiveTab('nodes')
-                      }}
-                      onPositionsChange={savePositions}
                       isLoading={isLoadingGraph}
                       error={graphError?.message}
                       showMinimap
@@ -658,18 +662,14 @@ export function AdminLangGraphPage() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="w-2.5 h-2.5 rounded bg-blue-500" />
-                      Agent
+                      Node
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded bg-emerald-500" />
-                      Generator
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded bg-amber-500" />
-                      Reviewer
+                      <div className="w-2.5 h-2.5 rounded bg-purple-500" />
+                      Subgraph
                     </div>
                     <span className="text-steel-dim/50">|</span>
-                    <span>Click to inspect, double-click to edit</span>
+                    <span>Click to inspect</span>
                   </div>
                 </div>
 
@@ -691,26 +691,7 @@ export function AdminLangGraphPage() {
             </div>
           )}
 
-          {activeTab === 'nodes' && (
-            <div>
-              <h2 className="text-sm font-medium text-steel mb-3">Orchestrator Nodes</h2>
-              <p className="text-xs text-steel-dim mb-4">
-                Edit system prompts for each orchestrator agent. Changes are saved to the database.
-              </p>
-              <NodeEditor selectedNode={selectedNode} onNodeSelect={setSelectedNode} />
-            </div>
-          )}
-
-          {activeTab === 'edges' && (
-            <div>
-              <h2 className="text-sm font-medium text-steel mb-3">Workflow Edges</h2>
-              <p className="text-xs text-steel-dim mb-4">
-                Define transitions between nodes. Conditional edges require a condition expression.
-              </p>
-              <EdgeEditor availableNodes={availableNodes} />
-            </div>
-          )}
-
+          {/* Threads Tab */}
           {activeTab === 'threads' && (
             <div className="flex gap-6">
               <div className="flex-1">
@@ -735,39 +716,19 @@ export function AdminLangGraphPage() {
             </div>
           )}
 
-          {activeTab === 'test' && (
-            <div className="flex gap-6">
-              {/* Test Runner */}
-              <div className="flex-1">
-                <h2 className="text-sm font-medium text-steel mb-3">Test Runner</h2>
-                <p className="text-xs text-steel-dim mb-4">
-                  Send test messages to the LangGraph and see the execution trace.
-                </p>
-                <TestRunner onHighlightNode={setHighlightedNode} />
-              </div>
-
-              {/* Live Graph View */}
-              <div className="w-96 border-l border-surface-700 pl-6">
-                <h3 className="text-sm font-medium text-steel mb-3">Live Graph</h3>
-                <GraphViewer
-                  mermaidCode={graphData?.mermaid || ''}
-                  nodes={graphData?.nodes || []}
-                  edges={graphData?.edges || []}
-                  highlightNode={highlightedNode}
-                  isLoading={isLoadingGraph}
-                  error={graphError?.message}
-                />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'config' && (
+          {/* Structure Tab */}
+          {activeTab === 'structure' && (
             <div>
-              <h2 className="text-sm font-medium text-steel mb-3">Platform Configuration</h2>
+              <h2 className="text-sm font-medium text-steel mb-3">Graph Structure</h2>
               <p className="text-xs text-steel-dim mb-4">
-                Configure system prompts and hard rejection criteria for capability assessment.
+                Read-only view of the code-defined graph structure. Graphs are defined in{' '}
+                <code className="bg-surface-800 px-1 rounded">src/services/langgraph/graphs/</code>.
               </p>
-              <ConfigEditor />
+              <StructureViewer
+                graphData={graphData || null}
+                isLoading={isLoadingGraph}
+                error={graphError?.message}
+              />
             </div>
           )}
         </div>

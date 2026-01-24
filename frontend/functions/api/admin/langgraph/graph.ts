@@ -1,30 +1,25 @@
 /**
  * GET /api/admin/langgraph/graph
  *
- * Returns the graph structure from the database.
- * Uses the dynamic graph builder to fetch nodes from orchestrator_prompts
- * and edges from orchestrator_edges tables.
+ * Returns the code-defined graph structure for visualization.
+ * The new subgraph architecture defines graphs in code, not in the database.
  */
 
 import type { Env, AuthenticatedRequest } from '../../_middleware'
-import { getGraphData } from '../../../lib/graph-builder'
+import { getCodeDefinedGraphData, type CodeDefinedGraphData } from '../../../lib/graph-builder'
 
 export const onRequestGet: PagesFunction<Env, '', AuthenticatedRequest> = async (context) => {
   const { user } = context.data
-  const { DB } = context.env
 
   if (!user?.isAdmin) {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
   try {
-    const graphData = await getGraphData(DB)
+    const graphData: CodeDefinedGraphData = getCodeDefinedGraphData()
     return Response.json(graphData)
   } catch (error) {
     console.error('Failed to fetch graph data:', error)
-    return Response.json(
-      { error: 'Failed to fetch graph data' },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Failed to fetch graph data' }, { status: 500 })
   }
 }

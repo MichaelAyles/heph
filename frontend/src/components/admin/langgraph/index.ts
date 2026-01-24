@@ -12,3 +12,14 @@ export { FlowNode, type FlowNodeData } from './FlowNode'
 export { FlowEdge, type FlowEdgeData } from './FlowEdge'
 export { ExecutionTimeline, type ExecutionTimelineProps } from './ExecutionTimeline'
 export { NodeDetail, type NodeDetailProps } from './NodeDetail'
+
+// Subgraph visualization components
+export { SubgraphSelector, type SubgraphSelectorProps } from './SubgraphSelector'
+export { StructureViewer, type StructureViewerProps } from './StructureViewer'
+
+// Re-export types from types file for convenience
+export {
+  getDefaultSubgraphOptions,
+  type SubgraphId,
+  type SubgraphOption,
+} from '../../../types/langgraph'

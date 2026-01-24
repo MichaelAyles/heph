@@ -61,6 +61,10 @@ function StepMarker({ step, isActive, isCurrent, position, onClick }: StepMarker
         return 'bg-amber-500'
       case 'error':
         return 'bg-red-500'
+      case 'subgraph_enter':
+        return 'bg-purple-400'
+      case 'subgraph_exit':
+        return 'bg-purple-600'
       default:
         return 'bg-surface-500'
     }
@@ -337,14 +341,19 @@ export function ExecutionTimeline({
               className={clsx(
                 'px-2 py-0.5 rounded font-medium',
                 currentStepInfo.type === 'graph_start' && 'bg-indigo-500/20 text-indigo-400',
-                currentStepInfo.type === 'graph_end' && (currentStepInfo.label === 'Complete' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'),
+                currentStepInfo.type === 'graph_end' &&
+                  (currentStepInfo.label === 'Complete'
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-red-500/20 text-red-400'),
                 currentStepInfo.type === 'node_enter' && 'bg-blue-500/20 text-blue-400',
                 currentStepInfo.type === 'node_exit' && 'bg-blue-600/20 text-blue-300',
                 currentStepInfo.type === 'edge_taken' && 'bg-amber-500/20 text-amber-400',
-                currentStepInfo.type === 'error' && 'bg-red-500/20 text-red-400'
+                currentStepInfo.type === 'error' && 'bg-red-500/20 text-red-400',
+                currentStepInfo.type === 'subgraph_enter' && 'bg-purple-500/20 text-purple-400',
+                currentStepInfo.type === 'subgraph_exit' && 'bg-purple-600/20 text-purple-300'
               )}
             >
-              {currentStepInfo.type.replace('_', ' ')}
+              {currentStepInfo.type.replace(/_/g, ' ')}
             </span>
             <span className="text-steel">{currentStepInfo.label}</span>
           </div>
@@ -367,6 +376,14 @@ export function ExecutionTimeline({
         <div className="flex items-center gap-1">
           <div className="w-2 h-2 rounded-full bg-blue-600" />
           Node Exit
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full bg-purple-400" />
+          Subgraph Enter
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full bg-purple-600" />
+          Subgraph Exit
         </div>
         <div className="flex items-center gap-1">
           <div className="w-2 h-2 rounded-full bg-amber-500" />
