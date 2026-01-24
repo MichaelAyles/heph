@@ -183,6 +183,8 @@ Development blog documenting PHAESTUS progress. 40 posts with images.
 - `src/pages/workspace/` - Workspace stage views (Spec, PCB, Enclosure, Firmware, Export)
 - `src/components/spec-steps/` - Individual step components (Feasibility, Refinement, Blueprint, Selection, Finalization)
 - `src/components/admin/orchestrator/` - Admin orchestrator editor (PromptEditor, FlowVisualization, HookConfiguration)
+- `src/components/admin/langgraph/` - LangGraph admin UI (StructureViewer, SubgraphSelector, FlowGraph, ExecutionTimeline)
+- `src/types/langgraph.ts` - Shared types for LangGraph visualization
 - `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure, orchestrator)
 - `src/services/` - LLM client, PCB merging, KiCad parsing, Gerber merging
 - `src/services/orchestrator/` - Modular orchestrator (tools/, helpers/, types.ts, orchestrator.ts, index.ts)
@@ -445,6 +447,10 @@ const data = result.data // Fully typed!
 | LangGraph state | `src/services/langgraph/state.ts` |
 | LangGraph graph | `src/services/langgraph/graph.ts` |
 | LangGraph checkpointer | `src/services/langgraph/checkpointer.ts` |
+| LangGraph admin page | `src/pages/AdminLangGraphPage.tsx` |
+| LangGraph structure viewer | `src/components/admin/langgraph/StructureViewer.tsx` |
+| LangGraph subgraph selector | `src/components/admin/langgraph/SubgraphSelector.tsx` |
+| LangGraph types | `src/types/langgraph.ts` |
 | KiCad export script | `scripts/export-kicad-block.ts` |
 | Blog listing page | `src/pages/BlogPage.tsx` |
 | Blog post page | `src/pages/BlogPostPage.tsx` |
@@ -527,7 +533,17 @@ The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` 
 
 ### LangGraph Architecture
 
-The orchestrator is built on LangGraph for state machine-based multi-agent workflows (`src/services/langgraph/`):
+The orchestrator uses a **hierarchical subgraph architecture** for state machine-based multi-agent workflows (`src/services/langgraph/`):
+
+```
+OrchestratorGraph (parent)
+├── router
+├── spec_stage (subgraph) → feasibility_check, refinement_loop, blueprint_generation, finalization
+├── pcb_stage (subgraph) → block_selection, placement_optimization, design_validation
+├── enclosure_stage (subgraph) → dimension_analysis, openscad_generation, review_loop
+├── firmware_stage (subgraph) → component_analysis, code_generation, review_loop
+└── export_stage (subgraph) → gerber_merge, bom_generation, zip_packaging
+```
 
 | File | Lines | Purpose |
 |------|-------|---------|
@@ -537,10 +553,16 @@ The orchestrator is built on LangGraph for state machine-based multi-agent workf
 | `nodes/` | - | Individual node implementations |
 
 **Key Features**:
+- **Subgraph Architecture** - Parent orchestrator coordinates 5 stage subgraphs
 - **Checkpointing** - Workflows can be paused and resumed across sessions
 - **State Reducers** - Immutable state updates with conflict resolution
 - **Tool Integration** - 6 tool modules (control, enclosure, firmware, pcb, spec, index)
 - **Context Building** - Dynamic context assembly from project state
+
+**Admin Page** (`/admin/langgraph`) - 3 tabs:
+- **Debugger**: Visual execution debugging with subgraph selector, React Flow graph
+- **Threads**: Checkpoint/state inspection with namespace support
+- **Structure**: Read-only tree view of code-defined graph hierarchy
 
 ### Gerber Merging
 

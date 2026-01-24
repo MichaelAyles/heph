@@ -1,8 +1,8 @@
 # PHAESTUS Code Review & Technical Debt
 
-**Last Review**: January 20, 2026
+**Last Review**: January 24, 2026
 **Overall Status**: Production-ready with identified issues
-**Test Coverage**: 816 tests (all passing)
+**Test Coverage**: 600 tests (all passing)
 
 ---
 
@@ -26,7 +26,17 @@ The codebase is mature and production-ready with solid engineering practices:
 - LLM-assisted block import wizard
 - 40 development blog posts documenting architecture decisions
 
-### Recent Changes (Jan 20, 2026)
+### Recent Changes (Jan 24, 2026)
+
+| Change | Commit | Impact |
+|--------|--------|--------|
+| LangGraph Subgraph Visualization | 8bd936a | New admin page with code-defined graph structure |
+| Add StructureViewer component | 8bd936a | Read-only tree view of orchestrator + 5 subgraphs |
+| Add SubgraphSelector component | 8bd936a | Dropdown for selecting graph to visualize |
+| Update ExecutionTimeline | 8bd936a | Subgraph enter/exit event styling |
+| Simplify AdminLangGraphPage | 8bd936a | 3 tabs: debugger, threads, structure |
+
+### Earlier Changes (Jan 20-22, 2026)
 
 | Change | Commit | Impact |
 |--------|--------|--------|
@@ -129,16 +139,30 @@ The codebase is mature and production-ready with solid engineering practices:
 
 ## Architecture
 
-### LangGraph Orchestrator
+### LangGraph Orchestrator (Subgraph Architecture)
 
-The orchestrator system has three layers:
+The orchestrator uses a hierarchical subgraph architecture:
 
-| Layer | Location | Purpose |
-|-------|----------|---------|
-| **Config UI** | `AdminOrchestratorPage.tsx` | Edit prompts, view flow graph, configure hooks |
-| **Prompt Storage** | `orchestrator_prompts` table | DB-backed prompt definitions for 8 agents |
-| **Prompt Loader** | `orchestrator/prompt-loader.ts` | Runtime loader with 60s TTL cache |
-| **Execution Engine** | `langgraph/` | LangGraph state machine with checkpointing |
+```
+OrchestratorGraph (parent)
+├── router
+├── spec_stage (subgraph) → feasibility_check, refinement_loop, blueprint_generation, finalization
+├── pcb_stage (subgraph) → block_selection, placement_optimization, design_validation
+├── enclosure_stage (subgraph) → dimension_analysis, openscad_generation, review_loop
+├── firmware_stage (subgraph) → component_analysis, code_generation, review_loop
+└── export_stage (subgraph) → gerber_merge, bom_generation, zip_packaging
+```
+
+**Admin Page** (`AdminLangGraphPage.tsx`) - 3 tabs:
+- **Debugger**: Visual execution debugging with subgraph selector
+- **Threads**: Checkpoint/state inspection with namespace support
+- **Structure**: Read-only view of code-defined graph hierarchy
+
+**Key Components** (`src/components/admin/langgraph/`):
+- `SubgraphSelector` - Dropdown for selecting orchestrator or stage subgraph
+- `StructureViewer` - Tree view of graph structure with nodes/edges
+- `ExecutionTimeline` - Timeline with subgraph_enter/exit events
+- `FlowGraph` - React Flow visualization of selected graph
 
 **LangGraph Files** (`src/services/langgraph/`):
 
@@ -328,159 +352,6 @@ The orchestrator system has three layers:
 - 18 database migrations
 - 40 development blog posts
 - CI workflow with GitHub Actions for PR checks
-- Code review completed January 20, 2026
+- Code review completed January 24, 2026
+- LangGraph admin page updated to subgraph architecture (Jan 24, 2026)
 
----
-
-## LangGraph Admin Page Implementation Plan
-
-**Date**: January 22, 2026
-**Status**: Complete - All components implemented
-
-### Goal
-Build `/admin/langgraph` to provide visualization, CRUD, and testing for the LangGraph orchestrator workflow.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    /admin/langgraph                              │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
-│  │   Graph     │  │   Nodes     │  │   Threads   │              │
-│  │   View      │  │   Editor    │  │   Viewer    │              │
-│  └─────────────┘  └─────────────┘  └─────────────┘              │
-│        │                │                │                       │
-│        ▼                ▼                ▼                       │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │                    Test Runner                               ││
-│  │  [Message input] [Run] → Debug output + state visualization  ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Component Structure
-
-```
-frontend/src/
-├── pages/
-│   └── AdminLangGraphPage.tsx          # Main admin page
-├── components/admin/langgraph/
-│   ├── GraphViewer.tsx                 # Mermaid graph visualization
-│   ├── NodeEditor.tsx                  # CRUD for orchestrator_prompts
-│   ├── EdgeEditor.tsx                  # CRUD for orchestrator_edges
-│   ├── ThreadViewer.tsx                # View/manage threads & checkpoints
-│   ├── TestRunner.tsx                  # Invoke graph and see debug output
-│   └── StateInspector.tsx              # View current state for a thread
-
-functions/api/admin/langgraph/
-│   ├── graph.ts                        # GET Mermaid diagram
-│   ├── nodes.ts                        # GET/POST/PUT/DELETE for prompts
-│   ├── edges.ts                        # GET/PUT for edges
-│   └── threads.ts                      # GET/DELETE for threads
-```
-
-### Implementation Phases
-
-| Phase | Component | Description | Status |
-|-------|-----------|-------------|--------|
-| 1 | GraphViewer | Mermaid-based live graph preview | [x] |
-| 2 | NodeEditor | CRUD for orchestrator_prompts | [x] |
-| 3 | EdgeEditor | CRUD for orchestrator_edges | [x] |
-| 4 | ThreadViewer | List/manage checkpointed threads | [x] |
-| 5 | StateInspector | Deep state inspection for threads | [x] |
-| 6 | TestRunner | Interactive graph testing | [x] |
-
-### Phase 1: GraphViewer
-
-**API**: `GET /api/admin/langgraph/graph`
-```typescript
-{
-  mermaid: string,
-  nodes: string[],
-  edges: Array<{ from: string, to: string, conditional: boolean }>
-}
-```
-
-**Features**:
-- Render Mermaid diagram client-side
-- Click node → opens NodeEditor
-- Highlight current node when viewing thread
-
-### Phase 2: NodeEditor
-
-**Uses**: Existing `orchestrator_prompts` table and `/api/admin/orchestrator/prompts/*` endpoints
-
-**Features**:
-- List nodes with category badges (agent/generator/reviewer)
-- Collapsible editor with Monaco for system prompts
-- Token count estimation
-- Active/inactive toggle
-
-### Phase 3: EdgeEditor
-
-**Uses**: Existing `orchestrator_edges` table and `/api/admin/orchestrator/edges` endpoint
-
-**Features**:
-- Visual edge list grouped by source node
-- Add edge: from → to dropdown, type, condition
-- Condition builder (field, operator, value)
-- Priority ordering
-
-### Phase 4: ThreadViewer
-
-**Uses**: Existing `langgraph_checkpoints` table and `/api/langgraph/history` endpoint
-
-**Features**:
-- List threads with project name, last activity
-- Checkpoint history timeline
-- State diff between checkpoints
-- Delete thread capability
-
-### Phase 5: StateInspector
-
-**Features**:
-- Tree view of PhaestusState fields
-- Collapsible messages, debug steps
-- JSON toggle for raw view
-- Time travel to previous checkpoints
-
-### Phase 6: TestRunner
-
-**Features**:
-- Message input + thread ID
-- Mock user projects (JSON)
-- Run button → calls POST /api/chat
-- Display: response, intent, route, debug trace
-- Graph with current node highlighted
-
-### File Changes
-
-| File | Action | Est. Lines |
-|------|--------|-----------|
-| `src/pages/AdminLangGraphPage.tsx` | Create | ~200 |
-| `src/components/admin/langgraph/GraphViewer.tsx` | Create | ~150 |
-| `src/components/admin/langgraph/NodeEditor.tsx` | Create | ~250 |
-| `src/components/admin/langgraph/EdgeEditor.tsx` | Create | ~200 |
-| `src/components/admin/langgraph/ThreadViewer.tsx` | Create | ~180 |
-| `src/components/admin/langgraph/StateInspector.tsx` | Create | ~150 |
-| `src/components/admin/langgraph/TestRunner.tsx` | Create | ~200 |
-| `functions/api/admin/langgraph/graph.ts` | Create | ~50 |
-| `functions/api/admin/langgraph/threads.ts` | Create | ~80 |
-| `src/components/Layout.tsx` | Modify | +1 line |
-| `src/App.tsx` | Modify | +1 route |
-
-**Total**: ~1,460 lines
-
-### Dependencies
-
-```bash
-pnpm add mermaid  # Client-side Mermaid rendering
-```
-
-### Key Decisions
-
-1. **Mermaid client-side** - Use `mermaid` npm package, not server PNG
-2. **Reuse orchestrator tables** - No new migrations needed
-3. **Thread ID = Project ID** - Consistent with existing checkpointer
-4. **Prompts editable, topology not** - Can change prompts but not add/remove nodes

@@ -36,11 +36,12 @@ PHAESTUS transforms natural language specifications into manufacturable hardware
 ### Admin Features
 - **Block Library** - Manage 21+ PCB blocks with LLM-assisted import from KiCad files
 - **Orchestrator Editor** - Edit 8 specialized agent prompts, visualize workflow DAG, configure hooks
+- **LangGraph Debugger** - Visual execution debugging with subgraph selector, thread inspection, graph structure viewer
 - **User Management** - Approval workflow, admin status, usage tracking
 - **Debug Logs** - Real-time log streaming with filtering by level/category
 
 ### Technical Highlights
-- **LangGraph Orchestrator** - State machine-based multi-agent system with checkpointing and resumable workflows
+- **LangGraph Orchestrator** - Hierarchical subgraph architecture with 5 stage subgraphs (spec, pcb, enclosure, firmware, export), checkpointing for resumable workflows
 - **Gerber Merging** - Block-based PCB manufacturing via Gerber layer concatenation (replaces complex KiCad S-expression parsing)
 - **TOKN Parser** - Custom KiCad S-expression parser for token-optimized hardware representation
 - **Formal Block System** - Zod-validated block.json schema with 5 required files (schematic, PCB, STEP, gerbers, block.json)
