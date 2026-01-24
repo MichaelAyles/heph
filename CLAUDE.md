@@ -247,6 +247,28 @@ All requests proxy through `/api/llm/*`:
 - Control modes: vibe_it, fix_it, design_it
 - Public routes: `/api/auth/*`, `/api/blocks`, `/api/images`, `/api/gallery/*`
 
+### Frontend Routes
+
+| Route | Page | Description |
+|-------|------|-------------|
+| `/` | HomePage | Landing page |
+| `/login` | LoginPage | Authentication |
+| `/projects` | ProjectsPage | User's project list |
+| `/projects/new` | NewProjectPage | Create new project |
+| `/projects/:id` | SpecPage | 5-step spec pipeline |
+| `/projects/:id/workspace` | WorkspacePage | PCB/Enclosure/Firmware/Export stages |
+| `/projects/:id/view` | SpecViewerPage | View completed spec |
+| `/blog` | BlogPage | Development blog listing |
+| `/blog/:slug` | BlogPostPage | Individual blog post |
+| `/gallery` | GalleryPage | Public project showcase |
+| `/admin` | AdminPage | Admin dashboard |
+| `/admin/logs` | AdminLogsPage | Debug log viewer |
+| `/admin/users` | AdminUsersPage | User management |
+| `/admin/blocks` | AdminBlocksPage | PCB block management |
+| `/admin/orchestrator` | AdminOrchestratorPage | Orchestrator prompt editor |
+| `/admin/langgraph` | AdminLangGraphPage | LangGraph debugger/threads/structure |
+| `/admin/blog` | AdminBlogPage | Blog management |
+
 ## Development Workflow
 
 Two servers running in dev:
@@ -328,7 +350,7 @@ Logs are stored in D1 for admin users and viewable via `GET /api/admin/logs`.
 
 ## Testing
 
-Vitest with 816 tests, ~65% overall coverage. Target 90%+ on core modules.
+Vitest with 600 tests, ~65% overall coverage. Target 90%+ on core modules.
 
 **Fully Tested (90%+)**:
 - `src/prompts/*.ts` - All prompt template builders (96.51%)
@@ -704,6 +726,11 @@ pnpm export-block <path-to-kicad-project> [--upload] [--slug name]
 
 **Public Orchestrator** (`/api/orchestrator/*`):
 - `GET /api/orchestrator/prompts/{node_name}` - Get runtime prompt (used by orchestrator service)
+
+**Admin LangGraph** (`/api/admin/langgraph/*`):
+- `GET /api/admin/langgraph/graph` - Get code-defined graph structure (orchestrator + subgraphs)
+- `GET /api/admin/langgraph/threads` - List checkpointed threads
+- `DELETE /api/admin/langgraph/threads/{id}` - Delete thread checkpoint
 
 **Blocks** (`/api/blocks/*`):
 - `GET /api/blocks` - List all PCB blocks
