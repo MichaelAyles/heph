@@ -9,7 +9,7 @@
  * - Auto-layout using dagre
  */
 
-import { useMemo, useCallback, useEffect } from 'react'
+import { useMemo, useCallback, useEffect, useRef } from 'react'
 import {
   ReactFlow,
   Background,
@@ -37,6 +37,12 @@ export interface GraphNodeDef {
   name: string
   type: 'start' | 'end' | 'node'
   category?: 'agent' | 'generator' | 'reviewer'
+  displayName?: string
+  description?: string
+  stage?: string | null
+  systemPrompt?: string
+  tokenEstimate?: number
+  position?: { x: number; y: number } | null
 }
 
 export interface GraphEdgeDef {
@@ -65,6 +71,8 @@ export interface FlowGraphProps {
   onNodeClick?: (nodeName: string) => void
   /** Callback when a node is double-clicked (e.g., to edit) */
   onNodeDoubleClick?: (nodeName: string) => void
+  /** Callback when node positions change (for persistence) */
+  onPositionsChange?: (positions: Array<{ nodeName: string; x: number; y: number }>) => void
   /** Whether the graph is loading */
   isLoading?: boolean
   /** Error message */
@@ -96,42 +104,61 @@ const edgeTypes = {
 const dagreGraph = new dagre.graphlib.Graph()
 dagreGraph.setDefaultEdgeLabel(() => ({}))
 
-const NODE_WIDTH = 140
-const NODE_HEIGHT = 80
+const NODE_WIDTH = 220
+const NODE_HEIGHT = 140
+
+interface StoredPositions {
+  [nodeName: string]: { x: number; y: number }
+}
 
 function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
+  storedPositions: StoredPositions = {},
   direction: 'TB' | 'LR' = 'TB'
 ): { nodes: Node[]; edges: Edge[] } {
-  dagreGraph.setGraph({ rankdir: direction, nodesep: 50, ranksep: 80 })
+  // Check if all nodes have stored positions - if so, skip dagre entirely
+  const allHavePositions = nodes.every((node) => storedPositions[node.id])
 
-  nodes.forEach((node) => {
-    const nodeData = node.data as FlowNodeData
-    dagreGraph.setNode(node.id, {
-      width: nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 80 : NODE_WIDTH,
-      height: nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 40 : NODE_HEIGHT,
+  if (!allHavePositions) {
+    // Run dagre layout for nodes without positions
+    dagreGraph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100 })
+
+    nodes.forEach((node) => {
+      const nodeData = node.data as FlowNodeData
+      dagreGraph.setNode(node.id, {
+        width: nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 80 : NODE_WIDTH,
+        height: nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 40 : NODE_HEIGHT,
+      })
     })
-  })
 
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target)
-  })
+    edges.forEach((edge) => {
+      dagreGraph.setEdge(edge.source, edge.target)
+    })
 
-  dagre.layout(dagreGraph)
+    dagre.layout(dagreGraph)
+  }
 
   const layoutedNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id)
     const nodeData = node.data as FlowNodeData
     const width = nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 80 : NODE_WIDTH
     const height = nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 40 : NODE_HEIGHT
 
-    return {
-      ...node,
-      position: {
+    // Use stored position if available, otherwise use dagre layout
+    let position: { x: number; y: number }
+    if (storedPositions[node.id]) {
+      position = storedPositions[node.id]
+    } else {
+      const nodeWithPosition = dagreGraph.node(node.id)
+      position = {
         x: nodeWithPosition.x - width / 2,
         y: nodeWithPosition.y - height / 2,
-      },
+      }
+    }
+
+    return {
+      ...node,
+      position,
       sourcePosition: Position.Bottom,
       targetPosition: Position.Top,
     }
@@ -154,12 +181,24 @@ export function FlowGraph({
   selectedNode,
   onNodeClick,
   onNodeDoubleClick,
+  onPositionsChange,
   isLoading,
   error,
   showMinimap = false,
   showControls = true,
   nodeStats,
 }: FlowGraphProps) {
+  // Build stored positions map from node definitions
+  const storedPositions = useMemo<StoredPositions>(() => {
+    const positions: StoredPositions = {}
+    for (const nodeDef of nodeDefs) {
+      if (nodeDef.position) {
+        positions[nodeDef.name] = nodeDef.position
+      }
+    }
+    return positions
+  }, [nodeDefs])
+
   // Calculate node and edge states from events if provided
   const calculatedNodeStates = useMemo(() => {
     if (externalNodeStates) return externalNodeStates
@@ -184,9 +223,14 @@ export function FlowGraph({
       const stats = nodeStats?.get(nodeDef.name)
 
       const data: FlowNodeData = {
-        label: nodeDef.name === '__start__' ? 'START' : nodeDef.name === '__end__' ? 'END' : nodeDef.name,
+        label: nodeDef.name === '__start__' ? 'START' : nodeDef.name === '__end__' ? 'END' : nodeDef.displayName || nodeDef.name,
+        nodeName: nodeDef.name,
         nodeType: nodeDef.type,
         category: nodeDef.category,
+        description: nodeDef.description,
+        stage: nodeDef.stage,
+        systemPrompt: nodeDef.systemPrompt,
+        tokenEstimate: nodeDef.tokenEstimate,
         status: state?.status || 'idle',
         durationMs: state?.durationMs,
         avgDuration: stats?.avgDuration,
@@ -232,21 +276,75 @@ export function FlowGraph({
     })
   }, [edgeDefs, calculatedEdgeStates])
 
-  // Apply layout
+  // Apply layout (uses stored positions when available)
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
-    () => getLayoutedElements(initialNodes, initialEdges),
-    [initialNodes, initialEdges]
+    () => getLayoutedElements(initialNodes, initialEdges, storedPositions),
+    [initialNodes, initialEdges, storedPositions]
   )
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges)
 
-  // Update nodes when layout changes
+  // Track initial load to avoid resetting user-dragged positions
+  const initializedRef = useRef(false)
+  const nodeDefsKeyRef = useRef(nodeDefs.map((n) => n.name).join(','))
+
+  // Update nodes only when node definitions actually change (new/removed nodes)
+  // Don't reset positions for just data changes (status, etc.)
   useEffect(() => {
-    setNodes(layoutedNodes)
+    const currentKey = nodeDefs.map((n) => n.name).join(',')
+    const nodeDefsChanged = currentKey !== nodeDefsKeyRef.current
+
+    if (!initializedRef.current || nodeDefsChanged) {
+      setNodes(layoutedNodes)
+      initializedRef.current = true
+      nodeDefsKeyRef.current = currentKey
+    }
+
+    // Always update edges (they carry status info)
     setEdges(layoutedEdges)
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges])
+  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, nodeDefs])
+
+  // Update node data (status, etc.) without resetting positions
+  useEffect(() => {
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        const layoutedNode = layoutedNodes.find((n) => n.id === node.id)
+        if (layoutedNode) {
+          return {
+            ...node,
+            data: layoutedNode.data, // Update data but keep position
+          }
+        }
+        return node
+      })
+    )
+  }, [layoutedNodes, setNodes])
+
+  // Handle node drag end - save positions
+  const handleNodeDragStop = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (!onPositionsChange) return
+
+      // Get all current positions and report the changed one
+      setNodes((currentNodes) => {
+        const positions = currentNodes.map((n) => ({
+          nodeName: n.id,
+          x: n.position.x,
+          y: n.position.y,
+        }))
+        // Debounce: only save the dragged node
+        onPositionsChange([{
+          nodeName: node.id,
+          x: node.position.x,
+          y: node.position.y,
+        }])
+        return currentNodes
+      })
+    },
+    [onPositionsChange, setNodes]
+  )
 
   // Handle node click
   const handleNodeClick = useCallback(
@@ -297,6 +395,7 @@ export function FlowGraph({
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeDragStop={handleNodeDragStop}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView

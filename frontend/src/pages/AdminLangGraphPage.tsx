@@ -60,7 +60,17 @@ type Tab = 'debugger' | 'nodes' | 'edges' | 'threads' | 'test' | 'config'
 
 interface GraphData {
   mermaid: string
-  nodes: Array<{ name: string; type: 'start' | 'end' | 'node'; category?: 'agent' | 'generator' | 'reviewer' }>
+  nodes: Array<{
+    name: string
+    type: 'start' | 'end' | 'node'
+    category?: 'agent' | 'generator' | 'reviewer'
+    displayName?: string
+    description?: string
+    stage?: string | null
+    systemPrompt?: string
+    tokenEstimate?: number
+    position?: { x: number; y: number } | null
+  }>
   edges: Array<{ from: string; to: string; conditional: boolean; label?: string }>
 }
 
@@ -115,6 +125,25 @@ export function AdminLangGraphPage() {
   const [executeError, setExecuteError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
 
+  // Save node positions to database
+  const savePositions = useCallback(
+    async (positions: Array<{ nodeName: string; x: number; y: number }>) => {
+      try {
+        const res = await fetch('/api/admin/langgraph/positions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ positions }),
+        })
+        if (!res.ok) {
+          console.error('Failed to save positions')
+        }
+      } catch (err) {
+        console.error('Error saving positions:', err)
+      }
+    },
+    []
+  )
+
   // Fetch graph data
   const {
     data: graphData,
@@ -138,6 +167,12 @@ export function AdminLangGraphPage() {
       name: n.name,
       type: n.type,
       category: n.category,
+      displayName: n.displayName,
+      description: n.description,
+      stage: n.stage,
+      systemPrompt: n.systemPrompt,
+      tokenEstimate: n.tokenEstimate,
+      position: n.position,
     }))
   }, [graphData])
 
@@ -590,6 +625,7 @@ export function AdminLangGraphPage() {
                         setSelectedNode(name)
                         setActiveTab('nodes')
                       }}
+                      onPositionsChange={savePositions}
                       isLoading={isLoadingGraph}
                       error={graphError?.message}
                       showMinimap

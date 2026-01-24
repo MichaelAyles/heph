@@ -63,15 +63,17 @@ const PowerCategorySchema = z.object({
 
 const ItemsCategorySchema = z.object({
   items: z.array(z.string()),
-  confidence: z.number(),
+  confidence: z.number().optional(),
+  notes: z.string().optional(),
 })
 
 // Feasibility response - permissive schema that accepts LLM variations
+// Note: LLM may return null for optional fields, so we use .nullable().optional()
 export const FeasibilityResponseSchema = z
   .object({
     manufacturable: z.boolean(),
-    rejectionReason: z.string().optional(),
-    suggestedRevisions: SuggestedRevisionsSchema,
+    rejectionReason: z.string().nullable().optional(),
+    suggestedRevisions: SuggestedRevisionsSchema.nullable(),
     communication: CommunicationCategorySchema.optional(),
     processing: ProcessingCategorySchema.optional(),
     power: PowerCategorySchema.optional(),

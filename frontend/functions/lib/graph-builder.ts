@@ -23,6 +23,8 @@ export interface OrchestratorPrompt {
   is_active: number
   token_estimate: number | null
   version: number
+  position_x: number | null
+  position_y: number | null
 }
 
 export interface OrchestratorEdge {
@@ -46,6 +48,7 @@ export interface GraphStructure {
     stage?: string | null
     systemPrompt?: string
     tokenEstimate?: number
+    position?: { x: number; y: number } | null
   }>
   edges: Array<{
     from: string
@@ -110,6 +113,12 @@ export async function fetchGraphStructure(db: D1Database): Promise<GraphStructur
   for (const nodeName of nodeSet) {
     const prompt = promptMap.get(nodeName)
 
+    // Helper to get position from prompt
+    const getPosition = (p: OrchestratorPrompt | undefined) =>
+      p?.position_x != null && p?.position_y != null
+        ? { x: p.position_x, y: p.position_y }
+        : null
+
     if (nodeName === '__start__' || nodeName === 'start') {
       nodes.push({
         name: nodeName === 'start' ? 'start' : '__start__',
@@ -120,12 +129,14 @@ export async function fetchGraphStructure(db: D1Database): Promise<GraphStructur
         stage: prompt?.stage,
         systemPrompt: prompt?.system_prompt,
         tokenEstimate: prompt?.token_estimate || undefined,
+        position: getPosition(prompt),
       })
     } else if (nodeName === '__end__' || nodeName === 'end') {
       nodes.push({
         name: nodeName === 'end' ? 'end' : '__end__',
         type: nodeName === '__end__' ? 'end' : 'node',
         displayName: 'End',
+        position: getPosition(prompt),
       })
     } else {
       nodes.push({
@@ -137,6 +148,7 @@ export async function fetchGraphStructure(db: D1Database): Promise<GraphStructur
         stage: prompt?.stage,
         systemPrompt: prompt?.system_prompt,
         tokenEstimate: prompt?.token_estimate || undefined,
+        position: getPosition(prompt),
       })
     }
   }
@@ -260,11 +272,21 @@ export function generateMermaidDiagram(structure: GraphStructure): string {
 }
 
 /**
- * Get simplified graph data for the API response
+ * Get full graph data for the API response (includes prompts for visualization)
  */
 export async function getGraphData(db: D1Database): Promise<{
   mermaid: string
-  nodes: Array<{ name: string; type: 'start' | 'end' | 'node'; category?: string }>
+  nodes: Array<{
+    name: string
+    type: 'start' | 'end' | 'node'
+    category?: string
+    displayName?: string
+    description?: string
+    stage?: string | null
+    systemPrompt?: string
+    tokenEstimate?: number
+    position?: { x: number; y: number } | null
+  }>
   edges: Array<{ from: string; to: string; conditional: boolean; label?: string }>
 }> {
   const structure = await fetchGraphStructure(db)
@@ -276,6 +298,12 @@ export async function getGraphData(db: D1Database): Promise<{
       name: n.name,
       type: n.type,
       category: n.category,
+      displayName: n.displayName,
+      description: n.description,
+      stage: n.stage,
+      systemPrompt: n.systemPrompt,
+      tokenEstimate: n.tokenEstimate,
+      position: n.position,
     })),
     edges: structure.edges.map((e) => ({
       from: e.from,
