@@ -167,10 +167,7 @@ export function createGraphStartEvent(
 /**
  * Create a node enter event
  */
-export function createNodeEnterEvent(
-  node: string,
-  state: Record<string, unknown>
-): NodeEnterEvent {
+export function createNodeEnterEvent(node: string, state: Record<string, unknown>): NodeEnterEvent {
   return {
     type: 'node_enter',
     node,
@@ -237,11 +234,7 @@ export function createGraphEndEvent(
 /**
  * Create an error event
  */
-export function createErrorEvent(
-  error: string,
-  node?: string,
-  stack?: string
-): ErrorEvent {
+export function createErrorEvent(error: string, node?: string, stack?: string): ErrorEvent {
   return {
     type: 'error',
     timestamp: Date.now(),
@@ -255,7 +248,10 @@ export function createErrorEvent(
  * Convert execution events to timeline steps
  */
 export function eventsToTimeline(events: ExecutionEvent[]): TimelineStep[] {
-  return events.map((event, index) => {
+  // Filter out undefined/null events
+  const validEvents = events.filter((e): e is ExecutionEvent => e != null)
+
+  return validEvents.map((event, index) => {
     switch (event.type) {
       case 'graph_start':
         return {
@@ -321,6 +317,7 @@ export function getNodeStatesAtStep(
 
   for (let i = 0; i <= stepIndex && i < events.length; i++) {
     const event = events[i]
+    if (!event) continue // Skip undefined events
 
     switch (event.type) {
       case 'node_enter':
@@ -369,6 +366,7 @@ export function getActiveEdgesAtStep(
 
   for (let i = 0; i <= stepIndex && i < events.length; i++) {
     const event = events[i]
+    if (!event) continue // Skip undefined events
 
     if (event.type === 'edge_taken') {
       const edgeKey = `${event.from}->${event.to}`
@@ -412,9 +410,10 @@ export function calculateNodeStats(
   for (const [node, data] of stats) {
     const totalRuns = data.durations.length + (stats.get(node)?.successes === 0 ? 1 : 0)
     result.set(node, {
-      avgDuration: data.durations.length > 0
-        ? data.durations.reduce((a, b) => a + b, 0) / data.durations.length
-        : 0,
+      avgDuration:
+        data.durations.length > 0
+          ? data.durations.reduce((a, b) => a + b, 0) / data.durations.length
+          : 0,
       successRate: totalRuns > 0 ? data.successes / totalRuns : 0,
       runCount: data.durations.length,
     })
