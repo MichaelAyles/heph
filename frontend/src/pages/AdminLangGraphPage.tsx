@@ -585,11 +585,12 @@ export function AdminLangGraphPage() {
 
   // Get input/output for selected node at current step
   const selectedNodeInput = useMemo(() => {
-    if (!selectedNode || !currentRun) return undefined
+    if (!selectedNode || !currentRun?.events?.length) return undefined
     // Find the node_enter event for this node
-    for (let i = currentStep; i >= 0; i--) {
+    const maxIndex = Math.min(currentStep, currentRun.events.length - 1)
+    for (let i = maxIndex; i >= 0; i--) {
       const event = currentRun.events[i]
-      if (event.type === 'node_enter' && event.node === selectedNode) {
+      if (event && event.type === 'node_enter' && event.node === selectedNode) {
         return event.state
       }
     }
@@ -597,16 +598,23 @@ export function AdminLangGraphPage() {
   }, [selectedNode, currentRun, currentStep])
 
   const selectedNodeOutput = useMemo(() => {
-    if (!selectedNode || !currentRun) return undefined
+    if (!selectedNode || !currentRun?.events?.length) return undefined
     // Find the node_exit event for this node
-    for (let i = currentStep; i >= 0; i--) {
+    const maxIndex = Math.min(currentStep, currentRun.events.length - 1)
+    for (let i = maxIndex; i >= 0; i--) {
       const event = currentRun.events[i]
-      if (event.type === 'node_exit' && event.node === selectedNode) {
+      if (event && event.type === 'node_exit' && event.node === selectedNode) {
         return event.output
       }
     }
     return undefined
   }, [selectedNode, currentRun, currentStep])
+
+  // Get selected node definition (consolidated lookup)
+  const selectedNodeDef = useMemo(() => {
+    if (!selectedNode) return undefined
+    return flowNodes.find((n) => n.name === selectedNode)
+  }, [selectedNode, flowNodes])
 
   const tabs = [
     { id: 'debugger' as const, label: 'Debugger', icon: Bug },
@@ -916,11 +924,11 @@ export function AdminLangGraphPage() {
                   </div>
                   <NodeDetail
                     nodeName={selectedNode || null}
-                    nodeType={flowNodes.find((n) => n.name === selectedNode)?.type}
-                    category={flowNodes.find((n) => n.name === selectedNode)?.category}
-                    displayName={flowNodes.find((n) => n.name === selectedNode)?.displayName}
-                    description={flowNodes.find((n) => n.name === selectedNode)?.description}
-                    stage={flowNodes.find((n) => n.name === selectedNode)?.stage}
+                    nodeType={selectedNodeDef?.type}
+                    category={selectedNodeDef?.category}
+                    displayName={selectedNodeDef?.displayName}
+                    description={selectedNodeDef?.description}
+                    stage={selectedNodeDef?.stage}
                     edges={flowEdges}
                     nodeState={selectedNodeState}
                     inputState={selectedNodeInput}
