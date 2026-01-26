@@ -17,10 +17,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 # Install PlatformIO
 RUN pip install --no-cache-dir platformio
 
-# Pre-install ESP32 platforms (downloads ~800MB of toolchains)
-# Latest version for ESP32-C6 Arduino 3.x support
-RUN platformio platform install espressif32 --with-package framework-arduinoespressif32
-# Also install 6.5.0 for stable ESP32/S3 support
+# Pre-install ESP32 platforms (downloads ~1GB of toolchains)
+# Pioarduino fork for ESP32-C6 Arduino 3.x support
+RUN platformio platform install https://github.com/pioarduino/platform-espressif32/releases/download/51.03.07/platform-espressif32.zip
+# Official espressif32@6.5.0 for stable ESP32/S3 support
 RUN platformio platform install espressif32@6.5.0 --with-package framework-arduinoespressif32
 
 # Create app directory
