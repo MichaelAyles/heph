@@ -1,8 +1,7 @@
 /**
  * Firmware Stage View
  *
- * AI-powered firmware generation with Monaco editor, manual download/upload workflow.
- * Compile server integration is planned for Phase 6 - currently using manual PlatformIO workflow.
+ * AI-powered firmware generation with Monaco editor and cloud compilation via PlatformIO service.
  */
 
 import { useState, useCallback, useEffect } from 'react'
@@ -21,11 +20,13 @@ import {
 import { extractAndValidateJson } from '@/../functions/lib/json'
 import { FirmwareProjectSchema } from '@/schemas/llm-responses'
 import {
+  BuildPanel,
   EditorPanel,
   FileTreePanel,
   FirmwareHeader,
   FooterActions,
   NotReadyState,
+  type CompileResult,
   type FileNode,
   type UploadedBinary,
   STARTER_TEMPLATE,
@@ -61,6 +62,11 @@ export function FirmwareStageView() {
 
   // Upload state
   const [uploadedBinary, setUploadedBinary] = useState<UploadedBinary | null>(null)
+
+  // Compile state
+  const [isCompiling, setIsCompiling] = useState(false)
+  const [compileResult, setCompileResult] = useState<CompileResult | null>(null)
+  const [selectedBoard, setSelectedBoard] = useState('esp32-c6-devkitc-1')
 
   const spec = project?.spec
   const enclosureComplete = spec?.stages?.enclosure?.status === 'complete'
@@ -376,6 +382,82 @@ export function FirmwareStageView() {
     // For now, just acknowledge the upload
   }
 
+  // Compile firmware via PlatformIO service
+  const handleCompile = async () => {
+    setIsCompiling(true)
+    setCompileResult(null)
+    setGenerationError(null)
+
+    try {
+      // Gather all files from the file tree
+      const files = flattenFiles(fileTree).map((f) => ({
+        path: f.path,
+        content: f.content,
+      }))
+
+      // Include current editor content if it has unsaved changes
+      if (selectedFile && editorContent !== selectedFile.content) {
+        const existingIndex = files.findIndex((f) => f.path === selectedFile.path)
+        if (existingIndex >= 0) {
+          files[existingIndex].content = editorContent
+        }
+      }
+
+      logger.firmware('Starting compilation', { board: selectedBoard, fileCount: files.length })
+
+      const response = await fetch('/api/firmware/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files,
+          board: selectedBoard,
+          framework: 'arduino',
+        }),
+      })
+
+      const result = (await response.json()) as CompileResult
+      setCompileResult(result)
+
+      if (result.success && result.firmware) {
+        logger.firmware('Compilation succeeded', {
+          firmwareSize: result.firmwareSize,
+          duration: result.duration,
+        })
+      } else {
+        logger.firmware('Compilation failed', { error: result.error })
+      }
+    } catch (error) {
+      logger.firmware('Compile request failed', { error })
+      setCompileResult({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to connect to compile service',
+        buildOutput: '',
+      })
+    } finally {
+      setIsCompiling(false)
+    }
+  }
+
+  // Download compiled binary
+  const handleDownloadBinary = () => {
+    if (!compileResult?.firmware) return
+
+    // Decode base64 firmware to binary
+    const binaryStr = atob(compileResult.firmware)
+    const bytes = new Uint8Array(binaryStr.length)
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i)
+    }
+
+    const blob = new Blob([bytes], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project?.name?.toLowerCase().replace(/\s+/g, '-') || 'firmware'}.bin`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (!enclosureComplete) {
     return <NotReadyState />
   }
@@ -422,8 +504,23 @@ export function FirmwareStageView() {
         />
       </div>
 
+      {/* Build panel */}
+      <BuildPanel
+        isCompiling={isCompiling}
+        compileResult={compileResult}
+        onDownloadBinary={handleDownloadBinary}
+        onRetry={handleCompile}
+      />
+
       {/* Footer actions */}
-      <FooterActions onDownloadSource={handleDownloadSource} onUploadBinary={handleUploadBinary} />
+      <FooterActions
+        onDownloadSource={handleDownloadSource}
+        onUploadBinary={handleUploadBinary}
+        onCompile={handleCompile}
+        isCompiling={isCompiling}
+        selectedBoard={selectedBoard}
+        onBoardChange={setSelectedBoard}
+      />
     </div>
   )
 }

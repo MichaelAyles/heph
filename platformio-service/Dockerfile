@@ -17,22 +17,28 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 # Install PlatformIO
 RUN pip install --no-cache-dir platformio
 
-# Pre-install ESP32 platform and Arduino framework to speed up first compile
+# Pre-install ESP32 platform v6.5.0 (stable Arduino support)
 # This downloads ~500MB of toolchains but makes container starts faster
-RUN platformio platform install espressif32 --with-package framework-arduinoespressif32
-RUN platformio platform update
+RUN platformio platform install espressif32@6.5.0 --with-package framework-arduinoespressif32
 
 # Create app directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY tsconfig.json ./
 
-# Install production dependencies
-RUN npm install --production
+# Install all dependencies (including dev for TypeScript)
+RUN npm install
 
-# Copy compiled code
-COPY dist/ ./dist/
+# Copy source code
+COPY src/ ./src/
+
+# Build TypeScript
+RUN npm run build
+
+# Remove dev dependencies
+RUN npm prune --production
 
 # Create temp directories
 RUN mkdir -p /tmp/uploads /tmp/pio-build

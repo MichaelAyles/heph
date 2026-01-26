@@ -2,6 +2,8 @@
  * Firmware components for firmware stage
  */
 
+export { BuildPanel } from './BuildPanel'
+export type { CompileResult } from './BuildPanel'
 export { EditorPanel } from './EditorPanel'
 export { FileTreeItem } from './FileTreeItem'
 export { FileTreePanel } from './FileTreePanel'
