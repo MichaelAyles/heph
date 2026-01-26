@@ -916,7 +916,12 @@ export function AdminLangGraphPage() {
                   </div>
                   <NodeDetail
                     nodeName={selectedNode || null}
+                    nodeType={flowNodes.find((n) => n.name === selectedNode)?.type}
                     category={flowNodes.find((n) => n.name === selectedNode)?.category}
+                    displayName={flowNodes.find((n) => n.name === selectedNode)?.displayName}
+                    description={flowNodes.find((n) => n.name === selectedNode)?.description}
+                    stage={flowNodes.find((n) => n.name === selectedNode)?.stage}
+                    edges={flowEdges}
                     nodeState={selectedNodeState}
                     inputState={selectedNodeInput}
                     outputState={selectedNodeOutput}

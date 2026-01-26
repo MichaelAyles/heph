@@ -3,6 +3,8 @@
  *
  * Shows:
  * - Node name and category
+ * - Node type, stage, and description
+ * - Incoming/outgoing edges (connectivity)
  * - Current status with timing
  * - Input state (what the node received)
  * - Output/result (what the node produced)
@@ -19,11 +21,14 @@ import {
   Clock,
   FileCode,
   ArrowRight,
+  ArrowLeft,
   Diff,
   Bot,
   Code2,
   Copy,
   Check,
+  GitBranch,
+  Database,
 } from 'lucide-react'
 import type { NodeState } from '../../../services/langgraph/execution-tracer'
 
@@ -31,11 +36,28 @@ import type { NodeState } from '../../../services/langgraph/execution-tracer'
 // Types
 // =============================================================================
 
+export interface EdgeInfo {
+  from: string
+  to: string
+  conditional: boolean
+  label?: string
+}
+
 export interface NodeDetailProps {
   /** Node name */
   nodeName: string | null
+  /** Node type (start, end, node) */
+  nodeType?: 'start' | 'end' | 'node'
   /** Node category */
   category?: 'agent' | 'generator' | 'reviewer'
+  /** Node display name */
+  displayName?: string
+  /** Node description */
+  description?: string
+  /** Stage this node belongs to */
+  stage?: string | null
+  /** All edges in the current graph */
+  edges?: EdgeInfo[]
   /** Node state from execution */
   nodeState?: NodeState
   /** Input state when node was entered */
@@ -189,7 +211,12 @@ function calculateStateDiff(
 
 export function NodeDetail({
   nodeName,
+  nodeType,
   category,
+  displayName,
+  description,
+  stage,
+  edges,
   nodeState,
   inputState,
   outputState,
@@ -207,6 +234,21 @@ export function NodeDetail({
     Object.keys(stateDiff.changed).length > 0 ||
     stateDiff.removed.length > 0
 
+  // Calculate incoming and outgoing edges
+  const { incomingEdges, outgoingEdges } = useMemo(() => {
+    if (!nodeName || !edges) return { incomingEdges: [], outgoingEdges: [] }
+    return {
+      incomingEdges: edges.filter((e) => e.to === nodeName),
+      outgoingEdges: edges.filter((e) => e.from === nodeName),
+    }
+  }, [nodeName, edges])
+
+  // Get state keys available to this node
+  const stateKeys = useMemo(() => {
+    if (!inputState) return []
+    return Object.keys(inputState).sort()
+  }, [inputState])
+
   if (!nodeName) {
     return (
       <div className="p-4 bg-surface-800 rounded-lg text-center text-steel-dim text-sm">
@@ -220,8 +262,13 @@ export function NodeDetail({
       {/* Node header */}
       <div className="p-3 bg-surface-800 rounded-lg">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-steel">{nodeName}</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-lg font-semibold text-steel">{displayName || nodeName}</h3>
+            {nodeType && nodeType !== 'node' && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded bg-indigo-500/20 text-indigo-400">
+                {nodeType}
+              </span>
+            )}
             {category && (
               <span
                 className={clsx(
@@ -232,6 +279,11 @@ export function NodeDetail({
                 )}
               >
                 {category}
+              </span>
+            )}
+            {stage && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded bg-purple-500/20 text-purple-400">
+                {stage}
               </span>
             )}
           </div>
@@ -251,6 +303,16 @@ export function NodeDetail({
           )}
         </div>
 
+        {/* Node ID (if different from display name) */}
+        {displayName && displayName !== nodeName && (
+          <div className="mt-1 text-xs text-steel-dim font-mono">{nodeName}</div>
+        )}
+
+        {/* Description */}
+        {description && (
+          <p className="mt-2 text-xs text-steel-dim">{description}</p>
+        )}
+
         {/* Timing info */}
         {nodeState?.durationMs !== undefined && (
           <div className="flex items-center gap-1 mt-2 text-xs text-steel-dim">
@@ -266,6 +328,92 @@ export function NodeDetail({
           </div>
         )}
       </div>
+
+      {/* Connectivity - Edges In/Out */}
+      {edges && edges.length > 0 && (incomingEdges.length > 0 || outgoingEdges.length > 0) && (
+        <CollapsibleSection
+          title="Connectivity"
+          icon={<GitBranch className="w-4 h-4" />}
+          defaultOpen
+          badge={`${incomingEdges.length} in, ${outgoingEdges.length} out`}
+        >
+          <div className="space-y-3">
+            {/* Incoming edges */}
+            {incomingEdges.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1 text-xs font-medium text-steel-dim mb-2">
+                  <ArrowLeft className="w-3 h-3" />
+                  <span>Incoming ({incomingEdges.length})</span>
+                </div>
+                <div className="space-y-1">
+                  {incomingEdges.map((edge, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 text-xs bg-surface-950 rounded px-2 py-1"
+                    >
+                      <span className="text-blue-400 font-mono">{edge.from}</span>
+                      <span className="text-steel-dim">→</span>
+                      {edge.label && (
+                        <span className="text-steel-dim italic">({edge.label})</span>
+                      )}
+                      {edge.conditional && (
+                        <span className="text-amber-400/60 text-[10px]">conditional</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Outgoing edges */}
+            {outgoingEdges.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1 text-xs font-medium text-steel-dim mb-2">
+                  <ArrowRight className="w-3 h-3" />
+                  <span>Outgoing ({outgoingEdges.length})</span>
+                </div>
+                <div className="space-y-1">
+                  {outgoingEdges.map((edge, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 text-xs bg-surface-950 rounded px-2 py-1"
+                    >
+                      <span className="text-steel-dim">→</span>
+                      <span className="text-emerald-400 font-mono">{edge.to}</span>
+                      {edge.label && (
+                        <span className="text-steel-dim italic">({edge.label})</span>
+                      )}
+                      {edge.conditional && (
+                        <span className="text-amber-400/60 text-[10px]">conditional</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* Available State Keys */}
+      {stateKeys.length > 0 && (
+        <CollapsibleSection
+          title="Available State"
+          icon={<Database className="w-4 h-4" />}
+          badge={`${stateKeys.length} keys`}
+        >
+          <div className="flex flex-wrap gap-1">
+            {stateKeys.map((key) => (
+              <span
+                key={key}
+                className="px-2 py-0.5 text-[10px] font-mono bg-surface-950 text-steel-dim rounded"
+              >
+                {key}
+              </span>
+            ))}
+          </div>
+        </CollapsibleSection>
+      )}
 
       {/* Input State */}
       {inputState && (
