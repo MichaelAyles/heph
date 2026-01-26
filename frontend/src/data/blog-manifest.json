@@ -1,6 +1,16 @@
 {
-  "generatedAt": "2026-01-26T22:49:44.581Z",
+  "generatedAt": "2026-01-26T23:10:00.000Z",
   "entries": [
+    {
+      "slug": "blog0044",
+      "number": 44,
+      "title": "Blog 44: Cloud Firmware Compilation - PlatformIO on Railway",
+      "date": "2026-01-26",
+      "excerpt": "Until today, PHAESTUS could generate ESP32 firmware code but users had to compile it themselves. Download the ZIP, install PlatformIO, run `pio run`, flash the board. Now there's a Compile Firmware button that does it all in the cloud...",
+      "thumbnailPath": null,
+      "markdownPath": "/blogs/blog0044/blog.md",
+      "readingTime": 4
+    },
     {
       "slug": "blog0043",
       "number": 43,
