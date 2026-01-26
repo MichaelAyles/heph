@@ -27,6 +27,8 @@ import {
   Trash2,
   Eye,
   GitBranch,
+  Download,
+  Upload,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -87,6 +89,112 @@ interface ExecutionRunResponse {
   createdAt: string
 }
 
+// =============================================================================
+// Import/Export Types
+// =============================================================================
+
+interface ExportedExecution {
+  version: '1.0'
+  exportedAt: string
+  execution: {
+    id: string
+    threadId: string | null
+    input: string
+    events: ExecutionEvent[]
+    startedAt: number
+    endedAt: number | null
+    durationMs: number | null
+    success: boolean
+    error: string | null
+  }
+}
+
+interface ExportedExecutionBatch {
+  version: '1.0'
+  exportedAt: string
+  count: number
+  executions: ExportedExecution['execution'][]
+}
+
+interface ExportedGraphStructure {
+  version: '1.0'
+  exportedAt: string
+  graphData: CodeDefinedGraphData
+}
+
+// =============================================================================
+// Import/Export Utilities
+// =============================================================================
+
+function downloadJson(data: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function exportExecution(run: ExecutionHistoryItem | ExecutionRunResponse, events?: ExecutionEvent[]): ExportedExecution {
+  const isDetailed = 'events' in run
+  return {
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    execution: {
+      id: run.id,
+      threadId: 'threadId' in run ? run.threadId : run.thread_id,
+      input: run.input,
+      events: events || (isDetailed ? run.events : []),
+      startedAt: 'startedAt' in run ? run.startedAt : run.started_at,
+      endedAt: 'endedAt' in run ? run.endedAt : run.ended_at,
+      durationMs: 'durationMs' in run ? run.durationMs : run.duration_ms,
+      success: typeof run.success === 'boolean' ? run.success : run.success === 1,
+      error: run.error,
+    },
+  }
+}
+
+function exportExecutionBatch(runs: ExecutionHistoryItem[]): ExportedExecutionBatch {
+  return {
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    count: runs.length,
+    executions: runs.map((run) => ({
+      id: run.id,
+      threadId: run.thread_id,
+      input: run.input,
+      events: [], // Summary export doesn't include full events
+      startedAt: run.started_at,
+      endedAt: run.ended_at,
+      durationMs: run.duration_ms,
+      success: run.success === 1,
+      error: run.error,
+    })),
+  }
+}
+
+function exportGraphStructure(graphData: CodeDefinedGraphData): ExportedGraphStructure {
+  return {
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    graphData,
+  }
+}
+
+function isValidExecutionImport(data: unknown): data is ExportedExecution | ExportedExecutionBatch {
+  if (typeof data !== 'object' || data === null) return false
+  const obj = data as Record<string, unknown>
+  if (obj.version !== '1.0') return false
+  // Single execution
+  if ('execution' in obj && typeof obj.execution === 'object') return true
+  // Batch
+  if ('executions' in obj && Array.isArray(obj.executions)) return true
+  return false
+}
+
 /**
  * Convert SubgraphDefinition to FlowGraph format
  */
@@ -124,6 +232,10 @@ export function AdminLangGraphPage() {
   const [isExecuting, setIsExecuting] = useState(false)
   const [executeError, setExecuteError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
+
+  // Import state
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
 
   // Fetch code-defined graph data
   const {
@@ -345,6 +457,88 @@ export function AdminLangGraphPage() {
     }
   }, [debuggerInput, executeGraph])
 
+  // Export single execution with full events
+  const handleExportExecution = useCallback(async (run: ExecutionHistoryItem) => {
+    try {
+      // Fetch full execution to get events
+      const res = await fetch(`/api/admin/langgraph/executions/${run.id}`)
+      if (!res.ok) throw new Error('Failed to fetch execution')
+      const data = (await res.json()) as ExecutionRunResponse
+
+      const exported = exportExecution(data)
+      const date = new Date(run.created_at).toISOString().split('T')[0]
+      downloadJson(exported, `langgraph-execution-${date}-${run.id.slice(0, 8)}.json`)
+    } catch (error) {
+      logger.error('orchestrator', 'Failed to export execution', { error })
+    }
+  }, [])
+
+  // Export all visible executions (summary without events)
+  const handleExportAllExecutions = useCallback(() => {
+    if (!historyData?.runs.length) return
+    const exported = exportExecutionBatch(historyData.runs)
+    const date = new Date().toISOString().split('T')[0]
+    downloadJson(exported, `langgraph-executions-${date}.json`)
+  }, [historyData])
+
+  // Export graph structure
+  const handleExportGraphStructure = useCallback(() => {
+    if (!graphData) return
+    const exported = exportGraphStructure(graphData)
+    const date = new Date().toISOString().split('T')[0]
+    downloadJson(exported, `langgraph-structure-${date}.json`)
+  }, [graphData])
+
+  // Import execution(s) from JSON file
+  const handleImportFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setImportError(null)
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+
+      if (!isValidExecutionImport(data)) {
+        throw new Error('Invalid import file format. Expected LangGraph execution export.')
+      }
+
+      // Handle single or batch import
+      const executions = 'execution' in data ? [data.execution] : data.executions
+
+      // Load the first execution into the viewer
+      if (executions.length > 0) {
+        const first = executions[0]
+        const run: ExecutionRun = {
+          id: first.id,
+          threadId: first.threadId || undefined,
+          input: first.input,
+          events: first.events,
+          startedAt: first.startedAt,
+          endedAt: first.endedAt || undefined,
+          durationMs: first.durationMs || undefined,
+          success: first.success,
+          error: first.error || undefined,
+        }
+        setCurrentRun(run)
+        setCurrentStep(0)
+        setIsPlaying(first.events.length > 0)
+        setShowHistory(false)
+      }
+
+      logger.info('orchestrator', `Imported ${executions.length} execution(s)`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to import file'
+      setImportError(message)
+      logger.error('orchestrator', 'Failed to import execution', { error })
+    }
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [])
+
   // Playback logic
   useEffect(() => {
     if (isPlaying && currentRun) {
@@ -560,14 +754,45 @@ export function AdminLangGraphPage() {
                       <History className="w-4 h-4 text-steel-dim" />
                       <h3 className="text-sm font-medium text-steel">Execution History</h3>
                     </div>
-                    <button
-                      onClick={() => refetchHistory()}
-                      className="p-1 rounded hover:bg-surface-700 transition-colors"
-                      title="Refresh history"
-                    >
-                      <RefreshCw className="w-3 h-3 text-steel-dim" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {/* Hidden file input for import */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        onChange={handleImportFile}
+                        className="hidden"
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-1 rounded hover:bg-surface-700 transition-colors"
+                        title="Import execution from JSON"
+                      >
+                        <Upload className="w-3 h-3 text-steel-dim" />
+                      </button>
+                      <button
+                        onClick={handleExportAllExecutions}
+                        disabled={!historyData?.runs.length}
+                        className="p-1 rounded hover:bg-surface-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Export all executions"
+                      >
+                        <Download className="w-3 h-3 text-steel-dim" />
+                      </button>
+                      <button
+                        onClick={() => refetchHistory()}
+                        className="p-1 rounded hover:bg-surface-700 transition-colors"
+                        title="Refresh history"
+                      >
+                        <RefreshCw className="w-3 h-3 text-steel-dim" />
+                      </button>
+                    </div>
                   </div>
+                  {/* Import error display */}
+                  {importError && (
+                    <div className="mb-2 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
+                      {importError}
+                    </div>
+                  )}
                   {isLoadingHistory ? (
                     <div className="flex items-center justify-center py-4">
                       <Loader2 className="w-5 h-5 text-steel-dim animate-spin" />
@@ -599,6 +824,16 @@ export function AdminLangGraphPage() {
                               )}
                             </div>
                           </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleExportExecution(run)
+                            }}
+                            className="p-1 rounded hover:bg-surface-600 transition-colors"
+                            title="Export execution"
+                          >
+                            <Download className="w-3 h-3 text-steel-dim hover:text-copper" />
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -719,7 +954,18 @@ export function AdminLangGraphPage() {
           {/* Structure Tab */}
           {activeTab === 'structure' && (
             <div>
-              <h2 className="text-sm font-medium text-steel mb-3">Graph Structure</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-medium text-steel">Graph Structure</h2>
+                <button
+                  onClick={handleExportGraphStructure}
+                  disabled={!graphData}
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs bg-surface-700 text-steel rounded hover:bg-surface-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Export graph structure as JSON"
+                >
+                  <Download className="w-3 h-3" />
+                  Export JSON
+                </button>
+              </div>
               <p className="text-xs text-steel-dim mb-4">
                 Read-only view of the code-defined graph structure. Graphs are defined in{' '}
                 <code className="bg-surface-800 px-1 rounded">src/services/langgraph/graphs/</code>.
