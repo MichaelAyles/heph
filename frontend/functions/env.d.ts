@@ -23,6 +23,9 @@ export interface Env {
 
   // KiCad microservice URL
   KICAD_SERVICE_URL?: string
+
+  // PlatformIO compile service URL
+  PLATFORMIO_SERVICE_URL?: string
 }
 
 // Extend the context with our typed env
