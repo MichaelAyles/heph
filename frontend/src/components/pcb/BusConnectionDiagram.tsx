@@ -28,7 +28,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { BlockDefinition } from '../../schemas/block'
-import type { PlacedBlock } from '../../db/schema'
+import type { PlacedBlock, RemoteBoard } from '../../db/schema'
 import { calculatePowerBudget, getEffectiveSize, type PowerBudget } from '../../services/pcb-grid'
 
 // =============================================================================
@@ -36,10 +36,12 @@ import { calculatePowerBudget, getEffectiveSize, type PowerBudget } from '../../
 // =============================================================================
 
 interface BusConnectionDiagramProps {
-  /** Placed blocks with positions */
+  /** Placed blocks with positions (main board) */
   placedBlocks: PlacedBlock[]
   /** Block definitions keyed by slug */
   blockDefinitions: Map<string, BlockDefinition>
+  /** Remote boards (off-grid boards with their own placed blocks) */
+  remoteBoards?: RemoteBoard[]
   /** Show as condensed table instead of visual diagram */
   variant?: 'diagram' | 'table'
   /** Additional class names */
@@ -75,39 +77,27 @@ const CATEGORY_COLORS: Record<string, string> = {
 export function BusConnectionDiagram({
   placedBlocks,
   blockDefinitions,
+  remoteBoards = [],
   variant = 'diagram',
   className,
 }: BusConnectionDiagramProps) {
-  // Separate main board blocks from remote boards
-  const { mainBoardBlocks, remoteBlocks } = useMemo(() => {
-    const main: Array<{ placement: PlacedBlock; block: BlockDefinition }> = []
-    const remote: Array<{ placement: PlacedBlock; block: BlockDefinition }> = []
+  // Get block definitions in placement order (sorted by row, then column)
+  const sortedBlocks = useMemo(() => {
+    const blocksWithDefs = placedBlocks
+      .map((placement) => ({
+        placement,
+        block: blockDefinitions.get(placement.blockSlug),
+      }))
+      .filter((b): b is { placement: PlacedBlock; block: BlockDefinition } => b.block !== undefined)
 
-    for (const placement of placedBlocks) {
-      const block = blockDefinitions.get(placement.blockSlug)
-      if (!block) continue
-
-      // Remote blocks don't have gridSize
-      if (!block.gridSize || block.gridSize[0] === 0) {
-        remote.push({ placement, block })
-      } else {
-        main.push({ placement, block })
-      }
-    }
-
-    // Sort main blocks by gridY first (top to bottom), then by gridX (left to right)
-    main.sort((a, b) => {
+    // Sort by gridY first (top to bottom), then by gridX (left to right)
+    return blocksWithDefs.sort((a, b) => {
       if (a.placement.gridY !== b.placement.gridY) {
         return a.placement.gridY - b.placement.gridY
       }
       return a.placement.gridX - b.placement.gridX
     })
-
-    return { mainBoardBlocks: main, remoteBlocks: remote }
   }, [placedBlocks, blockDefinitions])
-
-  // Get block definitions in placement order (sorted by row, then column)
-  const sortedBlocks = mainBoardBlocks
 
   // Group blocks by column for the diagram view, accounting for block width
   // A 2-wide block at column 0 should appear in BOTH column 0 and column 1
@@ -244,7 +234,9 @@ export function BusConnectionDiagram({
       </div>
 
       {/* Remote Boards Section */}
-      {remoteBlocks.length > 0 && <RemoteBoardsSection remoteBlocks={remoteBlocks} />}
+      {remoteBoards.length > 0 && (
+        <RemoteBoardsSection remoteBoards={remoteBoards} blockDefinitions={blockDefinitions} />
+      )}
     </div>
   )
 }
@@ -621,18 +613,19 @@ const REMOTE_TYPE_ICONS: Record<string, React.ComponentType<{ className?: string
   custom: Cpu,
 }
 
-const REMOTE_TYPE_COLORS: Record<string, string> = {
-  button: 'text-amber-400',
-  display: 'text-cyan-400',
-  connector: 'text-pink-400',
-  custom: 'text-purple-400',
+const REMOTE_TYPE_COLORS: Record<string, { border: string; bg: string; text: string }> = {
+  button: { border: 'border-amber-500/50', bg: 'bg-amber-500/5', text: 'text-amber-400' },
+  display: { border: 'border-cyan-500/50', bg: 'bg-cyan-500/5', text: 'text-cyan-400' },
+  connector: { border: 'border-pink-500/50', bg: 'bg-pink-500/5', text: 'text-pink-400' },
+  custom: { border: 'border-purple-500/50', bg: 'bg-purple-500/5', text: 'text-purple-400' },
 }
 
 interface RemoteBoardsSectionProps {
-  remoteBlocks: Array<{ placement: PlacedBlock; block: BlockDefinition }>
+  remoteBoards: RemoteBoard[]
+  blockDefinitions: Map<string, BlockDefinition>
 }
 
-function RemoteBoardsSection({ remoteBlocks }: RemoteBoardsSectionProps) {
+function RemoteBoardsSection({ remoteBoards, blockDefinitions }: RemoteBoardsSectionProps) {
   return (
     <div className="border-t border-surface-600 pt-6">
       {/* Header */}
@@ -641,58 +634,86 @@ function RemoteBoardsSection({ remoteBlocks }: RemoteBoardsSectionProps) {
           <Cable className="w-4 h-4 text-copper" />
           Remote Boards
         </h3>
-        <p className="text-xs text-steel-dim mt-0.5">Off-bus boards connected via cable</p>
+        <p className="text-xs text-steel-dim mt-0.5">
+          Off-grid boards connected via cable (not on main bus)
+        </p>
       </div>
 
       {/* Remote boards list */}
-      <div className="flex gap-4 justify-center flex-wrap">
-        {remoteBlocks.map(({ placement, block }) => {
-          // Determine board type from block properties
-          const boardType = block.isRemote || 'custom'
-          const Icon =
-            REMOTE_TYPE_ICONS[typeof boardType === 'string' ? boardType : 'custom'] || Cpu
-          const colorClass =
-            REMOTE_TYPE_COLORS[typeof boardType === 'string' ? boardType : 'custom'] ||
-            'text-purple-400'
+      <div className="flex gap-6 justify-center flex-wrap">
+        {remoteBoards.map((board) => {
+          const typeColors = REMOTE_TYPE_COLORS[board.type] || REMOTE_TYPE_COLORS.custom
+          const TypeIcon = REMOTE_TYPE_ICONS[board.type] || Cpu
 
-          // Collect signals
-          const signals: string[] = []
-          if (block.bus.i2c?.addresses) {
-            signals.push(
-              `I2C: ${block.bus.i2c.addresses.map((a) => `0x${a.toString(16)}`).join(', ')}`
-            )
-          }
-          if (block.bus.gpio?.claims) {
-            signals.push(`GPIO: ${block.bus.gpio.claims.join(', ')}`)
-          }
+          // Get block names on this remote board
+          const blockNames = board.placedBlocks
+            .map((p) => blockDefinitions.get(p.blockSlug)?.name || p.blockSlug)
+            .filter(Boolean)
 
           return (
             <div
-              key={placement.blockId}
-              className="w-56 border border-dashed border-surface-500 rounded-lg bg-surface-800/50 overflow-hidden"
+              key={board.id}
+              className={clsx(
+                'w-64 rounded-lg border overflow-hidden',
+                typeColors.border,
+                typeColors.bg
+              )}
             >
               {/* Header */}
               <div className="flex items-center gap-2 px-3 py-2 bg-surface-700/30 border-b border-surface-600/50">
-                <Icon className={clsx('w-4 h-4', colorClass)} />
-                <span className="text-sm font-medium text-steel flex-1 truncate">{block.name}</span>
-                <Cable className="w-3 h-3 text-surface-500" />
+                <TypeIcon className={clsx('w-4 h-4', typeColors.text)} />
+                <span className="text-sm font-medium text-steel flex-1 truncate">{board.name}</span>
+                <span className="text-[10px] text-steel-dim font-mono">
+                  {board.boardSize.width}x{board.boardSize.height}mm
+                </span>
               </div>
 
               {/* Content */}
-              <div className="px-3 py-2 space-y-1.5 text-xs">
-                {signals.length > 0 ? (
+              <div className="px-3 py-2 space-y-2 text-xs">
+                {/* Blocks on this board */}
+                {blockNames.length > 0 && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-steel-dim font-medium w-14 flex-shrink-0">Blocks:</span>
+                    <span className="text-steel">{blockNames.join(', ')}</span>
+                  </div>
+                )}
+
+                {/* Grid size */}
+                <div className="flex items-start gap-2">
+                  <span className="text-steel-dim font-medium w-14 flex-shrink-0">Grid:</span>
+                  <span className="text-steel font-mono">
+                    {board.gridWidth}x{board.gridHeight}
+                  </span>
+                </div>
+
+                {/* Connection mappings */}
+                {board.connectionMapping.length > 0 && (
                   <div className="flex items-start gap-2">
                     <span className="text-blue-400 font-medium w-14 flex-shrink-0">Signals:</span>
-                    <span className="text-steel-dim">{signals.join('; ')}</span>
+                    <div className="flex flex-col gap-0.5">
+                      {board.connectionMapping.slice(0, 3).map((conn, i) => (
+                        <span key={i} className="text-steel-dim font-mono text-[10px]">
+                          {conn.remoteSignal} → {conn.mainSignal}
+                        </span>
+                      ))}
+                      {board.connectionMapping.length > 3 && (
+                        <span className="text-steel-dim text-[10px]">
+                          +{board.connectionMapping.length - 3} more
+                        </span>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <span className="text-steel-dim italic">No bus signals</span>
+                )}
+
+                {blockNames.length === 0 && board.connectionMapping.length === 0 && (
+                  <span className="text-steel-dim italic">Empty board</span>
                 )}
               </div>
 
               {/* Footer */}
-              <div className="px-3 py-1 bg-surface-900/50 text-[8px] text-surface-500 text-center">
-                Not on main bus • Connect via cable
+              <div className="px-3 py-1 bg-surface-900/50 text-[8px] text-surface-500 text-center flex items-center justify-center gap-1">
+                <Cable className="w-2.5 h-2.5" />
+                <span>Connected via {board.connectionMapping[0]?.connectorType || 'cable'}</span>
               </div>
             </div>
           )

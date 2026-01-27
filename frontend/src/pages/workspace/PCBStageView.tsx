@@ -700,6 +700,7 @@ export function PCBStageView() {
                   <BusConnectionDiagram
                     placedBlocks={selectedBlocks}
                     blockDefinitions={blockDefinitions}
+                    remoteBoards={remoteBoards}
                     variant="diagram"
                   />
                 </div>
