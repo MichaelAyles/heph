@@ -81,23 +81,36 @@ export function BusConnectionDiagram({
   variant = 'diagram',
   className,
 }: BusConnectionDiagramProps) {
-  // Get block definitions in placement order (sorted by row, then column)
-  const sortedBlocks = useMemo(() => {
-    const blocksWithDefs = placedBlocks
-      .map((placement) => ({
-        placement,
-        block: blockDefinitions.get(placement.blockSlug),
-      }))
-      .filter((b): b is { placement: PlacedBlock; block: BlockDefinition } => b.block !== undefined)
+  // Separate main grid blocks from remote-type blocks (blocks with isRemote: true)
+  const { gridBlocks, remoteTypeBlocks } = useMemo(() => {
+    const grid: Array<{ placement: PlacedBlock; block: BlockDefinition }> = []
+    const remote: Array<{ placement: PlacedBlock; block: BlockDefinition }> = []
 
-    // Sort by gridY first (top to bottom), then by gridX (left to right)
-    return blocksWithDefs.sort((a, b) => {
+    for (const placement of placedBlocks) {
+      const block = blockDefinitions.get(placement.blockSlug)
+      if (!block) continue
+
+      // Remote-type blocks have isRemote: true and no gridSize
+      if (block.isRemote || !block.gridSize) {
+        remote.push({ placement, block })
+      } else {
+        grid.push({ placement, block })
+      }
+    }
+
+    // Sort grid blocks by gridY first (top to bottom), then by gridX (left to right)
+    grid.sort((a, b) => {
       if (a.placement.gridY !== b.placement.gridY) {
         return a.placement.gridY - b.placement.gridY
       }
       return a.placement.gridX - b.placement.gridX
     })
+
+    return { gridBlocks: grid, remoteTypeBlocks: remote }
   }, [placedBlocks, blockDefinitions])
+
+  // Alias for compatibility
+  const sortedBlocks = gridBlocks
 
   // Group blocks by column for the diagram view, accounting for block width
   // A 2-wide block at column 0 should appear in BOTH column 0 and column 1
@@ -233,7 +246,12 @@ export function BusConnectionDiagram({
         <PowerBudgetSummary budget={powerBudget} />
       </div>
 
-      {/* Remote Boards Section */}
+      {/* Remote-Type Blocks Section (blocks with isRemote: true, not on main bus) */}
+      {remoteTypeBlocks.length > 0 && (
+        <RemoteTypeBlocksSection remoteTypeBlocks={remoteTypeBlocks} />
+      )}
+
+      {/* Remote Boards Section (separate board entities) */}
       {remoteBoards.length > 0 && (
         <RemoteBoardsSection remoteBoards={remoteBoards} blockDefinitions={blockDefinitions} />
       )}
@@ -603,7 +621,117 @@ function BusConnectionTable({ blocks, powerBudget, className }: BusConnectionTab
 }
 
 // =============================================================================
-// Remote Boards Section Component
+// Remote-Type Blocks Section Component (blocks with isRemote: true)
+// =============================================================================
+
+interface RemoteTypeBlocksSectionProps {
+  remoteTypeBlocks: Array<{ placement: PlacedBlock; block: BlockDefinition }>
+}
+
+function RemoteTypeBlocksSection({ remoteTypeBlocks }: RemoteTypeBlocksSectionProps) {
+  return (
+    <div className="border-t border-surface-600 pt-6">
+      {/* Header */}
+      <div className="text-center mb-4">
+        <h3 className="text-sm font-medium text-steel flex items-center justify-center gap-2">
+          <Cable className="w-4 h-4 text-pink-400" />
+          Remote-Type Blocks
+        </h3>
+        <p className="text-xs text-steel-dim mt-0.5">
+          Blocks that connect via cable (not on main bus grid)
+        </p>
+      </div>
+
+      {/* Blocks list */}
+      <div className="flex gap-4 justify-center flex-wrap">
+        {remoteTypeBlocks.map(({ placement, block }) => {
+          const Icon = CATEGORY_ICONS[block.category] || Cable
+          const colorClass = CATEGORY_COLORS[block.category] || 'text-pink-400'
+
+          // Collect signals from the block
+          const signals: string[] = []
+          if (block.bus.i2c?.addresses) {
+            signals.push(
+              `I2C: ${block.bus.i2c.addresses.map((a) => `0x${a.toString(16)}`).join(', ')}`
+            )
+          }
+          if (block.bus.gpio?.claims) {
+            signals.push(`GPIO: ${block.bus.gpio.claims.join(', ')}`)
+          }
+          if (block.bus.spi?.csPin) {
+            signals.push(`SPI: ${block.bus.spi.csPin}`)
+          }
+
+          // Get remote block properties
+          const remoteProps = block.remote
+
+          return (
+            <div
+              key={placement.blockId}
+              className="w-64 border border-dashed border-pink-500/40 rounded-lg bg-pink-500/5 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-surface-700/30 border-b border-surface-600/50">
+                <Icon className={clsx('w-4 h-4', colorClass)} />
+                <span className="text-sm font-medium text-steel flex-1 truncate">{block.name}</span>
+                <Cable className="w-3 h-3 text-pink-400" />
+              </div>
+
+              {/* Content */}
+              <div className="px-3 py-2 space-y-1.5 text-xs">
+                {/* Cable connector type */}
+                {remoteProps?.cable && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-steel-dim font-medium w-16 flex-shrink-0">Cable:</span>
+                    <span className="text-steel font-mono">
+                      {remoteProps.cable.connectorType} ({remoteProps.cable.pinCount}p)
+                    </span>
+                  </div>
+                )}
+
+                {/* Mating connector */}
+                {remoteProps?.matingConnectorSlug && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-steel-dim font-medium w-16 flex-shrink-0">Mates:</span>
+                    <span className="text-steel font-mono text-[10px]">
+                      {remoteProps.matingConnectorSlug}
+                    </span>
+                  </div>
+                )}
+
+                {/* Bus signals */}
+                {signals.length > 0 && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-400 font-medium w-16 flex-shrink-0">Signals:</span>
+                    <span className="text-steel-dim">{signals.join('; ')}</span>
+                  </div>
+                )}
+
+                {/* Physical size if available */}
+                {remoteProps?.boardDimensions && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-steel-dim font-medium w-16 flex-shrink-0">Size:</span>
+                    <span className="text-steel font-mono">
+                      {remoteProps.boardDimensions.width}x{remoteProps.boardDimensions.height}mm
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-3 py-1 bg-surface-900/50 text-[8px] text-surface-500 text-center">
+                Connects via cable • Not on main bus
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Remote Boards Section Component (separate board entities)
 // =============================================================================
 
 const REMOTE_TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {

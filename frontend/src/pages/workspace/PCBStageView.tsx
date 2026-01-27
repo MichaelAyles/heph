@@ -23,6 +23,7 @@ import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
 import { GerberViewer } from '../../components/pcb/GerberViewer'
 import { RemoteBoardManager } from '../../components/pcb/RemoteBoardManager'
 import { RemoteBoardPreview } from '../../components/pcb/RemoteBoardPreview'
+import { RemoteTypeBlocksPreview } from '../../components/pcb/RemoteTypeBlocksPreview'
 import { PanelPreview } from '../../components/pcb/PanelPreview'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
 import { PCBViewerToolbar, type ViewMode } from '../../components/pcb/PCBViewerToolbar'
@@ -685,15 +686,22 @@ export function PCBStageView() {
                     />
                   </div>
 
-                  {/* Remote boards preview */}
-                  {remoteBoards.length > 0 && (
-                    <div className="flex-shrink-0 min-w-[200px] max-w-[280px]">
+                  {/* Side panel for off-grid items */}
+                  <div className="flex flex-col gap-4 flex-shrink-0 min-w-[200px] max-w-[280px]">
+                    {/* Remote-type blocks (cable-connected) */}
+                    <RemoteTypeBlocksPreview
+                      placedBlocks={selectedBlocks}
+                      blockDefinitions={blockDefinitions}
+                    />
+
+                    {/* Remote boards */}
+                    {remoteBoards.length > 0 && (
                       <RemoteBoardPreview
                         remoteBoards={remoteBoards}
                         blockDefinitions={blockDefinitions}
                       />
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ) : viewMode === 'bus' ? (
                 <div className="p-4">
