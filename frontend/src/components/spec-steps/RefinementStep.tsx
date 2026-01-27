@@ -1,15 +1,13 @@
 /**
  * RefinementStep - Iterative Q&A to refine project specifications
+ *
+ * Uses the LangGraph refinement node via /api/langgraph/invoke/refinement
  */
 
 import { useState, useCallback, useEffect } from 'react'
 import { clsx } from 'clsx'
 import { Loader2, CheckCircle2 } from 'lucide-react'
-import { llm } from '../../services/llm'
 import { logger } from '../../lib/logger'
-import { REFINEMENT_SYSTEM_PROMPT, buildRefinementPrompt } from '../../prompts/refinement'
-import { extractAndValidateJson } from '../../../functions/lib/json'
-import { RefinementResponseSchema } from '../../schemas/llm-responses'
 import type { Project, ProjectSpec, Decision, OpenQuestion } from '../../db/schema'
 
 interface RefinementStepProps {
@@ -17,6 +15,25 @@ interface RefinementStepProps {
   spec: ProjectSpec
   onDecisions: (decisions: Decision[]) => void
   onComplete: () => void
+}
+
+interface RefinementResponse {
+  output: {
+    questions: Array<{
+      id: string
+      question: string
+      options: string[]
+      category?: string
+    }>
+    complete: boolean
+    reasoning?: string
+  }
+  nodeId: string
+  debug: {
+    nodeName: string
+    durationMs: number
+    model: string
+  }
 }
 
 const MAX_REFINEMENT_ROUNDS = 5
@@ -41,30 +58,34 @@ export function RefinementStep({ project, spec, onDecisions, onComplete }: Refin
       setIsChecking(true)
 
       try {
-        const response = await llm.chat({
-          messages: [
-            { role: 'system', content: REFINEMENT_SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: buildRefinementPrompt(spec.description, spec.feasibility, currentDecisions),
+        const round = Math.floor(currentDecisions.length / 2) + 1
+
+        const response = await fetch('/api/langgraph/invoke/refinement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              description: spec.description,
+              feasibility: spec.feasibility,
+              previousDecisions: currentDecisions,
+              round,
             },
-          ],
-          temperature: 0.3,
-          projectId: project.id,
+            projectId: project.id,
+          }),
         })
 
-        const parseResult = extractAndValidateJson(response.content, RefinementResponseSchema)
-        if (!parseResult.success) {
-          logger.warn('project', 'Failed to parse refinement response', { error: parseResult.error })
-          onComplete()
-          return
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Request failed: ${response.status}`)
         }
-        const result = parseResult.data
+
+        const data: RefinementResponse = await response.json()
+        const result = data.output
 
         if (result.complete) {
           onComplete()
-        } else if (result.additionalQuestions && result.additionalQuestions.length > 0) {
-          setPendingQuestions(result.additionalQuestions)
+        } else if (result.questions && result.questions.length > 0) {
+          setPendingQuestions(result.questions)
         } else {
           onComplete()
         }

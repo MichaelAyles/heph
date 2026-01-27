@@ -43,13 +43,13 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 - [x] Display debug info (prompts, responses, timing)
 
 ### Phase 4: Component Migration
-- [ ] FeasibilityStep uses `/api/langgraph/invoke/feasibility`
-- [ ] RefinementStep uses `/api/langgraph/invoke/refinement`
-- [ ] BlueprintStep uses `/api/langgraph/invoke/blueprint`
-- [ ] FinalizationStep uses `/api/langgraph/invoke/finalization`
-- [ ] EnclosureStageView uses enclosure nodes
-- [ ] FirmwareStageView uses firmware nodes
-- [ ] AdminLLMsPage uses `/api/langgraph/invoke/admin_test`
+- [x] FeasibilityStep uses `/api/langgraph/invoke/feasibility`
+- [x] RefinementStep uses `/api/langgraph/invoke/refinement`
+- [x] BlueprintStep uses `/api/langgraph/invoke/blueprint`
+- [x] FinalizationStep uses `/api/langgraph/invoke/finalization`
+- [x] EnclosureStageView uses enclosure nodes
+- [x] FirmwareStageView uses firmware nodes
+- [x] AdminLLMsPage uses `/api/langgraph/invoke/admin_test`
 
 ## Current State Inventory
 

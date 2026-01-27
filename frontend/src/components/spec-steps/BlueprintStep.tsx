@@ -1,11 +1,12 @@
 /**
  * BlueprintStep - Generates 8 product blueprint images in parallel
+ *
+ * Uses the LangGraph blueprint node via /api/langgraph/invoke/blueprint
  */
 
 import { useState, useEffect } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
-import { buildBlueprintPrompts } from '../../prompts/blueprint'
-import { generateImage, isValidBlueprintUrl, withTimeout, IMAGE_TIMEOUT_MS } from './types'
+import { isValidBlueprintUrl, withTimeout, IMAGE_TIMEOUT_MS } from './types'
 import type { Project, ProjectSpec } from '../../db/schema'
 
 interface BlueprintStepProps {
@@ -14,7 +15,50 @@ interface BlueprintStepProps {
   onComplete: (blueprints: { url: string; prompt: string }[]) => void
 }
 
-export function BlueprintStep({ project: _project, spec, onComplete }: BlueprintStepProps) {
+interface BlueprintResponse {
+  output: {
+    imageUrl: string
+    prompt: string
+    style: string
+  }
+  nodeId: string
+  debug: {
+    nodeName: string
+    durationMs: number
+  }
+}
+
+async function invokeBlueprint(
+  projectId: string,
+  description: string,
+  decisions: { questionId: string; question: string; answer: string; timestamp?: string }[],
+  feasibility: { inputs?: { items?: string[] }; outputs?: { items?: string[] } } | undefined,
+  variation: number
+): Promise<{ url: string; prompt: string }> {
+  const response = await fetch('/api/langgraph/invoke/blueprint', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      input: {
+        description,
+        decisions,
+        feasibility,
+        variation,
+      },
+      projectId,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.error || `Request failed: ${response.status}`)
+  }
+
+  const data: BlueprintResponse = await response.json()
+  return { url: data.output.imageUrl, prompt: data.output.prompt }
+}
+
+export function BlueprintStep({ project, spec, onComplete }: BlueprintStepProps) {
   // 8 images: 4 Style A (adjective-heavy) + 4 Style B (structured photography)
   const [generating, setGenerating] = useState<boolean[]>([
     true,
@@ -46,18 +90,30 @@ export function BlueprintStep({ project: _project, spec, onComplete }: Blueprint
 
     setHasStarted(true)
 
-    const prompts = buildBlueprintPrompts(
-      spec.description,
-      spec.decisions || [],
-      spec.feasibility || {}
-    )
+    // Generate 8 images in parallel (variations 1-8)
+    for (let variation = 1; variation <= 8; variation++) {
+      const index = variation - 1
 
-    prompts.forEach((prompt, index) => {
-      withTimeout(generateImage(prompt), IMAGE_TIMEOUT_MS, 'Image generation timed out after 60s')
-        .then((url) => {
+      withTimeout(
+        invokeBlueprint(
+          project.id,
+          spec.description,
+          spec.decisions || [],
+          spec.feasibility
+            ? {
+                inputs: { items: spec.feasibility.inputs?.items },
+                outputs: { items: spec.feasibility.outputs?.items },
+              }
+            : undefined,
+          variation
+        ),
+        IMAGE_TIMEOUT_MS,
+        'Image generation timed out after 60s'
+      )
+        .then((result) => {
           setBlueprints((prev) => {
             const updated = [...prev]
-            updated[index] = { url, prompt }
+            updated[index] = result
             return updated
           })
           setGenerating((prev) => {
@@ -74,8 +130,8 @@ export function BlueprintStep({ project: _project, spec, onComplete }: Blueprint
             return updated
           })
         })
-    })
-  }, [hasStarted, spec.description, spec.decisions, spec.feasibility])
+    }
+  }, [hasStarted, project.id, spec.description, spec.decisions, spec.feasibility])
 
   useEffect(() => {
     if (hasCompleted) return

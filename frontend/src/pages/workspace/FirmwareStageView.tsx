@@ -2,6 +2,10 @@
  * Firmware Stage View
  *
  * AI-powered firmware generation with Monaco editor and cloud compilation via PlatformIO service.
+ *
+ * Uses LangGraph nodes via /api/langgraph/invoke/* for all LLM calls:
+ * - firmware_generate: Generate firmware from spec
+ * - firmware_modify: Modify firmware with chat
  */
 
 import { useState, useCallback, useEffect } from 'react'
@@ -9,16 +13,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import JSZip from 'jszip'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { logger } from '@/lib/logger'
-import { llm } from '@/services/llm'
-import {
-  FIRMWARE_SYSTEM_PROMPT,
-  buildFirmwarePrompt,
-  buildFirmwareModificationPrompt,
-  buildFirmwareInputFromSpec,
-  type FirmwareProject,
-} from '@/prompts/firmware'
-import { extractAndValidateJson } from '@/../functions/lib/json'
-import { FirmwareProjectSchema } from '@/schemas/llm-responses'
+import { buildFirmwareInputFromSpec, type FirmwareProject } from '@/prompts/firmware'
 import {
   BuildPanel,
   EditorPanel,
@@ -37,6 +32,38 @@ import {
   getFilesForSave,
   generateReadme,
 } from '@/components/firmware'
+
+// =============================================================================
+// LangGraph API Response Types
+// =============================================================================
+
+interface FirmwareGenerateResponse {
+  output: {
+    files: Array<{
+      path: string
+      content: string
+      language?: string
+      type?: 'cpp' | 'h' | 'ini' | 'json'
+    }>
+    dependencies?: string[]
+    notes?: string
+  }
+  nodeId: string
+}
+
+interface FirmwareModifyResponse {
+  output: {
+    files: Array<{
+      path: string
+      content: string
+      language?: string
+      type?: 'cpp' | 'h' | 'ini' | 'json'
+    }>
+    changesApplied: string[]
+    notes?: string
+  }
+  nodeId: string
+}
 
 export function FirmwareStageView() {
   const { project } = useWorkspaceContext()
@@ -199,7 +226,7 @@ export function FirmwareStageView() {
     }
   }, [])
 
-  // Generate firmware with LLM
+  // Generate firmware using LangGraph firmware_generate node
   const handleGenerate = async () => {
     if (!project) return
 
@@ -214,32 +241,49 @@ export function FirmwareStageView() {
         project.spec?.pcb
       )
 
-      const response = await llm.chat({
-        messages: [
-          { role: 'system', content: FIRMWARE_SYSTEM_PROMPT },
-          { role: 'user', content: buildFirmwarePrompt(input) },
-        ],
-        temperature: 0.3,
-        projectId: project.id,
+      const response = await fetch('/api/langgraph/invoke/firmware_generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            projectName: input.projectName,
+            description: input.description,
+            inputs: input.inputs,
+            outputs: input.outputs,
+            communication: input.communication,
+            power: input.power,
+            blocks: input.blocks,
+          },
+          projectId: project.id,
+        }),
       })
 
-      // Parse and validate response
-      const parseResult = extractAndValidateJson(response.content, FirmwareProjectSchema)
-      if (!parseResult.success) {
-        throw new Error(`Failed to parse firmware response: ${parseResult.error}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Generation failed: ${response.status}`)
       }
-      const result = parseResult.data as FirmwareProject
+
+      const data: FirmwareGenerateResponse = await response.json()
+      const result = data.output
+
       if (!result.files || result.files.length === 0) {
         throw new Error('No files generated')
       }
 
-      const tree = buildFileTree(result.files)
+      // Transform to FirmwareProject format
+      const firmwareFiles: FirmwareProject['files'] = result.files.map((f) => ({
+        path: f.path,
+        content: f.content,
+        language: (f.language || f.type || 'cpp') as 'cpp' | 'h' | 'ini' | 'json',
+      }))
+
+      const tree = buildFileTree(firmwareFiles)
       setFileTree(tree)
       setSelectedFile(null) // Reset selection
       setIsDirty(false)
 
       // Save to project
-      await saveMutation.mutateAsync(result.files)
+      await saveMutation.mutateAsync(firmwareFiles)
     } catch (error) {
       logger.firmware('Firmware generation failed', { error })
       setGenerationError(error instanceof Error ? error.message : 'Generation failed')
@@ -248,7 +292,7 @@ export function FirmwareStageView() {
     }
   }
 
-  // Modify firmware with chat
+  // Modify firmware using LangGraph firmware_modify node
   const handleModify = async () => {
     if (!project || !chatInput.trim()) return
 
@@ -273,24 +317,32 @@ export function FirmwareStageView() {
         project.spec?.pcb
       )
 
-      const response = await llm.chat({
-        messages: [
-          { role: 'system', content: FIRMWARE_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: buildFirmwareModificationPrompt(currentFiles, chatInput, input),
+      const response = await fetch('/api/langgraph/invoke/firmware_modify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            currentFiles,
+            request: chatInput,
+            projectName: input.projectName,
+            description: input.description,
+            inputs: input.inputs,
+            outputs: input.outputs,
+            communication: input.communication,
+            power: input.power,
           },
-        ],
-        temperature: 0.3,
-        projectId: project.id,
+          projectId: project.id,
+        }),
       })
 
-      // Parse and validate response
-      const parseResult = extractAndValidateJson(response.content, FirmwareProjectSchema)
-      if (!parseResult.success) {
-        throw new Error(`Failed to parse modification response: ${parseResult.error}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Modification failed: ${response.status}`)
       }
-      const result = parseResult.data as FirmwareProject
+
+      const data: FirmwareModifyResponse = await response.json()
+      const result = data.output
+
       if (!result.files || result.files.length === 0) {
         throw new Error('No files in response')
       }

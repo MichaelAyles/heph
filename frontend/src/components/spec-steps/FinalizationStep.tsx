@@ -1,20 +1,38 @@
 /**
  * FinalizationStep - Generates the final locked specification
+ *
+ * Uses the LangGraph finalization node via /api/langgraph/invoke/finalization
  */
 
 import { useState, useEffect } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
-import { llm } from '../../services/llm'
 import { logger } from '../../lib/logger'
-import { FINAL_SPEC_SYSTEM_PROMPT, buildFinalSpecPrompt } from '../../prompts/finalSpec'
-import { extractAndValidateJson } from '../../../functions/lib/json'
-import { FinalSpecResponseSchema } from '../../schemas/llm-responses'
 import type { Project, ProjectSpec, FinalSpec } from '../../db/schema'
 
 interface FinalizationStepProps {
   project: Project
   spec: ProjectSpec
   onComplete: (finalSpec: FinalSpec) => void
+}
+
+interface FinalizationResponse {
+  output: {
+    name: string
+    summary: string
+    pcbSize?: { width: number; height: number; unit: string }
+    inputs?: Array<{ type: string; count: number; notes?: string }>
+    outputs?: Array<{ type: string; count: number; notes?: string }>
+    power?: { source: string; voltage: string; current: string; batteryLife?: string }
+    communication?: { type: string; protocol?: string }
+    enclosure?: { style: string; width: number; height: number; depth: number }
+    estimatedBOM?: Array<{ item: string; quantity: number; unitCost: number }>
+  }
+  nodeId: string
+  debug: {
+    nodeName: string
+    durationMs: number
+    model: string
+  }
 }
 
 export function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) {
@@ -36,29 +54,28 @@ export function FinalizationStep({ project, spec, onComplete }: FinalizationStep
         const selectedPrompt =
           spec.selectedBlueprint !== null ? spec.blueprints[spec.selectedBlueprint]?.prompt : ''
 
-        const response = await llm.chat({
-          messages: [
-            { role: 'system', content: FINAL_SPEC_SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: buildFinalSpecPrompt(
-                spec.description,
-                spec.feasibility || {},
-                spec.decisions,
-                selectedPrompt
-              ),
+        const response = await fetch('/api/langgraph/invoke/finalization', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              description: spec.description,
+              feasibility: spec.feasibility || {},
+              decisions: spec.decisions || [],
+              selectedBlueprint: { prompt: selectedPrompt },
             },
-          ],
-          temperature: 0.3,
-          projectId: project.id,
+            projectId: project.id,
+          }),
         })
 
-        const parseResult = extractAndValidateJson(response.content, FinalSpecResponseSchema)
-        if (!parseResult.success) {
-          throw new Error(`Failed to parse final spec response: ${parseResult.error}`)
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Request failed: ${response.status}`)
         }
-        // Schema validates minimum fields; cast to full FinalSpec (LLM provides all fields)
-        const result = parseResult.data as unknown as FinalSpec
+
+        const data: FinalizationResponse = await response.json()
+        // Cast output to FinalSpec and add locked fields
+        const result = data.output as unknown as FinalSpec
         result.locked = true
         result.lockedAt = new Date().toISOString()
         onComplete(result)

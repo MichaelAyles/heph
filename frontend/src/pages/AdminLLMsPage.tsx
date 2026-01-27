@@ -1,3 +1,9 @@
+/**
+ * AdminLLMsPage - LLM configuration and testing
+ *
+ * Uses LangGraph admin_test node for text model testing via /api/langgraph/invoke/admin_test
+ */
+
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -13,7 +19,6 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { llm } from '@/services/llm'
 
 type LLMProvider = 'openrouter' | 'gemini'
 
@@ -131,11 +136,23 @@ export function AdminLLMsPage() {
     setTextTestError(null)
 
     try {
-      const response = await llm.chat({
-        messages: [{ role: 'user', content: 'Say exactly "Hello World" and nothing else.' }],
-        temperature: 0,
+      const response = await fetch('/api/langgraph/invoke/admin_test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            prompt: 'Say exactly "Hello World" and nothing else.',
+          },
+        }),
       })
-      setTextTestResult(response.content)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Test failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      setTextTestResult(data.output.response)
       queryClient.invalidateQueries({ queryKey: ['usage'] })
     } catch (err) {
       setTextTestError(err instanceof Error ? err.message : 'Test failed')

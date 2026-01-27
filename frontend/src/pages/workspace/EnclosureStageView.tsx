@@ -1,5 +1,13 @@
 /**
  * EnclosureStageView - Main enclosure design stage with generation, editing, and preview
+ *
+ * Uses LangGraph nodes via /api/langgraph/invoke/* for all LLM calls:
+ * - enclosure_validation: Validate OpenSCAD code
+ * - enclosure_fix: Auto-fix validation issues
+ * - enclosure_vision: Generate from blueprint image
+ * - enclosure_text: Generate from text description
+ * - enclosure_regenerate: Regenerate with feedback
+ * - enclosure_visual_compare: Compare render to blueprint
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -14,26 +22,9 @@ import {
   revokeSTLBlobUrl,
   preloadOpenSCAD,
 } from '@/lib/openscadRenderer'
-import {
-  buildEnclosurePrompt,
-  buildEnclosureInputFromSpec,
-  buildEnclosureRegenerationPrompt,
-  ENCLOSURE_VISION_SYSTEM_PROMPT,
-  buildVisionEnclosurePrompt,
-  buildFeatureList,
-} from '@/prompts/enclosure'
-import {
-  OPENSCAD_VALIDATION_PROMPT,
-  buildValidationPrompt,
-  buildFixPrompt,
-  parseValidationResponse,
-  VISUAL_COMPARISON_PROMPT,
-  parseVisualValidationResponse,
-  type ValidationIssue,
-  type VisualValidationResult,
-} from '@/prompts/enclosure-validation'
-import { llm, fetchImageAsBase64, getMimeTypeFromUrl } from '@/services/llm'
-import type { ImageContent, TextContent } from '@/services/llm'
+import { buildFeatureList, buildEnclosureInputFromSpec } from '@/prompts/enclosure'
+import type { ValidationIssue, VisualValidationResult } from '@/prompts/enclosure-validation'
+import { fetchImageAsBase64 } from '@/services/llm'
 import type { STLViewerRef } from '@/components/enclosure/STLViewer'
 import {
   ComparisonModal,
@@ -45,6 +36,74 @@ import {
   type EnclosureStep,
   MAX_VALIDATION_ITERATIONS,
 } from '@/components/enclosure'
+
+// =============================================================================
+// LangGraph API Response Types
+// =============================================================================
+
+interface EnclosureValidationResponse {
+  output: {
+    isValid: boolean
+    issues: ValidationIssue[]
+    summary: string
+  }
+  nodeId: string
+}
+
+interface EnclosureFixResponse {
+  output: {
+    fixedCode: string
+    changesApplied: string[]
+    remainingIssues: string[]
+  }
+  nodeId: string
+}
+
+interface EnclosureVisionResponse {
+  output: {
+    openScadCode: string
+    designNotes?: string
+    estimatedDimensions?: { width: number; height: number; depth: number }
+  }
+  nodeId: string
+}
+
+interface EnclosureTextResponse {
+  output: {
+    openScadCode: string
+    designNotes?: string
+    estimatedDimensions?: { width: number; height: number; depth: number }
+  }
+  nodeId: string
+}
+
+interface EnclosureRegenerateResponse {
+  output: {
+    openScadCode: string
+    changesApplied: string[]
+    designNotes?: string
+  }
+  nodeId: string
+}
+
+interface EnclosureVisualCompareResponse {
+  output: {
+    overallScore: number
+    scores: {
+      formFactor: number
+      featurePlacement: number
+      visualStyle: number
+      assembly: number
+    }
+    matches: boolean
+    issues: Array<{
+      category: string
+      description: string
+    }>
+    fixInstructions: string
+  }
+  nodeId: string
+}
 
 export function EnclosureStageView() {
   const { project } = useWorkspaceContext()
@@ -159,13 +218,7 @@ export function EnclosureStageView() {
     },
   })
 
-  // Helper to extract code from LLM response
-  const extractCode = (content: string): string => {
-    const codeMatch = content.match(/```(?:openscad)?\n([\s\S]*?)```/)
-    return codeMatch ? codeMatch[1].trim() : content.trim()
-  }
-
-  // Validate OpenSCAD code and return issues
+  // Validate OpenSCAD code and return issues using LangGraph node
   const validateCode = useCallback(
     async (code: string): Promise<ValidationIssue[]> => {
       const pcbWidth = pcbArtifacts?.boardSize?.width ?? 50
@@ -180,49 +233,65 @@ export function EnclosureStageView() {
       const hasButtons =
         finalSpec?.inputs?.some((i) => i.type.toLowerCase().includes('button')) ?? false
 
-      const validationPrompt = buildValidationPrompt(code, {
-        pcbWidth,
-        pcbHeight,
-        hasOled,
-        hasUsb,
-        hasButtons,
+      const response = await fetch('/api/langgraph/invoke/enclosure_validation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            openScadCode: code,
+            pcbWidth,
+            pcbHeight,
+            hasOled,
+            hasUsb,
+            hasButtons,
+          },
+          projectId: project?.id,
+        }),
       })
 
-      const response = await llm.chat({
-        messages: [
-          { role: 'system', content: OPENSCAD_VALIDATION_PROMPT },
-          { role: 'user', content: validationPrompt },
-        ],
-        temperature: 0.3,
-        projectId: project?.id,
-      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Validation failed: ${response.status}`)
+      }
 
-      const result = parseValidationResponse(response.content)
-      return result.issues
+      const data: EnclosureValidationResponse = await response.json()
+      return data.output.issues
     },
     [pcbArtifacts, finalSpec, project?.id]
   )
 
-  // Fix code based on validation issues
+  // Fix code based on validation issues using LangGraph node
   const fixCode = useCallback(
     async (code: string, issues: ValidationIssue[]): Promise<string> => {
       const pcbWidth = pcbArtifacts?.boardSize?.width ?? 50
       const pcbHeight = pcbArtifacts?.boardSize?.height ?? 40
 
-      const fixPrompt = buildFixPrompt(code, issues, { pcbWidth, pcbHeight })
-
-      const response = await llm.chat({
-        messages: [{ role: 'user', content: fixPrompt }],
-        temperature: 0.5,
-        projectId: project?.id,
+      const response = await fetch('/api/langgraph/invoke/enclosure_fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            openScadCode: code,
+            issues,
+            pcbWidth,
+            pcbHeight,
+          },
+          projectId: project?.id,
+        }),
       })
 
-      return extractCode(response.content)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Fix failed: ${response.status}`)
+      }
+
+      const data: EnclosureFixResponse = await response.json()
+      return data.output.fixedCode
     },
     [pcbArtifacts, project?.id]
   )
 
-  // Generate OpenSCAD code using LLM with validation loop
+  // Generate OpenSCAD code using LangGraph nodes with validation loop
   const handleGenerate = useCallback(async () => {
     if (!project || !pcbArtifacts) return
 
@@ -246,46 +315,42 @@ export function EnclosureStageView() {
       const hasBlueprint = !!blueprintUrl
 
       let code: string
+      const pcbWidth = pcbArtifacts.boardSize?.width ?? 50
+      const pcbHeight = pcbArtifacts.boardSize?.height ?? 40
 
       if (hasBlueprint) {
-        // Vision-enabled generation: send blueprint image with prompt
+        // Vision-enabled generation using enclosure_vision node
         setValidationStatus('Analyzing blueprint image...')
 
         const blueprintBase64 = await fetchImageAsBase64(blueprintUrl)
-        const mimeType = getMimeTypeFromUrl(blueprintUrl)
-
-        // Build feature list from spec
         const features = buildFeatureList(finalSpec || {})
-        const pcbWidth = pcbArtifacts.boardSize?.width ?? 50
-        const pcbHeight = pcbArtifacts.boardSize?.height ?? 40
-
-        const visionPrompt = buildVisionEnclosurePrompt({
-          pcbWidth,
-          pcbHeight,
-          wallThickness: 2,
-          features,
-        })
 
         setValidationStatus('Generating enclosure from blueprint...')
 
-        const response = await llm.chat({
-          messages: [
-            { role: 'system', content: ENCLOSURE_VISION_SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: [
-                { type: 'image', mimeType, data: blueprintBase64 } as ImageContent,
-                { type: 'text', text: visionPrompt } as TextContent,
-              ],
+        const response = await fetch('/api/langgraph/invoke/enclosure_vision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              blueprintImage: `data:image/png;base64,${blueprintBase64}`,
+              pcbWidth,
+              pcbHeight,
+              wallThickness: 2,
+              features,
             },
-          ],
-          temperature: 0.7,
-          projectId: project.id,
+            projectId: project.id,
+          }),
         })
 
-        code = extractCode(typeof response.content === 'string' ? response.content : '')
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Vision generation failed: ${response.status}`)
+        }
+
+        const data: EnclosureVisionResponse = await response.json()
+        code = data.output.openScadCode
       } else {
-        // Fallback: text-only generation
+        // Fallback: text-only generation using enclosure_text node
         const input = buildEnclosureInputFromSpec(
           project.name,
           spec?.description || '',
@@ -294,15 +359,31 @@ export function EnclosureStageView() {
         )
 
         setValidationStatus('Generating enclosure design...')
-        const prompt = buildEnclosurePrompt(input)
 
-        const response = await llm.chat({
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          projectId: project.id,
+        const response = await fetch('/api/langgraph/invoke/enclosure_text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              projectName: input.projectName,
+              description: input.description,
+              boardWidth: input.boardWidth,
+              boardHeight: input.boardHeight,
+              boardThickness: input.boardThickness,
+              wallThickness: input.wallThickness,
+              features: input.features,
+            },
+            projectId: project.id,
+          }),
         })
 
-        code = extractCode(typeof response.content === 'string' ? response.content : '')
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Text generation failed: ${response.status}`)
+        }
+
+        const data: EnclosureTextResponse = await response.json()
+        code = data.output.openScadCode
       }
 
       // Step 2: Validation loop
@@ -358,7 +439,7 @@ export function EnclosureStageView() {
     }
   }, [project, spec, pcbArtifacts, finalSpec, saveEnclosureMutation, validateCode, fixCode])
 
-  // Regenerate with feedback (includes validation loop)
+  // Regenerate with feedback using LangGraph node (includes validation loop)
   const handleRegenerate = useCallback(async () => {
     if (!project || !pcbArtifacts || !feedback.trim()) return
 
@@ -383,17 +464,35 @@ export function EnclosureStageView() {
         finalSpec || undefined
       )
 
-      // Step 1: Regenerate with feedback
+      // Step 1: Regenerate with feedback using enclosure_regenerate node
       setValidationStatus('Regenerating with feedback...')
-      const prompt = buildEnclosureRegenerationPrompt(openScadCode, feedback, input)
 
-      const response = await llm.chat({
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        projectId: project.id,
+      const response = await fetch('/api/langgraph/invoke/enclosure_regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            currentCode: openScadCode,
+            feedback,
+            projectName: input.projectName,
+            description: input.description,
+            boardWidth: input.boardWidth,
+            boardHeight: input.boardHeight,
+            boardThickness: input.boardThickness,
+            wallThickness: input.wallThickness,
+            features: input.features,
+          },
+          projectId: project.id,
+        }),
       })
 
-      let code = extractCode(response.content)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Regeneration failed: ${response.status}`)
+      }
+
+      const data: EnclosureRegenerateResponse = await response.json()
+      let code = data.output.openScadCode
 
       // Step 2: Validation loop
       for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
@@ -456,7 +555,7 @@ export function EnclosureStageView() {
     fixCode,
   ])
 
-  // Perform visual validation by comparing render to blueprint
+  // Perform visual validation by comparing render to blueprint using LangGraph node
   const performVisualValidation = useCallback(async () => {
     const blueprintIndex = spec?.selectedBlueprint ?? 0
     const blueprintUrl = spec?.blueprints?.[blueprintIndex]?.url
@@ -482,26 +581,45 @@ export function EnclosureStageView() {
 
       // Fetch blueprint as base64
       const blueprintBase64 = await fetchImageAsBase64(blueprintUrl)
-      const blueprintMimeType = getMimeTypeFromUrl(blueprintUrl)
 
-      // Send both images to LLM for comparison
-      const response = await llm.chat({
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', mimeType: blueprintMimeType, data: blueprintBase64 } as ImageContent,
-              { type: 'image', mimeType: 'image/png', data: renderBase64 } as ImageContent,
-              { type: 'text', text: VISUAL_COMPARISON_PROMPT } as TextContent,
-            ],
+      // Send both images to LangGraph enclosure_visual_compare node
+      const response = await fetch('/api/langgraph/invoke/enclosure_visual_compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            blueprintImage: `data:image/png;base64,${blueprintBase64}`,
+            stlScreenshot: `data:image/png;base64,${renderBase64}`,
+            designIntent: spec?.description,
           },
-        ],
-        projectId: project?.id,
+          projectId: project?.id,
+        }),
       })
 
-      const result = parseVisualValidationResponse(
-        typeof response.content === 'string' ? response.content : ''
-      )
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Visual comparison failed: ${response.status}`)
+      }
+
+      const data: EnclosureVisualCompareResponse = await response.json()
+
+      // Transform to VisualValidationResult format
+      // Cast issues to the expected type with proper category union
+      const result: VisualValidationResult = {
+        overallScore: data.output.overallScore,
+        scores: data.output.scores,
+        matches: data.output.matches,
+        issues: data.output.issues.map((issue) => ({
+          category: issue.category as
+            | 'formFactor'
+            | 'featurePlacement'
+            | 'visualStyle'
+            | 'assembly',
+          description: issue.description,
+        })),
+        fixInstructions: data.output.fixInstructions,
+      }
+
       setVisualValidationResult(result)
       setShowComparison(true)
     } catch (error) {

@@ -1,14 +1,12 @@
 /**
  * FeasibilityStep - Analyzes project feasibility with available components
+ *
+ * Uses the LangGraph feasibility node via /api/langgraph/invoke/feasibility
  */
 
 import { useState, useEffect } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
-import { llm } from '../../services/llm'
 import { logger } from '../../lib/logger'
-import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '../../prompts/feasibility'
-import { extractAndValidateJson } from '../../../functions/lib/json'
-import { FeasibilityResponseSchema } from '../../schemas/llm-responses'
 import type { SuggestedRevisions } from './types'
 import type { Project, ProjectSpec, FeasibilityAnalysis, OpenQuestion } from '../../db/schema'
 
@@ -17,6 +15,37 @@ interface FeasibilityStepProps {
   spec: ProjectSpec
   onComplete: (feasibility: FeasibilityAnalysis, questions: OpenQuestion[]) => void
   onReject: (reason: string, suggestedRevisions?: SuggestedRevisions) => void
+}
+
+interface FeasibilityResponse {
+  output: {
+    manufacturable: boolean
+    rejectionReason?: string | null
+    overallScore?: number
+    communication?: { type: string; confidence: number; notes: string }
+    processing?: { level: string; confidence: number; notes: string }
+    power?: { options: string[]; confidence: number; notes: string }
+    inputs?: { items: string[]; confidence?: number; notes?: string }
+    outputs?: { items: string[]; confidence?: number; notes?: string }
+    openQuestions?: Array<{
+      id: string
+      question: string
+      options?: string[]
+      category?: string
+      impact?: string
+    }>
+    suggestedRevisions?: {
+      summary: string
+      changes: string[]
+      revisedDescription: string
+    } | null
+  }
+  nodeId: string
+  debug: {
+    nodeName: string
+    durationMs: number
+    model: string
+  }
 }
 
 export function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilityStepProps) {
@@ -36,25 +65,27 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
       try {
         setStatus('Checking feasibility with available components...')
 
-        const response = await llm.chat({
-          messages: [
-            { role: 'system', content: FEASIBILITY_SYSTEM_PROMPT },
-            { role: 'user', content: buildFeasibilityPrompt(spec.description) },
-          ],
-          temperature: 0.3,
-          projectId: project.id,
+        const response = await fetch('/api/langgraph/invoke/feasibility', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: { description: spec.description },
+            projectId: project.id,
+          }),
         })
 
-        const parseResult = extractAndValidateJson(response.content, FeasibilityResponseSchema)
-        if (!parseResult.success) {
-          throw new Error(`Failed to parse feasibility response: ${parseResult.error}`)
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Request failed: ${response.status}`)
         }
-        const result = parseResult.data
+
+        const data: FeasibilityResponse = await response.json()
+        const result = data.output
 
         if (!result.manufacturable) {
           onReject(
             result.rejectionReason || 'Project is not manufacturable',
-            result.suggestedRevisions ?? undefined  // Convert null to undefined
+            result.suggestedRevisions ?? undefined // Convert null to undefined
           )
           return
         }
@@ -73,10 +104,14 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
           },
           overallScore: result.overallScore ?? 0,
           manufacturable: result.manufacturable,
-          rejectionReason: result.rejectionReason ?? undefined,  // Convert null to undefined
+          rejectionReason: result.rejectionReason ?? undefined, // Convert null to undefined
         }
 
-        const questions: OpenQuestion[] = result.openQuestions || []
+        const questions: OpenQuestion[] = (result.openQuestions || []).map((q) => ({
+          id: q.id,
+          question: q.question,
+          options: q.options || [],
+        }))
         onComplete(feasibility, questions)
       } catch (err) {
         setError('Failed to analyze feasibility. Please try again.')
