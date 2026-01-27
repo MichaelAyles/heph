@@ -35,6 +35,8 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 - [x] `enclosure_regenerate` - Code + text in, code out
 - [x] `enclosure_visual_compare` - 2 images in, JSON out (multimodal)
 - [x] `export_bom` - N/A (BOM generated programmatically, no LLM call needed)
+- [x] `block_selection` - Text in, JSON out (PCB block selection)
+- [x] `tap_configuration` - Text in, JSON out (0R resistor tap configuration)
 
 ### Phase 3: UI Integration
 - [x] Update AdminLangGraphPage to show node registry (Nodes tab)
@@ -50,10 +52,18 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 - [x] EnclosureStageView uses enclosure nodes
 - [x] FirmwareStageView uses firmware nodes
 - [x] AdminLLMsPage uses `/api/langgraph/invoke/admin_test`
+- [x] PCBStageView uses `/api/langgraph/invoke/block_selection`
+- [x] ManufacturingExportPanel uses `/api/langgraph/invoke/tap_configuration`
+
+### Phase 5: Remove Hardcoded Prompts
+- [x] Remove all `SYSTEM_PROMPT` constants from prompt files
+- [x] Remove `buildXxxMessages()` functions that included system prompts
+- [x] Update test files to remove system prompt tests
+- [x] All prompts now stored in `orchestrator_prompts` database table
 
 ## Current State Inventory
 
-### All 14 LLM Call Sites
+### All 16 LLM Call Sites
 
 | # | Component | File:Line | Node Name | Type |
 |---|-----------|-----------|-----------|------|
@@ -70,7 +80,9 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 | 11 | FirmwareStageView | `workspace/FirmwareStageView.tsx:217` | `firmware_generate` | chat |
 | 12 | FirmwareStageView | `workspace/FirmwareStageView.tsx:276` | `firmware_modify` | chat |
 | 13 | AdminLLMsPage | `AdminLLMsPage.tsx:134` | `admin_test` | chat |
-| 14 | ManufacturingExportPanel | TBD | `export_bom` | chat (if exists) |
+| 14 | PCBStageView | `workspace/PCBStageView.tsx:335` | `block_selection` | chat |
+| 15 | ManufacturingExportPanel | `pcb/ManufacturingExportPanel.tsx:85` | `tap_configuration` | chat |
+| 16 | ManufacturingExportPanel | N/A | `export_bom` | N/A (programmatic) |
 
 ---
 
@@ -92,7 +104,7 @@ Each LangGraph node is:
 │  finalization         enclosure_validation enclosure_fix     │
 │  enclosure_vision     enclosure_text       enclosure_regen   │
 │  enclosure_visual     firmware_generate    firmware_modify   │
-│  admin_test           export_bom                             │
+│  admin_test           block_selection      tap_configuration │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -684,24 +696,26 @@ CREATE INDEX idx_executions_time ON langgraph_executions(started_at DESC);
 
 ### Update: `orchestrator_prompts`
 
-Add entries for all 14 nodes (some already exist):
+All 16 nodes are now in the database (migrations 0031 and 0032):
 
-| node_name | category | stage | exists? |
-|-----------|----------|-------|---------|
-| feasibility | agent | spec | yes |
-| refinement | generator | spec | no |
-| blueprint | generator | spec | no |
-| finalization | generator | spec | no |
-| enclosure_validation | validator | enclosure | no |
-| enclosure_fix | generator | enclosure | no |
-| enclosure_vision | generator | enclosure | yes |
-| enclosure_text | generator | enclosure | yes (as enclosure) |
-| enclosure_regenerate | generator | enclosure | no |
-| enclosure_visual_compare | validator | enclosure | no |
-| firmware_generate | generator | firmware | yes (as firmware) |
-| firmware_modify | generator | firmware | no |
-| admin_test | utility | admin | no |
-| export_bom | generator | export | no |
+| node_name | category | stage | migration |
+|-----------|----------|-------|-----------|
+| feasibility | agent | spec | 0031 |
+| refinement | generator | spec | 0031 |
+| blueprint | generator | spec | 0031 |
+| finalization | generator | spec | 0031 |
+| enclosure_validation | generator | enclosure | 0031 |
+| enclosure_fix | generator | enclosure | 0031 |
+| enclosure_vision | generator | enclosure | 0031 |
+| enclosure_text | generator | enclosure | 0031 |
+| enclosure_regenerate | generator | enclosure | 0031 |
+| enclosure_visual_compare | generator | enclosure | 0031 |
+| firmware_generate | generator | firmware | 0031 |
+| firmware_modify | generator | firmware | 0031 |
+| admin_test | agent | spec | 0031 |
+| block_selection | generator | pcb | 0032 |
+| tap_configuration | generator | pcb | 0032 |
+| export_bom | N/A | N/A | N/A (programmatic) |
 
 ---
 

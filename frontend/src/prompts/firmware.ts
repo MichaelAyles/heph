@@ -5,6 +5,9 @@
 
 import type { FinalSpec } from '../db/schema'
 
+// NOTE: System prompt is stored in database (orchestrator_prompts table)
+// Use /api/langgraph/invoke/firmware
+
 export interface FirmwareProject {
   files: Array<{
     path: string
@@ -26,32 +29,6 @@ export interface FirmwareInput {
 export interface PCBArtifacts {
   placedBlocks?: Array<{ blockSlug: string }>
 }
-
-export const FIRMWARE_SYSTEM_PROMPT = `You are an ESP32-C6 firmware developer. Generate complete PlatformIO project code for IoT hardware projects.
-
-Target Platform: ESP32-C6 SuperMini
-Framework: Arduino
-
-Output Requirements:
-1. platformio.ini - Project configuration
-2. src/main.cpp - Main application code
-3. Additional headers/sources as needed
-
-Code Guidelines:
-- Use ESP32 Arduino framework
-- Include WiFi setup with configuration portal
-- Use deep sleep for battery optimization
-- Proper pin definitions with clear comments
-- Error handling and status LED feedback
-- Modular code structure
-
-Output JSON format:
-{
-  "files": [
-    { "path": "platformio.ini", "content": "...", "language": "ini" },
-    { "path": "src/main.cpp", "content": "...", "language": "cpp" }
-  ]
-}`
 
 export function buildFirmwareInputFromSpec(
   projectName: string,
@@ -118,9 +95,7 @@ export function buildFirmwareModificationPrompt(
   feedback: string,
   input: FirmwareInput
 ): string {
-  const filesSection = currentFiles
-    .map((f) => `--- ${f.path} ---\n${f.content}`)
-    .join('\n\n')
+  const filesSection = currentFiles.map((f) => `--- ${f.path} ---\n${f.content}`).join('\n\n')
 
   return `Modify this ESP32-C6 firmware based on user feedback:
 

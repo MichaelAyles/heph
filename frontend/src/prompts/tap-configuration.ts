@@ -63,51 +63,8 @@ export interface BlockTapInfo {
 // System Prompt
 // =============================================================================
 
-export const TAP_CONFIGURATION_SYSTEM_PROMPT = `You are a hardware design assistant specializing in PCB configuration. Your task is to determine the optimal 0R resistor tap configuration for a hardware project.
-
-## Background
-
-0R resistor "taps" are used to:
-1. Configure I2C addresses by pulling address pins high/low
-2. Connect/disconnect signal lines from the bus
-3. Isolate power rails for specific blocks
-4. Route GPIO signals through the bus
-
-A tap can be either:
-- **populated** (fit): The 0R resistor connects the signal
-- **not populated** (nofit): The signal is isolated/disconnected
-
-## Configuration Rules
-
-1. **I2C Address Configuration**:
-   - No two devices on the same I2C bus can share the same address
-   - Select addresses that avoid conflicts
-   - Use the address configuration options provided for each block
-   - Default to the lowest available address unless there's a conflict
-
-2. **Power Taps**:
-   - Power taps (3V3, 5V0) should be populated unless:
-     - The block needs isolated power
-     - Multiple power sources conflict
-   - GND taps are almost always populated
-
-3. **Signal Taps**:
-   - I2C_SDA, I2C_SCL taps should be populated for I2C devices
-   - SPI taps should be populated for SPI devices
-   - GPIO taps depend on project requirements
-
-4. **Conflict Resolution**:
-   - When I2C address conflicts exist, change one device's address configuration
-   - Report any unresolvable conflicts
-
-## Output Format
-
-Return a JSON object with:
-- configurations: Array of tap states (blockSlug, reference, signal, populated, reason)
-- conflicts: Array of any detected conflicts (type, description, affectedBlocks, resolution)
-- notes: Summary of the configuration decisions
-
-Be concise but clear in your reasoning.`
+// NOTE: System prompt is stored in database (orchestrator_prompts table)
+// Use /api/langgraph/invoke/tap_configuration to configure taps
 
 // =============================================================================
 // Prompt Builder
@@ -163,23 +120,20 @@ export function buildTapConfigPrompt(context: TapConfigContext): string {
   // Build blocks section
   const blocksSection = blockInfos
     .map((info) => {
-      const lines = [
-        `### ${info.name} (${info.slug})`,
-        `Category: ${info.category}`,
-      ]
+      const lines = [`### ${info.name} (${info.slug})`, `Category: ${info.category}`]
 
       // Add I2C info if present
       if (info.i2cAddresses && info.i2cAddresses.length > 0) {
-        lines.push(`I2C Addresses: ${info.i2cAddresses.map((a) => `0x${a.toString(16)}`).join(', ')}`)
+        lines.push(
+          `I2C Addresses: ${info.i2cAddresses.map((a) => `0x${a.toString(16)}`).join(', ')}`
+        )
       }
 
       // Add I2C address configs if present
       if (info.i2cAddressConfigs && info.i2cAddressConfigs.length > 0) {
         lines.push('Address Configuration Options:')
         for (const config of info.i2cAddressConfigs) {
-          const resistorStates = config.resistors
-            .map((r) => `${r.reference}=${r.state}`)
-            .join(', ')
+          const resistorStates = config.resistors.map((r) => `${r.reference}=${r.state}`).join(', ')
           const defaultMarker = config.isDefault ? ' (default)' : ''
           lines.push(`  - 0x${config.address.toString(16)}: ${resistorStates}${defaultMarker}`)
         }
@@ -210,19 +164,25 @@ export function buildTapConfigPrompt(context: TapConfigContext): string {
     if (finalSpec.inputs && finalSpec.inputs.length > 0) {
       requirements.push('Inputs:')
       for (const input of finalSpec.inputs) {
-        requirements.push(`  - ${input.type} (x${input.count})${input.notes ? `: ${input.notes}` : ''}`)
+        requirements.push(
+          `  - ${input.type} (x${input.count})${input.notes ? `: ${input.notes}` : ''}`
+        )
       }
     }
 
     if (finalSpec.outputs && finalSpec.outputs.length > 0) {
       requirements.push('Outputs:')
       for (const output of finalSpec.outputs) {
-        requirements.push(`  - ${output.type} (x${output.count})${output.notes ? `: ${output.notes}` : ''}`)
+        requirements.push(
+          `  - ${output.type} (x${output.count})${output.notes ? `: ${output.notes}` : ''}`
+        )
       }
     }
 
     if (finalSpec.communication) {
-      requirements.push(`Communication: ${finalSpec.communication.type} (${finalSpec.communication.protocol})`)
+      requirements.push(
+        `Communication: ${finalSpec.communication.type} (${finalSpec.communication.protocol})`
+      )
     }
 
     if (requirements.length > 0) {
@@ -249,17 +209,7 @@ Analyze the blocks above and determine the optimal tap configuration:
 Return your configuration as a JSON object.`
 }
 
-/**
- * Build complete messages for LLM chat
- */
-export function buildTapConfigMessages(
-  context: TapConfigContext
-): Array<{ role: 'system' | 'user'; content: string }> {
-  return [
-    { role: 'system', content: TAP_CONFIGURATION_SYSTEM_PROMPT },
-    { role: 'user', content: buildTapConfigPrompt(context) },
-  ]
-}
+// NOTE: buildTapConfigMessages removed - use /api/langgraph/invoke/tap_configuration instead
 
 // =============================================================================
 // Response Parser

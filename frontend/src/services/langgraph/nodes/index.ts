@@ -23,7 +23,8 @@ import './enclosure-regenerate'
 import './enclosure-visual-compare'
 import './firmware-generate'
 import './firmware-modify'
-// import './export-bom'  // TODO: If needed
+import './block-selection'
+import './tap-configuration'
 
 // Re-export specific nodes for direct use
 export { adminTestNode } from './admin-test'
@@ -39,3 +40,5 @@ export { enclosureRegenerateNode } from './enclosure-regenerate'
 export { enclosureVisualCompareNode } from './enclosure-visual-compare'
 export { firmwareGenerateNode } from './firmware-generate'
 export { firmwareModifyNode } from './firmware-modify'
+export { blockSelectionNode } from './block-selection'
+export { tapConfigurationNode } from './tap-configuration'

@@ -1,49 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { FINAL_SPEC_SYSTEM_PROMPT, buildFinalSpecPrompt } from './finalSpec'
+import { buildFinalSpecPrompt } from './finalSpec'
+
+// NOTE: FINAL_SPEC_SYSTEM_PROMPT has been moved to database (orchestrator_prompts table)
+// System prompt tests should be performed against the database content, not hardcoded values
 
 describe('finalSpec prompt', () => {
-  describe('FINAL_SPEC_SYSTEM_PROMPT', () => {
-    it('should introduce PHAESTUS', () => {
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('PHAESTUS')
-    })
-
-    it('should list available components', () => {
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('ESP32-C6')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('BME280')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('WS2812B')
-    })
-
-    it('should describe output format', () => {
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('JSON')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('name')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('summary')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('pcbSize')
-    })
-
-    it('should include BOM in output format', () => {
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('estimatedBOM')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('unitCost')
-    })
-
-    it('should include enclosure specs', () => {
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('enclosure')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('width')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('height')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('depth')
-    })
-
-    it('should include power specifications', () => {
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('power')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('voltage')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('current')
-    })
-
-    it('should contain guidelines', () => {
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('realistic PCB dimensions')
-      expect(FINAL_SPEC_SYSTEM_PROMPT).toContain('ALL components in the BOM')
-    })
-  })
-
   describe('buildFinalSpecPrompt', () => {
     const description = 'A smart plant monitor'
     const feasibility = {

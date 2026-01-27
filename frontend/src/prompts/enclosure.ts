@@ -27,27 +27,8 @@ export interface PCBArtifacts {
   placedBlocks?: Array<{ blockSlug: string; gridX: number; gridY: number }>
 }
 
-export const ENCLOSURE_SYSTEM_PROMPT = `You are an OpenSCAD enclosure designer. Generate clean, parametric OpenSCAD code for 3D-printable enclosures.
-
-Guidelines:
-- Use mm as the unit
-- Include wall thickness, clearance, and tolerance parameters
-- Create mounting posts for PCB
-- Add cutouts for connectors and displays
-- Use hull() and difference() for smooth shapes
-- Add snap-fit features or screw posts for lid attachment
-
-Output only valid OpenSCAD code, no explanations.`
-
-export const ENCLOSURE_VISION_SYSTEM_PROMPT = `You are an OpenSCAD enclosure designer with access to product blueprint images. Analyze the visual design and generate matching OpenSCAD code.
-
-When reviewing the blueprint:
-1. Note the overall shape (rectangular, rounded, organic)
-2. Identify button, LED, and display positions
-3. Consider the intended form factor
-4. Match the aesthetic style shown
-
-Output only valid OpenSCAD code that captures the visual design intent.`
+// NOTE: System prompts are stored in database (orchestrator_prompts table)
+// Use /api/langgraph/invoke/enclosure_text or /api/langgraph/invoke/enclosure_vision
 
 export function buildEnclosureInputFromSpec(
   projectName: string,
@@ -86,7 +67,10 @@ export function buildFeatureList(spec: FinalSpec | Record<string, unknown> | nul
   finalSpec.outputs?.forEach((output) => {
     if (output.type.toLowerCase().includes('led')) features.push('LED window')
     if (output.type.toLowerCase().includes('display')) features.push('display opening')
-    if (output.type.toLowerCase().includes('speaker') || output.type.toLowerCase().includes('buzzer')) {
+    if (
+      output.type.toLowerCase().includes('speaker') ||
+      output.type.toLowerCase().includes('buzzer')
+    ) {
       features.push('speaker grille')
     }
   })

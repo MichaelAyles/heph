@@ -50,16 +50,21 @@ const PCBBlockSchema = z.object({
   slug: z.string(),
   gridX: z.number(),
   gridY: z.number(),
-  rotation: z.union([z.literal(0), z.literal(180)]).optional().default(0),
+  rotation: z
+    .union([z.literal(0), z.literal(180)])
+    .optional()
+    .default(0),
   reason: z.string().optional().default(''),
 })
 
 const PCBSuggestionResponseSchema = z.object({
   blocks: z.array(PCBBlockSchema),
-  boardSize: z.object({
-    width: z.number(),
-    height: z.number(),
-  }).optional(),
+  boardSize: z
+    .object({
+      width: z.number(),
+      height: z.number(),
+    })
+    .optional(),
   notes: z.string().optional().default(''),
 })
 
@@ -116,58 +121,8 @@ export function toBlockCatalogEntry(block: BlockDefinition): BlockCatalogEntry {
 // Prompt Builder
 // =============================================================================
 
-/**
- * Build the system prompt for PCB block selection
- */
-export function buildPCBSelectionSystemPrompt(): string {
-  return `You are an expert PCB design assistant for PHAESTUS, a modular hardware design platform.
-
-Your task is to select and arrange pre-validated circuit blocks to build a PCB that meets the user's requirements.
-
-## Design Constraints
-
-1. **Grid System**: All blocks snap to a 12.7mm (0.5") grid
-2. **Bus Continuity**: The bus runs north→south per column. Each column MUST have unbroken block coverage for signals to propagate. If there's a gap, use a passthrough block (1x1-passthrough).
-3. **Edge Mount**: Blocks with connectors (USB-C, etc.) must be placed at the specified board edge
-4. **MCU Required**: Every design needs exactly one MCU block (esp32-c6-mcu)
-5. **Power Budget**: Total power consumption must not exceed what power blocks provide
-
-## Available Block Categories
-
-- **mcu**: Microcontroller (required - provides bus and 3V3)
-- **power**: Power input/regulation (USB-C, battery, etc.)
-- **sensor**: Environmental sensors (I2C/SPI)
-- **output**: LEDs, buzzers, relays, motor drivers
-- **connector**: External connections (buttons, displays, FPCs)
-- **utility**: Passthrough blocks for bus continuity
-
-## Response Format
-
-Return a JSON object with this structure:
-{
-  "blocks": [
-    {
-      "slug": "block-slug",
-      "gridX": 0,
-      "gridY": 0,
-      "rotation": 0,
-      "reason": "Brief explanation why this block is needed"
-    }
-  ],
-  "boardSize": { "width": 2, "height": 4 },
-  "notes": "Overall design notes and considerations"
-}
-
-## Layout Guidelines
-
-1. Place MCU at the top (row 0) - it defines the bus
-2. Place power blocks at the bottom (south edge) for USB-C
-3. Fill gaps with passthrough blocks to maintain bus continuity
-4. Minimize board size while ensuring all requirements are met
-5. Consider I2C address conflicts (each address can only be used once)
-
-Be concise but thorough. Select the minimal set of blocks needed.`
-}
+// NOTE: System prompt is stored in database (orchestrator_prompts table)
+// Use /api/langgraph/invoke/block_selection to get AI suggestions
 
 /**
  * Build the user prompt for a specific project
@@ -337,19 +292,4 @@ export function validatePCBSuggestion(
   }
 }
 
-// =============================================================================
-// Convenience Function
-// =============================================================================
-
-/**
- * Build complete prompt messages for the LLM
- */
-export function buildPCBSelectionMessages(request: PCBSuggestionRequest): Array<{
-  role: 'system' | 'user'
-  content: string
-}> {
-  return [
-    { role: 'system', content: buildPCBSelectionSystemPrompt() },
-    { role: 'user', content: buildPCBSelectionUserPrompt(request) },
-  ]
-}
+// NOTE: buildPCBSelectionMessages removed - use /api/langgraph/invoke/block_selection instead

@@ -30,16 +30,22 @@ import { ManufacturingExportPanel } from '../../components/pcb/ManufacturingExpo
 import { mergeBlockSchematics, mergeBlockPCBs } from '../../services/pcb-merge'
 import { generatePCBDocument } from '../../services/pcb-document'
 import {
-  buildPCBSelectionMessages,
   toBlockCatalogEntry,
-  parsePCBSuggestionResponse,
   validatePCBSuggestion,
+  type BlockCatalogEntry,
 } from '../../prompts/pcb-selection'
 import { validateGrid, fromPlacedBlocks, calculateBoardSize } from '../../services/pcb-grid'
 import { getMainBoardSignals } from '../../services/remote-board'
 import { calculatePanelLayout } from '../../services/panel-merge'
 import { logger } from '../../lib/logger'
-import type { PcbBlock, PlacedBlock, PCBArtifacts, NetAssignment, RemoteBoard, ResistorTapState } from '../../db/schema'
+import type {
+  PcbBlock,
+  PlacedBlock,
+  PCBArtifacts,
+  NetAssignment,
+  RemoteBoard,
+  ResistorTapState,
+} from '../../db/schema'
 import type { BlockDefinition } from '../../schemas/block'
 
 type PCBStep = 'select_blocks' | 'generating' | 'preview'
@@ -283,8 +289,14 @@ export function PCBStageView() {
           { patterns: ['-in2_cu', '-In2_Cu', '.g2'], layer: `${slug}-In2.Cu` },
           { patterns: ['-f_mask', '.gts', '-F_Mask'], layer: `${slug}-F.Mask` },
           { patterns: ['-b_mask', '.gbs', '-B_Mask'], layer: `${slug}-B.Mask` },
-          { patterns: ['-f_silkscreen', '.gto', '-F_Silkscreen', '-F_SilkS'], layer: `${slug}-F.SilkS` },
-          { patterns: ['-b_silkscreen', '.gbo', '-B_Silkscreen', '-B_SilkS'], layer: `${slug}-B.SilkS` },
+          {
+            patterns: ['-f_silkscreen', '.gto', '-F_Silkscreen', '-F_SilkS'],
+            layer: `${slug}-F.SilkS`,
+          },
+          {
+            patterns: ['-b_silkscreen', '.gbo', '-B_Silkscreen', '-B_SilkS'],
+            layer: `${slug}-B.SilkS`,
+          },
           { patterns: ['-edge_cuts', '.gm1', '-Edge_Cuts'], layer: `${slug}-Edge.Cuts` },
         ]
 
@@ -295,7 +307,7 @@ export function PCBStageView() {
 
           // Find matching layer
           for (const mapping of layerMappings) {
-            if (mapping.patterns.some(p => lowerFilename.includes(p.toLowerCase()))) {
+            if (mapping.patterns.some((p) => lowerFilename.includes(p.toLowerCase()))) {
               const content = await zipEntry.async('string')
               layers[mapping.layer] = content
               break
@@ -319,36 +331,35 @@ export function PCBStageView() {
     setIsAiSuggesting(true)
     try {
       // Build catalog entries
-      const catalogEntries = blocksData.blocks
+      const catalogEntries: BlockCatalogEntry[] = blocksData.blocks
         .filter((b) => b.definition)
         .map((b) => toBlockCatalogEntry(b.definition!))
 
-      // Build messages
-      const messages = buildPCBSelectionMessages({
-        projectName: project?.name || 'Untitled',
-        description: spec.finalSpec.summary || project?.description || '',
-        finalSpec: spec.finalSpec,
-        availableBlocks: catalogEntries,
-      })
-
-      // Call LLM
-      const res = await fetch('/api/llm/chat', {
+      // Call LangGraph block_selection node
+      const res = await fetch('/api/langgraph/invoke/block_selection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages,
-          temperature: 0.3,
+          input: {
+            projectName: project?.name || 'Untitled',
+            description: spec.finalSpec.summary || project?.description || '',
+            finalSpec: spec.finalSpec,
+            availableBlocks: catalogEntries,
+          },
           projectId: project?.id,
         }),
       })
 
-      if (!res.ok) throw new Error('Failed to get AI suggestion')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to get AI suggestion')
+      }
 
       const data = await res.json()
-      const suggestion = parsePCBSuggestionResponse(data.content)
+      const suggestion = data.output
 
       if (!suggestion) {
-        throw new Error('Failed to parse AI suggestion')
+        throw new Error('Failed to get block selection output')
       }
 
       // Validate suggestion
@@ -362,13 +373,15 @@ export function PCBStageView() {
       setGridHeight(Math.max(4, suggestion.boardSize.height))
 
       // Convert to PlacedBlock format
-      const newBlocks: PlacedBlock[] = suggestion.blocks.map((b, idx) => ({
-        blockId: `${b.slug}-${Date.now()}-${idx}`,
-        blockSlug: b.slug,
-        gridX: b.gridX,
-        gridY: b.gridY,
-        rotation: b.rotation,
-      }))
+      const newBlocks: PlacedBlock[] = suggestion.blocks.map(
+        (b: { slug: string; gridX: number; gridY: number; rotation: 0 | 180 }, idx: number) => ({
+          blockId: `${b.slug}-${Date.now()}-${idx}`,
+          blockSlug: b.slug,
+          gridX: b.gridX,
+          gridY: b.gridY,
+          rotation: b.rotation,
+        })
+      )
 
       setSelectedBlocks(newBlocks)
       savePCBMutation.mutate({ placedBlocks: newBlocks })
@@ -741,7 +754,9 @@ export function PCBStageView() {
                   pcbArtifacts={pcbArtifacts}
                   remoteBoards={remoteBoards}
                   panelConfig={panelConfig}
-                  boardSize={boardSize ? { widthMm: boardSize.widthMm, heightMm: boardSize.heightMm } : null}
+                  boardSize={
+                    boardSize ? { widthMm: boardSize.widthMm, heightMm: boardSize.heightMm } : null
+                  }
                   initialTapStates={configuredTapStates}
                   onTapStatesChange={handleTapStatesChange}
                 />

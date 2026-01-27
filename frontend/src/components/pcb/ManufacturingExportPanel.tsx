@@ -13,8 +13,6 @@ import { Loader2, Settings2, Package } from 'lucide-react'
 import { PanelPreview } from './PanelPreview'
 import { TapConfigTable, TapConfigSummary } from './TapConfigTable'
 import {
-  buildTapConfigMessages,
-  parseTapConfigResponse,
   toResistorTapStates,
   hasConflicts,
   type TapConfigResponse,
@@ -62,11 +60,12 @@ export function ManufacturingExportPanel({
   const [isTapConfiguring, setIsTapConfiguring] = useState(false)
   const [tapConfigError, setTapConfigError] = useState<string | null>(null)
   const [tapConfigResponse, setTapConfigResponse] = useState<TapConfigResponse | null>(null)
-  const [configuredTapStates, setConfiguredTapStates] = useState<ResistorTapState[]>(initialTapStates)
+  const [configuredTapStates, setConfiguredTapStates] =
+    useState<ResistorTapState[]>(initialTapStates)
   const [isExportingMfg, setIsExportingMfg] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
-  // Handle tap configuration via LLM
+  // Handle tap configuration via LangGraph node
   const handleConfigureTaps = useCallback(async () => {
     if (selectedBlocks.length === 0) return
 
@@ -74,31 +73,37 @@ export function ManufacturingExportPanel({
     setTapConfigError(null)
 
     try {
-      const messages = buildTapConfigMessages({
-        projectName: project.name,
-        projectDescription: project.description || undefined,
-        finalSpec: spec?.finalSpec,
-        placedBlocks: selectedBlocks,
-        blockDefinitions,
+      // Convert blockDefinitions Map to object for JSON serialization
+      const blockDefsObject: Record<string, unknown> = {}
+      blockDefinitions.forEach((def, slug) => {
+        blockDefsObject[slug] = def
       })
 
-      const res = await fetch('/api/llm/chat', {
+      const res = await fetch('/api/langgraph/invoke/tap_configuration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages,
-          temperature: 0.3,
+          input: {
+            projectName: project.name,
+            projectDescription: project.description || undefined,
+            finalSpec: spec?.finalSpec,
+            placedBlocks: selectedBlocks,
+            blockDefinitions: blockDefsObject,
+          },
           projectId: project.id,
         }),
       })
 
-      if (!res.ok) throw new Error('Failed to configure taps')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to configure taps')
+      }
 
       const data = await res.json()
-      const response = parseTapConfigResponse(data.content)
+      const response: TapConfigResponse = data.output
 
       if (!response) {
-        throw new Error('Failed to parse tap configuration response')
+        throw new Error('Failed to get tap configuration output')
       }
 
       setTapConfigResponse(response)
@@ -353,7 +358,8 @@ export function ManufacturingExportPanel({
                 Bill of Materials
                 {configuredTapStates.length > 0 && (
                   <span className="text-amber-400">
-                    {' '}({configuredTapStates.filter((t) => !t.populated).length} DNP)
+                    {' '}
+                    ({configuredTapStates.filter((t) => !t.populated).length} DNP)
                   </span>
                 )}
               </div>
