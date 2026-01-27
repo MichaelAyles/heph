@@ -1,8 +1,8 @@
 # PHAESTUS Code Review & Technical Debt
 
-**Last Review**: January 24, 2026
+**Last Review**: January 27, 2026
 **Overall Status**: Production-ready with identified issues
-**Test Coverage**: 600 tests (all passing)
+**Test Coverage**: 585 tests (all passing)
 
 ---
 
@@ -13,8 +13,9 @@ The codebase is mature and production-ready with solid engineering practices:
 - Multi-stage workspace (PCB, Enclosure, Firmware, Export)
 - LangGraph orchestrator with state machine workflows, checkpointing, and 8 specialized agents
 - Gerber-based PCB merging for manufacturing output (replaces KiCad S-expression parsing)
-- Remote boards system for off-grid components (buttons, displays, connectors)
-- Panelization with v-score lines for manufacturing multiple boards together
+- Remote-type blocks for cable-connected components (buttons, displays, connectors)
+- Board selector for switching between main board and cable-connected views
+- Per-board schematic/PCB generation with separate artifacts
 - Enhanced exports: Manufacturing BOM, Design Document (JSON/MD), Panelized Gerbers
 - Comprehensive LLM integration with retry logic, streaming, and tool calling
 - 18 database migrations, WorkOS OAuth, user approval workflow
@@ -26,7 +27,18 @@ The codebase is mature and production-ready with solid engineering practices:
 - LLM-assisted block import wizard
 - 40 development blog posts documenting architecture decisions
 
-### Recent Changes (Jan 24, 2026)
+### Recent Changes (Jan 27, 2026)
+
+| Change | Commit | Impact |
+|--------|--------|--------|
+| Simplify PCB board system | b021b6b | Remove RemoteBoard entities, use only remote-type blocks |
+| Add board selector | b021b6b | Switch between main board and cable-connected blocks |
+| Per-board generation | b021b6b | Main board and remote-type blocks get separate schematic/PCB |
+| Fix gerber loading | ced210c | Auto-reload gerbers on board selection change |
+| Add gerber error messaging | ced210c | Show which blocks are missing gerber files |
+| Add gerber debug logging | dd0587b | Log ZIP contents and layer pattern matching |
+
+### Earlier Changes (Jan 24, 2026)
 
 | Change | Commit | Impact |
 |--------|--------|--------|
@@ -40,13 +52,10 @@ The codebase is mature and production-ready with solid engineering practices:
 
 | Change | Commit | Impact |
 |--------|--------|--------|
-| Add Remote Boards system | - | Off-grid boards with connection mapping |
-| Add Panelization service | - | V-score layout for manufacturing |
+| Add remote-type block support | - | Cable-connected blocks with isRemote flag |
 | Add BOM generator | - | Component aggregation with nofit marking |
 | Add Design Document export | - | JSON/Markdown design documentation |
-| Add PanelPreview component | - | SVG panel visualization |
-| Add RemoteBoardManager UI | - | Remote board creation/editing |
-| Enhanced Export stage | - | Manufacturing BOM, Design Doc, Panel Gerbers |
+| Enhanced Export stage | - | Manufacturing BOM, Design Doc |
 
 ### Earlier Changes (Jan 19-20, 2026)
 
@@ -181,12 +190,10 @@ OrchestratorGraph (parent)
 | `langgraph/state.ts` | 604 | New - State management |
 | `langgraph/checkpointer.ts` | 628 | New - Persistence |
 | `gerber-merge.ts` | 621 | Manufacturing output |
-| `remote-board.ts` | 400 | New - Remote board management |
-| `panel-merge.ts` | 407 | New - Panelization |
 | `bom-generator.ts` | 265 | New - BOM aggregation |
 | `design-document.ts` | 320 | New - Design export |
-| `RemoteBoardManager.tsx` | 320 | New - Remote board UI |
-| `PanelPreview.tsx` | 248 | New - Panel visualization |
+| `RemoteTypeBlocksPreview.tsx` | ~100 | Cable-connected blocks preview |
+| `BoardSelector` | ~60 | Board selection UI (in PCBStageView) |
 | `SpecPage.tsx` | 362 | Refactored |
 | `SpecStageView.tsx` | 1495 | Monitor |
 | `EnclosureStageView.tsx` | 962 | Good |
@@ -304,10 +311,9 @@ OrchestratorGraph (parent)
 6. Add pagination bounds check (large offsets on expensive queries)
 7. Add message boundary awareness to trimConversationHistory (keep assistant+tool pairs together)
 8. Add tests for new services:
-   - `remote-board.ts` - Connection mapping validation, signal suggestion
-   - `panel-merge.ts` - Layout calculation, v-score generation
    - `bom-generator.ts` - Component aggregation, nofit marking
    - `design-document.ts` - JSON/Markdown export formatting
+9. Fix gerber loading pattern matching for KiCad-exported gerbers (investigating)
 
 ---
 
@@ -341,17 +347,20 @@ OrchestratorGraph (parent)
 - Panelization with automatic v-score generation
 - Enhanced exports: Manufacturing BOM, Design Document, Panelized Gerbers
 
-### Remote Boards & Panelization
-- 4 board types: button, display, connector, custom
-- Connection mapping with GND requirement validation
-- Auto-suggest connections based on signal name similarity
-- Panel layout algorithm with v-score separation lines
-- PanelPreview component for visual layout inspection
+### Remote-Type Blocks (Cable-Connected)
+- Remote-type blocks are blocks with `isRemote: true` or no `gridSize` in their definition
+- These connect to the main board via cable (FFC, JST, etc.) rather than bus
+- Board selector allows switching between main grid view and cable-connected view
+- Per-board generation: main board and remote-type blocks get separate schematic/PCB artifacts
+- Gerber viewer supports separate viewing of each board type
+- 3D viewer filters blocks based on selected board
 
 ### Recent
 - 18 database migrations
-- 40 development blog posts
+- 44 development blog posts
 - CI workflow with GitHub Actions for PR checks
 - Code review completed January 24, 2026
 - LangGraph admin page updated to subgraph architecture (Jan 24, 2026)
+- Simplified PCB board system to remote-type blocks only (Jan 27, 2026)
+- Added board selector and per-board generation (Jan 27, 2026)
 

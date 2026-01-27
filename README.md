@@ -28,7 +28,7 @@ PHAESTUS transforms natural language specifications into manufacturable hardware
 5. **Finalization** - Generates locked spec with detailed BOM
 
 ### Workspace Stages (Post-Spec)
-- **PCB Stage** - Block selection from 21+ pre-validated modules, grid-based layout, KiCad schematic merging
+- **PCB Stage** - Block selection from 21+ pre-validated modules, grid-based layout, KiCad schematic merging, board selector for main/cable-connected blocks
 - **Enclosure Stage** - OpenSCAD generation, real-time STL preview (WASM), visual validation against blueprints
 - **Firmware Stage** - ESP32-C6 code generation (Arduino/PlatformIO), Monaco editor, multi-file support
 - **Export Stage** - Download all artifacts (spec, PCB, enclosure, firmware), gallery publishing
@@ -81,7 +81,7 @@ Open http://localhost:8788
 | **Database** | Cloudflare D1 (SQLite, 18 migrations) |
 | **Storage** | Cloudflare R2 |
 | **LLM** | OpenRouter / Google Gemini |
-| **Testing** | Vitest (816 tests, ~65% coverage) |
+| **Testing** | Vitest (585 tests, ~65% coverage) |
 
 ## Architecture
 
@@ -153,7 +153,7 @@ CI/CD via GitHub Actions on push to `main`.
 
 ## Development Blog
 
-PHAESTUS includes a development blog documenting the build process with 40 technical posts.
+PHAESTUS includes a development blog documenting the build process with 44 technical posts.
 
 **Live**: https://phaestus.app/blog
 
@@ -164,7 +164,7 @@ frontend/
 │   ├── blog0001/
 │   │   ├── blog.md          # Markdown content
 │   │   └── screenshot.png   # Images
-│   ├── blog0040/            # Latest: Gerber Merging
+│   ├── blog0044/            # Latest: Cloud Firmware Compilation
 │   │   └── ...
 └── src/data/
     └── blog-manifest.json   # Index of all posts
