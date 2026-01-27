@@ -220,22 +220,28 @@ function isValidExecutionImport(data: unknown): data is ExportedExecution | Expo
 /**
  * Convert SubgraphDefinition to FlowGraph format
  */
-function subgraphToFlowNodes(subgraph: SubgraphDefinition): GraphNodeDef[] {
-  return subgraph.nodes.map((node) => ({
-    name: node.name,
-    type: node.type,
-    displayName: node.displayName,
-    stage: subgraph.stage,
-  }))
+function subgraphToFlowNodes(subgraph: SubgraphDefinition | undefined): GraphNodeDef[] {
+  if (!subgraph?.nodes) return []
+  return subgraph.nodes
+    .filter((node) => node && typeof node.name === 'string')
+    .map((node) => ({
+      name: node.name,
+      type: node.type || 'node',
+      displayName: node.displayName || node.name,
+      stage: subgraph.stage,
+    }))
 }
 
-function subgraphToFlowEdges(subgraph: SubgraphDefinition): GraphEdgeDef[] {
-  return subgraph.edges.map((edge) => ({
-    from: edge.from,
-    to: edge.to,
-    conditional: edge.conditional,
-    label: edge.label,
-  }))
+function subgraphToFlowEdges(subgraph: SubgraphDefinition | undefined): GraphEdgeDef[] {
+  if (!subgraph?.edges) return []
+  return subgraph.edges
+    .filter((edge) => edge && edge.from && edge.to)
+    .map((edge) => ({
+      from: edge.from,
+      to: edge.to,
+      conditional: edge.conditional ?? false,
+      label: edge.label,
+    }))
 }
 
 export function AdminLangGraphPage() {

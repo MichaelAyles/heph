@@ -26,8 +26,15 @@ import '@xyflow/react/dist/style.css'
 import dagre from 'dagre'
 import { FlowNode, type FlowNodeData } from './FlowNode'
 import { FlowEdge, type FlowEdgeData } from './FlowEdge'
-import type { NodeState, EdgeState, ExecutionEvent } from '../../../services/langgraph/execution-tracer'
-import { getNodeStatesAtStep, getActiveEdgesAtStep } from '../../../services/langgraph/execution-tracer'
+import type {
+  NodeState,
+  EdgeState,
+  ExecutionEvent,
+} from '../../../services/langgraph/execution-tracer'
+import {
+  getNodeStatesAtStep,
+  getActiveEdgesAtStep,
+} from '../../../services/langgraph/execution-tracer'
 
 // =============================================================================
 // Types
@@ -117,6 +124,11 @@ function getLayoutedElements(
   storedPositions: StoredPositions = {},
   direction: 'TB' | 'LR' = 'TB'
 ): { nodes: Node[]; edges: Edge[] } {
+  // Guard against empty nodes
+  if (!nodes || nodes.length === 0) {
+    return { nodes: [], edges: [] }
+  }
+
   // Check if all nodes have stored positions - if so, skip dagre entirely
   const allHavePositions = nodes.every((node) => storedPositions[node.id])
 
@@ -125,10 +137,11 @@ function getLayoutedElements(
     dagreGraph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100 })
 
     nodes.forEach((node) => {
-      const nodeData = node.data as FlowNodeData
+      const nodeData = node.data as FlowNodeData | undefined
+      const nodeType = nodeData?.nodeType
       dagreGraph.setNode(node.id, {
-        width: nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 80 : NODE_WIDTH,
-        height: nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 40 : NODE_HEIGHT,
+        width: nodeType === 'start' || nodeType === 'end' ? 80 : NODE_WIDTH,
+        height: nodeType === 'start' || nodeType === 'end' ? 40 : NODE_HEIGHT,
       })
     })
 
@@ -140,9 +153,10 @@ function getLayoutedElements(
   }
 
   const layoutedNodes = nodes.map((node) => {
-    const nodeData = node.data as FlowNodeData
-    const width = nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 80 : NODE_WIDTH
-    const height = nodeData.nodeType === 'start' || nodeData.nodeType === 'end' ? 40 : NODE_HEIGHT
+    const nodeData = node.data as FlowNodeData | undefined
+    const nodeType = nodeData?.nodeType
+    const width = nodeType === 'start' || nodeType === 'end' ? 80 : NODE_WIDTH
+    const height = nodeType === 'start' || nodeType === 'end' ? 40 : NODE_HEIGHT
 
     // Use stored position if available, otherwise use dagre layout
     let position: { x: number; y: number }
@@ -223,7 +237,12 @@ export function FlowGraph({
       const stats = nodeStats?.get(nodeDef.name)
 
       const data: FlowNodeData = {
-        label: nodeDef.name === '__start__' ? 'START' : nodeDef.name === '__end__' ? 'END' : nodeDef.displayName || nodeDef.name,
+        label:
+          nodeDef.name === '__start__'
+            ? 'START'
+            : nodeDef.name === '__end__'
+              ? 'END'
+              : nodeDef.displayName || nodeDef.name,
         nodeName: nodeDef.name,
         nodeType: nodeDef.type,
         category: nodeDef.category,
@@ -328,11 +347,13 @@ export function FlowGraph({
       if (!onPositionsChange) return
 
       // Save the dragged node's position
-      onPositionsChange([{
-        nodeName: node.id,
-        x: node.position.x,
-        y: node.position.y,
-      }])
+      onPositionsChange([
+        {
+          nodeName: node.id,
+          x: node.position.x,
+          y: node.position.y,
+        },
+      ])
     },
     [onPositionsChange]
   )
@@ -400,9 +421,7 @@ export function FlowGraph({
       >
         <Background color="#334155" gap={20} size={1} />
         {showControls && (
-          <Controls
-            className="!bg-surface-800 !border-surface-600 !shadow-lg [&_button]:!bg-surface-700 [&_button]:!border-surface-600 [&_button:hover]:!bg-surface-600 [&_button_svg]:!fill-steel"
-          />
+          <Controls className="!bg-surface-800 !border-surface-600 !shadow-lg [&_button]:!bg-surface-700 [&_button]:!border-surface-600 [&_button:hover]:!bg-surface-600 [&_button_svg]:!fill-steel" />
         )}
         {showMinimap && (
           <MiniMap

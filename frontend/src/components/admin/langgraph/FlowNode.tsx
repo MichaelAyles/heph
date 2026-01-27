@@ -98,10 +98,19 @@ function getPromptPreview(prompt: string | undefined, maxLength: number = 80): s
 }
 
 function FlowNodeComponent({ data, selected }: FlowNodeProps) {
+  // Guard against undefined data
+  if (!data) {
+    return (
+      <div className="px-4 py-2 bg-surface-800 rounded border border-surface-600 text-steel-dim text-xs">
+        Invalid node data
+      </div>
+    )
+  }
+
   const {
-    label,
+    label = 'Unknown',
     nodeName,
-    nodeType,
+    nodeType = 'node',
     category,
     stage,
     systemPrompt,
@@ -187,17 +196,23 @@ function FlowNodeComponent({ data, selected }: FlowNodeProps) {
       />
 
       {/* Header with node name */}
-      <div className={clsx('px-2.5 py-1.5 border-b flex items-center justify-between', colors.header)}>
+      <div
+        className={clsx('px-2.5 py-1.5 border-b flex items-center justify-between', colors.header)}
+      >
         <div className="flex items-center gap-1.5 min-w-0">
           <Cpu className={clsx('w-3 h-3 flex-shrink-0', colors.accent)} />
-          <span className={clsx('text-xs font-semibold truncate', colors.label)}>
-            {label}
-          </span>
+          <span className={clsx('text-xs font-semibold truncate', colors.label)}>{label}</span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {statusIcon}
           {category && (
-            <span className={clsx('text-[9px] uppercase font-medium px-1 rounded', colors.text, 'bg-black/20')}>
+            <span
+              className={clsx(
+                'text-[9px] uppercase font-medium px-1 rounded',
+                colors.text,
+                'bg-black/20'
+              )}
+            >
               {category.slice(0, 3)}
             </span>
           )}
