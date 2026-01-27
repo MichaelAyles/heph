@@ -6,6 +6,8 @@
  * - Power provides/requires for each block
  * - Signal usage (I2C, SPI, GPIO)
  * - Power budget summary
+ * - Multi-column blocks spanning their actual width
+ * - Remote boards shown separately (not on bus)
  */
 
 import { useMemo } from 'react'
@@ -20,11 +22,14 @@ import {
   Wrench,
   AlertTriangle,
   CheckCircle2,
+  Monitor,
+  ToggleLeft,
+  Usb,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { BlockDefinition } from '../../schemas/block'
 import type { PlacedBlock } from '../../db/schema'
-import { calculatePowerBudget, type PowerBudget } from '../../services/pcb-grid'
+import { calculatePowerBudget, getEffectiveSize, type PowerBudget } from '../../services/pcb-grid'
 
 // =============================================================================
 // Types
@@ -73,34 +78,75 @@ export function BusConnectionDiagram({
   variant = 'diagram',
   className,
 }: BusConnectionDiagramProps) {
-  // Get block definitions in placement order (sorted by row, then column)
-  const sortedBlocks = useMemo(() => {
-    const blocksWithDefs = placedBlocks
-      .map((placement) => ({
-        placement,
-        block: blockDefinitions.get(placement.blockSlug),
-      }))
-      .filter((b): b is { placement: PlacedBlock; block: BlockDefinition } => b.block !== undefined)
+  // Separate main board blocks from remote boards
+  const { mainBoardBlocks, remoteBlocks } = useMemo(() => {
+    const main: Array<{ placement: PlacedBlock; block: BlockDefinition }> = []
+    const remote: Array<{ placement: PlacedBlock; block: BlockDefinition }> = []
 
-    // Sort by gridY first (top to bottom), then by gridX (left to right)
-    return blocksWithDefs.sort((a, b) => {
+    for (const placement of placedBlocks) {
+      const block = blockDefinitions.get(placement.blockSlug)
+      if (!block) continue
+
+      // Remote blocks don't have gridSize
+      if (!block.gridSize || block.gridSize[0] === 0) {
+        remote.push({ placement, block })
+      } else {
+        main.push({ placement, block })
+      }
+    }
+
+    // Sort main blocks by gridY first (top to bottom), then by gridX (left to right)
+    main.sort((a, b) => {
       if (a.placement.gridY !== b.placement.gridY) {
         return a.placement.gridY - b.placement.gridY
       }
       return a.placement.gridX - b.placement.gridX
     })
+
+    return { mainBoardBlocks: main, remoteBlocks: remote }
   }, [placedBlocks, blockDefinitions])
 
-  // Group blocks by column for the diagram view
+  // Get block definitions in placement order (sorted by row, then column)
+  const sortedBlocks = mainBoardBlocks
+
+  // Group blocks by column for the diagram view, accounting for block width
+  // A 2-wide block at column 0 should appear in BOTH column 0 and column 1
   const blocksByColumn = useMemo(() => {
-    const columns = new Map<number, Array<{ placement: PlacedBlock; block: BlockDefinition }>>()
+    // First, determine the total number of columns needed
+    let maxColumn = 0
+    for (const item of sortedBlocks) {
+      const [width] = getEffectiveSize(item.block, item.placement.rotation)
+      maxColumn = Math.max(maxColumn, item.placement.gridX + width - 1)
+    }
+
+    // Create column arrays
+    const columns = new Map<
+      number,
+      Array<{
+        placement: PlacedBlock
+        block: BlockDefinition
+        isSpan: boolean
+        spanStart: number
+        spanWidth: number
+      }>
+    >()
 
     for (const item of sortedBlocks) {
-      const col = item.placement.gridX
-      if (!columns.has(col)) {
-        columns.set(col, [])
+      const [width] = getEffectiveSize(item.block, item.placement.rotation)
+      const startCol = item.placement.gridX
+
+      // Add this block to each column it spans
+      for (let col = startCol; col < startCol + width; col++) {
+        if (!columns.has(col)) {
+          columns.set(col, [])
+        }
+        columns.get(col)!.push({
+          ...item,
+          isSpan: col !== startCol, // True if this is not the leftmost column of the block
+          spanStart: startCol,
+          spanWidth: width,
+        })
       }
-      columns.get(col)!.push(item)
     }
 
     // Sort each column by gridY (top to bottom)
@@ -134,48 +180,122 @@ export function BusConnectionDiagram({
   }
 
   return (
-    <div className={clsx('flex flex-col gap-4', className)}>
+    <div className={clsx('flex flex-col gap-6', className)}>
+      {/* Main Board Bus Topology */}
+      <div className="flex flex-col gap-4">
+        {/* Header */}
+        <div className="text-center">
+          <h3 className="text-sm font-medium text-steel">Main Board Bus Topology</h3>
+          <p className="text-xs text-steel-dim mt-0.5">North → South signal flow per column</p>
+        </div>
+
+        {/* Columns side by side */}
+        <div className="flex gap-4 justify-center flex-wrap">
+          {blocksByColumn.map(([colNum, colBlocks]) => (
+            <div key={colNum} className="flex flex-col items-center">
+              {/* Column header */}
+              <div className="text-xs font-medium text-steel-dim mb-2 px-2 py-0.5 bg-surface-800 rounded">
+                Column {colNum}
+              </div>
+
+              {/* Block chain for this column */}
+              <div className="flex flex-col items-center gap-1">
+                {colBlocks.map((item, index) => (
+                  <div
+                    key={`${item.placement.blockId}-${colNum}`}
+                    className="flex flex-col items-center"
+                  >
+                    {item.isSpan ? (
+                      // This is a span column - show a connector indicating the block spans here
+                      <SpanIndicator
+                        block={item.block}
+                        spanStart={item.spanStart}
+                        spanWidth={item.spanWidth}
+                        currentCol={colNum}
+                        isFirst={index === 0}
+                        isLast={index === colBlocks.length - 1}
+                      />
+                    ) : (
+                      // This is the main column for this block
+                      <BlockCard
+                        block={item.block}
+                        placement={item.placement}
+                        isFirst={index === 0}
+                        isLast={index === colBlocks.length - 1}
+                        spanWidth={item.spanWidth}
+                      />
+                    )}
+                    {index < colBlocks.length - 1 && (
+                      <div className="flex flex-col items-center py-1">
+                        <div className="w-0.5 h-3 bg-surface-600" />
+                        <ArrowDown className="w-3 h-3 text-surface-500" />
+                        <div className="text-[8px] text-surface-500 mt-0.5">ALL signals</div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Power budget summary */}
+        <PowerBudgetSummary budget={powerBudget} />
+      </div>
+
+      {/* Remote Boards Section */}
+      {remoteBlocks.length > 0 && <RemoteBoardsSection remoteBlocks={remoteBlocks} />}
+    </div>
+  )
+}
+
+// =============================================================================
+// Span Indicator Component (for multi-column blocks)
+// =============================================================================
+
+interface SpanIndicatorProps {
+  block: BlockDefinition
+  spanStart: number
+  spanWidth: number
+  currentCol: number
+  isFirst: boolean
+  isLast: boolean
+}
+
+function SpanIndicator({
+  block,
+  spanStart,
+  spanWidth,
+  currentCol,
+  isFirst,
+  isLast,
+}: SpanIndicatorProps) {
+  const colorClass = CATEGORY_COLORS[block.category] || 'text-gray-400'
+  const colPosition = currentCol - spanStart + 1 // 1-indexed position in span
+
+  return (
+    <div
+      className={clsx(
+        'w-48 border rounded-lg bg-surface-800/50 overflow-hidden',
+        'border-dashed border-surface-500'
+      )}
+    >
       {/* Header */}
-      <div className="text-center">
-        <h3 className="text-sm font-medium text-steel">Bus Topology</h3>
-        <p className="text-xs text-steel-dim mt-0.5">North → South signal flow per column</p>
+      <div className="flex items-center gap-2 px-3 py-2 bg-surface-700/30 border-b border-surface-600/50">
+        <span className={clsx('text-xs font-medium truncate', colorClass)}>← {block.name}</span>
+        <span className="text-[9px] text-steel-dim ml-auto">
+          col {colPosition}/{spanWidth}
+        </span>
       </div>
 
-      {/* Columns side by side */}
-      <div className="flex gap-6 justify-center flex-wrap">
-        {blocksByColumn.map(([colNum, colBlocks]) => (
-          <div key={colNum} className="flex flex-col items-center">
-            {/* Column header */}
-            <div className="text-xs font-medium text-steel-dim mb-2 px-2 py-0.5 bg-surface-800 rounded">
-              Column {colNum}
-            </div>
+      {/* Content */}
+      <div className="px-3 py-2 text-xs text-steel-dim italic">Spans from column {spanStart}</div>
 
-            {/* Block chain for this column */}
-            <div className="flex flex-col items-center gap-1">
-              {colBlocks.map((item, index) => (
-                <div key={item.placement.blockId} className="flex flex-col items-center">
-                  <BlockCard
-                    block={item.block}
-                    placement={item.placement}
-                    isFirst={index === 0}
-                    isLast={index === colBlocks.length - 1}
-                  />
-                  {index < colBlocks.length - 1 && (
-                    <div className="flex flex-col items-center py-1">
-                      <div className="w-0.5 h-3 bg-surface-600" />
-                      <ArrowDown className="w-3 h-3 text-surface-500" />
-                      <div className="text-[8px] text-surface-500 mt-0.5">ALL signals</div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+      {/* Edge indicators */}
+      <div className="flex justify-between px-3 py-1 bg-surface-900/50 text-[8px] text-surface-500">
+        <span>{isFirst ? '↑ North edge' : '↑ Bus in'}</span>
+        <span>{isLast ? 'South edge ↓' : 'Bus out ↓'}</span>
       </div>
-
-      {/* Power budget summary */}
-      <PowerBudgetSummary budget={powerBudget} />
     </div>
   )
 }
@@ -189,9 +309,10 @@ interface BlockCardProps {
   placement: PlacedBlock
   isFirst: boolean
   isLast: boolean
+  spanWidth?: number
 }
 
-function BlockCard({ block, placement, isFirst, isLast }: BlockCardProps) {
+function BlockCard({ block, placement, isFirst, isLast, spanWidth = 1 }: BlockCardProps) {
   const Icon = CATEGORY_ICONS[block.category] || Wrench
   const colorClass = CATEGORY_COLORS[block.category] || 'text-gray-400'
 
@@ -246,6 +367,9 @@ function BlockCard({ block, placement, isFirst, isLast }: BlockCardProps) {
       <div className="flex items-center gap-2 px-3 py-2 bg-surface-700/50 border-b border-surface-600">
         <Icon className={clsx('w-4 h-4', colorClass)} />
         <span className="text-sm font-medium text-steel flex-1 truncate">{block.name}</span>
+        {spanWidth > 1 && (
+          <span className="text-[9px] bg-copper/20 text-copper px-1 rounded">{spanWidth}w</span>
+        )}
         <span className="text-[10px] text-steel-dim font-mono">
           ({placement.gridX},{placement.gridY})
         </span>
@@ -458,7 +582,11 @@ function BusConnectionTable({ blocks, powerBudget, className }: BusConnectionTab
                     ({placement.gridX},{placement.gridY})
                   </td>
                   <td className="px-3 py-1.5 font-mono">
-                    {block.gridSize ? `${block.gridSize[0]}x${block.gridSize[1]}` : block.isRemote ? 'Remote' : '-'}
+                    {block.gridSize
+                      ? `${block.gridSize[0]}x${block.gridSize[1]}`
+                      : block.isRemote
+                        ? 'Remote'
+                        : '-'}
                   </td>
                   <td className="px-3 py-1.5 text-green-400">
                     {provides.length > 0 ? provides.join(', ') : '-'}
@@ -478,6 +606,98 @@ function BusConnectionTable({ blocks, powerBudget, className }: BusConnectionTab
 
       {/* Power summary */}
       <PowerBudgetSummary budget={powerBudget} />
+    </div>
+  )
+}
+
+// =============================================================================
+// Remote Boards Section Component
+// =============================================================================
+
+const REMOTE_TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  button: ToggleLeft,
+  display: Monitor,
+  connector: Usb,
+  custom: Cpu,
+}
+
+const REMOTE_TYPE_COLORS: Record<string, string> = {
+  button: 'text-amber-400',
+  display: 'text-cyan-400',
+  connector: 'text-pink-400',
+  custom: 'text-purple-400',
+}
+
+interface RemoteBoardsSectionProps {
+  remoteBlocks: Array<{ placement: PlacedBlock; block: BlockDefinition }>
+}
+
+function RemoteBoardsSection({ remoteBlocks }: RemoteBoardsSectionProps) {
+  return (
+    <div className="border-t border-surface-600 pt-6">
+      {/* Header */}
+      <div className="text-center mb-4">
+        <h3 className="text-sm font-medium text-steel flex items-center justify-center gap-2">
+          <Cable className="w-4 h-4 text-copper" />
+          Remote Boards
+        </h3>
+        <p className="text-xs text-steel-dim mt-0.5">Off-bus boards connected via cable</p>
+      </div>
+
+      {/* Remote boards list */}
+      <div className="flex gap-4 justify-center flex-wrap">
+        {remoteBlocks.map(({ placement, block }) => {
+          // Determine board type from block properties
+          const boardType = block.isRemote || 'custom'
+          const Icon =
+            REMOTE_TYPE_ICONS[typeof boardType === 'string' ? boardType : 'custom'] || Cpu
+          const colorClass =
+            REMOTE_TYPE_COLORS[typeof boardType === 'string' ? boardType : 'custom'] ||
+            'text-purple-400'
+
+          // Collect signals
+          const signals: string[] = []
+          if (block.bus.i2c?.addresses) {
+            signals.push(
+              `I2C: ${block.bus.i2c.addresses.map((a) => `0x${a.toString(16)}`).join(', ')}`
+            )
+          }
+          if (block.bus.gpio?.claims) {
+            signals.push(`GPIO: ${block.bus.gpio.claims.join(', ')}`)
+          }
+
+          return (
+            <div
+              key={placement.blockId}
+              className="w-56 border border-dashed border-surface-500 rounded-lg bg-surface-800/50 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-surface-700/30 border-b border-surface-600/50">
+                <Icon className={clsx('w-4 h-4', colorClass)} />
+                <span className="text-sm font-medium text-steel flex-1 truncate">{block.name}</span>
+                <Cable className="w-3 h-3 text-surface-500" />
+              </div>
+
+              {/* Content */}
+              <div className="px-3 py-2 space-y-1.5 text-xs">
+                {signals.length > 0 ? (
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-400 font-medium w-14 flex-shrink-0">Signals:</span>
+                    <span className="text-steel-dim">{signals.join('; ')}</span>
+                  </div>
+                ) : (
+                  <span className="text-steel-dim italic">No bus signals</span>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-3 py-1 bg-surface-900/50 text-[8px] text-surface-500 text-center">
+                Not on main bus • Connect via cable
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
