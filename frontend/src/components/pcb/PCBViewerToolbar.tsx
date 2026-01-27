@@ -26,7 +26,7 @@ interface PCBViewerToolbarProps {
   onViewModeChange: (mode: ViewMode) => void
   onLoadGerbers: () => void
   selectedBlocksCount: number
-  panelConfig: PanelConfiguration | null
+  panelConfig?: PanelConfiguration | null
   hasSchematicData: boolean
   boardSize: { widthMm: number; heightMm: number; width: number; height: number } | null
   validationResult: { valid: boolean; errors: string[] } | null
@@ -42,7 +42,7 @@ export function PCBViewerToolbar({
   onViewModeChange,
   onLoadGerbers,
   selectedBlocksCount,
-  panelConfig,
+  panelConfig = null,
   hasSchematicData,
   boardSize,
   validationResult,
@@ -118,8 +118,8 @@ export function PCBViewerToolbar({
         {/* Board size info */}
         {boardSize && boardSize.width > 0 && (
           <span className="text-xs text-steel-dim px-2 py-1 bg-surface-800 rounded font-mono">
-            {boardSize.widthMm.toFixed(1)}×{boardSize.heightMm.toFixed(1)}mm (
-            {boardSize.width}×{boardSize.height} units)
+            {boardSize.widthMm.toFixed(1)}×{boardSize.heightMm.toFixed(1)}mm ({boardSize.width}×
+            {boardSize.height} units)
           </span>
         )}
 

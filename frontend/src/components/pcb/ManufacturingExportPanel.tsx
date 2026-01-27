@@ -37,8 +37,8 @@ interface ManufacturingExportPanelProps {
   blockDefinitions: Map<string, BlockDefinition>
   blocks: PcbBlock[]
   pcbArtifacts?: PCBArtifacts | null
-  remoteBoards: RemoteBoard[]
-  panelConfig: PanelConfiguration | null
+  remoteBoards?: RemoteBoard[]
+  panelConfig?: PanelConfiguration | null
   boardSize: { widthMm: number; heightMm: number } | null
   initialTapStates: ResistorTapState[]
   onTapStatesChange: (states: ResistorTapState[]) => void
@@ -51,8 +51,8 @@ export function ManufacturingExportPanel({
   blockDefinitions,
   blocks,
   pcbArtifacts,
-  remoteBoards,
-  panelConfig,
+  remoteBoards = [],
+  panelConfig = null,
   boardSize,
   initialTapStates,
   onTapStatesChange,

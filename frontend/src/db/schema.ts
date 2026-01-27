@@ -144,7 +144,11 @@ export interface PCBArtifacts {
   netList?: NetAssignment[]
   // Timestamp of last merge
   mergedAt?: string
-  // Remote boards (off-grid boards like button panels, displays)
+  // Remote-type blocks schematic (cable-connected blocks with isRemote: true)
+  remoteTypeSchematicData?: string
+  // Remote-type blocks PCB data
+  remoteTypePcbData?: string
+  // Legacy: Remote boards (deprecated, use remote-type blocks instead)
   remoteBoards?: RemoteBoard[]
   // Panel configuration for manufacturing
   panelConfig?: PanelConfiguration

@@ -11,9 +11,7 @@ import {
   Grid3X3,
   Sparkles,
   Layers,
-  ChevronDown,
-  ChevronRight,
-  Monitor,
+  Cable,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
@@ -22,10 +20,7 @@ import { PCB3DViewer } from '../../components/pcb/PCB3DViewer'
 import { GridEditor } from '../../components/pcb/GridEditor'
 import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
 import { GerberViewer } from '../../components/pcb/GerberViewer'
-import { RemoteBoardManager } from '../../components/pcb/RemoteBoardManager'
-import { RemoteBoardPreview } from '../../components/pcb/RemoteBoardPreview'
 import { RemoteTypeBlocksPreview } from '../../components/pcb/RemoteTypeBlocksPreview'
-import { PanelPreview } from '../../components/pcb/PanelPreview'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
 import { PCBViewerToolbar, type ViewMode } from '../../components/pcb/PCBViewerToolbar'
 import { SelectedBlocksBar } from '../../components/pcb/SelectedBlocksBar'
@@ -39,15 +34,12 @@ import {
   type BlockCatalogEntry,
 } from '../../prompts/pcb-selection'
 import { validateGrid, fromPlacedBlocks, calculateBoardSize } from '../../services/pcb-grid'
-import { getMainBoardSignals } from '../../services/remote-board'
-import { calculatePanelLayout } from '../../services/panel-merge'
 import { logger } from '../../lib/logger'
 import type {
   PcbBlock,
   PlacedBlock,
   PCBArtifacts,
   NetAssignment,
-  RemoteBoard,
   ResistorTapState,
 } from '../../db/schema'
 import type { BlockDefinition } from '../../schemas/block'
@@ -67,10 +59,8 @@ export function PCBStageView() {
   const [gridHeight, setGridHeight] = useState(6)
   const [gerberLayers, setGerberLayers] = useState<Record<string, string>>({})
   const [isLoadingGerbers, setIsLoadingGerbers] = useState(false)
-  const [remoteBoards, setRemoteBoards] = useState<RemoteBoard[]>([])
-  const [showRemoteBoards, setShowRemoteBoards] = useState(false)
   const [configuredTapStates, setConfiguredTapStates] = useState<ResistorTapState[]>([])
-  // Selected board for gerbers/3D view: null = main board, string = remote board ID
+  // Selected board for gerbers/3D view: null = main board, '__remote_type__' = cable-connected blocks
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null)
 
   const specComplete = project?.status === 'complete'
@@ -109,13 +99,6 @@ export function PCBStageView() {
     }
   }, [pcbArtifacts?.placedBlocks])
 
-  // Initialize remote boards from spec if available
-  useMemo(() => {
-    if (pcbArtifacts?.remoteBoards && remoteBoards.length === 0) {
-      setRemoteBoards(pcbArtifacts.remoteBoards)
-    }
-  }, [pcbArtifacts?.remoteBoards])
-
   // Initialize tap states from spec if available
   useMemo(() => {
     if (pcbArtifacts?.resistorTapStates && configuredTapStates.length === 0) {
@@ -123,30 +106,36 @@ export function PCBStageView() {
     }
   }, [pcbArtifacts?.resistorTapStates])
 
-  // Calculate main board signals for remote board connection mapping
-  const mainBoardSignals = useMemo(() => {
-    return getMainBoardSignals(selectedBlocks, blockDefinitions)
+  // Separate main grid blocks from remote-type blocks (isRemote: true)
+  const { mainGridBlocks, remoteTypeBlocks } = useMemo(() => {
+    const main: PlacedBlock[] = []
+    const remote: PlacedBlock[] = []
+
+    for (const block of selectedBlocks) {
+      const def = blockDefinitions.get(block.blockSlug)
+      if (!def) continue
+      if (def.isRemote || !def.gridSize) {
+        remote.push(block)
+      } else {
+        main.push(block)
+      }
+    }
+
+    return { mainGridBlocks: main, remoteTypeBlocks: remote }
   }, [selectedBlocks, blockDefinitions])
 
-  // Get blocks for currently selected board (main or remote)
-  const viewingBlocks = useMemo(() => {
-    if (!selectedBoardId) {
-      // Main board - filter to only non-remote blocks
-      return selectedBlocks.filter((b) => {
-        const def = blockDefinitions.get(b.blockSlug)
-        return def && !def.isRemote && def.gridSize
-      })
-    }
-    // Remote board
-    const remoteBoard = remoteBoards.find((rb) => rb.id === selectedBoardId)
-    return remoteBoard?.placedBlocks || []
-  }, [selectedBoardId, selectedBlocks, blockDefinitions, remoteBoards])
+  // Special board ID for remote-type blocks
+  const REMOTE_TYPE_BOARD_ID = '__remote_type__'
 
-  // Get the selected board object (null for main board)
-  const selectedRemoteBoard = useMemo(() => {
-    if (!selectedBoardId) return null
-    return remoteBoards.find((rb) => rb.id === selectedBoardId) || null
-  }, [selectedBoardId, remoteBoards])
+  // Get blocks for currently selected board (main or remote-type)
+  const viewingBlocks = useMemo(() => {
+    if (selectedBoardId === REMOTE_TYPE_BOARD_ID) {
+      // Remote-type blocks (cable-connected)
+      return remoteTypeBlocks
+    }
+    // Main board - only grid blocks
+    return mainGridBlocks
+  }, [selectedBoardId, mainGridBlocks, remoteTypeBlocks])
 
   // Validate current placement and calculate board size
   const { validationResult, boardSize } = useMemo(() => {
@@ -157,21 +146,6 @@ export function PCBStageView() {
       boardSize: calculateBoardSize(gridState),
     }
   }, [selectedBlocks, blockDefinitions, gridWidth, gridHeight])
-
-  // Calculate panel configuration when remote boards exist
-  const panelConfig = useMemo(() => {
-    if (remoteBoards.length === 0 || !boardSize) return null
-    const mainBoardSizeMm = {
-      width: boardSize.widthMm,
-      height: boardSize.heightMm,
-    }
-    // Map remote boards to include actual size (use boardSize since we don't have gerbers yet)
-    const remoteBoardsWithSizes = remoteBoards.map((board) => ({
-      board,
-      actualSize: { width: board.boardSize.width, height: board.boardSize.height },
-    }))
-    return calculatePanelLayout(mainBoardSizeMm, remoteBoardsWithSizes)
-  }, [remoteBoards, boardSize])
 
   // Generate documentation
   const documentOutput = useMemo(() => {
@@ -262,15 +236,6 @@ export function PCBStageView() {
       savePCBMutation.mutate({ placedBlocks: blocks })
     },
     [savePCBMutation]
-  )
-
-  // Handle remote boards change
-  const handleRemoteBoardsChange = useCallback(
-    (boards: RemoteBoard[]) => {
-      setRemoteBoards(boards)
-      savePCBMutation.mutate({ placedBlocks: selectedBlocks, remoteBoards: boards })
-    },
-    [savePCBMutation, selectedBlocks]
   )
 
   // Handle block removal
@@ -461,10 +426,15 @@ export function PCBStageView() {
       // 1. Process MAIN BOARD
       // =========================================================================
 
-      // Filter to only non-remote blocks for main board
+      // Separate blocks into main grid and remote-type
       const mainBoardBlocks = selectedBlocks.filter((b) => {
         const def = blockDefinitions.get(b.blockSlug)
         return def && !def.isRemote && def.gridSize
+      })
+
+      const remoteTypeBlocksList = selectedBlocks.filter((b) => {
+        const def = blockDefinitions.get(b.blockSlug)
+        return def && (def.isRemote || !def.gridSize)
       })
 
       const mainBlockData = blocksData.blocks.filter((b) =>
@@ -515,62 +485,42 @@ export function PCBStageView() {
       }))
 
       // =========================================================================
-      // 2. Process REMOTE BOARDS
+      // 2. Process REMOTE-TYPE BLOCKS (cable-connected)
       // =========================================================================
 
-      const updatedRemoteBoards: RemoteBoard[] = await Promise.all(
-        remoteBoards.map(async (board) => {
-          if (board.placedBlocks.length === 0) {
-            // No blocks on this remote board, skip generation
-            return board
-          }
+      let remoteTypeSchematicData: string | undefined
+      let remoteTypePcbData: string | undefined
 
-          const remoteBoardBlockData = blocksData.blocks.filter((b) =>
-            board.placedBlocks.some((pb) => pb.blockSlug === b.slug)
+      if (remoteTypeBlocksList.length > 0) {
+        const remoteBlockData = blocksData.blocks.filter((b) =>
+          remoteTypeBlocksList.some((rb) => rb.blockSlug === b.slug)
+        )
+
+        try {
+          const remoteSchematicResult = await mergeBlockSchematics(
+            remoteTypeBlocksList,
+            remoteBlockData,
+            `${project.name}-remote`
           )
+          remoteTypeSchematicData = remoteSchematicResult.schematic
+        } catch (err) {
+          logger.warn('pcb', 'Remote-type blocks schematic merge failed', { error: err })
+        }
 
-          let remoteBoardSchematic: string | undefined
-          let remoteBoardPcb: string | undefined
-
-          try {
-            // Merge remote board schematic
-            const remoteSchematicResult = await mergeBlockSchematics(
-              board.placedBlocks,
-              remoteBoardBlockData,
-              `${project.name}-${board.slug}`
+        try {
+          const blocksWithPcb = remoteBlockData.filter((b) => b.files?.pcb)
+          if (blocksWithPcb.length > 0) {
+            const remotePcbResult = await mergeBlockPCBs(
+              remoteTypeBlocksList,
+              remoteBlockData,
+              `${project.name}-remote`
             )
-            remoteBoardSchematic = remoteSchematicResult.schematic
-          } catch (err) {
-            logger.warn('pcb', `Remote board ${board.name} schematic merge failed`, { error: err })
+            remoteTypePcbData = remotePcbResult.pcb
           }
-
-          try {
-            // Merge remote board PCB
-            const blocksWithPcb = remoteBoardBlockData.filter((b) => b.files?.pcb)
-            if (blocksWithPcb.length > 0) {
-              const remotePcbResult = await mergeBlockPCBs(
-                board.placedBlocks,
-                remoteBoardBlockData,
-                `${project.name}-${board.slug}`
-              )
-              remoteBoardPcb = remotePcbResult.pcb
-            }
-          } catch (err) {
-            logger.warn('pcb', `Remote board ${board.name} PCB merge failed`, { error: err })
-          }
-
-          // Return updated board with generated data
-          return {
-            ...board,
-            schematicData: remoteBoardSchematic,
-            pcbData: remoteBoardPcb,
-            mergedAt: new Date().toISOString(),
-          }
-        })
-      )
-
-      // Update local state with generated remote boards
-      setRemoteBoards(updatedRemoteBoards)
+        } catch (err) {
+          logger.warn('pcb', 'Remote-type blocks PCB merge failed', { error: err })
+        }
+      }
 
       // =========================================================================
       // 3. Save everything to the project
@@ -583,7 +533,9 @@ export function PCBStageView() {
         boardSize: { ...schematicResult.boardSize, unit: 'mm' as const },
         netList: transformedNetList,
         mergedAt: new Date().toISOString(),
-        remoteBoards: updatedRemoteBoards,
+        // Store remote-type data in a simple format
+        remoteTypeSchematicData,
+        remoteTypePcbData,
       })
 
       setCurrentStep('preview')
@@ -602,7 +554,6 @@ export function PCBStageView() {
     blocksData?.blocks,
     blockDefinitions,
     project?.name,
-    remoteBoards,
     savePCBMutation,
     loadGerbers,
   ])
@@ -747,31 +698,6 @@ export function PCBStageView() {
             disabled={currentStep === 'generating'}
             className="flex-1 min-h-0"
           />
-
-          {/* Remote Boards Section - Collapsible */}
-          <div className="border-t border-surface-700">
-            <button
-              onClick={() => setShowRemoteBoards(!showRemoteBoards)}
-              className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-steel-dim uppercase tracking-wider hover:bg-surface-800/50"
-            >
-              <span>Remote Boards ({remoteBoards.length})</span>
-              {showRemoteBoards ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </button>
-            {showRemoteBoards && (
-              <div className="max-h-64 overflow-y-auto">
-                <RemoteBoardManager
-                  remoteBoards={remoteBoards}
-                  mainBoardSignals={mainBoardSignals}
-                  onBoardsChange={handleRemoteBoardsChange}
-                  disabled={currentStep === 'generating'}
-                />
-              </div>
-            )}
-          </div>
         </aside>
 
         {/* Main panel */}
@@ -782,7 +708,6 @@ export function PCBStageView() {
             onViewModeChange={setViewMode}
             onLoadGerbers={loadGerbers}
             selectedBlocksCount={selectedBlocks.length}
-            panelConfig={panelConfig}
             hasSchematicData={!!pcbArtifacts?.schematicData}
             boardSize={boardSize}
             validationResult={validationResult}
@@ -821,14 +746,6 @@ export function PCBStageView() {
                       placedBlocks={selectedBlocks}
                       blockDefinitions={blockDefinitions}
                     />
-
-                    {/* Remote boards */}
-                    {remoteBoards.length > 0 && (
-                      <RemoteBoardPreview
-                        remoteBoards={remoteBoards}
-                        blockDefinitions={blockDefinitions}
-                      />
-                    )}
                   </div>
                 </div>
               ) : viewMode === 'bus' ? (
@@ -836,7 +753,6 @@ export function PCBStageView() {
                   <BusConnectionDiagram
                     placedBlocks={selectedBlocks}
                     blockDefinitions={blockDefinitions}
-                    remoteBoards={remoteBoards}
                     variant="diagram"
                   />
                 </div>
@@ -849,7 +765,8 @@ export function PCBStageView() {
                       setSelectedBoardId(id)
                       setGerberLayers({}) // Clear to force reload
                     }}
-                    remoteBoards={remoteBoards}
+                    remoteTypeBlockCount={remoteTypeBlocks.length}
+                    remoteTypeBoardId={REMOTE_TYPE_BOARD_ID}
                     onLoadGerbers={loadGerbers}
                   />
                   {/* Gerber viewer */}
@@ -882,20 +799,14 @@ export function PCBStageView() {
                   <BoardSelector
                     selectedBoardId={selectedBoardId}
                     onSelectBoard={setSelectedBoardId}
-                    remoteBoards={remoteBoards}
+                    remoteTypeBlockCount={remoteTypeBlocks.length}
+                    remoteTypeBoardId={REMOTE_TYPE_BOARD_ID}
                   />
                   {/* 3D viewer */}
                   <div className="flex-1 min-h-0">
                     {viewingBlocks.length > 0 ? (
                       <PCB3DViewer
-                        boardSize={
-                          selectedRemoteBoard
-                            ? {
-                                width: selectedRemoteBoard.boardSize.width,
-                                height: selectedRemoteBoard.boardSize.height,
-                              }
-                            : pcbArtifacts?.boardSize
-                        }
+                        boardSize={pcbArtifacts?.boardSize}
                         placedBlocks={viewingBlocks}
                         blocks={blocksData.blocks}
                         className="w-full h-full"
@@ -909,8 +820,8 @@ export function PCBStageView() {
                           />
                           <p className="text-steel-dim text-sm mb-2">No blocks on this board</p>
                           <p className="text-xs text-surface-500">
-                            {selectedBoardId
-                              ? 'Add blocks to this remote board'
+                            {selectedBoardId === REMOTE_TYPE_BOARD_ID
+                              ? 'Cable-connected blocks will be shown here'
                               : 'Select blocks from the catalog'}
                           </p>
                         </div>
@@ -943,14 +854,6 @@ export function PCBStageView() {
                     </ReactMarkdown>
                   </article>
                 </div>
-              ) : viewMode === 'panel' && panelConfig && boardSize ? (
-                <div className="p-4 flex justify-center">
-                  <PanelPreview
-                    mainBoardSize={{ width: boardSize.widthMm, height: boardSize.heightMm }}
-                    remoteBoards={remoteBoards}
-                    panelConfig={panelConfig}
-                  />
-                </div>
               ) : viewMode === 'mfg' && project && blocksData?.blocks ? (
                 <ManufacturingExportPanel
                   project={{ id: project.id, name: project.name, description: project.description }}
@@ -959,8 +862,6 @@ export function PCBStageView() {
                   blockDefinitions={blockDefinitions}
                   blocks={blocksData.blocks}
                   pcbArtifacts={pcbArtifacts}
-                  remoteBoards={remoteBoards}
-                  panelConfig={panelConfig}
                   boardSize={
                     boardSize ? { widthMm: boardSize.widthMm, heightMm: boardSize.heightMm } : null
                   }
@@ -1040,20 +941,22 @@ function StepIndicator({ step, label, active, complete, onClick, canClick }: Ste
 }
 
 // =============================================================================
-// Board Selector - Switch between main board and remote boards
+// Board Selector - Switch between main board and cable-connected blocks
 // =============================================================================
 
 interface BoardSelectorProps {
   selectedBoardId: string | null
   onSelectBoard: (boardId: string | null) => void
-  remoteBoards: RemoteBoard[]
+  remoteTypeBlockCount?: number
+  remoteTypeBoardId?: string
   onLoadGerbers?: () => void
 }
 
 function BoardSelector({
   selectedBoardId,
   onSelectBoard,
-  remoteBoards,
+  remoteTypeBlockCount = 0,
+  remoteTypeBoardId = '__remote_type__',
   onLoadGerbers,
 }: BoardSelectorProps) {
   return (
@@ -1074,22 +977,21 @@ function BoardSelector({
           Main Board
         </button>
 
-        {/* Remote board buttons */}
-        {remoteBoards.map((board) => (
+        {/* Remote-type blocks (cable-connected) */}
+        {remoteTypeBlockCount > 0 && (
           <button
-            key={board.id}
-            onClick={() => onSelectBoard(board.id)}
+            onClick={() => onSelectBoard(remoteTypeBoardId)}
             className={clsx(
               'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
-              selectedBoardId === board.id
-                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+              selectedBoardId === remoteTypeBoardId
+                ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40'
                 : 'bg-surface-700 text-steel-dim hover:text-steel hover:bg-surface-600'
             )}
           >
-            <Monitor className="w-3.5 h-3.5" />
-            {board.name}
+            <Cable className="w-3.5 h-3.5" />
+            Cable-Connected ({remoteTypeBlockCount})
           </button>
-        ))}
+        )}
       </div>
 
       {/* Load gerbers button (only shown when provided) */}
