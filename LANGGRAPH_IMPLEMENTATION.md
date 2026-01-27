@@ -21,15 +21,15 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 - [ ] Add orchestrator_prompts entries for missing nodes
 
 ### Phase 2: Migrate Nodes (in order of complexity)
-- [ ] `admin_test` - Simplest, good for testing
-- [ ] `feasibility` - Text in, JSON out
-- [ ] `refinement` - Text in, JSON out
-- [ ] `finalization` - Text in, JSON out
-- [ ] `enclosure_text` - Text in, code out
-- [ ] `enclosure_validation` - Code in, JSON out
-- [ ] `enclosure_fix` - Code in, code out
-- [ ] `firmware_generate` - Text in, multi-file out
-- [ ] `firmware_modify` - Code + text in, multi-file out
+- [x] `admin_test` - Simplest, good for testing
+- [x] `feasibility` - Text in, JSON out
+- [x] `refinement` - Text in, JSON out
+- [x] `finalization` - Text in, JSON out
+- [x] `enclosure_text` - Text in, code out
+- [x] `enclosure_validation` - Code in, JSON out
+- [x] `enclosure_fix` - Code in, code out
+- [x] `firmware_generate` - Text in, multi-file out
+- [x] `firmware_modify` - Code + text in, multi-file out
 - [ ] `blueprint` - Text in, image out (different API)
 - [ ] `enclosure_vision` - Image + text in, code out (multimodal)
 - [ ] `enclosure_regenerate` - Code + text in, code out
