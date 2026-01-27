@@ -30,11 +30,11 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 - [x] `enclosure_fix` - Code in, code out
 - [x] `firmware_generate` - Text in, multi-file out
 - [x] `firmware_modify` - Code + text in, multi-file out
-- [ ] `blueprint` - Text in, image out (different API)
-- [ ] `enclosure_vision` - Image + text in, code out (multimodal)
-- [ ] `enclosure_regenerate` - Code + text in, code out
-- [ ] `enclosure_visual_compare` - 2 images in, JSON out (multimodal)
-- [ ] `export_bom` - TBD
+- [x] `blueprint` - Text in, image out (different API)
+- [x] `enclosure_vision` - Image + text in, code out (multimodal)
+- [x] `enclosure_regenerate` - Code + text in, code out
+- [x] `enclosure_visual_compare` - 2 images in, JSON out (multimodal)
+- [ ] `export_bom` - TBD (not implemented, may not be needed)
 
 ### Phase 3: UI Integration
 - [ ] Update AdminLangGraphPage to show node registry
