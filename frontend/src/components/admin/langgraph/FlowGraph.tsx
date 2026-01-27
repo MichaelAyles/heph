@@ -124,35 +124,62 @@ function getLayoutedElements(
   storedPositions: StoredPositions = {},
   direction: 'TB' | 'LR' = 'TB'
 ): { nodes: Node[]; edges: Edge[] } {
-  // Guard against empty nodes
+  // Guard against empty or invalid nodes
   if (!nodes || nodes.length === 0) {
     return { nodes: [], edges: [] }
   }
 
+  // Filter out any invalid nodes (defensive)
+  const validNodes = nodes.filter(
+    (node) => node && typeof node.id === 'string' && node.type === 'custom'
+  )
+
+  if (validNodes.length === 0) {
+    return { nodes: [], edges: [] }
+  }
+
+  // Build a set of valid node IDs for edge filtering
+  const validNodeIds = new Set(validNodes.map((n) => n.id))
+
+  // Filter edges to only include those with valid source/target nodes
+  const validEdges = edges.filter(
+    (edge) => edge && validNodeIds.has(edge.source) && validNodeIds.has(edge.target)
+  )
+
   // Check if all nodes have stored positions - if so, skip dagre entirely
-  const allHavePositions = nodes.every((node) => storedPositions[node.id])
+  const allHavePositions = validNodes.every((node) => storedPositions[node.id])
 
   if (!allHavePositions) {
-    // Run dagre layout for nodes without positions
-    dagreGraph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100 })
+    // Create a fresh dagre graph instance to avoid stale state
+    const graph = new dagre.graphlib.Graph()
+    graph.setDefaultEdgeLabel(() => ({}))
+    graph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100 })
 
-    nodes.forEach((node) => {
+    validNodes.forEach((node) => {
       const nodeData = node.data as FlowNodeData | undefined
       const nodeType = nodeData?.nodeType
-      dagreGraph.setNode(node.id, {
+      graph.setNode(node.id, {
         width: nodeType === 'start' || nodeType === 'end' ? 80 : NODE_WIDTH,
         height: nodeType === 'start' || nodeType === 'end' ? 40 : NODE_HEIGHT,
       })
     })
 
-    edges.forEach((edge) => {
-      dagreGraph.setEdge(edge.source, edge.target)
+    validEdges.forEach((edge) => {
+      graph.setEdge(edge.source, edge.target)
     })
 
-    dagre.layout(dagreGraph)
+    dagre.layout(graph)
+
+    // Update the module-level graph for position lookups
+    validNodes.forEach((node) => {
+      const graphNode = graph.node(node.id)
+      if (graphNode) {
+        dagreGraph.setNode(node.id, graphNode)
+      }
+    })
   }
 
-  const layoutedNodes = nodes.map((node) => {
+  const layoutedNodes = validNodes.map((node) => {
     const nodeData = node.data as FlowNodeData | undefined
     const nodeType = nodeData?.nodeType
     const width = nodeType === 'start' || nodeType === 'end' ? 80 : NODE_WIDTH
@@ -164,9 +191,15 @@ function getLayoutedElements(
       position = storedPositions[node.id]
     } else {
       const nodeWithPosition = dagreGraph.node(node.id)
-      position = {
-        x: nodeWithPosition.x - width / 2,
-        y: nodeWithPosition.y - height / 2,
+      // Guard against missing dagre node (can happen during rapid updates)
+      if (nodeWithPosition && typeof nodeWithPosition.x === 'number') {
+        position = {
+          x: nodeWithPosition.x - width / 2,
+          y: nodeWithPosition.y - height / 2,
+        }
+      } else {
+        // Fallback position if dagre layout failed
+        position = { x: 0, y: 0 }
       }
     }
 
@@ -178,7 +211,7 @@ function getLayoutedElements(
     }
   })
 
-  return { nodes: layoutedNodes, edges }
+  return { nodes: layoutedNodes, edges: validEdges }
 }
 
 // =============================================================================
@@ -232,9 +265,18 @@ export function FlowGraph({
 
   // Convert node definitions to React Flow nodes
   const initialNodes = useMemo<Node[]>(() => {
-    return nodeDefs.map((nodeDef) => {
+    // Filter out any invalid node definitions
+    const validNodeDefs = nodeDefs.filter(
+      (nodeDef) => nodeDef && typeof nodeDef.name === 'string' && nodeDef.name.length > 0
+    )
+
+    return validNodeDefs.map((nodeDef) => {
       const state = calculatedNodeStates.get(nodeDef.name)
       const stats = nodeStats?.get(nodeDef.name)
+
+      // Ensure nodeType is always a valid value
+      const nodeType: 'start' | 'end' | 'node' =
+        nodeDef.type === 'start' || nodeDef.type === 'end' ? nodeDef.type : 'node'
 
       const data: FlowNodeData = {
         label:
@@ -244,7 +286,7 @@ export function FlowGraph({
               ? 'END'
               : nodeDef.displayName || nodeDef.name,
         nodeName: nodeDef.name,
-        nodeType: nodeDef.type,
+        nodeType,
         category: nodeDef.category,
         description: nodeDef.description,
         stage: nodeDef.stage,
@@ -259,7 +301,7 @@ export function FlowGraph({
 
       return {
         id: nodeDef.name,
-        type: 'custom',
+        type: 'custom' as const,
         position: { x: 0, y: 0 }, // Will be set by dagre
         data,
       }
@@ -307,39 +349,58 @@ export function FlowGraph({
 
   // Track initial load to avoid resetting user-dragged positions
   const initializedRef = useRef(false)
-  const nodeDefsKeyRef = useRef(nodeDefs.map((n) => n.name).join(','))
+  const nodeDefsKeyRef = useRef(
+    nodeDefs
+      .filter((n) => n && n.name)
+      .map((n) => n.name)
+      .join(',')
+  )
 
-  // Update nodes only when node definitions actually change (new/removed nodes)
-  // Don't reset positions for just data changes (status, etc.)
+  // Single effect to handle all node/edge updates (avoids race conditions)
   useEffect(() => {
-    const currentKey = nodeDefs.map((n) => n.name).join(',')
+    // Guard against empty layoutedNodes
+    if (!layoutedNodes || layoutedNodes.length === 0) {
+      return
+    }
+
+    const currentKey = nodeDefs
+      .filter((n) => n && n.name)
+      .map((n) => n.name)
+      .join(',')
     const nodeDefsChanged = currentKey !== nodeDefsKeyRef.current
 
     if (!initializedRef.current || nodeDefsChanged) {
+      // Full node reset when structure changes
       setNodes(layoutedNodes)
       initializedRef.current = true
       nodeDefsKeyRef.current = currentKey
+    } else {
+      // Only update node data (status, etc.) without resetting positions
+      setNodes((currentNodes) => {
+        // Guard against empty current nodes
+        if (!currentNodes || currentNodes.length === 0) {
+          return layoutedNodes
+        }
+
+        return currentNodes.map((node) => {
+          // Guard against invalid node
+          if (!node || !node.id) return node
+
+          const layoutedNode = layoutedNodes.find((n) => n && n.id === node.id)
+          if (layoutedNode) {
+            return {
+              ...node,
+              data: layoutedNode.data, // Update data but keep position
+            }
+          }
+          return node
+        })
+      })
     }
 
     // Always update edges (they carry status info)
     setEdges(layoutedEdges)
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges, nodeDefs])
-
-  // Update node data (status, etc.) without resetting positions
-  useEffect(() => {
-    setNodes((currentNodes) =>
-      currentNodes.map((node) => {
-        const layoutedNode = layoutedNodes.find((n) => n.id === node.id)
-        if (layoutedNode) {
-          return {
-            ...node,
-            data: layoutedNode.data, // Update data but keep position
-          }
-        }
-        return node
-      })
-    )
-  }, [layoutedNodes, setNodes])
 
   // Handle node drag end - save positions
   const handleNodeDragStop = useCallback(
@@ -361,8 +422,12 @@ export function FlowGraph({
   // Handle node click
   const handleNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      const nodeData = node.data as FlowNodeData
-      if (nodeData.nodeType !== 'start' && nodeData.nodeType !== 'end') {
+      // Guard against invalid node
+      if (!node || !node.id || !node.data) return
+
+      const nodeData = node.data as FlowNodeData | undefined
+      const nodeType = nodeData?.nodeType
+      if (nodeType !== 'start' && nodeType !== 'end') {
         onNodeClick?.(node.id)
       }
     },
@@ -372,8 +437,12 @@ export function FlowGraph({
   // Handle node double-click
   const handleNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      const nodeData = node.data as FlowNodeData
-      if (nodeData.nodeType !== 'start' && nodeData.nodeType !== 'end') {
+      // Guard against invalid node
+      if (!node || !node.id || !node.data) return
+
+      const nodeData = node.data as FlowNodeData | undefined
+      const nodeType = nodeData?.nodeType
+      if (nodeType !== 'start' && nodeType !== 'end') {
         onNodeDoubleClick?.(node.id)
       }
     },
