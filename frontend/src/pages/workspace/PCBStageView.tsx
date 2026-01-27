@@ -22,6 +22,7 @@ import { GridEditor } from '../../components/pcb/GridEditor'
 import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
 import { GerberViewer } from '../../components/pcb/GerberViewer'
 import { RemoteBoardManager } from '../../components/pcb/RemoteBoardManager'
+import { RemoteBoardPreview } from '../../components/pcb/RemoteBoardPreview'
 import { PanelPreview } from '../../components/pcb/PanelPreview'
 import { StageCompleteButton } from '../../components/workspace/StageCompleteButton'
 import { PCBViewerToolbar, type ViewMode } from '../../components/pcb/PCBViewerToolbar'
@@ -668,15 +669,31 @@ export function PCBStageView() {
             {/* View content */}
             <div className="flex-1 min-h-0 overflow-auto">
               {viewMode === 'grid' ? (
-                <div className="p-4 flex justify-center">
-                  <GridEditor
-                    placedBlocks={selectedBlocks}
-                    blockDefinitions={blockDefinitions}
-                    onBlocksChange={handleBlocksChange}
-                    gridWidth={gridWidth}
-                    gridHeight={gridHeight}
-                    disabled={currentStep === 'generating'}
-                  />
+                <div className="p-4 flex gap-6 justify-center items-start">
+                  {/* Main board grid */}
+                  <div className="flex flex-col">
+                    <div className="mb-2 text-xs font-medium text-steel-dim uppercase tracking-wider">
+                      Main Board
+                    </div>
+                    <GridEditor
+                      placedBlocks={selectedBlocks}
+                      blockDefinitions={blockDefinitions}
+                      onBlocksChange={handleBlocksChange}
+                      gridWidth={gridWidth}
+                      gridHeight={gridHeight}
+                      disabled={currentStep === 'generating'}
+                    />
+                  </div>
+
+                  {/* Remote boards preview */}
+                  {remoteBoards.length > 0 && (
+                    <div className="flex-shrink-0 min-w-[200px] max-w-[280px]">
+                      <RemoteBoardPreview
+                        remoteBoards={remoteBoards}
+                        blockDefinitions={blockDefinitions}
+                      />
+                    </div>
+                  )}
                 </div>
               ) : viewMode === 'bus' ? (
                 <div className="p-4">
