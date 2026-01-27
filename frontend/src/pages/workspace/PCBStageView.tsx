@@ -457,28 +457,36 @@ export function PCBStageView() {
     setCurrentStep('generating')
 
     try {
-      // Filter to get only the blocks that are selected
-      const selectedBlockData = blocksData.blocks.filter((b) =>
-        selectedBlocks.some((sb) => sb.blockSlug === b.slug)
+      // =========================================================================
+      // 1. Process MAIN BOARD
+      // =========================================================================
+
+      // Filter to only non-remote blocks for main board
+      const mainBoardBlocks = selectedBlocks.filter((b) => {
+        const def = blockDefinitions.get(b.blockSlug)
+        return def && !def.isRemote && def.gridSize
+      })
+
+      const mainBlockData = blocksData.blocks.filter((b) =>
+        mainBoardBlocks.some((sb) => sb.blockSlug === b.slug)
       )
 
-      // Merge schematic
+      // Merge main board schematic
       const schematicResult = await mergeBlockSchematics(
-        selectedBlocks,
-        selectedBlockData,
+        mainBoardBlocks,
+        mainBlockData,
         project.name
       )
 
-      // Merge PCB layout
+      // Merge main board PCB layout
       let pcbData: string | undefined
       let pcbMergeError: string | undefined
       try {
-        // Check which blocks have PCB files before attempting merge
-        const blocksWithPcb = selectedBlockData.filter((b) => b.files?.pcb)
-        const blocksWithoutPcb = selectedBlockData.filter((b) => !b.files?.pcb)
+        const blocksWithPcb = mainBlockData.filter((b) => b.files?.pcb)
+        const blocksWithoutPcb = mainBlockData.filter((b) => !b.files?.pcb)
 
         if (blocksWithoutPcb.length > 0) {
-          logger.warn('pcb', 'Some blocks missing PCB files', {
+          logger.warn('pcb', 'Some main board blocks missing PCB files', {
             missing: blocksWithoutPcb.map((b) => b.slug),
           })
         }
@@ -486,18 +494,17 @@ export function PCBStageView() {
         if (blocksWithPcb.length === 0) {
           pcbMergeError = `No PCB files available. Missing: ${blocksWithoutPcb.map((b) => b.slug).join(', ')}`
         } else {
-          const pcbResult = await mergeBlockPCBs(selectedBlocks, selectedBlockData, project.name)
+          const pcbResult = await mergeBlockPCBs(mainBoardBlocks, mainBlockData, project.name)
           pcbData = pcbResult.pcb
         }
       } catch (pcbError) {
         const errorMsg = pcbError instanceof Error ? pcbError.message : 'PCB merge failed'
         pcbMergeError = errorMsg
-        logger.warn('pcb', 'PCB merge failed', { error: pcbError })
+        logger.warn('pcb', 'Main board PCB merge failed', { error: pcbError })
       }
 
-      // Log PCB merge error if there was one
       if (pcbMergeError) {
-        logger.info('pcb', 'PCB merge unavailable', { reason: pcbMergeError })
+        logger.info('pcb', 'Main board PCB merge unavailable', { reason: pcbMergeError })
       }
 
       // Transform netList to match schema type
@@ -507,7 +514,68 @@ export function PCBStageView() {
         gpio: n.gpio,
       }))
 
-      // Save merged schematic and PCB data to the project
+      // =========================================================================
+      // 2. Process REMOTE BOARDS
+      // =========================================================================
+
+      const updatedRemoteBoards: RemoteBoard[] = await Promise.all(
+        remoteBoards.map(async (board) => {
+          if (board.placedBlocks.length === 0) {
+            // No blocks on this remote board, skip generation
+            return board
+          }
+
+          const remoteBoardBlockData = blocksData.blocks.filter((b) =>
+            board.placedBlocks.some((pb) => pb.blockSlug === b.slug)
+          )
+
+          let remoteBoardSchematic: string | undefined
+          let remoteBoardPcb: string | undefined
+
+          try {
+            // Merge remote board schematic
+            const remoteSchematicResult = await mergeBlockSchematics(
+              board.placedBlocks,
+              remoteBoardBlockData,
+              `${project.name}-${board.slug}`
+            )
+            remoteBoardSchematic = remoteSchematicResult.schematic
+          } catch (err) {
+            logger.warn('pcb', `Remote board ${board.name} schematic merge failed`, { error: err })
+          }
+
+          try {
+            // Merge remote board PCB
+            const blocksWithPcb = remoteBoardBlockData.filter((b) => b.files?.pcb)
+            if (blocksWithPcb.length > 0) {
+              const remotePcbResult = await mergeBlockPCBs(
+                board.placedBlocks,
+                remoteBoardBlockData,
+                `${project.name}-${board.slug}`
+              )
+              remoteBoardPcb = remotePcbResult.pcb
+            }
+          } catch (err) {
+            logger.warn('pcb', `Remote board ${board.name} PCB merge failed`, { error: err })
+          }
+
+          // Return updated board with generated data
+          return {
+            ...board,
+            schematicData: remoteBoardSchematic,
+            pcbData: remoteBoardPcb,
+            mergedAt: new Date().toISOString(),
+          }
+        })
+      )
+
+      // Update local state with generated remote boards
+      setRemoteBoards(updatedRemoteBoards)
+
+      // =========================================================================
+      // 3. Save everything to the project
+      // =========================================================================
+
       await savePCBMutation.mutateAsync({
         placedBlocks: selectedBlocks,
         schematicData: schematicResult.schematic,
@@ -515,6 +583,7 @@ export function PCBStageView() {
         boardSize: { ...schematicResult.boardSize, unit: 'mm' as const },
         netList: transformedNetList,
         mergedAt: new Date().toISOString(),
+        remoteBoards: updatedRemoteBoards,
       })
 
       setCurrentStep('preview')
@@ -528,7 +597,15 @@ export function PCBStageView() {
     } finally {
       setIsMerging(false)
     }
-  }, [selectedBlocks, blocksData?.blocks, project?.name, savePCBMutation])
+  }, [
+    selectedBlocks,
+    blocksData?.blocks,
+    blockDefinitions,
+    project?.name,
+    remoteBoards,
+    savePCBMutation,
+    loadGerbers,
+  ])
 
   // Handle documentation download
   const handleDownloadDocs = useCallback(() => {

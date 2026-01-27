@@ -176,6 +176,10 @@ export interface RemoteBoard {
   connectionMapping: ConnectionMapping[]
   gridWidth: number
   gridHeight: number
+  // Generated data (per-board)
+  schematicData?: string
+  pcbData?: string
+  mergedAt?: string
 }
 
 export interface ConnectionMapping {
