@@ -305,18 +305,22 @@ export function AdminLangGraphPage() {
       return getDefaultSubgraphOptions()
     }
 
+    // Guard against malformed graph data
+    const orchestratorNodes = graphData.orchestrator?.nodes || []
+    const subgraphEntries = graphData.subgraphs ? Object.entries(graphData.subgraphs) : []
+
     return [
       {
         id: 'orchestrator' as const,
-        label: graphData.orchestrator.displayName,
+        label: graphData.orchestrator?.displayName || 'Orchestrator',
         description: 'Parent graph coordinating all stages',
-        nodeCount: graphData.orchestrator.nodes.length,
+        nodeCount: orchestratorNodes.length,
       },
-      ...Object.entries(graphData.subgraphs).map(([key, subgraph]) => ({
+      ...subgraphEntries.map(([key, subgraph]) => ({
         id: key as SubgraphId,
-        label: subgraph.displayName,
-        description: `${subgraph.nodes.filter((n) => n.type === 'node').length} processing nodes`,
-        nodeCount: subgraph.nodes.length,
+        label: subgraph?.displayName || key,
+        description: `${(subgraph?.nodes || []).filter((n) => n?.type === 'node').length} processing nodes`,
+        nodeCount: (subgraph?.nodes || []).length,
       })),
     ]
   }, [graphData])
