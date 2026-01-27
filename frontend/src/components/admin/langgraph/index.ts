@@ -11,11 +11,19 @@ export { FlowGraph, type GraphNodeDef, type GraphEdgeDef, type FlowGraphProps } 
 export { FlowNode, type FlowNodeData } from './FlowNode'
 export { FlowEdge, type FlowEdgeData } from './FlowEdge'
 export { ExecutionTimeline, type ExecutionTimelineProps } from './ExecutionTimeline'
-export { NodeDetail, type NodeDetailProps, type EdgeInfo } from './NodeDetail'
+export {
+  NodeDetail,
+  type NodeDetailProps,
+  type EdgeInfo,
+  type OrchestratorPrompt,
+} from './NodeDetail'
 
 // Subgraph visualization components
 export { SubgraphSelector, type SubgraphSelectorProps } from './SubgraphSelector'
 export { StructureViewer, type StructureViewerProps } from './StructureViewer'
+
+// Node registry for standalone nodes
+export { NodeRegistry } from './NodeRegistry'
 
 // Re-export types from types file for convenience
 export {

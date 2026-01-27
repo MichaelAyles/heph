@@ -12,7 +12,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Network,
   Play,
@@ -29,6 +29,7 @@ import {
   GitBranch,
   Download,
   Upload,
+  Boxes,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -40,9 +41,11 @@ import {
   SubgraphSelector,
   getDefaultSubgraphOptions,
   StructureViewer,
+  NodeRegistry,
   type GraphNodeDef,
   type GraphEdgeDef,
   type SubgraphId,
+  type OrchestratorPrompt,
 } from '../components/admin/langgraph'
 import type {
   ExecutionEvent,
@@ -53,7 +56,23 @@ import { getNodeStatesAtStep } from '../services/langgraph/execution-tracer'
 import { logger } from '../lib/logger'
 import type { CodeDefinedGraphData, SubgraphDefinition } from '../types/langgraph'
 
-type Tab = 'debugger' | 'threads' | 'structure'
+type Tab = 'debugger' | 'threads' | 'structure' | 'nodes'
+
+// Predefined test messages for quick debugging
+const PREDEFINED_MESSAGES = [
+  {
+    label: 'New Project',
+    value: 'I want to build a smart plant monitor with soil moisture sensing and WiFi alerts',
+  },
+  { label: 'Revise Spec', value: 'Actually, I want to add temperature and humidity sensing too' },
+  { label: 'Start PCB', value: "The spec looks good, let's move on to designing the PCB" },
+  { label: 'Add Block', value: 'Add a BME280 sensor block to the board' },
+  { label: 'Generate Enclosure', value: 'Generate an enclosure for this design' },
+  { label: 'Compile Firmware', value: 'Compile the firmware for the ESP32' },
+  { label: 'Export Files', value: 'Export the manufacturing files for this project' },
+  { label: 'Simple Query', value: 'What components are available for power management?' },
+  { label: 'Help Request', value: 'Help me understand what blocks I should use' },
+]
 
 interface ExecutionHistoryItem {
   id: string
@@ -138,7 +157,10 @@ function downloadJson(data: unknown, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-function exportExecution(run: ExecutionHistoryItem | ExecutionRunResponse, events?: ExecutionEvent[]): ExportedExecution {
+function exportExecution(
+  run: ExecutionHistoryItem | ExecutionRunResponse,
+  events?: ExecutionEvent[]
+): ExportedExecution {
   const isDetailed = 'events' in run
   return {
     version: '1.0',
@@ -307,6 +329,50 @@ export function AdminLangGraphPage() {
     },
     enabled: showHistory,
   })
+
+  // Fetch orchestrator prompts for node inspection
+  const queryClient = useQueryClient()
+  const { data: promptsData } = useQuery({
+    queryKey: ['admin-orchestrator-prompts'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/orchestrator/prompts')
+      if (!res.ok) throw new Error('Failed to fetch prompts')
+      return res.json() as Promise<{ prompts: OrchestratorPrompt[] }>
+    },
+  })
+
+  // Update prompt mutation
+  const [isUpdatingPrompt, setIsUpdatingPrompt] = useState(false)
+  const updatePromptMutation = useMutation({
+    mutationFn: async ({ nodeName, systemPrompt }: { nodeName: string; systemPrompt: string }) => {
+      const res = await fetch(`/api/admin/orchestrator/prompts/${nodeName}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt }),
+      })
+      if (!res.ok) throw new Error('Failed to update prompt')
+      return res.json()
+    },
+    onMutate: () => setIsUpdatingPrompt(true),
+    onSettled: () => setIsUpdatingPrompt(false),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-orchestrator-prompts'] })
+    },
+  })
+
+  // Handle prompt update
+  const handlePromptUpdate = useCallback(
+    async (nodeName: string, newPrompt: string) => {
+      await updatePromptMutation.mutateAsync({ nodeName, systemPrompt: newPrompt })
+    },
+    [updatePromptMutation]
+  )
+
+  // Get the selected node's orchestrator prompt
+  const selectedNodePrompt = useMemo(() => {
+    if (!selectedNode || !promptsData?.prompts) return null
+    return promptsData.prompts.find((p) => p.nodeName === selectedNode) || null
+  }, [selectedNode, promptsData])
 
   // Execute graph via SSE
   const executeGraph = useCallback(
@@ -620,6 +686,7 @@ export function AdminLangGraphPage() {
     { id: 'debugger' as const, label: 'Debugger', icon: Bug },
     { id: 'threads' as const, label: 'Threads', icon: Database },
     { id: 'structure' as const, label: 'Structure', icon: GitBranch },
+    { id: 'nodes' as const, label: 'Nodes', icon: Boxes },
   ]
 
   return (
@@ -684,12 +751,28 @@ export function AdminLangGraphPage() {
               {/* Input and Controls */}
               <div className="flex-shrink-0 bg-surface-800 rounded-lg p-4">
                 <div className="flex gap-3">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setDebuggerInput(e.target.value)
+                      }
+                    }}
+                    className="w-40 px-2 py-2 bg-surface-900 border border-surface-700 rounded text-sm text-steel focus:outline-none focus:border-copper"
+                  >
+                    <option value="">Quick message...</option>
+                    {PREDEFINED_MESSAGES.map((msg) => (
+                      <option key={msg.label} value={msg.value}>
+                        {msg.label}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="text"
                     value={debuggerInput}
                     onChange={(e) => setDebuggerInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleExecute()}
-                    placeholder="Enter a test message... (e.g., 'I want to build a smart plant monitor')"
+                    placeholder="Enter a test message or select from dropdown..."
                     className="flex-1 px-3 py-2 bg-surface-900 border border-surface-700 rounded text-sm text-steel focus:outline-none focus:border-copper"
                   />
                   <button
@@ -933,6 +1016,9 @@ export function AdminLangGraphPage() {
                     nodeState={selectedNodeState}
                     inputState={selectedNodeInput}
                     outputState={selectedNodeOutput}
+                    orchestratorPrompt={selectedNodePrompt}
+                    onPromptUpdate={handlePromptUpdate}
+                    isUpdatingPrompt={isUpdatingPrompt}
                   />
                 </div>
               </div>
@@ -988,6 +1074,24 @@ export function AdminLangGraphPage() {
                 isLoading={isLoadingGraph}
                 error={graphError?.message}
               />
+            </div>
+          )}
+
+          {/* Nodes Tab */}
+          {activeTab === 'nodes' && (
+            <div>
+              <div className="mb-4">
+                <h2 className="text-sm font-medium text-steel">Standalone Nodes</h2>
+                <p className="text-xs text-steel-dim mt-1">
+                  All LangGraph nodes registered in the system. Each node can be invoked
+                  independently via{' '}
+                  <code className="bg-surface-800 px-1 rounded">
+                    POST /api/langgraph/invoke/:nodeName
+                  </code>
+                  .
+                </p>
+              </div>
+              <NodeRegistry />
             </div>
           )}
         </div>

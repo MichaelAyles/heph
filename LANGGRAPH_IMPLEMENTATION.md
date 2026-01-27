@@ -37,10 +37,10 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 - [ ] `export_bom` - TBD (not implemented, may not be needed)
 
 ### Phase 3: UI Integration
-- [ ] Update AdminLangGraphPage to show node registry
-- [ ] Add "Invoke Node" UI for manual testing
-- [ ] Show execution history per node
-- [ ] Display debug info (prompts, responses, timing)
+- [x] Update AdminLangGraphPage to show node registry (Nodes tab)
+- [x] Add "Invoke Node" UI for manual testing
+- [x] Show execution history per node
+- [x] Display debug info (prompts, responses, timing)
 
 ### Phase 4: Component Migration
 - [ ] FeasibilityStep uses `/api/langgraph/invoke/feasibility`
