@@ -5,11 +5,12 @@
  * - Node name and category
  * - Node type, stage, and description
  * - Incoming/outgoing edges (connectivity)
+ * - State access (which fields the node reads/writes)
  * - Current status with timing
  * - Input state (what the node received)
  * - Output/result (what the node produced)
  * - State diff (what changed)
- * - System prompt used (if applicable)
+ * - System prompt (viewable and editable)
  * - LLM response (if applicable)
  */
 
@@ -29,8 +30,121 @@ import {
   Check,
   GitBranch,
   Database,
+  Edit3,
+  Save,
+  X,
+  Eye,
+  Pencil,
 } from 'lucide-react'
 import type { NodeState } from '../../../services/langgraph/execution-tracer'
+
+// =============================================================================
+// Node State Access Definitions
+// =============================================================================
+
+/**
+ * Defines which state fields each node reads and writes.
+ * This helps developers understand data flow through the graph.
+ */
+const NODE_STATE_ACCESS: Record<string, { reads: string[]; writes: string[] }> = {
+  // Orchestrator nodes
+  router: {
+    reads: ['messages', 'userRequest', 'userProjects', 'intent'],
+    writes: ['intent', 'route'],
+  },
+
+  // Spec stage nodes
+  feasibility_check: {
+    reads: ['messages', 'userRequest', 'availableBlocks'],
+    writes: ['capabilityAssessment', 'route'],
+  },
+  refinement_loop: {
+    reads: ['messages', 'userRequest', 'userFeedback', 'iterationCount', 'capabilityAssessment'],
+    writes: ['messages', 'iterationCount', 'userFeedback'],
+  },
+  blueprint_generation: {
+    reads: ['messages', 'userRequest', 'capabilityAssessment', 'projectId'],
+    writes: ['messages'],
+  },
+  finalization: {
+    reads: ['messages', 'userRequest', 'capabilityAssessment', 'projectId'],
+    writes: ['messages', 'projectId'],
+  },
+
+  // PCB stage nodes
+  block_selection: {
+    reads: ['messages', 'projectId', 'availableBlocks', 'capabilityAssessment'],
+    writes: ['messages'],
+  },
+  placement_optimization: {
+    reads: ['messages', 'projectId', 'availableBlocks'],
+    writes: ['messages'],
+  },
+  design_validation: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+
+  // Enclosure stage nodes
+  dimension_analysis: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+  openscad_generation: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+  enclosure_review: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+
+  // Firmware stage nodes
+  component_analysis: {
+    reads: ['messages', 'projectId', 'availableBlocks'],
+    writes: ['messages'],
+  },
+  code_generation: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+  firmware_review: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+
+  // Export stage nodes
+  gerber_merge: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+  bom_generation: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+  zip_packaging: {
+    reads: ['messages', 'projectId'],
+    writes: ['messages'],
+  },
+}
+
+// All known state fields with descriptions
+const STATE_FIELD_DESCRIPTIONS: Record<string, string> = {
+  messages: 'Conversation history with the user',
+  userRequest: "The user's original request text",
+  userFeedback: 'User feedback during refinement',
+  userProjects: "List of user's existing projects",
+  intent: 'Detected user intent (new_project, load_project, question)',
+  matchedProject: 'Project matched when loading existing',
+  capabilityAssessment: 'Feasibility analysis result',
+  iterationCount: 'Refinement loop iteration counter',
+  route: 'Routing decision (REJECT, CLARIFY, PROCEED)',
+  sessionId: 'Current session identifier',
+  projectId: 'Active project ID',
+  availableBlocks: 'Available PCB blocks from database',
+  error: 'Error state if something failed',
+  debug: 'Debug info with execution steps',
+}
 
 // =============================================================================
 // Types
@@ -41,6 +155,19 @@ export interface EdgeInfo {
   to: string
   conditional: boolean
   label?: string
+}
+
+export interface OrchestratorPrompt {
+  id: string
+  nodeName: string
+  displayName: string
+  description: string
+  systemPrompt: string
+  category: 'agent' | 'generator' | 'reviewer'
+  stage: string | null
+  isActive: boolean
+  tokenEstimate: number
+  version: number
 }
 
 export interface NodeDetailProps {
@@ -68,6 +195,12 @@ export interface NodeDetailProps {
   systemPrompt?: string
   /** LLM response text (if LLM node) */
   llmResponse?: string
+  /** Orchestrator prompt from database (for viewing/editing) */
+  orchestratorPrompt?: OrchestratorPrompt | null
+  /** Callback when prompt is updated */
+  onPromptUpdate?: (nodeName: string, newPrompt: string) => Promise<void>
+  /** Whether prompt update is in progress */
+  isUpdatingPrompt?: boolean
 }
 
 // =============================================================================
@@ -112,9 +245,7 @@ function CollapsibleSection({
           )}
         </div>
       </button>
-      {isOpen && (
-        <div className="p-3 bg-surface-900 border-t border-surface-700">{children}</div>
-      )}
+      {isOpen && <div className="p-3 bg-surface-900 border-t border-surface-700">{children}</div>}
     </div>
   )
 }
@@ -222,7 +353,13 @@ export function NodeDetail({
   outputState,
   systemPrompt,
   llmResponse,
+  orchestratorPrompt,
+  onPromptUpdate,
+  isUpdatingPrompt,
 }: NodeDetailProps) {
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false)
+  const [editedPrompt, setEditedPrompt] = useState('')
+
   // Calculate state diff
   const stateDiff = useMemo(
     () => calculateStateDiff(inputState, outputState),
@@ -248,6 +385,35 @@ export function NodeDetail({
     if (!inputState) return []
     return Object.keys(inputState).sort()
   }, [inputState])
+
+  // Get state access info for this node
+  const stateAccess = useMemo(() => {
+    if (!nodeName) return null
+    return NODE_STATE_ACCESS[nodeName] || null
+  }, [nodeName])
+
+  // Handle starting edit
+  const handleStartEdit = () => {
+    setEditedPrompt(orchestratorPrompt?.systemPrompt || '')
+    setIsEditingPrompt(true)
+  }
+
+  // Handle save
+  const handleSavePrompt = async () => {
+    if (onPromptUpdate && nodeName && editedPrompt !== orchestratorPrompt?.systemPrompt) {
+      await onPromptUpdate(nodeName, editedPrompt)
+    }
+    setIsEditingPrompt(false)
+  }
+
+  // Handle cancel
+  const handleCancelEdit = () => {
+    setIsEditingPrompt(false)
+    setEditedPrompt('')
+  }
+
+  // Estimate tokens
+  const estimateTokens = (text: string): number => Math.ceil(text.length / 4)
 
   if (!nodeName) {
     return (
@@ -309,9 +475,7 @@ export function NodeDetail({
         )}
 
         {/* Description */}
-        {description && (
-          <p className="mt-2 text-xs text-steel-dim">{description}</p>
-        )}
+        {description && <p className="mt-2 text-xs text-steel-dim">{description}</p>}
 
         {/* Timing info */}
         {nodeState?.durationMs !== undefined && (
@@ -353,9 +517,7 @@ export function NodeDetail({
                     >
                       <span className="text-blue-400 font-mono">{edge.from}</span>
                       <span className="text-steel-dim">→</span>
-                      {edge.label && (
-                        <span className="text-steel-dim italic">({edge.label})</span>
-                      )}
+                      {edge.label && <span className="text-steel-dim italic">({edge.label})</span>}
                       {edge.conditional && (
                         <span className="text-amber-400/60 text-[10px]">conditional</span>
                       )}
@@ -380,9 +542,7 @@ export function NodeDetail({
                     >
                       <span className="text-steel-dim">→</span>
                       <span className="text-emerald-400 font-mono">{edge.to}</span>
-                      {edge.label && (
-                        <span className="text-steel-dim italic">({edge.label})</span>
-                      )}
+                      {edge.label && <span className="text-steel-dim italic">({edge.label})</span>}
                       {edge.conditional && (
                         <span className="text-amber-400/60 text-[10px]">conditional</span>
                       )}
@@ -395,10 +555,68 @@ export function NodeDetail({
         </CollapsibleSection>
       )}
 
-      {/* Available State Keys */}
+      {/* State Access - shows what fields the node reads/writes */}
+      {stateAccess && (
+        <CollapsibleSection
+          title="State Access"
+          icon={<Database className="w-4 h-4" />}
+          defaultOpen
+          badge={`${stateAccess.reads.length} reads, ${stateAccess.writes.length} writes`}
+        >
+          <div className="space-y-3">
+            {/* Reads */}
+            <div>
+              <div className="flex items-center gap-1 text-xs font-medium text-blue-400 mb-2">
+                <Eye className="w-3 h-3" />
+                <span>Reads ({stateAccess.reads.length})</span>
+              </div>
+              <div className="space-y-1">
+                {stateAccess.reads.map((field) => (
+                  <div
+                    key={field}
+                    className="flex items-start gap-2 text-xs bg-surface-950 rounded px-2 py-1.5"
+                  >
+                    <span className="text-blue-400 font-mono shrink-0">{field}</span>
+                    {STATE_FIELD_DESCRIPTIONS[field] && (
+                      <span className="text-steel-dim text-[10px]">
+                        {STATE_FIELD_DESCRIPTIONS[field]}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Writes */}
+            <div>
+              <div className="flex items-center gap-1 text-xs font-medium text-emerald-400 mb-2">
+                <Pencil className="w-3 h-3" />
+                <span>Writes ({stateAccess.writes.length})</span>
+              </div>
+              <div className="space-y-1">
+                {stateAccess.writes.map((field) => (
+                  <div
+                    key={field}
+                    className="flex items-start gap-2 text-xs bg-surface-950 rounded px-2 py-1.5"
+                  >
+                    <span className="text-emerald-400 font-mono shrink-0">{field}</span>
+                    {STATE_FIELD_DESCRIPTIONS[field] && (
+                      <span className="text-steel-dim text-[10px]">
+                        {STATE_FIELD_DESCRIPTIONS[field]}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* Runtime State (from execution) */}
       {stateKeys.length > 0 && (
         <CollapsibleSection
-          title="Available State"
+          title="Runtime State"
           icon={<Database className="w-4 h-4" />}
           badge={`${stateKeys.length} keys`}
         >
@@ -502,10 +720,102 @@ export function NodeDetail({
         </CollapsibleSection>
       )}
 
-      {/* System Prompt */}
-      {systemPrompt && (
+      {/* System Prompt - Editable from orchestrator_prompts */}
+      {orchestratorPrompt && (
         <CollapsibleSection
           title="System Prompt"
+          icon={<Bot className="w-4 h-4" />}
+          defaultOpen
+          badge={`v${orchestratorPrompt.version} · ~${orchestratorPrompt.tokenEstimate} tokens`}
+        >
+          <div className="space-y-3">
+            {/* Prompt metadata */}
+            <div className="flex items-center gap-2 text-xs text-steel-dim">
+              <span className="font-mono">{orchestratorPrompt.nodeName}</span>
+              <span>·</span>
+              <span
+                className={clsx(
+                  'px-1.5 py-0.5 rounded text-[10px]',
+                  orchestratorPrompt.category === 'agent' && 'bg-blue-500/20 text-blue-400',
+                  orchestratorPrompt.category === 'generator' &&
+                    'bg-emerald-500/20 text-emerald-400',
+                  orchestratorPrompt.category === 'reviewer' && 'bg-amber-500/20 text-amber-400'
+                )}
+              >
+                {orchestratorPrompt.category}
+              </span>
+              {orchestratorPrompt.stage && (
+                <>
+                  <span>·</span>
+                  <span className="text-purple-400">{orchestratorPrompt.stage}</span>
+                </>
+              )}
+            </div>
+
+            {/* Edit/View toggle */}
+            {isEditingPrompt ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editedPrompt}
+                  onChange={(e) => setEditedPrompt(e.target.value)}
+                  className="w-full h-64 px-3 py-2 bg-surface-950 border border-surface-700 rounded text-xs text-steel font-mono resize-y focus:outline-none focus:border-copper"
+                  placeholder="Enter system prompt..."
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-steel-dim">
+                    ~{estimateTokens(editedPrompt)} tokens
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={isUpdatingPrompt}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-steel hover:bg-surface-700 rounded transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSavePrompt}
+                      disabled={
+                        isUpdatingPrompt || editedPrompt === orchestratorPrompt.systemPrompt
+                      }
+                      className={clsx(
+                        'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
+                        editedPrompt !== orchestratorPrompt.systemPrompt
+                          ? 'bg-copper text-surface-900 hover:bg-copper/90'
+                          : 'bg-surface-700 text-steel-dim cursor-not-allowed'
+                      )}
+                    >
+                      <Save className="w-3 h-3" />
+                      {isUpdatingPrompt ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="relative group">
+                <pre className="p-3 bg-surface-950 rounded text-xs text-steel font-mono whitespace-pre-wrap max-h-[300px] overflow-auto">
+                  {orchestratorPrompt.systemPrompt}
+                </pre>
+                {onPromptUpdate && (
+                  <button
+                    onClick={handleStartEdit}
+                    className="absolute top-2 right-2 p-1.5 rounded bg-surface-800 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-700"
+                    title="Edit prompt"
+                  >
+                    <Edit3 className="w-3 h-3 text-steel-dim" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* Fallback: Runtime system prompt (if no orchestrator prompt) */}
+      {!orchestratorPrompt && systemPrompt && (
+        <CollapsibleSection
+          title="System Prompt (Runtime)"
           icon={<Bot className="w-4 h-4" />}
           badge={`${systemPrompt.length} chars`}
         >

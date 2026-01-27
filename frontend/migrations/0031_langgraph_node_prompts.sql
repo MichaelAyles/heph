@@ -10,8 +10,8 @@ INSERT OR REPLACE INTO orchestrator_prompts (
   'Admin LLM Test',
   'Simple utility node for testing LLM connectivity from admin panel',
   'You are a helpful assistant. Respond exactly as instructed by the user prompt.',
-  'utility',
-  'admin',
+  'agent',
+  'spec',
   50
 );
 
