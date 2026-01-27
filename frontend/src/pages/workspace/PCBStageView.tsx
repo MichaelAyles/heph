@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -258,10 +258,14 @@ export function PCBStageView() {
     try {
       // Build GerberBlock array for merging
       const gerberBlocks: GerberBlock[] = []
+      const missingGerbers: string[] = []
 
       for (const placement of viewingBlocks) {
         const block = blocksData.blocks.find((b) => b.slug === placement.blockSlug)
-        if (!block?.files?.gerbers) continue
+        if (!block?.files?.gerbers) {
+          missingGerbers.push(placement.blockSlug)
+          continue
+        }
 
         // Fetch the gerber ZIP
         const res = await fetch(`/api/blocks/${block.slug}/files/${block.files.gerbers}`)
@@ -315,6 +319,11 @@ export function PCBStageView() {
         })
       }
 
+      // Log any missing gerbers
+      if (missingGerbers.length > 0) {
+        logger.warn('pcb', 'Some blocks missing gerber files', { missing: missingGerbers })
+      }
+
       if (gerberBlocks.length > 0) {
         // Merge all gerbers into unified layers
         const merged: MergedGerbers = mergeGerbers(gerberBlocks)
@@ -332,15 +341,26 @@ export function PCBStageView() {
         if (merged.drill) {
           layers['merged-Drill'] = merged.drill
         }
+      } else if (missingGerbers.length > 0) {
+        // All blocks are missing gerbers - show meaningful error
+        setMergeError(`No gerber files found for: ${missingGerbers.join(', ')}`)
       }
 
       setGerberLayers(layers)
     } catch (error) {
       logger.error('pcb', 'Failed to load gerbers', { error })
+      setMergeError(error instanceof Error ? error.message : 'Failed to load gerbers')
     } finally {
       setIsLoadingGerbers(false)
     }
   }, [viewingBlocks, blocksData?.blocks])
+
+  // Auto-reload gerbers when board selection changes (in gerbers view mode)
+  useEffect(() => {
+    if (viewMode === 'gerbers' && viewingBlocks.length > 0 && blocksData?.blocks) {
+      loadGerbers()
+    }
+  }, [selectedBoardId, viewMode]) // Intentionally exclude loadGerbers to avoid infinite loop
 
   // Handle AI suggestion
   const handleAiSuggest = useCallback(async () => {
@@ -761,10 +781,7 @@ export function PCBStageView() {
                   {/* Board selector */}
                   <BoardSelector
                     selectedBoardId={selectedBoardId}
-                    onSelectBoard={(id) => {
-                      setSelectedBoardId(id)
-                      setGerberLayers({}) // Clear to force reload
-                    }}
+                    onSelectBoard={setSelectedBoardId}
                     remoteTypeBlockCount={remoteTypeBlocks.length}
                     remoteTypeBoardId={REMOTE_TYPE_BOARD_ID}
                     onLoadGerbers={loadGerbers}
@@ -785,9 +802,13 @@ export function PCBStageView() {
                             strokeWidth={1}
                           />
                           <p className="text-steel-dim text-sm mb-2">No Gerber files available</p>
-                          <p className="text-xs text-surface-500">
-                            Click "Load Gerbers" to view merged board gerbers
-                          </p>
+                          {mergeError ? (
+                            <p className="text-xs text-red-400 mb-2">{mergeError}</p>
+                          ) : (
+                            <p className="text-xs text-surface-500">
+                              Click "Load Gerbers" to view merged board gerbers
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
