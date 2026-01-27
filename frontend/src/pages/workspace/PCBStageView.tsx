@@ -13,6 +13,7 @@ import {
   Layers,
   ChevronDown,
   ChevronRight,
+  Monitor,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
@@ -30,6 +31,7 @@ import { PCBViewerToolbar, type ViewMode } from '../../components/pcb/PCBViewerT
 import { SelectedBlocksBar } from '../../components/pcb/SelectedBlocksBar'
 import { ManufacturingExportPanel } from '../../components/pcb/ManufacturingExportPanel'
 import { mergeBlockSchematics, mergeBlockPCBs } from '../../services/pcb-merge'
+import { mergeGerbers, type GerberBlock, type MergedGerbers } from '../../services/gerber-merge'
 import { generatePCBDocument } from '../../services/pcb-document'
 import {
   toBlockCatalogEntry,
@@ -68,6 +70,8 @@ export function PCBStageView() {
   const [remoteBoards, setRemoteBoards] = useState<RemoteBoard[]>([])
   const [showRemoteBoards, setShowRemoteBoards] = useState(false)
   const [configuredTapStates, setConfiguredTapStates] = useState<ResistorTapState[]>([])
+  // Selected board for gerbers/3D view: null = main board, string = remote board ID
+  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null)
 
   const specComplete = project?.status === 'complete'
   const spec = project?.spec
@@ -123,6 +127,26 @@ export function PCBStageView() {
   const mainBoardSignals = useMemo(() => {
     return getMainBoardSignals(selectedBlocks, blockDefinitions)
   }, [selectedBlocks, blockDefinitions])
+
+  // Get blocks for currently selected board (main or remote)
+  const viewingBlocks = useMemo(() => {
+    if (!selectedBoardId) {
+      // Main board - filter to only non-remote blocks
+      return selectedBlocks.filter((b) => {
+        const def = blockDefinitions.get(b.blockSlug)
+        return def && !def.isRemote && def.gridSize
+      })
+    }
+    // Remote board
+    const remoteBoard = remoteBoards.find((rb) => rb.id === selectedBoardId)
+    return remoteBoard?.placedBlocks || []
+  }, [selectedBoardId, selectedBlocks, blockDefinitions, remoteBoards])
+
+  // Get the selected board object (null for main board)
+  const selectedRemoteBoard = useMemo(() => {
+    if (!selectedBoardId) return null
+    return remoteBoards.find((rb) => rb.id === selectedBoardId) || null
+  }, [selectedBoardId, remoteBoards])
 
   // Validate current placement and calculate board size
   const { validationResult, boardSize } = useMemo(() => {
@@ -256,9 +280,9 @@ export function PCBStageView() {
     savePCBMutation.mutate({ placedBlocks: updatedBlocks })
   }
 
-  // Load gerber files for selected blocks
+  // Load and merge gerber files for the selected board
   const loadGerbers = useCallback(async () => {
-    if (selectedBlocks.length === 0 || !blocksData?.blocks) {
+    if (viewingBlocks.length === 0 || !blocksData?.blocks) {
       setGerberLayers({})
       return
     }
@@ -267,39 +291,40 @@ export function PCBStageView() {
     const layers: Record<string, string> = {}
 
     try {
-      // Get unique block slugs
-      const uniqueSlugs = [...new Set(selectedBlocks.map((b) => b.blockSlug))]
+      // Build GerberBlock array for merging
+      const gerberBlocks: GerberBlock[] = []
 
-      for (const slug of uniqueSlugs) {
-        const block = blocksData.blocks.find((b) => b.slug === slug)
+      for (const placement of viewingBlocks) {
+        const block = blocksData.blocks.find((b) => b.slug === placement.blockSlug)
         if (!block?.files?.gerbers) continue
 
         // Fetch the gerber ZIP
-        const res = await fetch(`/api/blocks/${slug}/files/${block.files.gerbers}`)
+        const res = await fetch(`/api/blocks/${block.slug}/files/${block.files.gerbers}`)
         if (!res.ok) continue
 
         // Extract gerbers from the ZIP
         const blob = await res.blob()
         const zip = await JSZip.loadAsync(blob)
 
-        // Map file extensions/patterns to layer names
-        // Note: KiCad inner layer extensions vary (.g1/.g2 or .g2/.g3 depending on export settings)
+        // Map file extensions/patterns to layer properties
+        const blockLayers: GerberBlock['layers'] = {}
         const layerMappings = [
-          { patterns: ['-f_cu', '.gtl', '-F_Cu'], layer: `${slug}-F.Cu` },
-          { patterns: ['-b_cu', '.gbl', '-B_Cu'], layer: `${slug}-B.Cu` },
-          { patterns: ['-in1_cu', '-In1_Cu', '.g1'], layer: `${slug}-In1.Cu` },
-          { patterns: ['-in2_cu', '-In2_Cu', '.g2'], layer: `${slug}-In2.Cu` },
-          { patterns: ['-f_mask', '.gts', '-F_Mask'], layer: `${slug}-F.Mask` },
-          { patterns: ['-b_mask', '.gbs', '-B_Mask'], layer: `${slug}-B.Mask` },
+          { patterns: ['-f_cu', '.gtl', '-F_Cu'], prop: 'topCopper' as const },
+          { patterns: ['-b_cu', '.gbl', '-B_Cu'], prop: 'bottomCopper' as const },
+          { patterns: ['-in1_cu', '-In1_Cu', '.g1'], prop: 'innerCopper1' as const },
+          { patterns: ['-in2_cu', '-In2_Cu', '.g2'], prop: 'innerCopper2' as const },
+          { patterns: ['-f_mask', '.gts', '-F_Mask'], prop: 'topMask' as const },
+          { patterns: ['-b_mask', '.gbs', '-B_Mask'], prop: 'bottomMask' as const },
           {
             patterns: ['-f_silkscreen', '.gto', '-F_Silkscreen', '-F_SilkS'],
-            layer: `${slug}-F.SilkS`,
+            prop: 'topSilk' as const,
           },
           {
             patterns: ['-b_silkscreen', '.gbo', '-B_Silkscreen', '-B_SilkS'],
-            layer: `${slug}-B.SilkS`,
+            prop: 'bottomSilk' as const,
           },
-          { patterns: ['-edge_cuts', '.gm1', '-Edge_Cuts'], layer: `${slug}-Edge.Cuts` },
+          { patterns: ['-edge_cuts', '.gm1', '-Edge_Cuts'], prop: 'edgeCuts' as const },
+          { patterns: ['.drl', 'drill'], prop: 'drill' as const },
         ]
 
         // Extract each file from the ZIP
@@ -311,10 +336,36 @@ export function PCBStageView() {
           for (const mapping of layerMappings) {
             if (mapping.patterns.some((p) => lowerFilename.includes(p.toLowerCase()))) {
               const content = await zipEntry.async('string')
-              layers[mapping.layer] = content
+              blockLayers[mapping.prop] = content
               break
             }
           }
+        }
+
+        gerberBlocks.push({
+          name: block.slug,
+          gridX: placement.gridX,
+          gridY: placement.gridY,
+          layers: blockLayers,
+        })
+      }
+
+      if (gerberBlocks.length > 0) {
+        // Merge all gerbers into unified layers
+        const merged: MergedGerbers = mergeGerbers(gerberBlocks)
+
+        // Convert merged gerbers to the format GerberViewer expects
+        layers['merged-F.Cu'] = merged.topCopper
+        layers['merged-B.Cu'] = merged.bottomCopper
+        layers['merged-In1.Cu'] = merged.innerCopper1
+        layers['merged-In2.Cu'] = merged.innerCopper2
+        layers['merged-F.Mask'] = merged.topMask
+        layers['merged-B.Mask'] = merged.bottomMask
+        layers['merged-F.SilkS'] = merged.topSilk
+        layers['merged-B.SilkS'] = merged.bottomSilk
+        layers['merged-Edge.Cuts'] = merged.edgeCuts
+        if (merged.drill) {
+          layers['merged-Drill'] = merged.drill
         }
       }
 
@@ -324,7 +375,7 @@ export function PCBStageView() {
     } finally {
       setIsLoadingGerbers(false)
     }
-  }, [selectedBlocks, blocksData?.blocks])
+  }, [viewingBlocks, blocksData?.blocks])
 
   // Handle AI suggestion
   const handleAiSuggest = useCallback(async () => {
@@ -713,30 +764,83 @@ export function PCBStageView() {
                   />
                 </div>
               ) : viewMode === 'gerbers' ? (
-                isLoadingGerbers ? (
-                  <div className="flex-1 flex items-center justify-center h-full">
-                    <Loader2 className="w-8 h-8 text-copper animate-spin" />
+                <div className="flex flex-col h-full">
+                  {/* Board selector */}
+                  <BoardSelector
+                    selectedBoardId={selectedBoardId}
+                    onSelectBoard={(id) => {
+                      setSelectedBoardId(id)
+                      setGerberLayers({}) // Clear to force reload
+                    }}
+                    remoteBoards={remoteBoards}
+                    onLoadGerbers={loadGerbers}
+                  />
+                  {/* Gerber viewer */}
+                  <div className="flex-1 min-h-0">
+                    {isLoadingGerbers ? (
+                      <div className="flex-1 flex items-center justify-center h-full">
+                        <Loader2 className="w-8 h-8 text-copper animate-spin" />
+                      </div>
+                    ) : Object.keys(gerberLayers).length > 0 ? (
+                      <GerberViewer layers={gerberLayers} className="w-full h-full" />
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <Layers
+                            className="w-12 h-12 text-surface-600 mx-auto mb-3"
+                            strokeWidth={1}
+                          />
+                          <p className="text-steel-dim text-sm mb-2">No Gerber files available</p>
+                          <p className="text-xs text-surface-500">
+                            Click "Load Gerbers" to view merged board gerbers
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ) : Object.keys(gerberLayers).length > 0 ? (
-                  <GerberViewer layers={gerberLayers} className="w-full h-full" />
-                ) : (
-                  <div className="flex-1 flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <Layers className="w-12 h-12 text-surface-600 mx-auto mb-3" strokeWidth={1} />
-                      <p className="text-steel-dim text-sm mb-2">No Gerber files available</p>
-                      <p className="text-xs text-surface-500">
-                        Generate the design first or ensure blocks have Gerber files
-                      </p>
-                    </div>
+                </div>
+              ) : viewMode === '3d' && blocksData?.blocks ? (
+                <div className="flex flex-col h-full">
+                  {/* Board selector */}
+                  <BoardSelector
+                    selectedBoardId={selectedBoardId}
+                    onSelectBoard={setSelectedBoardId}
+                    remoteBoards={remoteBoards}
+                  />
+                  {/* 3D viewer */}
+                  <div className="flex-1 min-h-0">
+                    {viewingBlocks.length > 0 ? (
+                      <PCB3DViewer
+                        boardSize={
+                          selectedRemoteBoard
+                            ? {
+                                width: selectedRemoteBoard.boardSize.width,
+                                height: selectedRemoteBoard.boardSize.height,
+                              }
+                            : pcbArtifacts?.boardSize
+                        }
+                        placedBlocks={viewingBlocks}
+                        blocks={blocksData.blocks}
+                        className="w-full h-full"
+                      />
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <Cpu
+                            className="w-12 h-12 text-surface-600 mx-auto mb-3"
+                            strokeWidth={1}
+                          />
+                          <p className="text-steel-dim text-sm mb-2">No blocks on this board</p>
+                          <p className="text-xs text-surface-500">
+                            {selectedBoardId
+                              ? 'Add blocks to this remote board'
+                              : 'Select blocks from the catalog'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )
-              ) : viewMode === '3d' && selectedBlocks.length > 0 && blocksData?.blocks ? (
-                <PCB3DViewer
-                  boardSize={pcbArtifacts?.boardSize}
-                  placedBlocks={selectedBlocks}
-                  blocks={blocksData.blocks}
-                  className="w-full h-full"
-                />
+                </div>
               ) : viewMode === 'docs' && documentOutput ? (
                 <div className="p-6 max-w-4xl mx-auto overflow-auto">
                   <article
@@ -855,6 +959,73 @@ function StepIndicator({ step, label, active, complete, onClick, canClick }: Ste
       )}
       <span>{label}</span>
     </button>
+  )
+}
+
+// =============================================================================
+// Board Selector - Switch between main board and remote boards
+// =============================================================================
+
+interface BoardSelectorProps {
+  selectedBoardId: string | null
+  onSelectBoard: (boardId: string | null) => void
+  remoteBoards: RemoteBoard[]
+  onLoadGerbers?: () => void
+}
+
+function BoardSelector({
+  selectedBoardId,
+  onSelectBoard,
+  remoteBoards,
+  onLoadGerbers,
+}: BoardSelectorProps) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-surface-700 bg-surface-800/50">
+      <span className="text-xs text-steel-dim uppercase tracking-wider mr-2">Board:</span>
+      <div className="flex items-center gap-1">
+        {/* Main board button */}
+        <button
+          onClick={() => onSelectBoard(null)}
+          className={clsx(
+            'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
+            selectedBoardId === null
+              ? 'bg-copper/20 text-copper border border-copper/40'
+              : 'bg-surface-700 text-steel-dim hover:text-steel hover:bg-surface-600'
+          )}
+        >
+          <Grid3X3 className="w-3.5 h-3.5" />
+          Main Board
+        </button>
+
+        {/* Remote board buttons */}
+        {remoteBoards.map((board) => (
+          <button
+            key={board.id}
+            onClick={() => onSelectBoard(board.id)}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
+              selectedBoardId === board.id
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+                : 'bg-surface-700 text-steel-dim hover:text-steel hover:bg-surface-600'
+            )}
+          >
+            <Monitor className="w-3.5 h-3.5" />
+            {board.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Load gerbers button (only shown when provided) */}
+      {onLoadGerbers && (
+        <button
+          onClick={onLoadGerbers}
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-copper/20 text-copper hover:bg-copper/30 transition-colors"
+        >
+          <Layers className="w-3.5 h-3.5" />
+          Load Gerbers
+        </button>
+      )}
+    </div>
   )
 }
 
