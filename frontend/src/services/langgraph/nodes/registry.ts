@@ -194,7 +194,7 @@ export async function invokeNode(
       completionTokens: result.completionTokens,
       model: finalConfig.model || 'default',
       temperature: finalConfig.temperature ?? node.defaultTemperature,
-      systemPrompt: context.systemPromptOverride || '(using default prompt)',
+      systemPrompt: context.systemPrompt,
       userPrompt: JSON.stringify(input).slice(0, 1000),
       rawResponse: result.rawResponse,
       costUsd: result.costUsd,

@@ -9,7 +9,6 @@ import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
 import {
-  OPENSCAD_VALIDATION_PROMPT,
   buildValidationPrompt,
   parseValidationResponse,
 } from '../../../prompts/enclosure-validation'
@@ -54,8 +53,8 @@ async function invokeEnclosureValidation(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<EnclosureValidationOutput>> {
-  // Use override prompt from database if available, otherwise use default
-  const systemPrompt = context.systemPromptOverride || OPENSCAD_VALIDATION_PROMPT
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
 
   const userPrompt = buildValidationPrompt(input.openScadCode, {
     pcbWidth: input.pcbWidth,

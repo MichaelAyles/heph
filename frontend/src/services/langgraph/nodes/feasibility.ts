@@ -8,7 +8,7 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { FEASIBILITY_SYSTEM_PROMPT, buildFeasibilityPrompt } from '../../../prompts/feasibility'
+import { buildFeasibilityPrompt } from '../../../prompts/feasibility'
 
 // =============================================================================
 // Schemas
@@ -85,8 +85,8 @@ async function invokeFeasibility(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<FeasibilityOutput>> {
-  // Use override prompt from database if available, otherwise use default
-  const systemPrompt = context.systemPromptOverride || FEASIBILITY_SYSTEM_PROMPT
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
   const userPrompt = buildFeasibilityPrompt(input.description)
 
   const response = await context.llmChat({

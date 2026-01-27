@@ -8,7 +8,7 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { FINAL_SPEC_SYSTEM_PROMPT, buildFinalSpecPrompt } from '../../../prompts/finalSpec'
+import { buildFinalSpecPrompt } from '../../../prompts/finalSpec'
 
 // =============================================================================
 // Schemas
@@ -93,8 +93,8 @@ async function invokeFinalization(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<FinalizationOutput>> {
-  // Use override prompt from database if available, otherwise use default
-  const systemPrompt = context.systemPromptOverride || FINAL_SPEC_SYSTEM_PROMPT
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
 
   const userPrompt = buildFinalSpecPrompt(
     input.description,

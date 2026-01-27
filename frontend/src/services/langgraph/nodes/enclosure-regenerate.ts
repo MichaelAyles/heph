@@ -8,11 +8,7 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import {
-  ENCLOSURE_SYSTEM_PROMPT,
-  buildEnclosureRegenerationPrompt,
-  type EnclosureInput,
-} from '../../../prompts/enclosure'
+import { buildEnclosureRegenerationPrompt, type EnclosureInput } from '../../../prompts/enclosure'
 
 // =============================================================================
 // Schemas
@@ -48,8 +44,8 @@ async function invokeEnclosureRegenerate(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<EnclosureRegenerateOutput>> {
-  // Use override prompt from database if available, otherwise use default
-  const systemPrompt = context.systemPromptOverride || ENCLOSURE_SYSTEM_PROMPT
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
 
   // Build enclosure input for the prompt
   const enclosureInput: EnclosureInput = {

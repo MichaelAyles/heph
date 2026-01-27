@@ -8,10 +8,7 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import {
-  ENCLOSURE_VISION_SYSTEM_PROMPT,
-  buildVisionEnclosurePrompt,
-} from '../../../prompts/enclosure'
+import { buildVisionEnclosurePrompt } from '../../../prompts/enclosure'
 
 // =============================================================================
 // Schemas
@@ -50,8 +47,8 @@ async function invokeEnclosureVision(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<EnclosureVisionOutput>> {
-  // Use override prompt from database if available, otherwise use default
-  const systemPrompt = context.systemPromptOverride || ENCLOSURE_VISION_SYSTEM_PROMPT
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
 
   const userPrompt = buildVisionEnclosurePrompt({
     pcbWidth: input.pcbWidth,

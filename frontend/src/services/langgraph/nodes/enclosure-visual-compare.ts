@@ -8,10 +8,7 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import {
-  VISUAL_COMPARISON_PROMPT,
-  parseVisualValidationResponse,
-} from '../../../prompts/enclosure-validation'
+import { parseVisualValidationResponse } from '../../../prompts/enclosure-validation'
 
 // =============================================================================
 // Schemas
@@ -54,8 +51,8 @@ async function invokeEnclosureVisualCompare(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<EnclosureVisualCompareOutput>> {
-  // Use override prompt from database if available, otherwise use default
-  const systemPrompt = context.systemPromptOverride || VISUAL_COMPARISON_PROMPT
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
 
   // Build user prompt with design intent if provided
   let userPrompt =

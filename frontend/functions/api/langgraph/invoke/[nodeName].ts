@@ -77,12 +77,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
   }
 
-  // Get system prompt override from database
+  // Get system prompt from database (REQUIRED - no fallback to hardcoded prompts)
   const promptRow = await env.DB.prepare(
     'SELECT system_prompt FROM orchestrator_prompts WHERE node_name = ?'
   )
     .bind(nodeName)
     .first<{ system_prompt: string | null }>()
+
+  if (!promptRow || !promptRow.system_prompt) {
+    return Response.json(
+      {
+        error: `No prompt found in database for node "${nodeName}". Add entry to orchestrator_prompts table.`,
+      },
+      { status: 500 }
+    )
+  }
 
   // Create LLM chat function that proxies to our API
   const llmChat = async (params: LLMChatParams): Promise<LLMChatResponse> => {
@@ -125,7 +134,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     projectId: body.projectId,
     userId: user.id,
     threadId: body.threadId,
-    systemPromptOverride: promptRow?.system_prompt || undefined,
+    systemPrompt: promptRow.system_prompt, // Required - comes from database
     llmChat,
   }
 

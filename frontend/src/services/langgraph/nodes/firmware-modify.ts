@@ -8,11 +8,7 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import {
-  FIRMWARE_SYSTEM_PROMPT,
-  buildFirmwareModificationPrompt,
-  type FirmwareInput,
-} from '../../../prompts/firmware'
+import { buildFirmwareModificationPrompt, type FirmwareInput } from '../../../prompts/firmware'
 
 // =============================================================================
 // Schemas
@@ -71,8 +67,8 @@ async function invokeFirmwareModify(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<FirmwareModifyOutput>> {
-  // Use override prompt from database if available, otherwise use default
-  const systemPrompt = context.systemPromptOverride || FIRMWARE_SYSTEM_PROMPT
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
 
   // Build firmware input for modification prompt
   const firmwareInput: FirmwareInput = {

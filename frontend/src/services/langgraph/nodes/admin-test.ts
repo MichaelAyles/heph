@@ -38,8 +38,14 @@ async function invokeAdminTest(
 ): Promise<NodeInvokeResult<AdminTestOutput>> {
   const startMs = Date.now()
 
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
+
   const response = await context.llmChat({
-    messages: [{ role: 'user', content: input.prompt || 'Say exactly "Hello World"' }],
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: input.prompt || 'Say exactly "Hello World"' },
+    ],
     temperature: config.temperature ?? 0,
     model: config.model ?? input.model,
     projectId: context.projectId,

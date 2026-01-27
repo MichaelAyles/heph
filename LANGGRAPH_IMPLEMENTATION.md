@@ -18,7 +18,7 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 - [x] Create `/api/langgraph/invoke/[nodeName].ts` endpoint
 - [x] Create `/api/langgraph/nodes.ts` list endpoint
 - [x] Create `/api/langgraph/executions.ts` history endpoint
-- [ ] Add orchestrator_prompts entries for missing nodes
+- [x] Add orchestrator_prompts entries for missing nodes (migration 0031 - all 13 nodes)
 
 ### Phase 2: Migrate Nodes (in order of complexity)
 - [x] `admin_test` - Simplest, good for testing
@@ -34,7 +34,7 @@ This document outlines the migration strategy for moving all 14 LLM calls to Lan
 - [x] `enclosure_vision` - Image + text in, code out (multimodal)
 - [x] `enclosure_regenerate` - Code + text in, code out
 - [x] `enclosure_visual_compare` - 2 images in, JSON out (multimodal)
-- [ ] `export_bom` - TBD (not implemented, may not be needed)
+- [x] `export_bom` - N/A (BOM generated programmatically, no LLM call needed)
 
 ### Phase 3: UI Integration
 - [x] Update AdminLangGraphPage to show node registry (Nodes tab)

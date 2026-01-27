@@ -117,8 +117,8 @@ export interface NodeContext {
   /** Thread ID for checkpointing */
   threadId?: string
 
-  /** System prompt override from database */
-  systemPromptOverride?: string
+  /** System prompt from database (REQUIRED - no hardcoded fallbacks) */
+  systemPrompt: string
 
   /** LLM chat function */
   llmChat: (params: LLMChatParams) => Promise<LLMChatResponse>

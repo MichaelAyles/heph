@@ -8,7 +8,7 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { REFINEMENT_SYSTEM_PROMPT, buildRefinementPrompt } from '../../../prompts/refinement'
+import { buildRefinementPrompt } from '../../../prompts/refinement'
 import type { FeasibilityAnalysis, Decision } from '../../../db/schema'
 
 // =============================================================================
@@ -92,8 +92,8 @@ async function invokeRefinement(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<RefinementOutput>> {
-  // Use override prompt from database if available, otherwise use default
-  const systemPrompt = context.systemPromptOverride || REFINEMENT_SYSTEM_PROMPT
+  // System prompt comes from database (required)
+  const systemPrompt = context.systemPrompt
 
   // Convert Zod-parsed input to the types expected by buildRefinementPrompt
   const feasibility: FeasibilityAnalysis = {
