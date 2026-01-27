@@ -264,16 +264,27 @@ export function PCBStageView() {
         const block = blocksData.blocks.find((b) => b.slug === placement.blockSlug)
         if (!block?.files?.gerbers) {
           missingGerbers.push(placement.blockSlug)
+          logger.warn('pcb', `Block ${placement.blockSlug} missing gerbers file reference`)
           continue
         }
 
         // Fetch the gerber ZIP
-        const res = await fetch(`/api/blocks/${block.slug}/files/${block.files.gerbers}`)
-        if (!res.ok) continue
+        const url = `/api/blocks/${block.slug}/files/${block.files.gerbers}`
+        logger.info('pcb', `Fetching gerbers from ${url}`)
+        const res = await fetch(url)
+        if (!res.ok) {
+          logger.warn('pcb', `Failed to fetch gerbers: ${res.status} ${res.statusText}`)
+          continue
+        }
 
         // Extract gerbers from the ZIP
         const blob = await res.blob()
+        logger.info('pcb', `Got gerber ZIP blob: ${blob.size} bytes, type: ${blob.type}`)
         const zip = await JSZip.loadAsync(blob)
+
+        // Log all files in the ZIP
+        const zipFiles = Object.keys(zip.files)
+        logger.info('pcb', `ZIP contains ${zipFiles.length} files:`, { files: zipFiles })
 
         // Map file extensions/patterns to layer properties
         const blockLayers: GerberBlock['layers'] = {}
@@ -302,14 +313,22 @@ export function PCBStageView() {
           const lowerFilename = filename.toLowerCase()
 
           // Find matching layer
+          let matched = false
           for (const mapping of layerMappings) {
             if (mapping.patterns.some((p) => lowerFilename.includes(p.toLowerCase()))) {
               const content = await zipEntry.async('string')
               blockLayers[mapping.prop] = content
+              logger.info('pcb', `Matched ${filename} to ${mapping.prop} (${content.length} chars)`)
+              matched = true
               break
             }
           }
+          if (!matched) {
+            logger.warn('pcb', `No layer match for file: ${filename}`)
+          }
         }
+
+        logger.info('pcb', `Block ${block.slug} has layers:`, { layers: Object.keys(blockLayers) })
 
         gerberBlocks.push({
           name: block.slug,
