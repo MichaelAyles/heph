@@ -360,19 +360,20 @@ interface BlockBounds {
 }
 
 /**
- * Calculate unified bounds for a block using edge cuts (board outline)
- * This ensures all layers use the same origin for proper grid alignment
+ * Calculate unified bounds for a block using edge cuts ONLY (board outline).
+ * This ensures all layers use the same origin for proper grid alignment.
  *
- * IMPORTANT: Uses edge cuts for alignment because:
+ * IMPORTANT: Uses edge cuts ONLY because:
  * - Edge cuts define the physical board boundary on the 12.7mm grid
  * - All KiCad blocks are designed with edge cuts at grid boundaries
- * - Copper content can vary in position within the board
+ * - Copper content can OVERHANG the board edge (e.g., connectors)
  * - Silkscreen can overhang board edges
  *
- * Falls back to copper layers only if edge cuts aren't available.
+ * If edge cuts are missing, falls back to fixed grid size (12.7mm) rather than
+ * copper, which would include overhanging components and break alignment.
  */
 function findUnifiedBounds(block: GerberBlock): BlockBounds {
-  // Prefer edge cuts - defines the physical board boundary on the grid
+  // Use edge cuts ONLY - defines the physical board boundary on the grid
   const edgeCuts = block.layers.edgeCuts
   if (edgeCuts) {
     const bounds = findGerberFullBounds(edgeCuts)
@@ -387,11 +388,15 @@ function findUnifiedBounds(block: GerberBlock): BlockBounds {
     }
   }
 
-  // Fallback: use copper layers (for blocks without edge cuts)
+  // Fallback: use fixed grid size (12.7mm) instead of copper layers
+  // This prevents overhanging components from affecting block placement
+  console.warn(
+    `[gerber-merge] Block "${block.name}" missing valid edge cuts, using fixed grid size`
+  )
+
+  // Still need to find minX/minY from copper to normalize the block origin
   let minX = Infinity
   let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
 
   const copperLayers: (keyof GerberBlock['layers'])[] = [
     'topCopper',
@@ -409,16 +414,15 @@ function findUnifiedBounds(block: GerberBlock): BlockBounds {
     if (hasCoords) {
       if (bounds.minX < minX) minX = bounds.minX
       if (bounds.minY < minY) minY = bounds.minY
-      if (bounds.maxX > maxX) maxX = bounds.maxX
-      if (bounds.maxY > maxY) maxY = bounds.maxY
     }
   }
 
   return {
     minX: minX === Infinity ? 0 : minX,
     minY: minY === Infinity ? 0 : minY,
-    width: maxX > minX ? maxX - minX : GRID_SIZE_MM * 1e6,
-    height: maxY > minY ? maxY - minY : GRID_SIZE_MM * 1e6,
+    // Use fixed grid size for dimensions - NOT copper bounds
+    width: GRID_SIZE_MM * 1e6,
+    height: GRID_SIZE_MM * 1e6,
   }
 }
 
@@ -434,9 +438,16 @@ function calculateAllBlockBounds(blocks: GerberBlock[]): Map<string, BlockBounds
 }
 
 /**
- * Calculate actual Y offsets for blocks based on their heights
- * This stacks blocks from top to bottom, with the highest gridY at the bottom
- * Accounts for actual block heights instead of assuming fixed 12.7mm grid
+ * Calculate Y offsets for blocks GLOBALLY by row (gridY), not per-column.
+ * This ensures blocks at the same gridY across different columns align properly.
+ *
+ * Algorithm:
+ * 1. Find the maximum height for each gridY row (across all columns)
+ * 2. Calculate cumulative Y offset for each row from bottom (gridY=0) to top
+ * 3. All blocks at the same gridY get the same Y offset
+ *
+ * gridY=0 is at the bottom of the board (Y offset = 0)
+ * Higher gridY values stack upward with 1mm overlap for bus connectors
  */
 function calculateYOffsets(
   blocks: GerberBlock[],
@@ -444,32 +455,45 @@ function calculateYOffsets(
 ): Map<string, number> {
   const yOffsets = new Map<string, number>()
 
-  // Group blocks by column (gridX)
-  const columns = new Map<number, GerberBlock[]>()
+  // Group blocks by row (gridY) to find max height per row
+  const rows = new Map<number, GerberBlock[]>()
   for (const block of blocks) {
-    const col = columns.get(block.gridX) || []
-    col.push(block)
-    columns.set(block.gridX, col)
+    const row = rows.get(block.gridY) || []
+    row.push(block)
+    rows.set(block.gridY, row)
   }
 
-  // For each column, stack blocks from top (highest gridY) to bottom (gridY=0)
-  for (const [, colBlocks] of columns) {
-    // Sort by gridY descending (highest gridY = top of board)
-    const sorted = [...colBlocks].sort((a, b) => b.gridY - a.gridY)
-
-    let currentY = 0 // Start at Y=0 (bottom in Gerber coords)
-
-    for (const block of sorted) {
+  // Find the maximum height for each row (across all columns)
+  const rowMaxHeights = new Map<number, number>()
+  for (const [gridY, rowBlocks] of rows) {
+    let maxHeight = 0
+    for (const block of rowBlocks) {
       const bounds = blockBounds.get(block.name)
-      const blockHeight = bounds?.height ?? GRID_SIZE_MM * 1e6
-
-      // Invert: highest gridY gets lowest Y offset (starts at 0)
-      // Lower gridY values get stacked higher
-      yOffsets.set(block.name, currentY)
-
-      // Move up for next block (accounting for overlap)
-      currentY += blockHeight - VERTICAL_OVERLAP_MM * 1e6
+      const height = bounds?.height ?? GRID_SIZE_MM * 1e6
+      if (height > maxHeight) maxHeight = height
     }
+    rowMaxHeights.set(gridY, maxHeight)
+  }
+
+  // Get all unique gridY values sorted ascending (bottom to top)
+  const sortedGridYs = [...rows.keys()].sort((a, b) => a - b)
+
+  // Calculate cumulative Y offset for each row
+  // gridY=0 starts at Y=0, higher gridY values stack upward
+  const rowYOffsets = new Map<number, number>()
+  let currentY = 0
+
+  for (const gridY of sortedGridYs) {
+    rowYOffsets.set(gridY, currentY)
+    const rowHeight = rowMaxHeights.get(gridY) ?? GRID_SIZE_MM * 1e6
+    // Move up for next row (accounting for 1mm overlap)
+    currentY += rowHeight - VERTICAL_OVERLAP_MM * 1e6
+  }
+
+  // Assign the row's Y offset to each block
+  for (const block of blocks) {
+    const yOffset = rowYOffsets.get(block.gridY) ?? 0
+    yOffsets.set(block.name, yOffset)
   }
 
   return yOffsets

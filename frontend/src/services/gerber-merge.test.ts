@@ -148,41 +148,101 @@ describe('gerber-merge', () => {
     expect(result.bottomCopper).toBe('')
   })
 
-  it('handles Y offset correctly with inversion', () => {
-    // With Y inversion, gridY=0 should have highest Y (bottom of board)
-    // and gridY=1 should have lowest Y (top of board)
-    // Note: The new algorithm stacks based on actual block heights, not fixed grid
+  it('handles Y offset correctly with gridY=0 at bottom', () => {
+    // gridY=0 should be at Y=0 (bottom of board)
+    // gridY=1 should be stacked above gridY=0
+    // Since blocks don't have edge cuts, they use fixed 12.7mm height
     const blocks: GerberBlock[] = [
       {
         name: 'block0',
         gridX: 0,
-        gridY: 0, // First row - should be stacked ABOVE block1
+        gridY: 0, // First row - at Y=0 (bottom)
         layers: { topCopper: sampleTopCopper },
       },
       {
         name: 'block1',
         gridX: 0,
-        gridY: 1, // Second row - should be at Y=0 (base)
+        gridY: 1, // Second row - stacked above block0
         layers: { topCopper: sampleTopCopper },
       },
     ]
 
     const result = mergeGerbers(blocks)
 
-    // With the new stacking algorithm:
-    // - Sort by gridY descending: block1 (gridY=1) first, then block0 (gridY=0)
-    // - block1 goes at Y=0
-    // - block0 stacks on top: Y = blockHeight(2mm) - overlap(1mm) = 1mm
-    // So block0 should have Y offset of 1000000 (1mm in Gerber units)
+    // With the fixed stacking algorithm:
+    // - gridY=0 (block0) is at Y=0
+    // - gridY=1 (block1) is at Y = 12.7mm - 1mm overlap = 11.7mm = 11700000 units
     expect(result.topCopper).toContain('Block: block0')
     expect(result.topCopper).toContain('Block: block1')
 
-    // block0's first Y coordinate should be at 1mm offset
-    // Original Y1000000 - origin Y1000000 + offset 1000000 = Y1000000
-    expect(result.topCopper).toContain('Y1000000')
-
-    // block1 should be at Y=0 (no offset, normalized to origin)
+    // block0 (gridY=0) should be at Y=0 (normalized to origin, no offset)
     // Original Y1000000 - origin Y1000000 + offset 0 = Y0
     expect(result.topCopper).toContain('Y0D03')
+
+    // block1 (gridY=1) should be at Y=11.7mm offset
+    // Original Y1000000 - origin Y1000000 + offset 11700000 = Y11700000
+    expect(result.topCopper).toContain('Y11700000')
+  })
+
+  it('aligns blocks at same gridY across different columns', () => {
+    // Blocks at the same gridY in different columns MUST have the same Y offset
+    // This was a bug where each column calculated Y offsets independently
+    const blocks: GerberBlock[] = [
+      {
+        name: 'blockA',
+        gridX: 0,
+        gridY: 0,
+        layers: { topCopper: sampleTopCopper },
+      },
+      {
+        name: 'blockB',
+        gridX: 1, // Different column
+        gridY: 0, // Same row - should have same Y offset
+        layers: { topCopper: sampleTopCopper2 },
+      },
+      {
+        name: 'blockC',
+        gridX: 0,
+        gridY: 1,
+        layers: { topCopper: sampleTopCopper },
+      },
+      {
+        name: 'blockD',
+        gridX: 1, // Different column
+        gridY: 1, // Same row - should have same Y offset as blockC
+        layers: { topCopper: sampleTopCopper2 },
+      },
+    ]
+
+    const result = mergeGerbers(blocks)
+
+    // All blocks should be present
+    expect(result.topCopper).toContain('Block: blockA')
+    expect(result.topCopper).toContain('Block: blockB')
+    expect(result.topCopper).toContain('Block: blockC')
+    expect(result.topCopper).toContain('Block: blockD')
+
+    // Extract the section for each block and check Y offset
+    // gridY=0 blocks should have coordinates starting at Y=0
+    // gridY=1 blocks should have coordinates starting at Y=11700000
+
+    // Split output by block markers
+    const blockSections = result.topCopper.split('G04 Block: ')
+
+    // Find blockA section (gridY=0) - first Y coordinate should be 0
+    const blockASection = blockSections.find((s) => s.startsWith('blockA'))
+    expect(blockASection).toMatch(/Y0D0[123]\*/)
+
+    // Find blockB section (gridY=0) - first Y coordinate should be 0
+    const blockBSection = blockSections.find((s) => s.startsWith('blockB'))
+    expect(blockBSection).toMatch(/Y0D0[123]\*/)
+
+    // Find blockC section (gridY=1) - first Y coordinate should be 11700000
+    const blockCSection = blockSections.find((s) => s.startsWith('blockC'))
+    expect(blockCSection).toMatch(/Y11700000D0[123]\*/)
+
+    // Find blockD section (gridY=1) - first Y coordinate should be 11700000
+    const blockDSection = blockSections.find((s) => s.startsWith('blockD'))
+    expect(blockDSection).toMatch(/Y11700000D0[123]\*/)
   })
 })
