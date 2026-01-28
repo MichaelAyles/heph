@@ -284,6 +284,12 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
     }
   }, [parsedLayers])
 
+  // Reset view when layers change (auto-fit to board)
+  useEffect(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [layers])
+
   // Toggle layer visibility
   const toggleLayer = useCallback((filename: string) => {
     setParsedLayers((prev) =>
