@@ -149,32 +149,40 @@ describe('gerber-merge', () => {
   })
 
   it('handles Y offset correctly with inversion', () => {
-    // With Y inversion, gridY=0 should have highest Y (bottom of board in SVG)
-    // and gridY=1 should have lowest Y (top of board in SVG)
+    // With Y inversion, gridY=0 should have highest Y (bottom of board)
+    // and gridY=1 should have lowest Y (top of board)
+    // Note: The new algorithm stacks based on actual block heights, not fixed grid
     const blocks: GerberBlock[] = [
       {
         name: 'block0',
         gridX: 0,
-        gridY: 0, // First row - should be at BOTTOM (highest Y)
+        gridY: 0, // First row - should be stacked ABOVE block1
         layers: { topCopper: sampleTopCopper },
       },
       {
         name: 'block1',
         gridX: 0,
-        gridY: 1, // Second row - should be at TOP (Y=0)
+        gridY: 1, // Second row - should be at Y=0 (base)
         layers: { topCopper: sampleTopCopper },
       },
     ]
 
     const result = mergeGerbers(blocks)
 
-    // With maxGridY=1 and inversion:
-    // - block0 (gridY=0): invertedGridY = 1-0 = 1 → offset = 11700000
-    // - block1 (gridY=1): invertedGridY = 1-1 = 0 → offset = 0
-    // So block0 should have higher Y coordinates than block1
+    // With the new stacking algorithm:
+    // - Sort by gridY descending: block1 (gridY=1) first, then block0 (gridY=0)
+    // - block1 goes at Y=0
+    // - block0 stacks on top: Y = blockHeight(2mm) - overlap(1mm) = 1mm
+    // So block0 should have Y offset of 1000000 (1mm in Gerber units)
     expect(result.topCopper).toContain('Block: block0')
     expect(result.topCopper).toContain('Block: block1')
-    // block0 should have Y11700000 (at the bottom)
-    expect(result.topCopper).toContain('Y11700000')
+
+    // block0's first Y coordinate should be at 1mm offset
+    // Original Y1000000 - origin Y1000000 + offset 1000000 = Y1000000
+    expect(result.topCopper).toContain('Y1000000')
+
+    // block1 should be at Y=0 (no offset, normalized to origin)
+    // Original Y1000000 - origin Y1000000 + offset 0 = Y0
+    expect(result.topCopper).toContain('Y0D03')
   })
 })

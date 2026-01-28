@@ -13,16 +13,12 @@ import { fileURLToPath } from 'url'
 import { execSync, spawn } from 'child_process'
 import {
   mergeGerbers,
-  calculateBoardOutlineFromContent,
   parseBoardDimensionsFromEdgeCuts,
   generateBoardOutlineGerber,
   type GerberBlock,
   type MergedGerbers,
 } from '../src/services/gerber-merge'
-import {
-  calculatePanelLayout,
-  mergeIntoPanelGerbers,
-} from '../src/services/panel-merge'
+import { calculatePanelLayout, mergeIntoPanelGerbers } from '../src/services/panel-merge'
 import type { RemoteBoard } from '../src/db/schema'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -63,7 +59,7 @@ const MAIN_BOARD_BLOCKS: BlockConfig[] = [
   },
   {
     name: 'battery',
-    gerberDir: join(TEMPLATES_DIR, '1x1-jst-ph-battery-connector-done/gerbers'),
+    gerberDir: join(TEMPLATES_DIR, '1x1-jst-ph-battery-connector/gerbers'),
     gerberPrefix: '1x1-jst-ph-battery-connector',
     gridX: 0,
     gridY: 1,
@@ -81,7 +77,7 @@ const MAIN_BOARD_BLOCKS: BlockConfig[] = [
   },
   {
     name: 'esp32',
-    gerberDir: join(TEMPLATES_DIR, 'ESP32-done/ESP32/gerbers'),
+    gerberDir: join(TEMPLATES_DIR, '2x2-ESP32-C6-MCU/ESP32/gerbers'),
     gerberPrefix: 'ESP32',
     gridX: 0,
     gridY: 2,
@@ -184,7 +180,9 @@ async function main() {
   for (const config of MAIN_BOARD_BLOCKS) {
     console.log(`  Loading: ${config.name}`)
     console.log(`    Path: ${config.gerberDir}`)
-    console.log(`    Grid: (${config.gridX}, ${config.gridY}) - ${config.gridWidth}x${config.gridHeight}`)
+    console.log(
+      `    Grid: (${config.gridX}, ${config.gridY}) - ${config.gridWidth}x${config.gridHeight}`
+    )
 
     if (!existsSync(config.gerberDir)) {
       console.log(`    ERROR: Directory not found, skipping`)
@@ -226,13 +224,15 @@ async function main() {
   // Main board is 2 cols × 4 rows = 25.4mm × 50.8mm
   const mainBoardGridWidth = 2
   const mainBoardGridHeight = 4
-  const mainBoardBaseWidth = mainBoardGridWidth * GRID_SIZE_MM  // 25.4mm
+  const mainBoardBaseWidth = mainBoardGridWidth * GRID_SIZE_MM // 25.4mm
   const mainBoardBaseHeight = mainBoardGridHeight * GRID_SIZE_MM // 50.8mm
   const marginMM = 1.0
 
   const outline = generateBoardOutlineGerber(mainBoardBaseWidth, mainBoardBaseHeight, marginMM)
   console.log(`  Board dimensions: ${outline.width.toFixed(2)}mm x ${outline.height.toFixed(2)}mm`)
-  console.log(`    (Grid: ${mainBoardGridWidth}x${mainBoardGridHeight} = ${mainBoardBaseWidth}mm x ${mainBoardBaseHeight}mm + ${marginMM * 2}mm margin)`)
+  console.log(
+    `    (Grid: ${mainBoardGridWidth}x${mainBoardGridHeight} = ${mainBoardBaseWidth}mm x ${mainBoardBaseHeight}mm + ${marginMM * 2}mm margin)`
+  )
 
   // Replace edge cuts with calculated outline
   merged.edgeCuts = outline.gerber
@@ -276,19 +276,27 @@ async function main() {
 
     if (remoteLayerCount > 0) {
       // Merge remote board (single block at origin)
-      const remoteMerged = mergeGerbers([
-        { ...remoteBlock, gridX: 0, gridY: 0 },
-      ])
+      const remoteMerged = mergeGerbers([{ ...remoteBlock, gridX: 0, gridY: 0 }])
 
       // Parse actual board dimensions from edge cuts
       const edgeCutsDims = parseBoardDimensionsFromEdgeCuts(remoteBlock.layers.edgeCuts || '')
-      console.log(`  Remote board edge cuts: ${edgeCutsDims.width.toFixed(2)}mm x ${edgeCutsDims.height.toFixed(2)}mm`)
+      console.log(
+        `  Remote board edge cuts: ${edgeCutsDims.width.toFixed(2)}mm x ${edgeCutsDims.height.toFixed(2)}mm`
+      )
 
       // Generate outline with 1mm margin (for edge cut gerber only)
-      const remoteOutline = generateBoardOutlineGerber(edgeCutsDims.width, edgeCutsDims.height, marginMM)
+      const remoteOutline = generateBoardOutlineGerber(
+        edgeCutsDims.width,
+        edgeCutsDims.height,
+        marginMM
+      )
       remoteMerged.edgeCuts = remoteOutline.gerber
-      console.log(`  Remote board with margin: ${remoteOutline.width.toFixed(2)}mm x ${remoteOutline.height.toFixed(2)}mm`)
-      console.log(`  Remote board ACTUAL size (for routing): ${edgeCutsDims.width.toFixed(2)}mm x ${edgeCutsDims.height.toFixed(2)}mm`)
+      console.log(
+        `  Remote board with margin: ${remoteOutline.width.toFixed(2)}mm x ${remoteOutline.height.toFixed(2)}mm`
+      )
+      console.log(
+        `  Remote board ACTUAL size (for routing): ${edgeCutsDims.width.toFixed(2)}mm x ${edgeCutsDims.height.toFixed(2)}mm`
+      )
 
       // =====================================================================
       // Step 6: Create panel layout
@@ -298,7 +306,7 @@ async function main() {
       // Use ACTUAL board dimensions (without margin) for panel layout
       // The margin is for manufacturing tolerance, not board sizing
       const mainBoardSize = {
-        width: mainBoardBaseWidth,   // 25.4mm (actual grid size)
+        width: mainBoardBaseWidth, // 25.4mm (actual grid size)
         height: mainBoardBaseHeight, // 50.8mm (actual grid size)
       }
 
@@ -310,7 +318,7 @@ async function main() {
         type: 'connector',
         placedBlocks: [],
         boardSize: {
-          width: edgeCutsDims.width,   // 10mm (actual board)
+          width: edgeCutsDims.width, // 10mm (actual board)
           height: edgeCutsDims.height, // 50mm (actual board)
           unit: 'mm',
         },
@@ -322,12 +330,18 @@ async function main() {
       console.log(`\n  Height comparison (actual board sizes):`)
       console.log(`    Main board:   ${mainBoardSize.height.toFixed(2)}mm`)
       console.log(`    Remote board: ${remoteBoard.boardSize.height.toFixed(2)}mm`)
-      console.log(`    Difference:   ${(mainBoardSize.height - remoteBoard.boardSize.height).toFixed(2)}mm`)
+      console.log(
+        `    Difference:   ${(mainBoardSize.height - remoteBoard.boardSize.height).toFixed(2)}mm`
+      )
 
       const panelConfig = calculatePanelLayout(mainBoardSize, [remoteBoard])
 
-      console.log(`  Panel size: ${panelConfig.panelSize.width.toFixed(1)}mm x ${panelConfig.panelSize.height.toFixed(1)}mm`)
-      console.log(`  Main board at: (${panelConfig.mainBoardPosition.x}, ${panelConfig.mainBoardPosition.y})`)
+      console.log(
+        `  Panel size: ${panelConfig.panelSize.width.toFixed(1)}mm x ${panelConfig.panelSize.height.toFixed(1)}mm`
+      )
+      console.log(
+        `  Main board at: (${panelConfig.mainBoardPosition.x}, ${panelConfig.mainBoardPosition.y})`
+      )
       console.log(`  Remote boards: ${panelConfig.remoteBoards.length}`)
       console.log(`  V-score lines: ${panelConfig.vScoreLines.length}`)
       console.log(`  Routed edges: ${panelConfig.routedEdges?.length ?? 0}`)
@@ -448,9 +462,12 @@ View files at: https://tracespace.io/view/
         join(OUTPUT_DIR, 'panel-VScore.gbr'),
       ].filter(existsSync)
 
-      execSync(`"${GERBV_PATH}" --export=png --dpi=300 --antialias --background=#000000 -o "${pngPath}" ${copperFiles.map(f => `"${f}"`).join(' ')}`, {
-        stdio: 'inherit',
-      })
+      execSync(
+        `"${GERBV_PATH}" --export=png --dpi=300 --antialias --background=#000000 -o "${pngPath}" ${copperFiles.map((f) => `"${f}"`).join(' ')}`,
+        {
+          stdio: 'inherit',
+        }
+      )
       console.log(`  Exported: ${pngPath}`)
     } catch (error) {
       console.error('  Failed to export PNG:', error)

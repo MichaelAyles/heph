@@ -42,13 +42,20 @@ const GRID_SIZE_MM = 12.7
 const VERTICAL_OVERLAP_MM = 1.0
 
 /**
- * Find bounding box of coordinates in Gerber content
- * Returns min X and Y values to use as origin offset
+ * Find bounding box of coordinates in Gerber content (min and max)
+ * Returns min and max X/Y values for full bounds calculation
  * Only considers actual coordinate commands (X...Y...D0[123]*)
  */
-function findGerberBounds(content: string): { minX: number; minY: number } {
+function findGerberFullBounds(content: string): {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+} {
   let minX = Infinity
   let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
 
   // Match coordinate commands: X{num}Y{num}D{01|02|03}*
   // This avoids matching X/Y values inside aperture definitions
@@ -59,6 +66,8 @@ function findGerberBounds(content: string): { minX: number; minY: number } {
     const y = parseInt(match[2])
     if (x < minX) minX = x
     if (y < minY) minY = y
+    if (x > maxX) maxX = x
+    if (y > maxY) maxY = y
   }
 
   // Also match standalone X or Y updates (some Gerbers use partial coords)
@@ -75,9 +84,11 @@ function findGerberBounds(content: string): { minX: number; minY: number } {
     if (xMatch) {
       const x = parseInt(xMatch[1])
       if (x < minX) minX = x
+      if (x > maxX) maxX = x
       if (xMatch[2]) {
         const y = parseInt(xMatch[2])
         if (y < minY) minY = y
+        if (y > maxY) maxY = y
       }
     }
   }
@@ -85,6 +96,8 @@ function findGerberBounds(content: string): { minX: number; minY: number } {
   return {
     minX: minX === Infinity ? 0 : minX,
     minY: minY === Infinity ? 0 : minY,
+    maxX: maxX === -Infinity ? 0 : maxX,
+    maxY: maxY === -Infinity ? 0 : maxY,
   }
 }
 
@@ -112,27 +125,25 @@ function findDrillBounds(content: string): { minX: number; minY: number } {
 }
 
 /**
- * Transform Gerber coordinates: normalize to origin then offset by grid
+ * Transform Gerber coordinates: normalize to origin then offset by grid/stack position
  * Only transforms coordinate commands, not aperture definitions
  *
- * Note: gridY is inverted so that gridY=0 appears at the BOTTOM of the board
- * (highest Y in Gerber coords). This matches the visual expectation that
- * blocks added first (gridY=0) are at the bottom of the stack.
+ * @param content - Gerber file content
+ * @param originX - Block's min X coordinate (for normalization)
+ * @param originY - Block's min Y coordinate (for normalization)
+ * @param gridX - Grid X position (0, 1, 2...)
+ * @param yOffset - Pre-calculated Y offset in Gerber units (from calculateYOffsets)
  */
 function transformGerberCoords(
   content: string,
   originX: number,
   originY: number,
   gridX: number,
-  gridY: number,
-  maxGridY: number
+  yOffset: number
 ): string {
   // Grid offset in Gerber units (mm * 1,000,000 for 6 decimal places)
-  // Y offset uses reduced spacing (GRID_SIZE_MM - VERTICAL_OVERLAP_MM) for bus connector merging
-  // Invert gridY so that gridY=0 is at the bottom (highest Y offset)
-  const invertedGridY = maxGridY - gridY
   const gridOffsetX = Math.round(gridX * GRID_SIZE_MM * 1000000)
-  const gridOffsetY = Math.round(invertedGridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM) * 1000000)
+  const gridOffsetY = Math.round(yOffset)
 
   // Process line by line to avoid transforming aperture definitions
   const lines = content.split('\n')
@@ -163,20 +174,22 @@ function transformGerberCoords(
 
 /**
  * Transform Excellon drill coordinates (decimal mm format)
+ *
+ * @param content - Excellon drill file content
+ * @param originX - Block's min X coordinate in mm (for normalization)
+ * @param originY - Block's min Y coordinate in mm (for normalization)
+ * @param gridX - Grid X position (0, 1, 2...)
+ * @param yOffset - Pre-calculated Y offset in mm (from calculateYOffsets, converted)
  */
 function transformDrillCoords(
   content: string,
   originX: number,
   originY: number,
   gridX: number,
-  gridY: number,
-  maxGridY: number
+  yOffset: number
 ): string {
-  // Y offset uses reduced spacing for bus connector merging
-  // Invert gridY so that gridY=0 is at the bottom (highest Y offset)
-  const invertedGridY = maxGridY - gridY
   const gridOffsetX = gridX * GRID_SIZE_MM
-  const gridOffsetY = invertedGridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM)
+  const gridOffsetY = yOffset // Already in mm
 
   return content.replace(/X(-?\d+\.?\d*)Y(-?\d+\.?\d*)/g, (_, x, y) => {
     const newX = (parseFloat(x) - originX + gridOffsetX).toFixed(4)
@@ -338,6 +351,14 @@ function renumberToolSelections(body: string, offset: number): string {
   return body.replace(/^T(\d+)$/gm, (_, t) => `T${parseInt(t) + offset}`)
 }
 
+/** Block bounds including size */
+interface BlockBounds {
+  minX: number
+  minY: number
+  width: number // in Gerber units (mm * 1e6)
+  height: number // in Gerber units (mm * 1e6)
+}
+
 /**
  * Calculate unified bounds for a block using edge cuts (board outline)
  * This ensures all layers use the same origin for proper grid alignment
@@ -350,20 +371,27 @@ function renumberToolSelections(body: string, offset: number): string {
  *
  * Falls back to copper layers only if edge cuts aren't available.
  */
-function findUnifiedBounds(block: GerberBlock): { minX: number; minY: number } {
+function findUnifiedBounds(block: GerberBlock): BlockBounds {
   // Prefer edge cuts - defines the physical board boundary on the grid
   const edgeCuts = block.layers.edgeCuts
   if (edgeCuts) {
-    const bounds = findGerberBounds(edgeCuts)
+    const bounds = findGerberFullBounds(edgeCuts)
     const hasCoords = /X-?\d+Y-?\d+D0[123]\*/.test(edgeCuts)
-    if (hasCoords && (bounds.minX !== 0 || bounds.minY !== 0)) {
-      return bounds
+    if (hasCoords && (bounds.maxX > bounds.minX || bounds.maxY > bounds.minY)) {
+      return {
+        minX: bounds.minX,
+        minY: bounds.minY,
+        width: bounds.maxX - bounds.minX,
+        height: bounds.maxY - bounds.minY,
+      }
     }
   }
 
   // Fallback: use copper layers (for blocks without edge cuts)
   let minX = Infinity
   let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
 
   const copperLayers: (keyof GerberBlock['layers'])[] = [
     'topCopper',
@@ -376,33 +404,75 @@ function findUnifiedBounds(block: GerberBlock): { minX: number; minY: number } {
     const content = block.layers[layerKey]
     if (!content) continue
 
-    const bounds = findGerberBounds(content)
-    if (bounds.minX !== 0 || bounds.minY !== 0) {
-      const hasCoords = /X-?\d+Y-?\d+D0[123]\*/.test(content)
-      if (hasCoords) {
-        if (bounds.minX < minX) minX = bounds.minX
-        if (bounds.minY < minY) minY = bounds.minY
-      }
+    const bounds = findGerberFullBounds(content)
+    const hasCoords = /X-?\d+Y-?\d+D0[123]\*/.test(content)
+    if (hasCoords) {
+      if (bounds.minX < minX) minX = bounds.minX
+      if (bounds.minY < minY) minY = bounds.minY
+      if (bounds.maxX > maxX) maxX = bounds.maxX
+      if (bounds.maxY > maxY) maxY = bounds.maxY
     }
   }
 
   return {
     minX: minX === Infinity ? 0 : minX,
     minY: minY === Infinity ? 0 : minY,
+    width: maxX > minX ? maxX - minX : GRID_SIZE_MM * 1e6,
+    height: maxY > minY ? maxY - minY : GRID_SIZE_MM * 1e6,
   }
 }
 
 /**
  * Pre-calculate unified bounds for all blocks
  */
-function calculateAllBlockBounds(
-  blocks: GerberBlock[]
-): Map<string, { minX: number; minY: number }> {
-  const boundsMap = new Map<string, { minX: number; minY: number }>()
+function calculateAllBlockBounds(blocks: GerberBlock[]): Map<string, BlockBounds> {
+  const boundsMap = new Map<string, BlockBounds>()
   for (const block of blocks) {
     boundsMap.set(block.name, findUnifiedBounds(block))
   }
   return boundsMap
+}
+
+/**
+ * Calculate actual Y offsets for blocks based on their heights
+ * This stacks blocks from top to bottom, with the highest gridY at the bottom
+ * Accounts for actual block heights instead of assuming fixed 12.7mm grid
+ */
+function calculateYOffsets(
+  blocks: GerberBlock[],
+  blockBounds: Map<string, BlockBounds>
+): Map<string, number> {
+  const yOffsets = new Map<string, number>()
+
+  // Group blocks by column (gridX)
+  const columns = new Map<number, GerberBlock[]>()
+  for (const block of blocks) {
+    const col = columns.get(block.gridX) || []
+    col.push(block)
+    columns.set(block.gridX, col)
+  }
+
+  // For each column, stack blocks from top (highest gridY) to bottom (gridY=0)
+  for (const [, colBlocks] of columns) {
+    // Sort by gridY descending (highest gridY = top of board)
+    const sorted = [...colBlocks].sort((a, b) => b.gridY - a.gridY)
+
+    let currentY = 0 // Start at Y=0 (bottom in Gerber coords)
+
+    for (const block of sorted) {
+      const bounds = blockBounds.get(block.name)
+      const blockHeight = bounds?.height ?? GRID_SIZE_MM * 1e6
+
+      // Invert: highest gridY gets lowest Y offset (starts at 0)
+      // Lower gridY values get stacked higher
+      yOffsets.set(block.name, currentY)
+
+      // Move up for next block (accounting for overlap)
+      currentY += blockHeight - VERTICAL_OVERLAP_MM * 1e6
+    }
+  }
+
+  return yOffsets
 }
 
 /**
@@ -411,14 +481,12 @@ function calculateAllBlockBounds(
 function mergeLayer(
   blocks: GerberBlock[],
   layerKey: keyof GerberBlock['layers'],
-  blockBounds?: Map<string, { minX: number; minY: number }>
+  blockBounds?: Map<string, BlockBounds>,
+  yOffsets?: Map<string, number>
 ): string {
   if (layerKey === 'drill') {
-    return mergeDrill(blocks, blockBounds)
+    return mergeDrill(blocks, blockBounds, yOffsets)
   }
-
-  // Calculate max gridY for Y-axis inversion
-  const maxGridY = Math.max(...blocks.map((b) => b.gridY))
 
   const allMacros = new Set<string>()
   const allApertures = new Map<number, string>()
@@ -430,7 +498,10 @@ function mergeLayer(
     if (!content) continue
 
     // Use unified bounds if provided, otherwise calculate from this layer
-    const bounds = blockBounds?.get(block.name) ?? findGerberBounds(content)
+    const bounds = blockBounds?.get(block.name) ?? findUnifiedBounds(block)
+
+    // Get Y offset from pre-calculated map, or fall back to grid-based calculation
+    const yOffset = yOffsets?.get(block.name) ?? 0
 
     // Extract macros (deduplicate by content)
     const macros = extractMacros(content)
@@ -446,7 +517,7 @@ function mergeLayer(
 
     // Extract and transform body
     let body = extractGerberBody(content)
-    body = transformGerberCoords(body, bounds.minX, bounds.minY, block.gridX, block.gridY, maxGridY)
+    body = transformGerberCoords(body, bounds.minX, bounds.minY, block.gridX, yOffset)
     body = renumberApertureSelections(body, apertureOffset)
 
     if (body.trim()) {
@@ -481,11 +552,9 @@ function mergeLayer(
  */
 function mergeDrill(
   blocks: GerberBlock[],
-  blockBounds?: Map<string, { minX: number; minY: number }>
+  blockBounds?: Map<string, BlockBounds>,
+  yOffsets?: Map<string, number>
 ): string {
-  // Calculate max gridY for Y-axis inversion
-  const maxGridY = Math.max(...blocks.map((b) => b.gridY))
-
   const allTools = new Map<number, string>()
   const bodies: string[] = []
   let toolOffset = 0
@@ -501,6 +570,9 @@ function mergeDrill(
       ? { minX: gerberBounds.minX / 1000000, minY: gerberBounds.minY / 1000000 }
       : findDrillBounds(content)
 
+    // Get Y offset from pre-calculated map (convert to mm), or fall back to 0
+    const yOffset = yOffsets ? (yOffsets.get(block.name) ?? 0) / 1e6 : 0
+
     // Extract tools with offset
     const tools = parseDrillTools(content)
     let maxTool = 0
@@ -511,7 +583,7 @@ function mergeDrill(
 
     // Extract and transform body
     let body = extractDrillBody(content)
-    body = transformDrillCoords(body, bounds.minX, bounds.minY, block.gridX, block.gridY, maxGridY)
+    body = transformDrillCoords(body, bounds.minX, bounds.minY, block.gridX, yOffset)
     body = renumberToolSelections(body, toolOffset)
 
     if (body.trim()) {
@@ -545,17 +617,21 @@ export function mergeGerbers(blocks: GerberBlock[]): MergedGerbers {
   // This ensures all layers of a block use the same origin
   const blockBounds = calculateAllBlockBounds(blocks)
 
+  // Calculate Y offsets based on actual block heights
+  // This stacks blocks properly accounting for their actual dimensions
+  const yOffsets = calculateYOffsets(blocks, blockBounds)
+
   return {
-    topCopper: mergeLayer(blocks, 'topCopper', blockBounds),
-    innerCopper1: mergeLayer(blocks, 'innerCopper1', blockBounds),
-    innerCopper2: mergeLayer(blocks, 'innerCopper2', blockBounds),
-    bottomCopper: mergeLayer(blocks, 'bottomCopper', blockBounds),
-    topSilk: mergeLayer(blocks, 'topSilk', blockBounds),
-    bottomSilk: mergeLayer(blocks, 'bottomSilk', blockBounds),
-    topMask: mergeLayer(blocks, 'topMask', blockBounds),
-    bottomMask: mergeLayer(blocks, 'bottomMask', blockBounds),
-    edgeCuts: mergeLayer(blocks, 'edgeCuts', blockBounds),
-    drill: mergeLayer(blocks, 'drill', blockBounds),
+    topCopper: mergeLayer(blocks, 'topCopper', blockBounds, yOffsets),
+    innerCopper1: mergeLayer(blocks, 'innerCopper1', blockBounds, yOffsets),
+    innerCopper2: mergeLayer(blocks, 'innerCopper2', blockBounds, yOffsets),
+    bottomCopper: mergeLayer(blocks, 'bottomCopper', blockBounds, yOffsets),
+    topSilk: mergeLayer(blocks, 'topSilk', blockBounds, yOffsets),
+    bottomSilk: mergeLayer(blocks, 'bottomSilk', blockBounds, yOffsets),
+    topMask: mergeLayer(blocks, 'topMask', blockBounds, yOffsets),
+    bottomMask: mergeLayer(blocks, 'bottomMask', blockBounds, yOffsets),
+    edgeCuts: mergeLayer(blocks, 'edgeCuts', blockBounds, yOffsets),
+    drill: mergeLayer(blocks, 'drill', blockBounds, yOffsets),
   }
 }
 
