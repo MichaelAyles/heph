@@ -189,7 +189,7 @@ Development blog documenting PHAESTUS progress. 40 posts with images.
 - `src/services/` - LLM client, PCB merging, KiCad parsing, Gerber merging
 - `src/services/orchestrator/` - Modular orchestrator (tools/, helpers/, types.ts, orchestrator.ts, index.ts)
 - `src/services/langgraph/` - LangGraph state machine (state.ts, graph.ts, checkpointer.ts, nodes/)
-- `src/services/gerber-merge.ts` - Gerber layer merging for manufacturing (621 lines)
+- `src/services/gerber-merge.ts` - Gerber layer merging for manufacturing (~800 lines)
 - `src/services/bom-generator.ts` - BOM aggregation with nofit marking
 - `src/components/pcb/RemoteTypeBlocksPreview.tsx` - Cable-connected blocks preview
 - `src/components/pcb/BoardSelector` - Board selection (in PCBStageView)
@@ -587,7 +587,7 @@ OrchestratorGraph (parent)
 
 ### Gerber Merging
 
-PHAESTUS uses Gerber-based merging for manufacturing output (`src/services/gerber-merge.ts`, 621 lines):
+PHAESTUS uses Gerber-based merging for manufacturing output (`src/services/gerber-merge.ts`, ~800 lines):
 
 **Why Gerbers, not KiCad S-expressions?**
 - Gerbers are flat vector graphics without electrical context
@@ -597,9 +597,15 @@ PHAESTUS uses Gerber-based merging for manufacturing output (`src/services/gerbe
 
 **Process**:
 1. Each block exports 4-layer Gerbers (F.Cu, In1.Cu, In2.Cu, B.Cu) + masks, silk, edge cuts
-2. Gerber merger normalizes each block to origin
-3. Blocks offset by grid position (12.7mm grid)
+2. Gerber merger calculates actual block dimensions from edge cuts (or copper fallback)
+3. Blocks are stacked based on actual heights with 1mm overlap for bus connectors
 4. Layers concatenated to produce merged manufacturing files
+
+**Dynamic Height Stacking**:
+- Blocks are sorted by gridY (descending) and stacked from top to bottom
+- Y offset = sum of preceding block heights minus overlaps
+- This handles blocks of any size, not just 12.7mm grid-aligned ones
+- Fixes gaps that occurred when blocks weren't exactly 12.7mm tall
 
 **Supported Layers**:
 - Copper: `F.Cu`, `In1.Cu`, `In2.Cu`, `B.Cu`
@@ -771,15 +777,22 @@ const GRID_SIZE_MM = 12.7        // 0.5" grid unit
 const VERTICAL_OVERLAP_MM = 1.0  // Bus connector overlap
 ```
 
-**Coordinate Transform**:
-1. Find unified bounds using **edge cuts** (not copper/silkscreen)
+**Coordinate Transform** (Dynamic Height-Based):
+1. Find unified bounds using **edge cuts** (not copper/silkscreen) - includes width AND height
 2. Normalize block to origin: `normalized = raw - minX/minY`
-3. Offset by grid: `X = gridX * 12.7mm`, `Y = gridY * 11.7mm` (reduced for overlap)
+3. Calculate Y offsets by stacking blocks based on actual heights (not fixed grid)
+4. Offset by: `X = gridX * 12.7mm`, `Y = calculated offset from stacking`
+
+**Stacking Algorithm**:
+1. Group blocks by column (gridX)
+2. Sort each column by gridY descending (highest first)
+3. Stack from Y=0 upward: `nextY = currentY + blockHeight - 1mm overlap`
+4. This produces tight stacking regardless of actual block dimensions
 
 **Why 1mm Vertical Overlap?**
 - Bus connector pads need to merge at block seams
 - Without overlap, pads would be 1mm apart
-- Height formula: `maxY * 12.7 - (maxY - 1) * 1.0`
+- Each block boundary overlaps by 1mm for proper electrical connection
 
 ### BOM & Centroid Generation
 

@@ -42,7 +42,7 @@ PHAESTUS transforms natural language specifications into manufacturable hardware
 
 ### Technical Highlights
 - **LangGraph Orchestrator** - Hierarchical subgraph architecture with 5 stage subgraphs (spec, pcb, enclosure, firmware, export), checkpointing for resumable workflows
-- **Gerber Merging** - Block-based PCB manufacturing via Gerber layer concatenation (replaces complex KiCad S-expression parsing)
+- **Gerber Merging** - Block-based PCB manufacturing via Gerber layer concatenation with dynamic height-based stacking (handles variable block sizes with 1mm bus connector overlap)
 - **TOKN Parser** - Custom KiCad S-expression parser for token-optimized hardware representation
 - **Formal Block System** - Zod-validated block.json schema with 5 required files (schematic, PCB, STEP, gerbers, block.json)
 - **OpenSCAD 2025 WASM** - Real-time STL rendering with Manifold backend
