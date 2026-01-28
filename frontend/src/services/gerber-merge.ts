@@ -443,11 +443,13 @@ function calculateAllBlockBounds(blocks: GerberBlock[]): Map<string, BlockBounds
  *
  * Algorithm:
  * 1. Find the maximum height for each gridY row (across all columns)
- * 2. Calculate cumulative Y offset for each row from bottom (gridY=0) to top
+ * 2. Calculate cumulative Y offset for each row from bottom to top
  * 3. All blocks at the same gridY get the same Y offset
  *
- * gridY=0 is at the bottom of the board (Y offset = 0)
- * Higher gridY values stack upward with 1mm overlap for bus connectors
+ * PHAESTUS bus design: Higher gridY blocks are at the BOTTOM of the physical board.
+ * - Highest gridY (e.g., MCU) at Y=0 (bottom), south edge faces down
+ * - Lower gridY blocks stack upward, north edges connecting to south edges above
+ * - Lowest gridY (e.g., USB-C) at top of board
  */
 function calculateYOffsets(
   blocks: GerberBlock[],
@@ -475,11 +477,11 @@ function calculateYOffsets(
     rowMaxHeights.set(gridY, maxHeight)
   }
 
-  // Get all unique gridY values sorted ascending (bottom to top)
-  const sortedGridYs = [...rows.keys()].sort((a, b) => a - b)
+  // Get all unique gridY values sorted DESCENDING (highest gridY at bottom/Y=0)
+  const sortedGridYs = [...rows.keys()].sort((a, b) => b - a)
 
   // Calculate cumulative Y offset for each row
-  // gridY=0 starts at Y=0, higher gridY values stack upward
+  // Highest gridY starts at Y=0 (bottom), lower gridY values stack upward
   const rowYOffsets = new Map<number, number>()
   let currentY = 0
 
