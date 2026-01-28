@@ -19,29 +19,48 @@ type BoundingBox = [number, number, number, number]
 // Layer colors matching typical PCB CAM viewers
 // Order determines rendering order (lower = rendered first/below)
 // Masks are hidden by default since they show openings, not the mask itself
-const LAYER_COLORS: Record<string, { fill: string; stroke: string; label: string; order: number; defaultHidden?: boolean }> = {
-  'B.Mask': { fill: '#008080', stroke: '#00aaaa', label: 'Bottom Mask', order: 0, defaultHidden: true },
+const LAYER_COLORS: Record<
+  string,
+  { fill: string; stroke: string; label: string; order: number; defaultHidden?: boolean }
+> = {
+  'B.Mask': {
+    fill: '#008080',
+    stroke: '#00aaaa',
+    label: 'Bottom Mask',
+    order: 0,
+    defaultHidden: true,
+  },
   'B.Cu': { fill: '#3232c8', stroke: '#4444ff', label: 'Bottom Copper', order: 1 },
   'In2.Cu': { fill: '#00c8c8', stroke: '#00ffff', label: 'Inner 2', order: 2 },
   'In1.Cu': { fill: '#c8c800', stroke: '#ffff00', label: 'Inner 1', order: 3 },
   'F.Cu': { fill: '#c83232', stroke: '#ff4444', label: 'Top Copper', order: 4 },
-  'F.Mask': { fill: '#800080', stroke: '#aa00aa', label: 'Top Mask', order: 5, defaultHidden: true },
-  'Drill': { fill: '#ffffff', stroke: '#ffffff', label: 'Drills', order: 6 },
+  'F.Mask': {
+    fill: '#800080',
+    stroke: '#aa00aa',
+    label: 'Top Mask',
+    order: 5,
+    defaultHidden: true,
+  },
+  Drill: { fill: '#ffffff', stroke: '#ffffff', label: 'Drills', order: 6 },
   'F.SilkS': { fill: '#f0f0f0', stroke: '#ffffff', label: 'Top Silk', order: 7 },
-  'B.SilkS': { fill: '#808080', stroke: '#aaaaaa', label: 'Bottom Silk', order: -1, defaultHidden: true },
+  'B.SilkS': {
+    fill: '#808080',
+    stroke: '#aaaaaa',
+    label: 'Bottom Silk',
+    order: -1,
+    defaultHidden: true,
+  },
   'Edge.Cuts': { fill: 'none', stroke: '#c8c800', label: 'Board Outline', order: 8 },
 }
 
 // Map common Gerber file extensions to layer names
 function guessLayerFromFilename(filename: string): string {
   const lower = filename.toLowerCase()
-  if (lower.includes('f.cu') || lower.endsWith('.gtl') || lower.includes('-f_cu'))
-    return 'F.Cu'
-  if (lower.includes('b.cu') || lower.endsWith('.gbl') || lower.includes('-b_cu'))
-    return 'B.Cu'
-  if (lower.includes('in1.cu') || lower.endsWith('.g2') || lower.includes('-in1_cu'))
+  if (lower.includes('f.cu') || lower.endsWith('.gtl') || lower.includes('-f_cu')) return 'F.Cu'
+  if (lower.includes('b.cu') || lower.endsWith('.gbl') || lower.includes('-b_cu')) return 'B.Cu'
+  if (lower.includes('in1.cu') || lower.endsWith('.g1') || lower.includes('-in1_cu'))
     return 'In1.Cu'
-  if (lower.includes('in2.cu') || lower.endsWith('.g3') || lower.includes('-in2_cu'))
+  if (lower.includes('in2.cu') || lower.endsWith('.g2') || lower.includes('-in2_cu'))
     return 'In2.Cu'
   if (lower.includes('f.mask') || lower.endsWith('.gts') || lower.includes('-f_mask'))
     return 'F.Mask'
@@ -53,8 +72,7 @@ function guessLayerFromFilename(filename: string): string {
     return 'B.SilkS'
   if (lower.includes('edge') || lower.endsWith('.gm1') || lower.includes('-edge_cuts'))
     return 'Edge.Cuts'
-  if (lower.endsWith('.drl') || lower.includes('drill'))
-    return 'Drill'
+  if (lower.endsWith('.drl') || lower.includes('drill')) return 'Drill'
   return 'Unknown'
 }
 
@@ -96,6 +114,20 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
 
         for (const [filename, content] of Object.entries(layers)) {
           const layerName = guessLayerFromFilename(filename)
+
+          // Skip empty content
+          if (!content || content.trim().length === 0) {
+            logger.warn('pcb', `Skipping empty gerber layer`, { filename, layerName })
+            continue
+          }
+
+          logger.info('pcb', `Parsing gerber layer`, {
+            filename,
+            layerName,
+            contentLength: content.length,
+            contentPreview: content.substring(0, 200),
+          })
+
           try {
             // Parse the gerber content
             const parser = createParser()
@@ -124,7 +156,11 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
               // Recursively convert children to SVG string
               const convertToString = (el: unknown): string => {
                 if (!el || typeof el !== 'object') return ''
-                const element = el as { type?: string; attributes?: Record<string, unknown>; children?: unknown[] }
+                const element = el as {
+                  type?: string
+                  attributes?: Record<string, unknown>
+                  children?: unknown[]
+                }
                 if (!element.type) return ''
 
                 const attrs = element.attributes || {}
@@ -186,7 +222,10 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
 
   // Calculate overall bounds
   const bounds = useMemo(() => {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity
 
     for (const layer of parsedLayers) {
       if (!layer.visible || !layer.bounds) continue

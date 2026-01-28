@@ -10,16 +10,16 @@ export interface GerberBlock {
   gridX: number // grid position (0, 1, 2...)
   gridY: number
   layers: {
-    topCopper?: string      // .gtl (F.Cu)
-    innerCopper1?: string   // .g1 (In1.Cu)
-    innerCopper2?: string   // .g2 (In2.Cu)
-    bottomCopper?: string   // .gbl (B.Cu)
-    topSilk?: string        // .gto (F.Silkscreen)
-    bottomSilk?: string     // .gbo (B.Silkscreen)
-    topMask?: string        // .gts (F.Mask)
-    bottomMask?: string     // .gbs (B.Mask)
-    edgeCuts?: string       // .gm1 (Edge.Cuts)
-    drill?: string          // .drl (Excellon)
+    topCopper?: string // .gtl (F.Cu)
+    innerCopper1?: string // .g1 (In1.Cu)
+    innerCopper2?: string // .g2 (In2.Cu)
+    bottomCopper?: string // .gbl (B.Cu)
+    topSilk?: string // .gto (F.Silkscreen)
+    bottomSilk?: string // .gbo (B.Silkscreen)
+    topMask?: string // .gts (F.Mask)
+    bottomMask?: string // .gbs (B.Mask)
+    edgeCuts?: string // .gm1 (Edge.Cuts)
+    drill?: string // .drl (Excellon)
   }
 }
 
@@ -84,7 +84,7 @@ function findGerberBounds(content: string): { minX: number; minY: number } {
 
   return {
     minX: minX === Infinity ? 0 : minX,
-    minY: minY === Infinity ? 0 : minY
+    minY: minY === Infinity ? 0 : minY,
   }
 }
 
@@ -107,7 +107,7 @@ function findDrillBounds(content: string): { minX: number; minY: number } {
 
   return {
     minX: minX === Infinity ? 0 : minX,
-    minY: minY === Infinity ? 0 : minY
+    minY: minY === Infinity ? 0 : minY,
   }
 }
 
@@ -129,7 +129,7 @@ function transformGerberCoords(
 
   // Process line by line to avoid transforming aperture definitions
   const lines = content.split('\n')
-  const transformed = lines.map(line => {
+  const transformed = lines.map((line) => {
     const trimmed = line.trim()
 
     // Skip aperture definitions, macros, comments
@@ -179,7 +179,7 @@ function transformDrillCoords(
  * Parse aperture definitions including macros
  */
 interface ApertureInfo {
-  definition: string  // Full definition line(s)
+  definition: string // Full definition line(s)
   isMacro: boolean
 }
 
@@ -193,7 +193,7 @@ function parseApertures(content: string): Map<number, ApertureInfo> {
     const dcode = parseInt(match[1])
     apertures.set(dcode, {
       definition: match[2],
-      isMacro: false
+      isMacro: false,
     })
   }
 
@@ -202,13 +202,17 @@ function parseApertures(content: string): Map<number, ApertureInfo> {
 
 /**
  * Extract aperture macros from Gerber content
+ * Macros start with %AM and end with % (the content inside ends with *)
+ * Example: %AMRoundRect*\n0 comment*\n4,1,4,...*%
  */
 function extractMacros(content: string): string[] {
   const macros: string[] = []
-  const regex = /%AM([^%]+)\*%/g
+  // Match %AM followed by anything until closing %
+  // The macro content ends with * before the closing %
+  const regex = /%AM[^%]+%/g
   let match
   while ((match = regex.exec(content)) !== null) {
-    macros.push(`%AM${match[1]}*%`)
+    macros.push(match[0])
   }
   return macros
 }
@@ -227,7 +231,10 @@ function extractGerberBody(content: string): string {
 
     // Track multi-line macro definitions (start with %AM, end with *%)
     if (trimmed.startsWith('%AM')) {
-      inMacro = true
+      // Check if it's a single-line macro that also ends with *%
+      if (!trimmed.endsWith('*%')) {
+        inMacro = true
+      }
       continue
     }
     if (inMacro) {
@@ -238,21 +245,21 @@ function extractGerberBody(content: string): string {
     }
 
     // Skip header/metadata
-    if (trimmed.startsWith('%TF.')) continue  // File attributes
-    if (trimmed.startsWith('%TA.')) continue  // Aperture attributes
-    if (trimmed.startsWith('%TD')) continue   // Delete attributes
-    if (trimmed.startsWith('%TO.')) continue  // Object attributes
-    if (trimmed.startsWith('%MO')) continue   // Units
-    if (trimmed.startsWith('%FS')) continue   // Format spec
-    if (trimmed.startsWith('%LP')) continue   // Layer polarity
-    if (trimmed.startsWith('%ADD')) continue  // Aperture definitions
-    if (trimmed.startsWith('G04')) continue   // Comments
-    if (trimmed === 'M02*') continue          // End of file
+    if (trimmed.startsWith('%TF.')) continue // File attributes
+    if (trimmed.startsWith('%TA.')) continue // Aperture attributes
+    if (trimmed.startsWith('%TD')) continue // Delete attributes
+    if (trimmed.startsWith('%TO.')) continue // Object attributes
+    if (trimmed.startsWith('%MO')) continue // Units
+    if (trimmed.startsWith('%FS')) continue // Format spec
+    if (trimmed.startsWith('%LP')) continue // Layer polarity
+    if (trimmed.startsWith('%ADD')) continue // Aperture definitions
+    if (trimmed.startsWith('G04')) continue // Comments
+    if (trimmed === 'M02*') continue // End of file
     if (trimmed === '') continue
 
     // Skip macro body lines (start with number or comment indicator)
-    if (/^[0-9]/.test(trimmed)) continue      // Macro primitive lines
-    if (trimmed.startsWith('0 ')) continue    // Macro comments
+    if (/^[0-9]/.test(trimmed)) continue // Macro primitive lines
+    if (trimmed.startsWith('0 ')) continue // Macro comments
 
     bodyLines.push(trimmed)
   }
@@ -349,7 +356,10 @@ function findUnifiedBounds(block: GerberBlock): { minX: number; minY: number } {
   let minY = Infinity
 
   const copperLayers: (keyof GerberBlock['layers'])[] = [
-    'topCopper', 'innerCopper1', 'innerCopper2', 'bottomCopper'
+    'topCopper',
+    'innerCopper1',
+    'innerCopper2',
+    'bottomCopper',
   ]
 
   for (const layerKey of copperLayers) {
@@ -368,14 +378,16 @@ function findUnifiedBounds(block: GerberBlock): { minX: number; minY: number } {
 
   return {
     minX: minX === Infinity ? 0 : minX,
-    minY: minY === Infinity ? 0 : minY
+    minY: minY === Infinity ? 0 : minY,
   }
 }
 
 /**
  * Pre-calculate unified bounds for all blocks
  */
-function calculateAllBlockBounds(blocks: GerberBlock[]): Map<string, { minX: number; minY: number }> {
+function calculateAllBlockBounds(
+  blocks: GerberBlock[]
+): Map<string, { minX: number; minY: number }> {
   const boundsMap = new Map<string, { minX: number; minY: number }>()
   for (const block of blocks) {
     boundsMap.set(block.name, findUnifiedBounds(block))
@@ -409,7 +421,7 @@ function mergeLayer(
 
     // Extract macros (deduplicate by content)
     const macros = extractMacros(content)
-    macros.forEach(m => allMacros.add(m))
+    macros.forEach((m) => allMacros.add(m))
 
     // Extract apertures with offset
     const apertures = parseApertures(content)
@@ -434,12 +446,7 @@ function mergeLayer(
   if (bodies.length === 0) return ''
 
   // Build merged Gerber
-  const header = [
-    'G04 Merged by PHAESTUS*',
-    '%MOMM*%',
-    '%FSLAX46Y46*%',
-    '%LPD*%',
-  ]
+  const header = ['G04 Merged by PHAESTUS*', '%MOMM*%', '%FSLAX46Y46*%', '%LPD*%']
 
   // Add macros
   for (const macro of allMacros) {
@@ -501,12 +508,7 @@ function mergeDrill(
   if (bodies.length === 0) return ''
 
   // Build merged drill file
-  const header = [
-    'M48',
-    '; Merged by PHAESTUS',
-    'FMAT,2',
-    'METRIC',
-  ]
+  const header = ['M48', '; Merged by PHAESTUS', 'FMAT,2', 'METRIC']
 
   for (const [num, def] of allTools) {
     header.push(`T${num}${def}`)
@@ -545,7 +547,10 @@ export function mergeGerbers(blocks: GerberBlock[]): MergedGerbers {
  * Calculate board outline from merged Gerber content (actual bounds)
  * Creates outline with uniform margin around all content
  */
-export function calculateBoardOutlineFromContent(mergedGerber: string, marginMM: number = 1): {
+export function calculateBoardOutlineFromContent(
+  mergedGerber: string,
+  marginMM: number = 1
+): {
   width: number
   height: number
   gerber: string
@@ -590,7 +595,7 @@ export function calculateBoardOutlineFromContent(mergedGerber: string, marginMM:
     `X${x2}Y${y2}D01*`,
     `X${x1}Y${y2}D01*`,
     `X${x1}Y${y1}D01*`,
-    'M02*'
+    'M02*',
   ].join('\n')
 
   return { width, height, gerber }
@@ -633,7 +638,7 @@ export function calculateBoardOutline(blocks: GerberBlock[]): {
     `X${w}Y${h}D01*`,
     `X0Y${h}D01*`,
     `X0Y0D01*`,
-    'M02*'
+    'M02*',
   ].join('\n')
 
   return { width, height, gerber }

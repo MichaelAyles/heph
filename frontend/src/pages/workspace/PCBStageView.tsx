@@ -347,19 +347,40 @@ export function PCBStageView() {
         // Merge all gerbers into unified layers
         const merged: MergedGerbers = mergeGerbers(gerberBlocks)
 
-        // Convert merged gerbers to the format GerberViewer expects
-        layers['merged-F.Cu'] = merged.topCopper
-        layers['merged-B.Cu'] = merged.bottomCopper
-        layers['merged-In1.Cu'] = merged.innerCopper1
-        layers['merged-In2.Cu'] = merged.innerCopper2
-        layers['merged-F.Mask'] = merged.topMask
-        layers['merged-B.Mask'] = merged.bottomMask
-        layers['merged-F.SilkS'] = merged.topSilk
-        layers['merged-B.SilkS'] = merged.bottomSilk
-        layers['merged-Edge.Cuts'] = merged.edgeCuts
-        if (merged.drill) {
-          layers['merged-Drill'] = merged.drill
+        // Log merged layer sizes for debugging
+        logger.info('pcb', 'Merged gerber layers:', {
+          topCopper: merged.topCopper?.length ?? 0,
+          bottomCopper: merged.bottomCopper?.length ?? 0,
+          innerCopper1: merged.innerCopper1?.length ?? 0,
+          innerCopper2: merged.innerCopper2?.length ?? 0,
+          topMask: merged.topMask?.length ?? 0,
+          bottomMask: merged.bottomMask?.length ?? 0,
+          topSilk: merged.topSilk?.length ?? 0,
+          bottomSilk: merged.bottomSilk?.length ?? 0,
+          edgeCuts: merged.edgeCuts?.length ?? 0,
+          drill: merged.drill?.length ?? 0,
+        })
+
+        // Log preview of merged content to debug parsing issues
+        if (merged.topCopper) {
+          logger.info('pcb', 'Merged topCopper preview:', {
+            first500: merged.topCopper.substring(0, 500),
+            last200: merged.topCopper.substring(merged.topCopper.length - 200),
+          })
         }
+
+        // Convert merged gerbers to the format GerberViewer expects
+        // Only add non-empty layers to avoid parse errors
+        if (merged.topCopper) layers['merged-F.Cu'] = merged.topCopper
+        if (merged.bottomCopper) layers['merged-B.Cu'] = merged.bottomCopper
+        if (merged.innerCopper1) layers['merged-In1.Cu'] = merged.innerCopper1
+        if (merged.innerCopper2) layers['merged-In2.Cu'] = merged.innerCopper2
+        if (merged.topMask) layers['merged-F.Mask'] = merged.topMask
+        if (merged.bottomMask) layers['merged-B.Mask'] = merged.bottomMask
+        if (merged.topSilk) layers['merged-F.SilkS'] = merged.topSilk
+        if (merged.bottomSilk) layers['merged-B.SilkS'] = merged.bottomSilk
+        if (merged.edgeCuts) layers['merged-Edge.Cuts'] = merged.edgeCuts
+        if (merged.drill) layers['merged-Drill'] = merged.drill
       } else if (missingGerbers.length > 0) {
         // All blocks are missing gerbers - show meaningful error
         setMergeError(`No gerber files found for: ${missingGerbers.join(', ')}`)
