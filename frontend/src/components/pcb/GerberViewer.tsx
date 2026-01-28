@@ -9,7 +9,18 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createParser } from '@tracespace/parser'
 import { plot as plotTree } from '@tracespace/plotter'
 import { render as renderImage } from '@tracespace/renderer'
-import { Loader2, AlertCircle, ZoomIn, ZoomOut, RotateCcw, Layers, Eye, EyeOff } from 'lucide-react'
+import {
+  Loader2,
+  AlertCircle,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Layers,
+  Eye,
+  EyeOff,
+  Download,
+} from 'lucide-react'
+import JSZip from 'jszip'
 import { clsx } from 'clsx'
 import { logger } from '@/lib/logger'
 
@@ -305,6 +316,28 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
     setPan({ x: 0, y: 0 })
   }
 
+  // Download gerbers as ZIP
+  const handleDownload = useCallback(async () => {
+    const zip = new JSZip()
+    const gerberFolder = zip.folder('gerbers')
+
+    if (!gerberFolder) return
+
+    for (const [filename, content] of Object.entries(layers)) {
+      gerberFolder.file(filename, content)
+    }
+
+    const blob = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'gerbers.zip'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [layers])
+
   // Pan handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     isDragging.current = true
@@ -418,6 +451,14 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
             title="Toggle Layers Panel"
           >
             <Layers className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-surface-600 mx-1" />
+          <button
+            onClick={handleDownload}
+            className="p-1 hover:bg-surface-700 rounded text-steel-dim hover:text-steel"
+            title="Download Gerbers"
+          >
+            <Download className="w-4 h-4" />
           </button>
         </div>
 
