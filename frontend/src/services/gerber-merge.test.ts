@@ -48,14 +48,14 @@ describe('gerber-merge', () => {
         name: 'block1',
         gridX: 0,
         gridY: 0,
-        layers: { topCopper: sampleTopCopper }
+        layers: { topCopper: sampleTopCopper },
       },
       {
         name: 'block2',
         gridX: 1,
         gridY: 0,
-        layers: { topCopper: sampleTopCopper2 }
-      }
+        layers: { topCopper: sampleTopCopper2 },
+      },
     ]
 
     const result = mergeGerbers(blocks)
@@ -86,14 +86,14 @@ describe('gerber-merge', () => {
         name: 'block1',
         gridX: 0,
         gridY: 0,
-        layers: { drill: sampleDrill }
+        layers: { drill: sampleDrill },
       },
       {
         name: 'block2',
         gridX: 1,
         gridY: 0,
-        layers: { drill: sampleDrill }
-      }
+        layers: { drill: sampleDrill },
+      },
     ]
 
     const result = mergeGerbers(blocks)
@@ -148,21 +148,33 @@ describe('gerber-merge', () => {
     expect(result.bottomCopper).toBe('')
   })
 
-  it('handles Y offset correctly', () => {
+  it('handles Y offset correctly with inversion', () => {
+    // With Y inversion, gridY=0 should have highest Y (bottom of board in SVG)
+    // and gridY=1 should have lowest Y (top of board in SVG)
     const blocks: GerberBlock[] = [
+      {
+        name: 'block0',
+        gridX: 0,
+        gridY: 0, // First row - should be at BOTTOM (highest Y)
+        layers: { topCopper: sampleTopCopper },
+      },
       {
         name: 'block1',
         gridX: 0,
-        gridY: 1, // Second row
-        layers: { topCopper: sampleTopCopper }
-      }
+        gridY: 1, // Second row - should be at TOP (Y=0)
+        layers: { topCopper: sampleTopCopper },
+      },
     ]
 
     const result = mergeGerbers(blocks)
 
-    // Y coordinates are normalized to origin first, then offset by grid
-    // Original minY=1000000, so Y1000000 becomes 0, then + (12.7 - 1.0)mm grid offset
-    // 11.7mm = 11700000 gerber units (vertical overlap for bus connector merging)
+    // With maxGridY=1 and inversion:
+    // - block0 (gridY=0): invertedGridY = 1-0 = 1 → offset = 11700000
+    // - block1 (gridY=1): invertedGridY = 1-1 = 0 → offset = 0
+    // So block0 should have higher Y coordinates than block1
+    expect(result.topCopper).toContain('Block: block0')
+    expect(result.topCopper).toContain('Block: block1')
+    // block0 should have Y11700000 (at the bottom)
     expect(result.topCopper).toContain('Y11700000')
   })
 })

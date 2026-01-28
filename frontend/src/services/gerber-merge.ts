@@ -114,18 +114,25 @@ function findDrillBounds(content: string): { minX: number; minY: number } {
 /**
  * Transform Gerber coordinates: normalize to origin then offset by grid
  * Only transforms coordinate commands, not aperture definitions
+ *
+ * Note: gridY is inverted so that gridY=0 appears at the BOTTOM of the board
+ * (highest Y in Gerber coords). This matches the visual expectation that
+ * blocks added first (gridY=0) are at the bottom of the stack.
  */
 function transformGerberCoords(
   content: string,
   originX: number,
   originY: number,
   gridX: number,
-  gridY: number
+  gridY: number,
+  maxGridY: number
 ): string {
   // Grid offset in Gerber units (mm * 1,000,000 for 6 decimal places)
   // Y offset uses reduced spacing (GRID_SIZE_MM - VERTICAL_OVERLAP_MM) for bus connector merging
+  // Invert gridY so that gridY=0 is at the bottom (highest Y offset)
+  const invertedGridY = maxGridY - gridY
   const gridOffsetX = Math.round(gridX * GRID_SIZE_MM * 1000000)
-  const gridOffsetY = Math.round(gridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM) * 1000000)
+  const gridOffsetY = Math.round(invertedGridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM) * 1000000)
 
   // Process line by line to avoid transforming aperture definitions
   const lines = content.split('\n')
@@ -162,11 +169,14 @@ function transformDrillCoords(
   originX: number,
   originY: number,
   gridX: number,
-  gridY: number
+  gridY: number,
+  maxGridY: number
 ): string {
   // Y offset uses reduced spacing for bus connector merging
+  // Invert gridY so that gridY=0 is at the bottom (highest Y offset)
+  const invertedGridY = maxGridY - gridY
   const gridOffsetX = gridX * GRID_SIZE_MM
-  const gridOffsetY = gridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM)
+  const gridOffsetY = invertedGridY * (GRID_SIZE_MM - VERTICAL_OVERLAP_MM)
 
   return content.replace(/X(-?\d+\.?\d*)Y(-?\d+\.?\d*)/g, (_, x, y) => {
     const newX = (parseFloat(x) - originX + gridOffsetX).toFixed(4)
@@ -407,6 +417,9 @@ function mergeLayer(
     return mergeDrill(blocks, blockBounds)
   }
 
+  // Calculate max gridY for Y-axis inversion
+  const maxGridY = Math.max(...blocks.map((b) => b.gridY))
+
   const allMacros = new Set<string>()
   const allApertures = new Map<number, string>()
   const bodies: string[] = []
@@ -433,7 +446,7 @@ function mergeLayer(
 
     // Extract and transform body
     let body = extractGerberBody(content)
-    body = transformGerberCoords(body, bounds.minX, bounds.minY, block.gridX, block.gridY)
+    body = transformGerberCoords(body, bounds.minX, bounds.minY, block.gridX, block.gridY, maxGridY)
     body = renumberApertureSelections(body, apertureOffset)
 
     if (body.trim()) {
@@ -470,6 +483,9 @@ function mergeDrill(
   blocks: GerberBlock[],
   blockBounds?: Map<string, { minX: number; minY: number }>
 ): string {
+  // Calculate max gridY for Y-axis inversion
+  const maxGridY = Math.max(...blocks.map((b) => b.gridY))
+
   const allTools = new Map<number, string>()
   const bodies: string[] = []
   let toolOffset = 0
@@ -495,7 +511,7 @@ function mergeDrill(
 
     // Extract and transform body
     let body = extractDrillBody(content)
-    body = transformDrillCoords(body, bounds.minX, bounds.minY, block.gridX, block.gridY)
+    body = transformDrillCoords(body, bounds.minX, bounds.minY, block.gridX, block.gridY, maxGridY)
     body = renumberToolSelections(body, toolOffset)
 
     if (body.trim()) {

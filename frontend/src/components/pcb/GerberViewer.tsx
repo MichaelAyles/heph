@@ -476,45 +476,42 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
             cursor: isDragging.current ? 'grabbing' : 'grab',
           }}
         >
-          {/* Flip Y axis: PCB/Gerber uses Y-up, SVG uses Y-down */}
-          <g transform={`translate(0, ${bounds.minY + bounds.maxY}) scale(1, -1)`}>
-            <g transform={`translate(${pan.x / zoom / 10}, ${-pan.y / zoom / 10}) scale(${zoom})`}>
-              {/* Background */}
-              <rect
-                x={bounds.minX}
-                y={bounds.minY}
-                width={bounds.width}
-                height={bounds.height}
-                fill="#1a1a1a"
-              />
+          <g transform={`translate(${pan.x / zoom / 10}, ${pan.y / zoom / 10}) scale(${zoom})`}>
+            {/* Background */}
+            <rect
+              x={bounds.minX}
+              y={bounds.minY}
+              width={bounds.width}
+              height={bounds.height}
+              fill="#1a1a1a"
+            />
 
-              {/* Grid */}
-              <defs>
-                <pattern id="grid-minor" width="1" height="1" patternUnits="userSpaceOnUse">
-                  <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#333" strokeWidth="0.02" />
-                </pattern>
-                <pattern id="grid-major" width="10" height="10" patternUnits="userSpaceOnUse">
-                  <rect width="10" height="10" fill="url(#grid-minor)" />
-                  <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#444" strokeWidth="0.05" />
-                </pattern>
-              </defs>
-              <rect
-                x={bounds.minX}
-                y={bounds.minY}
-                width={bounds.width}
-                height={bounds.height}
-                fill="url(#grid-major)"
-              />
+            {/* Grid */}
+            <defs>
+              <pattern id="grid-minor" width="1" height="1" patternUnits="userSpaceOnUse">
+                <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#333" strokeWidth="0.02" />
+              </pattern>
+              <pattern id="grid-major" width="10" height="10" patternUnits="userSpaceOnUse">
+                <rect width="10" height="10" fill="url(#grid-minor)" />
+                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#444" strokeWidth="0.05" />
+              </pattern>
+            </defs>
+            <rect
+              x={bounds.minX}
+              y={bounds.minY}
+              width={bounds.width}
+              height={bounds.height}
+              fill="url(#grid-major)"
+            />
 
-              {/* Render layers (bottom to top) */}
-              {visibleLayers.map((layer) => (
-                <g
-                  key={layer.filename}
-                  dangerouslySetInnerHTML={{ __html: layer.svgContent || '' }}
-                  opacity={0.85}
-                />
-              ))}
-            </g>
+            {/* Render layers (bottom to top) */}
+            {visibleLayers.map((layer) => (
+              <g
+                key={layer.filename}
+                dangerouslySetInnerHTML={{ __html: layer.svgContent || '' }}
+                opacity={0.85}
+              />
+            ))}
           </g>
         </svg>
       </div>
