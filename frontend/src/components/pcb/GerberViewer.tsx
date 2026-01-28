@@ -283,12 +283,20 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
     isDragging.current = false
   }
 
-  // Wheel zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    setZoom((z) => Math.max(0.1, Math.min(20, z * delta)))
-  }
+  // Wheel zoom - use native event listener with passive: false to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? 0.9 : 1.1
+      setZoom((z) => Math.max(0.1, Math.min(20, z * delta)))
+    }
+
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => container.removeEventListener('wheel', handleWheel)
+  }, [])
 
   if (isLoading) {
     return (
@@ -333,7 +341,6 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
       >
         {/* Toolbar */}
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-surface-800/90 rounded p-1">
