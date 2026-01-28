@@ -134,50 +134,92 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
             parser.feed(content)
             const parseTree = parser.result()
 
-            // Plot to image tree (use as any to handle version mismatch)
+            // Plot to image tree
             const imageTree = plotTree(parseTree as never)
 
-            // Render to SVG
+            // Render to SVG (returns hast element)
             const svgElement = renderImage(imageTree)
 
-            // Extract the inner SVG content (without the wrapper <svg> tags)
-            // The render function returns a full SVG element, we need to convert to string
-            let svgString = ''
-            if (svgElement && typeof svgElement === 'object') {
-              // Build SVG string from element properties
-              const svgObj = svgElement as { children?: unknown[] }
-              const children = svgObj.children || []
+            // Debug: log the structure
+            logger.info('pcb', 'Rendered SVG element structure', {
+              filename,
+              type: typeof svgElement,
+              tagName: (svgElement as { tagName?: string }).tagName,
+              hasChildren: !!(svgElement as { children?: unknown[] }).children,
+              childCount: ((svgElement as { children?: unknown[] }).children || []).length,
+              keys: Object.keys(svgElement || {}),
+              sample: JSON.stringify(svgElement).substring(0, 500),
+            })
 
-              // Create group with layer styling
-              const colorConfig = LAYER_COLORS[layerName] || { fill: '#888', stroke: '#aaa' }
+            // Convert hast element to SVG string
+            // Tracespace returns hast format: { type: 'element', tagName: 'svg', properties: {...}, children: [...] }
+            const colorConfig = LAYER_COLORS[layerName] || { fill: '#888', stroke: '#aaa' }
 
-              svgString = `<g class="layer-${layerName.replace('.', '-')}" fill="${colorConfig.fill}" stroke="${colorConfig.stroke}">`
+            const convertHastToString = (node: unknown): string => {
+              if (!node || typeof node !== 'object') return ''
 
-              // Recursively convert children to SVG string
-              const convertToString = (el: unknown): string => {
-                if (!el || typeof el !== 'object') return ''
-                const element = el as {
-                  type?: string
-                  attributes?: Record<string, unknown>
-                  children?: unknown[]
-                }
-                if (!element.type) return ''
-
-                const attrs = element.attributes || {}
-                const attrStr = Object.entries(attrs)
-                  .map(([k, v]) => `${k}="${v}"`)
-                  .join(' ')
-
-                if (element.children && element.children.length > 0) {
-                  const childStr = element.children.map(convertToString).join('')
-                  return `<${element.type} ${attrStr}>${childStr}</${element.type}>`
-                }
-                return `<${element.type} ${attrStr}/>`
+              const n = node as {
+                type?: string
+                tagName?: string
+                properties?: Record<string, unknown>
+                children?: unknown[]
+                value?: string
               }
 
-              svgString += children.map(convertToString).join('')
+              // Text node
+              if (n.type === 'text' && n.value) {
+                return n.value
+              }
+
+              // Element node
+              if (n.type === 'element' && n.tagName) {
+                const props = n.properties || {}
+                const attrStr = Object.entries(props)
+                  .filter(([, v]) => v !== undefined && v !== null)
+                  .map(([k, v]) => {
+                    // Convert camelCase to kebab-case for SVG attributes
+                    const attrName = k.replace(/([A-Z])/g, '-$1').toLowerCase()
+                    return `${attrName}="${v}"`
+                  })
+                  .join(' ')
+
+                const children = n.children || []
+                if (children.length > 0) {
+                  const childStr = children.map(convertHastToString).join('')
+                  return `<${n.tagName}${attrStr ? ' ' + attrStr : ''}>${childStr}</${n.tagName}>`
+                }
+                return `<${n.tagName}${attrStr ? ' ' + attrStr : ''}/>`
+              }
+
+              // Root node - process children
+              if (n.type === 'root' && n.children) {
+                return n.children.map(convertHastToString).join('')
+              }
+
+              return ''
+            }
+
+            // Get SVG content, wrap in styled group
+            let svgString = ''
+            const hastNode = svgElement as { tagName?: string; children?: unknown[] }
+
+            if (hastNode.tagName === 'svg' && hastNode.children) {
+              // Extract inner content from the SVG element
+              svgString = `<g class="layer-${layerName.replace('.', '-')}" fill="${colorConfig.fill}" stroke="${colorConfig.stroke}">`
+              svgString += hastNode.children.map(convertHastToString).join('')
+              svgString += '</g>'
+            } else {
+              // Fallback: convert entire element
+              svgString = `<g class="layer-${layerName.replace('.', '-')}" fill="${colorConfig.fill}" stroke="${colorConfig.stroke}">`
+              svgString += convertHastToString(svgElement)
               svgString += '</g>'
             }
+
+            logger.info('pcb', 'Generated SVG string', {
+              filename,
+              svgLength: svgString.length,
+              svgPreview: svgString.substring(0, 300),
+            })
 
             const layerConfig = LAYER_COLORS[layerName]
             parsed.push({
