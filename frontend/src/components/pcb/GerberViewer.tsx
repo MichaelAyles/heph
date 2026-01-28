@@ -140,17 +140,6 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
             // Render to SVG (returns hast element)
             const svgElement = renderImage(imageTree)
 
-            // Debug: log the structure
-            logger.info('pcb', 'Rendered SVG element structure', {
-              filename,
-              type: typeof svgElement,
-              tagName: (svgElement as { tagName?: string }).tagName,
-              hasChildren: !!(svgElement as { children?: unknown[] }).children,
-              childCount: ((svgElement as { children?: unknown[] }).children || []).length,
-              keys: Object.keys(svgElement || {}),
-              sample: JSON.stringify(svgElement).substring(0, 500),
-            })
-
             // Convert hast element to SVG string
             // Tracespace returns hast format: { type: 'element', tagName: 'svg', properties: {...}, children: [...] }
             const colorConfig = LAYER_COLORS[layerName] || { fill: '#888', stroke: '#aaa' }
@@ -215,20 +204,23 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
               svgString += '</g>'
             }
 
-            logger.info('pcb', 'Generated SVG string', {
-              filename,
-              svgLength: svgString.length,
-              svgPreview: svgString.substring(0, 300),
-            })
-
             const layerConfig = LAYER_COLORS[layerName]
+            // imageTree.size is [minX, minY, width, height] (viewBox format)
+            // Convert to [minX, minY, maxX, maxY] for our bounds calculation
+            const viewBox = imageTree.size as [number, number, number, number]
+            const convertedBounds: BoundingBox = [
+              viewBox[0], // minX
+              viewBox[1], // minY
+              viewBox[0] + viewBox[2], // maxX = minX + width
+              viewBox[1] + viewBox[3], // maxY = minY + height
+            ]
             parsed.push({
               name: layerName,
               filename,
               content,
               visible: layerName !== 'Unknown' && !layerConfig?.defaultHidden,
               svgContent: svgString,
-              bounds: imageTree.size as BoundingBox,
+              bounds: convertedBounds,
             })
           } catch (parseError) {
             logger.warn('pcb', `Failed to parse gerber file`, { filename, error: parseError })
