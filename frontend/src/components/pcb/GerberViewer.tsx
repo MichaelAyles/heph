@@ -205,12 +205,13 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
 
             if (hastNode.tagName === 'svg' && hastNode.children) {
               // Extract inner content from the SVG element
-              svgString = `<g class="layer-${layerName.replace('.', '-')}" fill="${colorConfig.fill}" stroke="${colorConfig.stroke}">`
+              // Use CSS color property - tracespace uses currentColor for fill/stroke
+              svgString = `<g class="layer-${layerName.replace('.', '-')}" style="color: ${colorConfig.fill}">`
               svgString += hastNode.children.map(convertHastToString).join('')
               svgString += '</g>'
             } else {
               // Fallback: convert entire element
-              svgString = `<g class="layer-${layerName.replace('.', '-')}" fill="${colorConfig.fill}" stroke="${colorConfig.stroke}">`
+              svgString = `<g class="layer-${layerName.replace('.', '-')}" style="color: ${colorConfig.fill}">`
               svgString += convertHastToString(svgElement)
               svgString += '</g>'
             }
