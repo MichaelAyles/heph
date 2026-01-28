@@ -487,12 +487,24 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
               fill="#1a1a1a"
             />
 
-            {/* Grid */}
+            {/* Grid - aligned to content bounds origin */}
             <defs>
-              <pattern id="grid-minor" width="1" height="1" patternUnits="userSpaceOnUse">
+              <pattern
+                id="grid-minor"
+                width="1"
+                height="1"
+                patternUnits="userSpaceOnUse"
+                patternTransform={`translate(${bounds.minX} ${bounds.minY})`}
+              >
                 <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#333" strokeWidth="0.02" />
               </pattern>
-              <pattern id="grid-major" width="10" height="10" patternUnits="userSpaceOnUse">
+              <pattern
+                id="grid-major"
+                width="10"
+                height="10"
+                patternUnits="userSpaceOnUse"
+                patternTransform={`translate(${bounds.minX} ${bounds.minY})`}
+              >
                 <rect width="10" height="10" fill="url(#grid-minor)" />
                 <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#444" strokeWidth="0.05" />
               </pattern>
