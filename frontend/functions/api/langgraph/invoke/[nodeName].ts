@@ -35,7 +35,8 @@ interface BreakpointData {
   id: string
   nodeName: string
   nodeType: 'chat' | 'image'
-  systemPrompt: string
+  systemPromptTemplate: string // Raw template with @variables
+  systemPromptExpanded: string // Expanded with actual values
   dynamicContext: DynamicContext
   fullInput: Record<string, unknown>
   invocationConfig: NodeConfig | null
@@ -297,7 +298,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       id: breakpointId,
       nodeName,
       nodeType: node.type,
-      systemPrompt: expandedSystemPrompt, // Show expanded prompt in modal
+      systemPromptTemplate: systemPrompt, // Raw template with @variables
+      systemPromptExpanded: expandedSystemPrompt, // Expanded for actual LLM call
       dynamicContext,
       fullInput: body.input,
       invocationConfig: body.config || null,

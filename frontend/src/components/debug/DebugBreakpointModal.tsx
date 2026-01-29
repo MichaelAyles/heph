@@ -31,7 +31,7 @@ import { useDebugBreakpointStore } from '../../stores/debug-breakpoint'
 
 export function DebugBreakpointModal() {
   const { pendingBreakpoint, resolveWith } = useDebugBreakpointStore()
-  const [systemPromptExpanded, setSystemPromptExpanded] = useState(false)
+  const [systemPromptSectionExpanded, setSystemPromptSectionExpanded] = useState(false)
   const [dynamicContextExpanded, setDynamicContextExpanded] = useState(true)
   const [userInputExpanded, setUserInputExpanded] = useState(true)
   const [timeRemaining, setTimeRemaining] = useState<number>(0)
@@ -93,7 +93,9 @@ export function DebugBreakpointModal() {
       }
       const data = await res.json()
       setTestResult({
-        systemPrompt: data.debug?.systemPrompt || currentPrompt || pendingBreakpoint.systemPrompt,
+        // For test results, show the expanded prompt (what actually gets sent to LLM)
+        systemPrompt:
+          data.debug?.systemPrompt || currentPrompt || pendingBreakpoint.systemPromptExpanded,
         userPrompt:
           data.debug?.userPrompt ||
           JSON.stringify(data.input || pendingBreakpoint.fullInput, null, 2),
@@ -145,8 +147,8 @@ export function DebugBreakpointModal() {
   const inputKeys = Object.keys(inputData)
   const dynamicContext = pendingBreakpoint.dynamicContext || {}
 
-  // Extract @ variables used in the system prompt
-  const activePrompt = currentPrompt || pendingBreakpoint.systemPrompt
+  // Extract @ variables used in the system prompt template (raw with @variables)
+  const activePrompt = currentPrompt || pendingBreakpoint.systemPromptTemplate
   const usedVariables = new Set<string>()
 
   // Check for @availableBlocks
@@ -254,14 +256,14 @@ export function DebugBreakpointModal() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* System Prompt Section */}
+          {/* System Prompt Section - shows raw template with @variables */}
           <div className="border border-surface-700 rounded-lg overflow-hidden">
             <div className="flex items-center justify-between p-3 bg-surface-800">
               <button
-                onClick={() => setSystemPromptExpanded(!systemPromptExpanded)}
+                onClick={() => setSystemPromptSectionExpanded(!systemPromptSectionExpanded)}
                 className="flex items-center gap-2 hover:text-steel transition-colors"
               >
-                {systemPromptExpanded ? (
+                {systemPromptSectionExpanded ? (
                   <ChevronDown className="w-4 h-4 text-steel-dim" />
                 ) : (
                   <ChevronRight className="w-4 h-4 text-steel-dim" />
@@ -271,12 +273,15 @@ export function DebugBreakpointModal() {
                 {currentPrompt ? (
                   <span className="text-xs text-emerald-400">(reloaded)</span>
                 ) : (
-                  <span className="text-xs text-steel-dim">(static)</span>
+                  <span className="text-xs text-steel-dim">(template)</span>
                 )}
               </button>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-steel-dim">
-                  {(currentPrompt || pendingBreakpoint.systemPrompt).length.toLocaleString()} chars
+                  {(
+                    currentPrompt || pendingBreakpoint.systemPromptTemplate
+                  ).length.toLocaleString()}{' '}
+                  chars
                 </span>
                 <button
                   onClick={handleReload}
@@ -298,10 +303,10 @@ export function DebugBreakpointModal() {
                 </Link>
               </div>
             </div>
-            {systemPromptExpanded && (
+            {systemPromptSectionExpanded && (
               <div className="p-4 bg-surface-900/50">
                 <pre className="text-sm text-steel-dim whitespace-pre-wrap font-mono leading-relaxed max-h-64 overflow-y-auto">
-                  {currentPrompt || pendingBreakpoint.systemPrompt}
+                  {currentPrompt || pendingBreakpoint.systemPromptTemplate}
                 </pre>
               </div>
             )}

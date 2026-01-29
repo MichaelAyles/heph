@@ -34,7 +34,8 @@ export interface BreakpointData {
   id: string
   nodeName: string
   nodeType: 'chat' | 'image'
-  systemPrompt: string
+  systemPromptTemplate: string // Raw template with @variables
+  systemPromptExpanded: string // Expanded with actual values
   dynamicContext: DynamicContext
   fullInput: Record<string, unknown>
   invocationConfig: Record<string, unknown> | null
