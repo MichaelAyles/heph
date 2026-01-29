@@ -144,9 +144,44 @@ export function DebugBreakpointModal() {
   const inputData = pendingBreakpoint.fullInput
   const inputKeys = Object.keys(inputData)
   const dynamicContext = pendingBreakpoint.dynamicContext || {}
-  const hasBlocks = dynamicContext.availableBlocks && dynamicContext.availableBlocks.length > 0
-  const hasProjectState = dynamicContext.projectState
-  const hasDynamicContext = hasBlocks || hasProjectState || dynamicContext.requirements
+
+  // Extract @ variables used in the system prompt
+  const activePrompt = currentPrompt || pendingBreakpoint.systemPrompt
+  const usedVariables = new Set<string>()
+
+  // Check for @availableBlocks
+  if (activePrompt.includes('@availableBlocks')) {
+    usedVariables.add('availableBlocks')
+  }
+
+  // Check for @projectState or @projectState.* paths
+  if (/@projectState(?:\.[a-zA-Z0-9_.]+)?/.test(activePrompt)) {
+    usedVariables.add('projectState')
+  }
+
+  // Check for @feasibility or @feasibility.* paths (shortcut for projectState.spec.feasibility)
+  if (/@feasibility(?:\.[a-zA-Z0-9_.]+)?/.test(activePrompt)) {
+    usedVariables.add('feasibility')
+  }
+
+  // Check for @requirements
+  if (activePrompt.includes('@requirements')) {
+    usedVariables.add('requirements')
+  }
+
+  // Only show context items that are actually used in the prompt
+  const hasBlocks =
+    usedVariables.has('availableBlocks') &&
+    dynamicContext.availableBlocks &&
+    dynamicContext.availableBlocks.length > 0
+  const hasProjectState =
+    (usedVariables.has('projectState') || usedVariables.has('feasibility')) &&
+    dynamicContext.projectState
+  const hasRequirements =
+    usedVariables.has('requirements') &&
+    dynamicContext.requirements &&
+    dynamicContext.requirements.length > 0
+  const hasDynamicContext = hasBlocks || hasProjectState || hasRequirements
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
@@ -287,7 +322,7 @@ export function DebugBreakpointModal() {
                   )}
                   <Boxes className="w-4 h-4 text-emerald-400" />
                   <span className="font-medium text-emerald-300">Dynamic Context</span>
-                  <span className="text-xs text-emerald-400/70">(runtime data)</span>
+                  <span className="text-xs text-emerald-400/70">(@ variables used in prompt)</span>
                 </div>
               </button>
               {dynamicContextExpanded && (
@@ -342,17 +377,17 @@ export function DebugBreakpointModal() {
                   )}
 
                   {/* Requirements */}
-                  {dynamicContext.requirements && dynamicContext.requirements.length > 0 && (
+                  {hasRequirements && (
                     <div className="border border-surface-700 rounded-lg overflow-hidden">
                       <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
                         <span className="font-mono text-sm text-emerald-400">requirements</span>
                         <span className="text-xs text-steel-dim">
-                          {dynamicContext.requirements.length} items
+                          {dynamicContext.requirements!.length} items
                         </span>
                       </div>
                       <div className="p-3 bg-surface-900/50">
                         <ul className="list-disc list-inside text-sm text-steel-dim space-y-1">
-                          {dynamicContext.requirements.map((req, i) => (
+                          {dynamicContext.requirements!.map((req, i) => (
                             <li key={i}>{req}</li>
                           ))}
                         </ul>
