@@ -109,6 +109,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     )
   }
 
+  // Check for system prompt override (used by debug test endpoint)
+  const systemPromptOverrideEncoded = context.request.headers.get('X-System-Prompt-Override')
+  const systemPrompt = systemPromptOverrideEncoded
+    ? decodeURIComponent(systemPromptOverrideEncoded)
+    : promptRow.system_prompt
+
   // Get node to check what context it needs
   const node = getNode(nodeName)!
   const contextTypes = node.contextTypes || []
@@ -126,11 +132,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       .map((row) => {
         try {
           const def = row.definition ? JSON.parse(row.definition) : null
+          // Support both flat structure (def.name) and nested (def.metadata.name)
           return {
             slug: row.slug,
-            name: def?.metadata?.name || row.slug,
-            category: def?.metadata?.category || 'unknown',
-            description: def?.metadata?.description || '',
+            name: def?.metadata?.name || def?.name || row.slug,
+            category: def?.metadata?.category || def?.category || 'unknown',
+            description: def?.metadata?.description || def?.description || '',
             interfaces: def?.electrical?.interfaces ? Object.keys(def.electrical.interfaces) : [],
           }
         } catch {
@@ -253,7 +260,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     projectId: body.projectId,
     userId: user.id,
     threadId: body.threadId,
-    systemPrompt: promptRow.system_prompt, // Required - comes from database
+    systemPrompt, // Required - from database or override header
     dynamicContext, // Runtime data (blocks, project state, etc.)
     llmChat,
   }

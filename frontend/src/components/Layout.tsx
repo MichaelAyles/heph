@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation, useParams } from 'react-router-dom'
 import {
   Home,
@@ -16,10 +17,11 @@ import {
   Wrench,
   MessageSquare,
   FileText,
-  SlidersHorizontal,
   Network,
   Monitor,
   Bug,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
@@ -44,7 +46,6 @@ const adminNavigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Blocks', href: '/admin/blocks', icon: Layers },
   { name: 'LLMs', href: '/admin/llms', icon: Cpu },
-  { name: 'Prompts', href: '/admin/system-prompts', icon: SlidersHorizontal },
   { name: 'LangGraph', href: '/admin/langgraph', icon: Network },
   { name: 'Blog', href: '/admin/blog', icon: FileText },
   { name: 'Logs', href: '/admin/logs', icon: ScrollText },
@@ -54,6 +55,16 @@ export function Layout() {
   const location = useLocation()
   const params = useParams()
   const { user, logout } = useAuthStore()
+
+  // Sidebar collapse state - persisted to localStorage
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const stored = localStorage.getItem('sidebar-collapsed')
+    return stored === 'true'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('sidebar-collapsed', String(sidebarCollapsed))
+  }, [sidebarCollapsed])
 
   // Extract project ID from URL if we're viewing a project
   const projectIdFromPath = location.pathname.match(/\/project\/([^/]+)/)?.[1]
@@ -81,33 +92,48 @@ export function Layout() {
 
       {/* Desktop Layout - hidden on small screens */}
       {/* Sidebar */}
-      <aside className="hidden md:flex w-64 bg-surface-900 border-r border-surface-700 flex-col flex-shrink-0">
+      <aside
+        className={clsx(
+          'hidden md:flex bg-surface-900 border-r border-surface-700 flex-col flex-shrink-0 transition-all duration-200',
+          sidebarCollapsed ? 'w-16' : 'w-64'
+        )}
+      >
         {/* Logo */}
-        <Link
-          to="/"
-          className="h-16 flex items-center gap-3 px-5 border-b border-surface-700 hover:bg-surface-800 transition-colors"
-        >
-          <img src="/logo.png" alt="Phaestus" className="h-8 w-auto object-contain" />
-          <span className="text-xl font-semibold tracking-tight text-steel">PHAESTUS</span>
-        </Link>
+        <div className="h-16 flex items-center border-b border-surface-700">
+          <Link
+            to="/"
+            className={clsx(
+              'flex items-center gap-3 hover:bg-surface-800 transition-colors h-full',
+              sidebarCollapsed ? 'px-4 justify-center' : 'px-5 flex-1'
+            )}
+            title={sidebarCollapsed ? 'PHAESTUS' : undefined}
+          >
+            <img src="/logo.png" alt="Phaestus" className="h-8 w-auto object-contain" />
+            {!sidebarCollapsed && (
+              <span className="text-xl font-semibold tracking-tight text-steel">PHAESTUS</span>
+            )}
+          </Link>
+        </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
+        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto min-h-0">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href
             return (
               <Link
                 key={item.name}
                 to={item.href}
+                title={sidebarCollapsed ? item.name : undefined}
                 className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 py-2.5 text-sm font-medium transition-colors rounded-md',
+                  sidebarCollapsed ? 'px-3 justify-center' : 'px-3',
                   isActive
                     ? 'bg-copper/10 text-copper border-l-2 border-copper'
                     : 'text-steel-dim hover:text-steel hover:bg-surface-800'
                 )}
               >
-                <item.icon className="w-5 h-5" strokeWidth={1.5} />
-                {item.name}
+                <item.icon className="w-5 h-5 flex-shrink-0" strokeWidth={1.5} />
+                {!sidebarCollapsed && item.name}
               </Link>
             )
           })}
@@ -115,23 +141,28 @@ export function Layout() {
           {/* Workbench Link - shown when viewing a project */}
           {projectId && (
             <>
-              <div className="pt-4 pb-2">
-                <span className="px-3 text-xs font-mono text-steel-dim tracking-wide">
-                  CURRENT PROJECT
-                </span>
-              </div>
+              {!sidebarCollapsed && (
+                <div className="pt-4 pb-2">
+                  <span className="px-3 text-xs font-mono text-steel-dim tracking-wide">
+                    CURRENT PROJECT
+                  </span>
+                </div>
+              )}
+              {sidebarCollapsed && <div className="pt-2 border-t border-surface-700 mt-2" />}
               <Link
                 to={`/project/${projectId}/spec`}
+                title={sidebarCollapsed ? 'Workbench' : undefined}
                 className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 py-2.5 text-sm font-medium transition-colors rounded-md',
+                  sidebarCollapsed ? 'px-3 justify-center' : 'px-3',
                   location.pathname.startsWith(`/project/${projectId}`) &&
                     !location.pathname.endsWith('/view')
                     ? 'bg-copper/10 text-copper border-l-2 border-copper'
                     : 'text-steel-dim hover:text-steel hover:bg-surface-800'
                 )}
               >
-                <Wrench className="w-5 h-5" strokeWidth={1.5} />
-                Workbench
+                <Wrench className="w-5 h-5 flex-shrink-0" strokeWidth={1.5} />
+                {!sidebarCollapsed && 'Workbench'}
               </Link>
             </>
           )}
@@ -139,24 +170,29 @@ export function Layout() {
           {/* Admin Navigation */}
           {user?.isAdmin && (
             <>
-              <div className="pt-4 pb-2">
-                <span className="px-3 text-xs font-mono text-steel-dim tracking-wide">ADMIN</span>
-              </div>
+              {!sidebarCollapsed && (
+                <div className="pt-4 pb-2">
+                  <span className="px-3 text-xs font-mono text-steel-dim tracking-wide">ADMIN</span>
+                </div>
+              )}
+              {sidebarCollapsed && <div className="pt-2 border-t border-surface-700 mt-2" />}
               {adminNavigation.map((item) => {
                 const isActive = location.pathname === item.href
                 return (
                   <Link
                     key={item.name}
                     to={item.href}
+                    title={sidebarCollapsed ? item.name : undefined}
                     className={clsx(
-                      'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors',
+                      'flex items-center gap-3 py-2.5 text-sm font-medium transition-colors rounded-md',
+                      sidebarCollapsed ? 'px-3 justify-center' : 'px-3',
                       isActive
                         ? 'bg-copper/10 text-copper border-l-2 border-copper'
                         : 'text-steel-dim hover:text-steel hover:bg-surface-800'
                     )}
                   >
-                    <item.icon className="w-5 h-5" strokeWidth={1.5} />
-                    {item.name}
+                    <item.icon className="w-5 h-5 flex-shrink-0" strokeWidth={1.5} />
+                    {!sidebarCollapsed && item.name}
                   </Link>
                 )
               })}
@@ -165,40 +201,87 @@ export function Layout() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-surface-700 space-y-3 flex-shrink-0">
+        <div
+          className={clsx(
+            'border-t border-surface-700 flex-shrink-0',
+            sidebarCollapsed ? 'p-2 space-y-2' : 'p-4 space-y-3'
+          )}
+        >
           {/* User */}
-          <div className="flex items-center gap-2 text-sm">
-            <User className="w-4 h-4 text-steel-dim" strokeWidth={1.5} />
-            <span className="text-steel truncate">{user?.displayName || user?.username}</span>
+          <div
+            className={clsx(
+              'flex items-center text-sm',
+              sidebarCollapsed ? 'justify-center' : 'gap-2'
+            )}
+            title={sidebarCollapsed ? user?.displayName || user?.username : undefined}
+          >
+            <User className="w-4 h-4 text-steel-dim flex-shrink-0" strokeWidth={1.5} />
+            {!sidebarCollapsed && (
+              <span className="text-steel truncate">{user?.displayName || user?.username}</span>
+            )}
           </div>
 
           {/* Control Mode Indicator */}
           {user?.controlMode && (
             <Link
               to="/settings"
-              className="flex items-center gap-2 px-2 py-1.5 bg-surface-800 hover:bg-surface-700 rounded transition-colors"
-              title="Click to change control mode"
+              className={clsx(
+                'flex items-center bg-surface-800 hover:bg-surface-700 rounded transition-colors',
+                sidebarCollapsed ? 'p-2 justify-center' : 'gap-2 px-2 py-1.5'
+              )}
+              title={
+                sidebarCollapsed
+                  ? MODE_CONFIG[user.controlMode].label
+                  : 'Click to change control mode'
+              }
             >
               {(() => {
                 const mode = MODE_CONFIG[user.controlMode]
                 const ModeIcon = mode.icon
                 return (
                   <>
-                    <ModeIcon className={clsx('w-4 h-4', mode.color)} strokeWidth={1.5} />
-                    <span className={clsx('text-xs font-medium', mode.color)}>{mode.label}</span>
+                    <ModeIcon
+                      className={clsx('w-4 h-4 flex-shrink-0', mode.color)}
+                      strokeWidth={1.5}
+                    />
+                    {!sidebarCollapsed && (
+                      <span className={clsx('text-xs font-medium', mode.color)}>{mode.label}</span>
+                    )}
                   </>
                 )
               })()}
             </Link>
           )}
 
+          {/* Collapse Toggle */}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={clsx(
+              'flex items-center text-steel-dim hover:text-steel hover:bg-surface-800 transition-colors rounded',
+              sidebarCollapsed ? 'p-2 justify-center w-full' : 'gap-2 p-1.5 w-full'
+            )}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeft className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
+            ) : (
+              <>
+                <PanelLeftClose className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
+                <span className="text-xs">Collapse</span>
+              </>
+            )}
+          </button>
+
           <button
             onClick={logout}
-            className="flex items-center gap-2 p-1.5 text-steel-dim hover:text-steel hover:bg-surface-800 transition-colors w-full"
+            className={clsx(
+              'flex items-center text-steel-dim hover:text-steel hover:bg-surface-800 transition-colors rounded',
+              sidebarCollapsed ? 'p-2 justify-center w-full' : 'gap-2 p-1.5 w-full'
+            )}
             title="Sign out"
           >
-            <LogOut className="w-4 h-4" strokeWidth={1.5} />
-            <span className="text-xs">Sign out</span>
+            <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
+            {!sidebarCollapsed && <span className="text-xs">Sign out</span>}
           </button>
         </div>
       </aside>

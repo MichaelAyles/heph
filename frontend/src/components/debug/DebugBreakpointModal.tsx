@@ -19,6 +19,13 @@ import {
   ExternalLink,
   Boxes,
   MessageSquare,
+  RefreshCw,
+  FlaskConical,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  ArrowRight,
+  ArrowLeft,
 } from 'lucide-react'
 import { useDebugBreakpointStore } from '../../stores/debug-breakpoint'
 
@@ -28,6 +35,76 @@ export function DebugBreakpointModal() {
   const [dynamicContextExpanded, setDynamicContextExpanded] = useState(true)
   const [userInputExpanded, setUserInputExpanded] = useState(true)
   const [timeRemaining, setTimeRemaining] = useState<number>(0)
+
+  // Reload and test state
+  const [currentPrompt, setCurrentPrompt] = useState<string | null>(null)
+  const [isReloading, setIsReloading] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{
+    userPrompt: string
+    rawResponse: string
+    model?: string
+    durationMs?: number
+  } | null>(null)
+  const [testError, setTestError] = useState<string | null>(null)
+  const [testResultExpanded, setTestResultExpanded] = useState(true)
+
+  // Reset state when breakpoint changes
+  useEffect(() => {
+    setCurrentPrompt(null)
+    setTestResult(null)
+    setTestError(null)
+  }, [pendingBreakpoint?.id])
+
+  // Reload prompt from database
+  const handleReload = async () => {
+    if (!pendingBreakpoint) return
+    setIsReloading(true)
+    try {
+      const res = await fetch(`/api/admin/orchestrator/prompts/${pendingBreakpoint.nodeName}`)
+      if (!res.ok) throw new Error('Failed to fetch prompt')
+      const data = await res.json()
+      setCurrentPrompt(data.prompt?.systemPrompt || null)
+    } catch (err) {
+      console.error('Failed to reload prompt:', err)
+    } finally {
+      setIsReloading(false)
+    }
+  }
+
+  // Test the LLM call without continuing
+  const handleTest = async () => {
+    if (!pendingBreakpoint) return
+    setIsTesting(true)
+    setTestResult(null)
+    setTestError(null)
+    try {
+      const res = await fetch(`/api/langgraph/breakpoint/${pendingBreakpoint.id}/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemPromptOverride: currentPrompt || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Test failed')
+      }
+      const data = await res.json()
+      setTestResult({
+        userPrompt:
+          data.debug?.userPrompt ||
+          JSON.stringify(data.input || pendingBreakpoint.fullInput, null, 2),
+        rawResponse: data.debug?.rawResponse || JSON.stringify(data.output, null, 2),
+        model: data.debug?.model,
+        durationMs: data.debug?.durationMs,
+      })
+    } catch (err) {
+      setTestError(err instanceof Error ? err.message : 'Test failed')
+    } finally {
+      setIsTesting(false)
+    }
+  }
 
   // Calculate and update time remaining
   useEffect(() => {
@@ -138,12 +215,25 @@ export function DebugBreakpointModal() {
                 )}
                 <FileText className="w-4 h-4 text-steel-dim" />
                 <span className="font-medium text-steel">System Prompt</span>
-                <span className="text-xs text-steel-dim">(static)</span>
+                {currentPrompt ? (
+                  <span className="text-xs text-emerald-400">(reloaded)</span>
+                ) : (
+                  <span className="text-xs text-steel-dim">(static)</span>
+                )}
               </button>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <span className="text-xs text-steel-dim">
-                  {pendingBreakpoint.systemPrompt.length.toLocaleString()} chars
+                  {(currentPrompt || pendingBreakpoint.systemPrompt).length.toLocaleString()} chars
                 </span>
+                <button
+                  onClick={handleReload}
+                  disabled={isReloading}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-surface-700 text-steel-dim hover:text-steel hover:bg-surface-600 transition-colors disabled:opacity-50"
+                  title="Reload prompt from database"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isReloading ? 'animate-spin' : ''}`} />
+                  <span className="text-xs">Reload</span>
+                </button>
                 <Link
                   to={`/admin/langgraph?node=${pendingBreakpoint.nodeName}`}
                   className="flex items-center gap-1 px-2 py-1 rounded bg-copper/20 text-copper hover:bg-copper/30 transition-colors"
@@ -158,7 +248,7 @@ export function DebugBreakpointModal() {
             {systemPromptExpanded && (
               <div className="p-4 bg-surface-900/50">
                 <pre className="text-sm text-steel-dim whitespace-pre-wrap font-mono leading-relaxed max-h-64 overflow-y-auto">
-                  {pendingBreakpoint.systemPrompt}
+                  {currentPrompt || pendingBreakpoint.systemPrompt}
                 </pre>
               </div>
             )}
@@ -310,6 +400,108 @@ export function DebugBreakpointModal() {
               </div>
             )}
           </div>
+
+          {/* Test Result Section */}
+          {(testResult || testError) && (
+            <div
+              className={`border rounded-lg overflow-hidden ${testError ? 'border-red-500/30' : 'border-cyan-500/30'}`}
+            >
+              <button
+                onClick={() => setTestResultExpanded(!testResultExpanded)}
+                className={`w-full flex items-center justify-between p-3 transition-colors ${testError ? 'bg-red-500/10 hover:bg-red-500/20' : 'bg-cyan-500/10 hover:bg-cyan-500/20'}`}
+              >
+                <div className="flex items-center gap-2">
+                  {testResultExpanded ? (
+                    <ChevronDown
+                      className={`w-4 h-4 ${testError ? 'text-red-400' : 'text-cyan-400'}`}
+                    />
+                  ) : (
+                    <ChevronRight
+                      className={`w-4 h-4 ${testError ? 'text-red-400' : 'text-cyan-400'}`}
+                    />
+                  )}
+                  {testError ? (
+                    <AlertCircle className="w-4 h-4 text-red-400" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 text-cyan-400" />
+                  )}
+                  <span className={`font-medium ${testError ? 'text-red-300' : 'text-cyan-300'}`}>
+                    Test Result
+                  </span>
+                  {testResult && (
+                    <span className="text-xs text-cyan-400/70">
+                      {testResult.model && `${testResult.model}`}
+                      {testResult.durationMs && ` • ${testResult.durationMs}ms`}
+                    </span>
+                  )}
+                  {testError && <span className="text-xs text-red-400/70">(error)</span>}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setTestResult(null)
+                    setTestError(null)
+                  }}
+                  className="text-xs text-steel-dim hover:text-steel px-2 py-1 rounded bg-surface-700/50 hover:bg-surface-700"
+                >
+                  Clear
+                </button>
+              </button>
+              {testResultExpanded && (
+                <div className="p-4 bg-surface-900/50 space-y-4">
+                  {testError ? (
+                    <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-red-300">
+                      {testError}
+                    </pre>
+                  ) : (
+                    testResult && (
+                      <>
+                        {/* Outgoing Message */}
+                        <div className="border border-surface-700 rounded-lg overflow-hidden">
+                          <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                            <div className="flex items-center gap-2">
+                              <ArrowRight className="w-4 h-4 text-amber-400" />
+                              <span className="text-sm font-medium text-amber-400">
+                                Outgoing (User Prompt)
+                              </span>
+                            </div>
+                            <span className="text-xs text-steel-dim">
+                              {testResult.userPrompt.length.toLocaleString()} chars
+                            </span>
+                          </div>
+                          <div className="p-3 bg-surface-900/50">
+                            <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-steel-dim max-h-48 overflow-y-auto">
+                              {testResult.userPrompt}
+                            </pre>
+                          </div>
+                        </div>
+
+                        {/* Incoming Message */}
+                        <div className="border border-surface-700 rounded-lg overflow-hidden">
+                          <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                            <div className="flex items-center gap-2">
+                              <ArrowLeft className="w-4 h-4 text-cyan-400" />
+                              <span className="text-sm font-medium text-cyan-400">
+                                Incoming (LLM Response)
+                              </span>
+                            </div>
+                            <span className="text-xs text-steel-dim">
+                              {testResult.rawResponse.length.toLocaleString()} chars
+                            </span>
+                          </div>
+                          <div className="p-3 bg-surface-900/50">
+                            <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-steel-dim max-h-64 overflow-y-auto">
+                              {testResult.rawResponse}
+                            </pre>
+                          </div>
+                        </div>
+                      </>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -320,6 +512,18 @@ export function DebugBreakpointModal() {
           >
             <Square className="w-4 h-4" />
             Cancel Execution
+          </button>
+          <button
+            onClick={handleTest}
+            disabled={isTesting}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 transition-colors disabled:opacity-50"
+          >
+            {isTesting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FlaskConical className="w-4 h-4" />
+            )}
+            {isTesting ? 'Testing...' : 'Test'}
           </button>
           <button
             onClick={() => resolveWith('continue')}
