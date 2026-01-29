@@ -12,6 +12,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Network,
@@ -30,6 +31,7 @@ import {
   Download,
   Upload,
   Boxes,
+  FileText,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -42,6 +44,7 @@ import {
   getDefaultSubgraphOptions,
   StructureViewer,
   NodeRegistry,
+  NodeEditor,
   type GraphNodeDef,
   type GraphEdgeDef,
   type SubgraphId,
@@ -56,7 +59,7 @@ import { getNodeStatesAtStep } from '../services/langgraph/execution-tracer'
 import { logger } from '../lib/logger'
 import type { CodeDefinedGraphData, SubgraphDefinition } from '../types/langgraph'
 
-type Tab = 'debugger' | 'threads' | 'structure' | 'nodes'
+type Tab = 'debugger' | 'threads' | 'structure' | 'nodes' | 'prompts'
 
 // Predefined test messages for quick debugging
 const PREDEFINED_MESSAGES = [
@@ -245,10 +248,23 @@ function subgraphToFlowEdges(subgraph: SubgraphDefinition | undefined): GraphEdg
 }
 
 export function AdminLangGraphPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<Tab>('debugger')
   const [selectedNode, setSelectedNode] = useState<string | undefined>()
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>()
   const [selectedGraph, setSelectedGraph] = useState<SubgraphId>('orchestrator')
+  const [selectedPromptNode, setSelectedPromptNode] = useState<string | undefined>()
+
+  // Handle ?node= query param - switch to prompts tab and select node
+  useEffect(() => {
+    const nodeParam = searchParams.get('node')
+    if (nodeParam) {
+      setActiveTab('prompts')
+      setSelectedPromptNode(nodeParam)
+      // Clear the param from URL after using it
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   // Debugger state
   const [debuggerInput, setDebuggerInput] = useState('')
@@ -697,6 +713,7 @@ export function AdminLangGraphPage() {
     { id: 'threads' as const, label: 'Threads', icon: Database },
     { id: 'structure' as const, label: 'Structure', icon: GitBranch },
     { id: 'nodes' as const, label: 'Nodes', icon: Boxes },
+    { id: 'prompts' as const, label: 'Prompts', icon: FileText },
   ]
 
   return (
@@ -1102,6 +1119,20 @@ export function AdminLangGraphPage() {
                 </p>
               </div>
               <NodeRegistry />
+            </div>
+          )}
+
+          {/* Prompts Tab */}
+          {activeTab === 'prompts' && (
+            <div>
+              <div className="mb-4">
+                <h2 className="text-sm font-medium text-steel">System Prompts</h2>
+                <p className="text-xs text-steel-dim mt-1">
+                  Edit the system prompts for each LangGraph node. Changes are saved to the database
+                  and take effect immediately.
+                </p>
+              </div>
+              <NodeEditor selectedNode={selectedPromptNode} onNodeSelect={setSelectedPromptNode} />
             </div>
           )}
         </div>
