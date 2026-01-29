@@ -41,6 +41,7 @@ export function DebugBreakpointModal() {
   const [isReloading, setIsReloading] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{
+    systemPrompt: string
     userPrompt: string
     rawResponse: string
     model?: string
@@ -92,6 +93,7 @@ export function DebugBreakpointModal() {
       }
       const data = await res.json()
       setTestResult({
+        systemPrompt: data.debug?.systemPrompt || currentPrompt || pendingBreakpoint.systemPrompt,
         userPrompt:
           data.debug?.userPrompt ||
           JSON.stringify(data.input || pendingBreakpoint.fullInput, null, 2),
@@ -457,28 +459,60 @@ export function DebugBreakpointModal() {
                     testResult && (
                       <>
                         {/* Outgoing Message */}
-                        <div className="border border-surface-700 rounded-lg overflow-hidden">
-                          <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                        <div className="border border-amber-500/30 rounded-lg overflow-hidden">
+                          <div className="flex items-center justify-between px-3 py-2 bg-amber-500/10">
                             <div className="flex items-center gap-2">
                               <ArrowRight className="w-4 h-4 text-amber-400" />
                               <span className="text-sm font-medium text-amber-400">
-                                Outgoing (User Prompt)
+                                Outgoing Message
                               </span>
                             </div>
                             <span className="text-xs text-steel-dim">
-                              {testResult.userPrompt.length.toLocaleString()} chars
+                              {(
+                                testResult.systemPrompt.length + testResult.userPrompt.length
+                              ).toLocaleString()}{' '}
+                              chars total
                             </span>
                           </div>
-                          <div className="p-3 bg-surface-900/50">
-                            <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-steel-dim max-h-48 overflow-y-auto">
-                              {testResult.userPrompt}
-                            </pre>
+                          <div className="p-3 bg-surface-900/50 space-y-3">
+                            {/* System Prompt */}
+                            <div className="border border-surface-700 rounded-lg overflow-hidden">
+                              <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                                <span className="text-xs font-medium text-steel-dim">
+                                  System Prompt
+                                </span>
+                                <span className="text-xs text-steel-dim">
+                                  {testResult.systemPrompt.length.toLocaleString()} chars
+                                </span>
+                              </div>
+                              <div className="p-3 bg-surface-900/50">
+                                <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-steel-dim max-h-32 overflow-y-auto">
+                                  {testResult.systemPrompt}
+                                </pre>
+                              </div>
+                            </div>
+                            {/* User Prompt */}
+                            <div className="border border-surface-700 rounded-lg overflow-hidden">
+                              <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                                <span className="text-xs font-medium text-steel-dim">
+                                  User Prompt
+                                </span>
+                                <span className="text-xs text-steel-dim">
+                                  {testResult.userPrompt.length.toLocaleString()} chars
+                                </span>
+                              </div>
+                              <div className="p-3 bg-surface-900/50">
+                                <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-steel-dim max-h-48 overflow-y-auto">
+                                  {testResult.userPrompt}
+                                </pre>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
                         {/* Incoming Message */}
-                        <div className="border border-surface-700 rounded-lg overflow-hidden">
-                          <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                        <div className="border border-cyan-500/30 rounded-lg overflow-hidden">
+                          <div className="flex items-center justify-between px-3 py-2 bg-cyan-500/10">
                             <div className="flex items-center gap-2">
                               <ArrowLeft className="w-4 h-4 text-cyan-400" />
                               <span className="text-sm font-medium text-cyan-400">
