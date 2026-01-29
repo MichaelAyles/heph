@@ -123,6 +123,7 @@ export const blueprintNode: LangGraphNode<
   outputSchema: BlueprintOutputSchema,
   defaultTemperature: 1.0, // Not used for image generation
   category: 'spec',
+  contextTypes: ['projectState'], // Access feasibility data via @feasibility template
   invoke: invokeBlueprint,
 }
 

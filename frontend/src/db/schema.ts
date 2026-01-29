@@ -319,11 +319,25 @@ export interface FeasibilityAnalysis {
   communication: { type: string; confidence: number; notes: string }
   processing: { level: string; confidence: number; notes: string }
   power: { options: string[]; confidence: number; notes: string }
-  inputs: { items: string[]; confidence: number }
-  outputs: { items: string[]; confidence: number }
+  inputs: { items: string[]; confidence?: number; notes?: string }
+  outputs: { items: string[]; confidence?: number; notes?: string }
   overallScore: number // 0-100
   manufacturable: boolean
   rejectionReason?: string
+  // Store suggested revisions including revisedDescription for downstream use
+  suggestedRevisions?: {
+    summary: string
+    changes: string[]
+    revisedDescription: string
+  }
+  // Store open questions returned by LLM (separate from spec.openQuestions which may be filtered)
+  openQuestions?: Array<{
+    id: string
+    question: string
+    options?: string[]
+    category?: string
+    impact?: string
+  }>
 }
 
 export interface OpenQuestion {

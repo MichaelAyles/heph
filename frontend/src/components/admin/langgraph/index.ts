@@ -25,6 +25,9 @@ export { StructureViewer, type StructureViewerProps } from './StructureViewer'
 // Node registry for standalone nodes
 export { NodeRegistry } from './NodeRegistry'
 
+// Context variables viewer
+export { ContextVariables } from './ContextVariables'
+
 // Re-export types from types file for convenience
 export {
   getDefaultSubgraphOptions,

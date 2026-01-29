@@ -51,15 +51,52 @@ interface InvokeRequest {
 }
 
 /**
+ * Get a nested value from an object using dot notation
+ * e.g., getNestedValue(obj, 'spec.feasibility.suggestedRevisions.revisedDescription')
+ */
+function getNestedValue(obj: unknown, path: string): unknown {
+  const parts = path.split('.')
+  let current: unknown = obj
+  for (const part of parts) {
+    if (current === null || current === undefined) return undefined
+    if (typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[part]
+  }
+  return current
+}
+
+/**
+ * Format a value for template expansion
+ */
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return '(not available)'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '(empty list)'
+    // Format arrays nicely
+    return value
+      .map((item) => (typeof item === 'object' ? JSON.stringify(item) : String(item)))
+      .join('\n')
+  }
+  // Objects get JSON formatted
+  return JSON.stringify(value, null, 2)
+}
+
+/**
  * Expand template variables in system prompt with dynamic context
- * Supported variables:
- * - @availableBlocks - List of available hardware blocks with descriptions
- * - @projectState - Current project status and spec summary
+ *
+ * Supported patterns:
+ * - @availableBlocks - List of available hardware blocks (special formatting)
+ * - @projectState - Full project state object
+ * - @projectState.path.to.value - Nested property access (e.g., @projectState.spec.feasibility.suggestedRevisions.revisedDescription)
+ * - @feasibility - Shortcut for @projectState.spec.feasibility
+ * - @feasibility.path - Nested access from feasibility (e.g., @feasibility.suggestedRevisions.revisedDescription)
  */
 function expandTemplateVariables(prompt: string, dynamicContext: DynamicContext): string {
   let expanded = prompt
 
-  // Expand @availableBlocks
+  // Special formatting for @availableBlocks (as a list)
   if (expanded.includes('@availableBlocks')) {
     if (dynamicContext.availableBlocks && dynamicContext.availableBlocks.length > 0) {
       const blocksList = dynamicContext.availableBlocks
@@ -68,22 +105,33 @@ function expandTemplateVariables(prompt: string, dynamicContext: DynamicContext)
             `- ${b.name} (${b.category}): ${b.description}${b.interfaces?.length ? ` [${b.interfaces.join(', ')}]` : ''}`
         )
         .join('\n')
-      expanded = expanded.replace('@availableBlocks', blocksList)
+      expanded = expanded.replace(/@availableBlocks(?![.\w])/g, blocksList)
     } else {
-      expanded = expanded.replace('@availableBlocks', '(No hardware blocks available)')
+      expanded = expanded.replace(/@availableBlocks(?![.\w])/g, '(No hardware blocks available)')
     }
   }
 
-  // Expand @projectState
-  if (expanded.includes('@projectState')) {
-    if (dynamicContext.projectState) {
+  // Expand @feasibility and @feasibility.path shortcuts
+  const feasibilityPattern = /@feasibility(?:\.([a-zA-Z0-9_.]+))?/g
+  expanded = expanded.replace(feasibilityPattern, (match, path) => {
+    const feasibility = dynamicContext.projectState?.spec?.feasibility
+    if (!feasibility) return '(No feasibility data available)'
+    if (!path) return formatValue(feasibility)
+    const value = getNestedValue(feasibility, path)
+    return formatValue(value)
+  })
+
+  // Expand @projectState and @projectState.path
+  const projectStatePattern = /@projectState(?:\.([a-zA-Z0-9_.]+))?/g
+  expanded = expanded.replace(projectStatePattern, (match, path) => {
+    if (!dynamicContext.projectState) return '(No project state available)'
+    if (!path) {
       const state = dynamicContext.projectState
-      const stateText = `Status: ${state.status}${state.spec ? `\nSpec: ${JSON.stringify(state.spec, null, 2)}` : ''}`
-      expanded = expanded.replace('@projectState', stateText)
-    } else {
-      expanded = expanded.replace('@projectState', '(No project state available)')
+      return `Status: ${state.status}${state.spec ? `\nSpec: ${JSON.stringify(state.spec, null, 2)}` : ''}`
     }
-  }
+    const value = getNestedValue(dynamicContext.projectState, path)
+    return formatValue(value)
+  })
 
   return expanded
 }

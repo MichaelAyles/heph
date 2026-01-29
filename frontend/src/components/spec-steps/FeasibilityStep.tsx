@@ -92,21 +92,26 @@ export function FeasibilityStep({
           return
         }
 
+        // Store the complete LLM response for downstream use via @feasibilityAnalysis
         const feasibility: FeasibilityAnalysis = {
           communication: result.communication ?? { type: 'unknown', confidence: 0, notes: '' },
           processing: result.processing ?? { level: 'unknown', confidence: 0, notes: '' },
           power: result.power ?? { options: [], confidence: 0, notes: '' },
           inputs: {
             items: result.inputs?.items ?? [],
-            confidence: result.inputs?.confidence ?? 0,
+            confidence: result.inputs?.confidence,
+            notes: result.inputs?.notes,
           },
           outputs: {
             items: result.outputs?.items ?? [],
-            confidence: result.outputs?.confidence ?? 0,
+            confidence: result.outputs?.confidence,
+            notes: result.outputs?.notes,
           },
           overallScore: result.overallScore ?? 0,
           manufacturable: result.manufacturable,
-          rejectionReason: result.rejectionReason ?? undefined, // Convert null to undefined
+          rejectionReason: result.rejectionReason ?? undefined,
+          suggestedRevisions: result.suggestedRevisions ?? undefined,
+          openQuestions: result.openQuestions,
         }
 
         const questions: OpenQuestion[] = (result.openQuestions || []).map((q) => ({

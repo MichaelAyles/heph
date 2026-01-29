@@ -32,6 +32,7 @@ import {
   Upload,
   Boxes,
   FileText,
+  Variable,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -45,6 +46,7 @@ import {
   StructureViewer,
   NodeRegistry,
   NodeEditor,
+  ContextVariables,
   type GraphNodeDef,
   type GraphEdgeDef,
   type SubgraphId,
@@ -59,7 +61,7 @@ import { getNodeStatesAtStep } from '../services/langgraph/execution-tracer'
 import { logger } from '../lib/logger'
 import type { CodeDefinedGraphData, SubgraphDefinition } from '../types/langgraph'
 
-type Tab = 'debugger' | 'threads' | 'structure' | 'nodes' | 'prompts'
+type Tab = 'debugger' | 'threads' | 'structure' | 'nodes' | 'prompts' | 'variables'
 
 // Predefined test messages for quick debugging
 const PREDEFINED_MESSAGES = [
@@ -714,6 +716,7 @@ export function AdminLangGraphPage() {
     { id: 'structure' as const, label: 'Structure', icon: GitBranch },
     { id: 'nodes' as const, label: 'Nodes', icon: Boxes },
     { id: 'prompts' as const, label: 'Prompts', icon: FileText },
+    { id: 'variables' as const, label: 'Variables', icon: Variable },
   ]
 
   return (
@@ -1135,6 +1138,9 @@ export function AdminLangGraphPage() {
               <NodeEditor selectedNode={selectedPromptNode} onNodeSelect={setSelectedPromptNode} />
             </div>
           )}
+
+          {/* Variables Tab */}
+          {activeTab === 'variables' && <ContextVariables />}
         </div>
       </div>
     </div>
