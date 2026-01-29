@@ -14,6 +14,7 @@ interface BlueprintStepProps {
   project: Project
   spec: ProjectSpec
   onComplete: (blueprints: { url: string; prompt: string }[]) => void
+  onCancel?: () => void
 }
 
 interface BlueprintResponse {
@@ -51,7 +52,7 @@ async function invokeBlueprint(
   return { url: output.imageUrl, prompt: output.prompt }
 }
 
-export function BlueprintStep({ project, spec, onComplete }: BlueprintStepProps) {
+export function BlueprintStep({ project, spec, onComplete, onCancel }: BlueprintStepProps) {
   // 8 images: 4 Style A (adjective-heavy) + 4 Style B (structured photography)
   const [generating, setGenerating] = useState<boolean[]>([
     true,
@@ -76,6 +77,7 @@ export function BlueprintStep({ project, spec, onComplete }: BlueprintStepProps)
   const [errors, setErrors] = useState<string[]>([])
   const [hasStarted, setHasStarted] = useState(false)
   const [hasCompleted, setHasCompleted] = useState(false)
+  const [cancelled, setCancelled] = useState(false)
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -116,10 +118,14 @@ export function BlueprintStep({ project, spec, onComplete }: BlueprintStepProps)
           })
         })
         .catch((err) => {
-          const errorMsg =
-            err instanceof BreakpointCancelledError
-              ? `Image ${index + 1}: Cancelled at debug breakpoint`
-              : `Image ${index + 1}: ${err.message}`
+          if (err instanceof BreakpointCancelledError) {
+            setCancelled(true)
+            // Stop all pending generations by marking them done
+            setGenerating([false, false, false, false, false, false, false, false])
+            onCancel?.()
+            return
+          }
+          const errorMsg = `Image ${index + 1}: ${err.message}`
           setErrors((prev) => [...prev, errorMsg])
           setGenerating((prev) => {
             const updated = [...prev]
@@ -131,7 +137,7 @@ export function BlueprintStep({ project, spec, onComplete }: BlueprintStepProps)
   }, [hasStarted, project.id, spec.description, spec.decisions, spec.feasibility])
 
   useEffect(() => {
-    if (hasCompleted) return
+    if (hasCompleted || cancelled) return
 
     const allDone = generating.every((g) => !g)
     const validBlueprints = blueprints.filter(
@@ -142,7 +148,7 @@ export function BlueprintStep({ project, spec, onComplete }: BlueprintStepProps)
       setHasCompleted(true)
       onComplete(validBlueprints)
     }
-  }, [generating, blueprints, onComplete, hasCompleted])
+  }, [generating, blueprints, onComplete, hasCompleted, cancelled])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const activeCount = generating.filter(Boolean).length

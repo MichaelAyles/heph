@@ -16,6 +16,7 @@ interface RefinementStepProps {
   spec: ProjectSpec
   onDecisions: (decisions: Decision[]) => void
   onComplete: () => void
+  onCancel?: () => void
 }
 
 interface RefinementResponse {
@@ -39,16 +40,24 @@ interface RefinementResponse {
 
 const MAX_REFINEMENT_ROUNDS = 5
 
-export function RefinementStep({ project, spec, onDecisions, onComplete }: RefinementStepProps) {
+export function RefinementStep({
+  project,
+  spec,
+  onDecisions,
+  onComplete,
+  onCancel,
+}: RefinementStepProps) {
   const [pendingQuestions, setPendingQuestions] = useState<OpenQuestion[]>(spec.openQuestions)
   const [isChecking, setIsChecking] = useState(false)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
   const [otherMode, setOtherMode] = useState<Record<string, boolean>>({})
   const [otherText, setOtherText] = useState<Record<string, string>>({})
   const [allDecisions, setAllDecisions] = useState<Decision[]>(spec.decisions || [])
+  const [cancelled, setCancelled] = useState(false)
 
   const checkForMoreQuestions = useCallback(
     async (currentDecisions: Decision[]) => {
+      if (cancelled) return // Don't continue if cancelled
       if (!spec.feasibility) return
 
       if (currentDecisions.length >= MAX_REFINEMENT_ROUNDS * 2) {
@@ -84,15 +93,18 @@ export function RefinementStep({ project, spec, onDecisions, onComplete }: Refin
       } catch (err) {
         if (err instanceof BreakpointCancelledError) {
           logger.info('project', 'Refinement cancelled at debug breakpoint')
-        } else {
-          logger.error('project', 'Refinement request failed', { error: err })
+          setCancelled(true)
+          setIsChecking(false)
+          onCancel?.()
+          return
         }
+        logger.error('project', 'Refinement request failed', { error: err })
         onComplete()
       } finally {
         setIsChecking(false)
       }
     },
-    [project.id, spec.feasibility, spec.description, onComplete]
+    [project.id, spec.feasibility, spec.description, onComplete, onCancel, cancelled]
   )
 
   const handleAnswer = (questionId: string, _question: string, answer: string) => {

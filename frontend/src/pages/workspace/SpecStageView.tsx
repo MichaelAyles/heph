@@ -245,6 +245,7 @@ export function SpecStageView() {
               spec={spec}
               onComplete={handleFeasibilityComplete}
               onReject={handleReject}
+              onCancel={() => navigate('/projects')}
             />
           )}
 
@@ -282,12 +283,18 @@ export function SpecStageView() {
               spec={spec}
               onDecisions={handleDecisions}
               onComplete={handleRefinementComplete}
+              onCancel={() => navigate('/projects')}
             />
           )}
 
           {/* Step 2: Blueprint Generation */}
           {currentStep === 2 && (
-            <BlueprintStep project={project} spec={spec} onComplete={handleBlueprintsComplete} />
+            <BlueprintStep
+              project={project}
+              spec={spec}
+              onComplete={handleBlueprintsComplete}
+              onCancel={() => navigate('/projects')}
+            />
           )}
 
           {/* Step 3: Blueprint Selection */}
@@ -301,7 +308,12 @@ export function SpecStageView() {
 
           {/* Step 4: Finalization */}
           {currentStep === 4 && (
-            <FinalizationStep project={project} spec={spec} onComplete={handleFinalizeComplete} />
+            <FinalizationStep
+              project={project}
+              spec={spec}
+              onComplete={handleFinalizeComplete}
+              onCancel={() => navigate('/projects')}
+            />
           )}
 
           {/* Step 5: Complete - Show full spec for review */}

@@ -16,6 +16,7 @@ interface FeasibilityStepProps {
   spec: ProjectSpec
   onComplete: (feasibility: FeasibilityAnalysis, questions: OpenQuestion[]) => void
   onReject: (reason: string, suggestedRevisions?: SuggestedRevisions) => void
+  onCancel?: () => void
 }
 
 interface FeasibilityResponse {
@@ -49,16 +50,24 @@ interface FeasibilityResponse {
   }
 }
 
-export function FeasibilityStep({ project, spec, onComplete, onReject }: FeasibilityStepProps) {
+export function FeasibilityStep({
+  project,
+  spec,
+  onComplete,
+  onReject,
+  onCancel,
+}: FeasibilityStepProps) {
   const [status, setStatus] = useState('Analyzing your project...')
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [cancelled, setCancelled] = useState(false)
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (spec.feasibility) return // Already done
     if (isRunning) return
+    if (cancelled) return // Don't retry if cancelled
 
     setIsRunning(true)
     setError(null)
@@ -108,10 +117,12 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
         onComplete(feasibility, questions)
       } catch (err) {
         if (err instanceof BreakpointCancelledError) {
-          setError('Analysis cancelled at debug breakpoint.')
-        } else {
-          setError('Failed to analyze feasibility. Please try again.')
+          setCancelled(true)
+          setIsRunning(false)
+          onCancel?.()
+          return
         }
+        setError('Failed to analyze feasibility. Please try again.')
         logger.error('project', 'Feasibility analysis failed', { error: err })
         setIsRunning(false)
       }

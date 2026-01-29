@@ -14,6 +14,7 @@ interface FinalizationStepProps {
   project: Project
   spec: ProjectSpec
   onComplete: (finalSpec: FinalSpec) => void
+  onCancel?: () => void
 }
 
 interface FinalizationOutput {
@@ -28,15 +29,17 @@ interface FinalizationOutput {
   estimatedBOM?: Array<{ item: string; quantity: number; unitCost: number }>
 }
 
-export function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) {
+export function FinalizationStep({ project, spec, onComplete, onCancel }: FinalizationStepProps) {
   const [status, setStatus] = useState('Generating final specification...')
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [cancelled, setCancelled] = useState(false)
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isRunning || spec.finalSpec) return
+    if (cancelled) return // Don't retry if cancelled
 
     setIsRunning(true)
     setError(null)
@@ -66,11 +69,13 @@ export function FinalizationStep({ project, spec, onComplete }: FinalizationStep
         onComplete(result)
       } catch (err) {
         if (err instanceof BreakpointCancelledError) {
-          setError('Finalization cancelled at debug breakpoint.')
-        } else {
-          logger.error('project', 'Failed to generate final spec', { error: err })
-          setError('Failed to generate specification. Please try again.')
+          setCancelled(true)
+          setIsRunning(false)
+          onCancel?.()
+          return
         }
+        logger.error('project', 'Failed to generate final spec', { error: err })
+        setError('Failed to generate specification. Please try again.')
         setIsRunning(false)
       }
     }
