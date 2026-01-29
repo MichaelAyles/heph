@@ -18,6 +18,16 @@ export const NodeTypeSchema = z.enum(['chat', 'image'])
 export type NodeType = z.infer<typeof NodeTypeSchema>
 
 /**
+ * Types of dynamic context that can be fetched for a node
+ */
+export const ContextTypeSchema = z.enum([
+  'availableBlocks', // PCB blocks from database
+  'projectState', // Current project spec/status
+  'requirements', // User-defined requirements
+])
+export type ContextType = z.infer<typeof ContextTypeSchema>
+
+/**
  * Node configuration passed at invocation time
  */
 export const NodeConfigSchema = z.object({
@@ -91,6 +101,9 @@ export interface LangGraphNode<
   /** Category for grouping in UI */
   category: 'spec' | 'enclosure' | 'firmware' | 'export' | 'admin'
 
+  /** Types of dynamic context this node needs (fetched at invocation time) */
+  contextTypes?: ContextType[]
+
   /**
    * The invoke function that performs the LLM call
    * @param input - Validated input matching inputSchema
@@ -102,6 +115,30 @@ export interface LangGraphNode<
     config: NodeConfig,
     context: NodeContext
   ) => Promise<NodeInvokeResult<z.infer<TOutput>>>
+}
+
+/**
+ * Dynamic context fetched at invocation time
+ */
+export interface DynamicContext {
+  /** Available PCB blocks with their capabilities */
+  availableBlocks?: Array<{
+    slug: string
+    name: string
+    category: string
+    description: string
+    interfaces?: string[]
+  }>
+  /** Current project state (spec, PCB artifacts, etc.) */
+  projectState?: {
+    status: string
+    spec?: Record<string, unknown>
+    pcbArtifacts?: Record<string, unknown>
+  }
+  /** User-defined requirements or constraints */
+  requirements?: string[]
+  /** Any additional context data */
+  custom?: Record<string, unknown>
 }
 
 /**
@@ -119,6 +156,9 @@ export interface NodeContext {
 
   /** System prompt from database (REQUIRED - no hardcoded fallbacks) */
   systemPrompt: string
+
+  /** Dynamic context fetched at invocation time */
+  dynamicContext: DynamicContext
 
   /** LLM chat function */
   llmChat: (params: LLMChatParams) => Promise<LLMChatResponse>

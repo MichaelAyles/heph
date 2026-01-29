@@ -17,14 +17,16 @@ import {
   Cpu,
   FileText,
   ExternalLink,
-  Database,
+  Boxes,
+  MessageSquare,
 } from 'lucide-react'
 import { useDebugBreakpointStore } from '../../stores/debug-breakpoint'
 
 export function DebugBreakpointModal() {
   const { pendingBreakpoint, resolveWith } = useDebugBreakpointStore()
   const [systemPromptExpanded, setSystemPromptExpanded] = useState(false)
-  const [projectStateExpanded, setProjectStateExpanded] = useState(true)
+  const [dynamicContextExpanded, setDynamicContextExpanded] = useState(true)
+  const [userInputExpanded, setUserInputExpanded] = useState(true)
   const [timeRemaining, setTimeRemaining] = useState<number>(0)
 
   // Calculate and update time remaining
@@ -59,9 +61,13 @@ export function DebugBreakpointModal() {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Parse the input to show structured project state
+  // Parse the data
   const inputData = pendingBreakpoint.fullInput
   const inputKeys = Object.keys(inputData)
+  const dynamicContext = pendingBreakpoint.dynamicContext || {}
+  const hasBlocks = dynamicContext.availableBlocks && dynamicContext.availableBlocks.length > 0
+  const hasProjectState = dynamicContext.projectState
+  const hasDynamicContext = hasBlocks || hasProjectState || dynamicContext.requirements
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
@@ -141,6 +147,7 @@ export function DebugBreakpointModal() {
                 )}
                 <FileText className="w-4 h-4 text-steel-dim" />
                 <span className="font-medium text-steel">System Prompt</span>
+                <span className="text-xs text-steel-dim">(static)</span>
               </div>
               <span className="text-xs text-steel-dim">
                 {pendingBreakpoint.systemPrompt.length.toLocaleString()} chars
@@ -155,24 +162,117 @@ export function DebugBreakpointModal() {
             )}
           </div>
 
-          {/* Project State Section */}
-          <div className="border border-surface-700 rounded-lg overflow-hidden">
+          {/* Dynamic Context Section */}
+          {hasDynamicContext && (
+            <div className="border border-emerald-500/30 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setDynamicContextExpanded(!dynamicContextExpanded)}
+                className="w-full flex items-center justify-between p-3 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  {dynamicContextExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-emerald-400" />
+                  )}
+                  <Boxes className="w-4 h-4 text-emerald-400" />
+                  <span className="font-medium text-emerald-300">Dynamic Context</span>
+                  <span className="text-xs text-emerald-400/70">(runtime data)</span>
+                </div>
+              </button>
+              {dynamicContextExpanded && (
+                <div className="p-4 bg-surface-900/50 space-y-3">
+                  {/* Available Blocks */}
+                  {hasBlocks && (
+                    <div className="border border-surface-700 rounded-lg overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                        <span className="font-mono text-sm text-emerald-400">availableBlocks</span>
+                        <span className="text-xs text-steel-dim">
+                          {dynamicContext.availableBlocks!.length} blocks
+                        </span>
+                      </div>
+                      <div className="p-3 bg-surface-900/50 max-h-48 overflow-y-auto">
+                        <div className="space-y-2">
+                          {dynamicContext.availableBlocks!.map((block) => (
+                            <div
+                              key={block.slug}
+                              className="flex items-center justify-between text-sm border-b border-surface-700/50 pb-2 last:border-0 last:pb-0"
+                            >
+                              <div>
+                                <span className="text-steel font-medium">{block.name}</span>
+                                <span className="text-steel-dim ml-2">({block.category})</span>
+                              </div>
+                              {block.interfaces && block.interfaces.length > 0 && (
+                                <span className="text-xs text-copper">
+                                  {block.interfaces.join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Project State */}
+                  {hasProjectState && (
+                    <div className="border border-surface-700 rounded-lg overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                        <span className="font-mono text-sm text-emerald-400">projectState</span>
+                        <span className="text-xs text-steel-dim">
+                          status: {dynamicContext.projectState!.status}
+                        </span>
+                      </div>
+                      <div className="p-3 bg-surface-900/50">
+                        <pre className="text-sm text-steel-dim whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">
+                          {JSON.stringify(dynamicContext.projectState, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Requirements */}
+                  {dynamicContext.requirements && dynamicContext.requirements.length > 0 && (
+                    <div className="border border-surface-700 rounded-lg overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
+                        <span className="font-mono text-sm text-emerald-400">requirements</span>
+                        <span className="text-xs text-steel-dim">
+                          {dynamicContext.requirements.length} items
+                        </span>
+                      </div>
+                      <div className="p-3 bg-surface-900/50">
+                        <ul className="list-disc list-inside text-sm text-steel-dim space-y-1">
+                          {dynamicContext.requirements.map((req, i) => (
+                            <li key={i}>{req}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* User Input Section */}
+          <div className="border border-amber-500/30 rounded-lg overflow-hidden">
             <button
-              onClick={() => setProjectStateExpanded(!projectStateExpanded)}
-              className="w-full flex items-center justify-between p-3 bg-surface-800 hover:bg-surface-700 transition-colors"
+              onClick={() => setUserInputExpanded(!userInputExpanded)}
+              className="w-full flex items-center justify-between p-3 bg-amber-500/10 hover:bg-amber-500/20 transition-colors"
             >
               <div className="flex items-center gap-2">
-                {projectStateExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-steel-dim" />
+                {userInputExpanded ? (
+                  <ChevronDown className="w-4 h-4 text-amber-400" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-steel-dim" />
+                  <ChevronRight className="w-4 h-4 text-amber-400" />
                 )}
-                <Database className="w-4 h-4 text-steel-dim" />
-                <span className="font-medium text-steel">Project State (Input)</span>
+                <MessageSquare className="w-4 h-4 text-amber-400" />
+                <span className="font-medium text-amber-300">User Input</span>
+                <span className="text-xs text-amber-400/70">(request params)</span>
               </div>
               <span className="text-xs text-steel-dim">{inputKeys.length} fields</span>
             </button>
-            {projectStateExpanded && (
+            {userInputExpanded && (
               <div className="p-4 bg-surface-900/50 space-y-3">
                 {inputKeys.map((key) => {
                   const value = inputData[key]

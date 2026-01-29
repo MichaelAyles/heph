@@ -5,11 +5,36 @@
 
 import { create } from 'zustand'
 
+/**
+ * Dynamic context that can be injected into LLM calls
+ * Fetched at invocation time based on node requirements
+ */
+export interface DynamicContext {
+  /** Available PCB blocks with their capabilities */
+  availableBlocks?: Array<{
+    slug: string
+    name: string
+    category: string
+    description: string
+    interfaces?: string[]
+  }>
+  /** Current project state (spec, PCB artifacts, etc.) */
+  projectState?: {
+    status: string
+    spec?: Record<string, unknown>
+    pcbArtifacts?: Record<string, unknown>
+  }
+  /** User-defined requirements or constraints */
+  requirements?: string[]
+  /** Any additional context data */
+  custom?: Record<string, unknown>
+}
+
 export interface BreakpointData {
   id: string
   nodeName: string
   systemPrompt: string
-  userContext: string
+  dynamicContext: DynamicContext
   fullInput: Record<string, unknown>
   invocationConfig: Record<string, unknown> | null
   tokenEstimate: number

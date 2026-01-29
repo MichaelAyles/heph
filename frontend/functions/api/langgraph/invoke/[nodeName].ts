@@ -17,6 +17,7 @@ import {
   type NodeConfig,
   type LLMChatParams,
   type LLMChatResponse,
+  type DynamicContext,
 } from '../../../../src/services/langgraph/nodes'
 
 interface User {
@@ -32,7 +33,7 @@ interface BreakpointData {
   id: string
   nodeName: string
   systemPrompt: string
-  userContext: string
+  dynamicContext: DynamicContext
   fullInput: Record<string, unknown>
   invocationConfig: NodeConfig | null
   tokenEstimate: number
@@ -108,13 +109,67 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     )
   }
 
+  // Get node to check what context it needs
+  const node = getNode(nodeName)!
+  const contextTypes = node.contextTypes || []
+
+  // Fetch dynamic context based on node requirements
+  const dynamicContext: DynamicContext = {}
+
+  // Fetch available blocks if needed
+  if (contextTypes.includes('availableBlocks')) {
+    const blocksResult = await env.DB.prepare(
+      `SELECT slug, definition FROM pcb_blocks WHERE is_active = 1`
+    ).all<{ slug: string; definition: string | null }>()
+
+    dynamicContext.availableBlocks = (blocksResult.results || [])
+      .map((row) => {
+        try {
+          const def = row.definition ? JSON.parse(row.definition) : null
+          return {
+            slug: row.slug,
+            name: def?.metadata?.name || row.slug,
+            category: def?.metadata?.category || 'unknown',
+            description: def?.metadata?.description || '',
+            interfaces: def?.electrical?.interfaces ? Object.keys(def.electrical.interfaces) : [],
+          }
+        } catch {
+          return {
+            slug: row.slug,
+            name: row.slug,
+            category: 'unknown',
+            description: '',
+            interfaces: [],
+          }
+        }
+      })
+      .filter((b) => b.name) // Filter out empty entries
+  }
+
+  // Fetch project state if needed
+  if (contextTypes.includes('projectState') && body.projectId) {
+    const projectRow = await env.DB.prepare(`SELECT status, spec FROM projects WHERE id = ?`)
+      .bind(body.projectId)
+      .first<{ status: string; spec: string | null }>()
+
+    if (projectRow) {
+      dynamicContext.projectState = {
+        status: projectRow.status,
+        spec: projectRow.spec ? JSON.parse(projectRow.spec) : undefined,
+      }
+    }
+  }
+
   // Check for debug_it mode breakpoint
   const skipBreakpoint = context.request.headers.get('X-Skip-Debug-Breakpoint') === 'true'
   if (user.controlMode === 'debug_it' && !skipBreakpoint) {
     // Create a breakpoint record and pause execution
     const breakpointId = crypto.randomUUID()
-    const userContext = JSON.stringify(body.input, null, 2)
-    const tokenEstimate = Math.ceil((promptRow.system_prompt.length + userContext.length) / 4) // ~4 chars per token
+    const contextJson = JSON.stringify(dynamicContext, null, 2)
+    const inputJson = JSON.stringify(body.input, null, 2)
+    const tokenEstimate = Math.ceil(
+      (promptRow.system_prompt.length + contextJson.length + inputJson.length) / 4
+    ) // ~4 chars per token
 
     // Breakpoint expires in 5 minutes
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
@@ -133,7 +188,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.threadId || null,
         nodeName,
         promptRow.system_prompt,
-        userContext,
+        contextJson, // Now stores dynamic context
         JSON.stringify(body.input),
         body.config ? JSON.stringify(body.config) : null,
         tokenEstimate,
@@ -145,7 +200,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       id: breakpointId,
       nodeName,
       systemPrompt: promptRow.system_prompt,
-      userContext,
+      dynamicContext,
       fullInput: body.input,
       invocationConfig: body.config || null,
       tokenEstimate,
@@ -199,11 +254,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     userId: user.id,
     threadId: body.threadId,
     systemPrompt: promptRow.system_prompt, // Required - comes from database
+    dynamicContext, // Runtime data (blocks, project state, etc.)
     llmChat,
   }
-
-  // Get node for metadata
-  const node = getNode(nodeName)!
 
   try {
     // Invoke the node

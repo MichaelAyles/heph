@@ -87,7 +87,27 @@ async function invokeFeasibility(
 ): Promise<NodeInvokeResult<FeasibilityOutput>> {
   // System prompt comes from database (required)
   const systemPrompt = context.systemPrompt
-  const userPrompt = buildFeasibilityPrompt(input.description)
+
+  // Build user prompt with dynamic context
+  let userPrompt = buildFeasibilityPrompt(input.description)
+
+  // Inject available blocks from dynamic context
+  if (context.dynamicContext.availableBlocks && context.dynamicContext.availableBlocks.length > 0) {
+    const blocksSection = context.dynamicContext.availableBlocks
+      .map(
+        (b) =>
+          `- ${b.name} (${b.category}): ${b.description}${b.interfaces?.length ? ` [${b.interfaces.join(', ')}]` : ''}`
+      )
+      .join('\n')
+
+    userPrompt = `${userPrompt}
+
+## Available Hardware Blocks
+The following pre-validated circuit modules are available for building this project:
+${blocksSection}
+
+Consider these specific blocks when determining feasibility.`
+  }
 
   const response = await context.llmChat({
     messages: [
@@ -132,6 +152,7 @@ export const feasibilityNode: LangGraphNode<
   outputSchema: FeasibilityOutputSchema,
   defaultTemperature: 0.3,
   category: 'spec',
+  contextTypes: ['availableBlocks'], // Fetch available PCB blocks at runtime
   invoke: invokeFeasibility,
 }
 
