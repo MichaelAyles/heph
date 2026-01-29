@@ -17,6 +17,8 @@ import {
   type NodeConfig,
   type LLMChatParams,
   type LLMChatResponse,
+  type LLMImageParams,
+  type LLMImageResponse,
   type DynamicContext,
 } from '../../../../src/services/langgraph/nodes'
 
@@ -344,6 +346,37 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return result
   }
 
+  // Create LLM image function that proxies to our API
+  const llmImage = async (params: LLMImageParams): Promise<LLMImageResponse> => {
+    const imageResponse = await fetch(new URL('/api/llm/image', context.request.url), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: context.request.headers.get('Cookie') || '',
+      },
+      body: JSON.stringify({
+        prompt: params.prompt,
+        model: params.model,
+      }),
+    })
+
+    if (!imageResponse.ok) {
+      const error = await imageResponse.text()
+      throw new Error(`Image API error: ${error}`)
+    }
+
+    const result = await imageResponse.json<{
+      imageUrl: string
+      model: string
+      latencyMs?: number
+    }>()
+
+    return {
+      url: result.imageUrl,
+      model: result.model,
+    }
+  }
+
   // Build context
   const nodeContext: NodeContext = {
     projectId: body.projectId,
@@ -352,6 +385,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     systemPrompt: expandedSystemPrompt, // Expanded with template variables
     dynamicContext, // Raw dynamic context (for nodes that need to process it differently)
     llmChat,
+    llmImage,
   }
 
   try {
