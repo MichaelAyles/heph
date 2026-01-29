@@ -182,8 +182,8 @@ Development blog documenting PHAESTUS progress. 40 posts with images.
 - `src/pages/` - Route components (SpecPage.tsx orchestrates the pipeline)
 - `src/pages/workspace/` - Workspace stage views (Spec, PCB, Enclosure, Firmware, Export)
 - `src/components/spec-steps/` - Individual step components (Feasibility, Refinement, Blueprint, Selection, Finalization)
-- `src/components/admin/orchestrator/` - Admin orchestrator editor (PromptEditor, FlowVisualization, HookConfiguration)
-- `src/components/admin/langgraph/` - LangGraph admin UI (StructureViewer, SubgraphSelector, FlowGraph, ExecutionTimeline)
+- `src/components/admin/langgraph/` - LangGraph admin UI (NodeEditor, StructureViewer, SubgraphSelector, FlowGraph)
+- `src/components/debug/` - Debug mode components (DebugBreakpointModal)
 - `src/types/langgraph.ts` - Shared types for LangGraph visualization
 - `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure, orchestrator)
 - `src/services/` - LLM client, PCB merging, KiCad parsing, Gerber merging
@@ -195,7 +195,7 @@ Development blog documenting PHAESTUS progress. 40 posts with images.
 - `src/components/pcb/BoardSelector` - Board selection (in PCBStageView)
 - `src/services/design-document.ts` - Design JSON/Markdown export
 - `src/lib/tokn/` - TOKN KiCad parser (sexpr.ts, kicadSch.ts, connectivity.ts, toknEncoder.ts)
-- `src/stores/` - Zustand state (auth, workspace, orchestrator)
+- `src/stores/` - Zustand state (auth, workspace, debug-breakpoint)
 - `src/components/admin/blocks/` - Block management UI (BlockImportWizard, BlockEditor)
 - `functions/api/` - Cloudflare Pages Functions (auth, llm, projects, admin, orchestrator)
 - `functions/api/admin/orchestrator/` - Admin API for managing orchestrator prompts, edges, and hooks
@@ -228,6 +228,9 @@ Key tables in D1 (18 migrations):
 - **pcb_blocks.definition**: JSON block.json schema with metadata, electrical, physical properties
 - **pcb_blocks.version**: Schema version tracking for block definitions
 
+**Debug Tables (migration 0034):**
+- **debug_breakpoints**: Stores paused LLM execution state for debug_it mode (id, user_id, node_name, system_prompt, user_context, full_input, invocation_config, expires_at)
+
 ### LLM Integration
 
 All requests proxy through `/api/llm/*`:
@@ -244,7 +247,7 @@ All requests proxy through `/api/llm/*`:
 - WorkOS AuthKit OAuth integration available
 - Default user: `mike`/`mike` (admin)
 - User approval workflow (is_approved flag)
-- Control modes: vibe_it, fix_it, design_it
+- Control modes: `vibe_it`, `fix_it`, `design_it`, `debug_it` (admin-only)
 - Public routes: `/api/auth/*`, `/api/blocks`, `/api/images`, `/api/gallery/*`
 
 ### Frontend Routes
@@ -265,8 +268,8 @@ All requests proxy through `/api/llm/*`:
 | `/admin/logs` | AdminLogsPage | Debug log viewer |
 | `/admin/users` | AdminUsersPage | User management |
 | `/admin/blocks` | AdminBlocksPage | PCB block management |
-| `/admin/orchestrator` | AdminOrchestratorPage | Orchestrator prompt editor |
-| `/admin/langgraph` | AdminLangGraphPage | LangGraph debugger/threads/structure |
+| `/admin/llms` | AdminLLMsPage | LLM model configuration |
+| `/admin/langgraph` | AdminLangGraphPage | LangGraph admin (Debugger, Threads, Structure, Prompts tabs) |
 | `/admin/blog` | AdminBlogPage | Blog management |
 
 ## Development Workflow
@@ -445,11 +448,15 @@ const data = result.data // Fully typed!
 | LLM response schemas | `src/schemas/llm-responses.ts` |
 | Pricing calculations | `functions/api/llm/pricing.ts` |
 | Admin logs API | `functions/api/admin/logs.ts` |
-| Admin orchestrator UI | `src/pages/AdminOrchestratorPage.tsx` |
-| Orchestrator prompt editor | `src/components/admin/orchestrator/PromptEditor.tsx` |
-| Orchestrator flow viz | `src/components/admin/orchestrator/FlowVisualization.tsx` |
-| Orchestrator admin API | `functions/api/admin/orchestrator/` |
-| Runtime prompt loading | `functions/api/orchestrator/prompts.ts` |
+| LangGraph admin page | `src/pages/AdminLangGraphPage.tsx` |
+| LangGraph node editor | `src/components/admin/langgraph/NodeEditor.tsx` |
+| LangGraph structure viewer | `src/components/admin/langgraph/StructureViewer.tsx` |
+| LangGraph invoke API | `functions/api/langgraph/invoke/[nodeName].ts` |
+| Debug breakpoint modal | `src/components/debug/DebugBreakpointModal.tsx` |
+| Debug breakpoint store | `src/stores/debug-breakpoint.ts` |
+| Breakpoint resolve API | `functions/api/langgraph/breakpoint/[id]/resolve.ts` |
+| Breakpoint test API | `functions/api/langgraph/breakpoint/[id]/test.ts` |
+| Orchestrator prompts API | `functions/api/admin/orchestrator/` |
 | TOKN KiCad parser | `src/lib/tokn/` |
 | KiCad file parser | `src/services/kicad-parser.ts` |
 | Block definition schema | `src/schemas/block.ts` |
@@ -468,9 +475,7 @@ const data = result.data // Fully typed!
 | LangGraph state | `src/services/langgraph/state.ts` |
 | LangGraph graph | `src/services/langgraph/graph.ts` |
 | LangGraph checkpointer | `src/services/langgraph/checkpointer.ts` |
-| LangGraph admin page | `src/pages/AdminLangGraphPage.tsx` |
-| LangGraph structure viewer | `src/components/admin/langgraph/StructureViewer.tsx` |
-| LangGraph subgraph selector | `src/components/admin/langgraph/SubgraphSelector.tsx` |
+| LangGraph nodes | `src/services/langgraph/nodes/` |
 | LangGraph types | `src/types/langgraph.ts` |
 | KiCad export script | `scripts/export-kicad-block.ts` |
 | Blog listing page | `src/pages/BlogPage.tsx` |
@@ -531,14 +536,16 @@ Admin block management (`/admin/blocks`):
 - `physical`: connectors, edge connections, mounting
 - `files`: schematic, PCB, STEP model references
 
-### Orchestrator Agent System
+### LangGraph Node System
 
-The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` table:
+LangGraph nodes are standalone LLM-powered functions stored in `orchestrator_prompts` table. Each node has:
+- A system prompt (editable via admin UI)
+- Input/output Zod schemas
+- Optional dynamic context requirements (`contextTypes`)
 
 | Node Name | Category | Stage | Purpose |
 |-----------|----------|-------|---------|
-| `orchestrator` | agent | - | Main coordinator that decides workflow and makes final decisions |
-| `feasibility` | agent | spec | Analyzes user description against available components |
+| `feasibility` | agent | spec | Analyzes user description against available hardware blocks |
 | `naming` | generator | spec | Generates creative project names |
 | `enclosure` | generator | enclosure | Generates OpenSCAD code for basic enclosures |
 | `enclosure_vision` | generator | enclosure | Blueprint-aware enclosure generation using product images |
@@ -546,11 +553,11 @@ The orchestrator uses 8 specialized agents stored in the `orchestrator_prompts` 
 | `enclosure_review` | reviewer | enclosure | Reviews OpenSCAD against specification |
 | `firmware_review` | reviewer | firmware | Reviews firmware code for correctness |
 
-**Admin Management**: The `AdminOrchestratorPage` provides:
-- Prompt editing with token estimation
-- Workflow graph visualization
-- Hook configuration for pre/post execution logic
-- Context tag management
+**Admin Management**: The LangGraph admin page (`/admin/langgraph`) provides:
+- **Prompts tab**: Edit system prompts with token estimation, deep-link via `?node=feasibility`
+- **Debugger tab**: Visual execution debugging with React Flow graph
+- **Threads tab**: Checkpoint/state inspection
+- **Structure tab**: Read-only tree view of graph hierarchy
 
 ### LangGraph Architecture
 
@@ -578,12 +585,51 @@ OrchestratorGraph (parent)
 - **Checkpointing** - Workflows can be paused and resumed across sessions
 - **State Reducers** - Immutable state updates with conflict resolution
 - **Tool Integration** - 6 tool modules (control, enclosure, firmware, pcb, spec, index)
-- **Context Building** - Dynamic context assembly from project state
+- **Dynamic Context** - Runtime data injection based on node `contextTypes` (availableBlocks, projectState)
 
-**Admin Page** (`/admin/langgraph`) - 3 tabs:
+**Admin Page** (`/admin/langgraph`) - 4 tabs:
 - **Debugger**: Visual execution debugging with subgraph selector, React Flow graph
 - **Threads**: Checkpoint/state inspection with namespace support
 - **Structure**: Read-only tree view of code-defined graph hierarchy
+- **Prompts**: Edit node system prompts (deep-link: `?node=feasibility`)
+
+### Debug Mode (debug_it)
+
+Admin-only control mode that pauses execution before each LLM call, showing a breakpoint modal.
+
+**How it works**:
+1. User sets control mode to `debug_it` in Settings
+2. When a LangGraph node is invoked, execution pauses before the LLM call
+3. A modal displays:
+   - **System Prompt** (with Reload and Edit buttons)
+   - **Dynamic Context** (available blocks, project state fetched at runtime)
+   - **User Input** (the request parameters)
+4. User can:
+   - **Edit** - Opens prompt editor in new tab (`/admin/langgraph?node=xxx`)
+   - **Reload** - Fetches updated prompt from database
+   - **Test** - Runs the LLM call and shows outgoing/incoming messages without continuing
+   - **Continue** - Proceeds with execution
+   - **Cancel** - Aborts and navigates to projects list
+
+**Key Files**:
+- `src/stores/debug-breakpoint.ts` - Zustand store for breakpoint modal state
+- `src/components/debug/DebugBreakpointModal.tsx` - The breakpoint inspection modal
+- `functions/api/langgraph/invoke/[nodeName].ts` - Creates breakpoints when debug_it mode active
+- `functions/api/langgraph/breakpoint/[id]/resolve.ts` - Continues or cancels execution
+- `functions/api/langgraph/breakpoint/[id]/test.ts` - Test LLM call without resolving
+
+**Dynamic Context System**:
+Nodes declare what runtime data they need via `contextTypes`:
+```typescript
+// In node definition
+contextTypes: ['availableBlocks', 'projectState']
+```
+
+The invoke handler fetches this data at runtime:
+- `availableBlocks` - Active PCB blocks from database with name, category, description, interfaces
+- `projectState` - Current project status and spec
+
+This separates static prompts (edited in admin) from dynamic runtime data.
 
 ### Gerber Merging
 
@@ -733,6 +779,11 @@ pnpm export-block <path-to-kicad-project> [--upload] [--slug name]
 - `GET /api/admin/langgraph/graph` - Get code-defined graph structure (orchestrator + subgraphs)
 - `GET /api/admin/langgraph/threads` - List checkpointed threads
 - `DELETE /api/admin/langgraph/threads/{id}` - Delete thread checkpoint
+
+**LangGraph Invoke** (`/api/langgraph/*`):
+- `POST /api/langgraph/invoke/{nodeName}` - Invoke a LangGraph node (pauses if debug_it mode)
+- `POST /api/langgraph/breakpoint/{id}/resolve` - Continue or cancel a debug breakpoint
+- `POST /api/langgraph/breakpoint/{id}/test` - Test LLM call without resolving breakpoint
 
 **Blocks** (`/api/blocks/*`):
 - `GET /api/blocks` - List all PCB blocks
