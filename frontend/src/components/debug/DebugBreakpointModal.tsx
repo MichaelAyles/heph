@@ -83,15 +83,6 @@ export function DebugBreakpointModal() {
               <div className="flex items-center gap-2 text-sm text-steel-dim">
                 <span>Node:</span>
                 <span className="text-amber-400 font-mono">{pendingBreakpoint.nodeName}</span>
-                <Link
-                  to={`/admin/langgraph?node=${pendingBreakpoint.nodeName}`}
-                  className="flex items-center gap-1 text-copper hover:text-copper-light transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                  target="_blank"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  <span className="text-xs">Edit Prompt</span>
-                </Link>
               </div>
             </div>
           </div>
@@ -135,11 +126,11 @@ export function DebugBreakpointModal() {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* System Prompt Section */}
           <div className="border border-surface-700 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setSystemPromptExpanded(!systemPromptExpanded)}
-              className="w-full flex items-center justify-between p-3 bg-surface-800 hover:bg-surface-700 transition-colors"
-            >
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between p-3 bg-surface-800">
+              <button
+                onClick={() => setSystemPromptExpanded(!systemPromptExpanded)}
+                className="flex items-center gap-2 hover:text-steel transition-colors"
+              >
                 {systemPromptExpanded ? (
                   <ChevronDown className="w-4 h-4 text-steel-dim" />
                 ) : (
@@ -148,11 +139,22 @@ export function DebugBreakpointModal() {
                 <FileText className="w-4 h-4 text-steel-dim" />
                 <span className="font-medium text-steel">System Prompt</span>
                 <span className="text-xs text-steel-dim">(static)</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-steel-dim">
+                  {pendingBreakpoint.systemPrompt.length.toLocaleString()} chars
+                </span>
+                <Link
+                  to={`/admin/langgraph?node=${pendingBreakpoint.nodeName}`}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-copper/20 text-copper hover:bg-copper/30 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                  target="_blank"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span className="text-xs">Edit</span>
+                </Link>
               </div>
-              <span className="text-xs text-steel-dim">
-                {pendingBreakpoint.systemPrompt.length.toLocaleString()} chars
-              </span>
-            </button>
+            </div>
             {systemPromptExpanded && (
               <div className="p-4 bg-surface-900/50">
                 <pre className="text-sm text-steel-dim whitespace-pre-wrap font-mono leading-relaxed max-h-64 overflow-y-auto">
