@@ -32,7 +32,16 @@ export async function generateImage(prompt: string): Promise<string> {
 
 export const IMAGE_TIMEOUT_MS = 60000
 
-export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+export function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+  options?: { skipTimeout?: boolean }
+): Promise<T> {
+  // Skip timeout if explicitly requested (e.g., in debug mode)
+  if (options?.skipTimeout) {
+    return promise
+  }
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),

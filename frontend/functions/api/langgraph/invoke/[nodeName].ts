@@ -32,6 +32,7 @@ interface User {
 interface BreakpointData {
   id: string
   nodeName: string
+  nodeType: 'chat' | 'image'
   systemPrompt: string
   dynamicContext: DynamicContext
   fullInput: Record<string, unknown>
@@ -47,6 +48,44 @@ interface InvokeRequest {
   threadId?: string
   projectId?: string
   config?: NodeConfig
+}
+
+/**
+ * Expand template variables in system prompt with dynamic context
+ * Supported variables:
+ * - @availableBlocks - List of available hardware blocks with descriptions
+ * - @projectState - Current project status and spec summary
+ */
+function expandTemplateVariables(prompt: string, dynamicContext: DynamicContext): string {
+  let expanded = prompt
+
+  // Expand @availableBlocks
+  if (expanded.includes('@availableBlocks')) {
+    if (dynamicContext.availableBlocks && dynamicContext.availableBlocks.length > 0) {
+      const blocksList = dynamicContext.availableBlocks
+        .map(
+          (b) =>
+            `- ${b.name} (${b.category}): ${b.description}${b.interfaces?.length ? ` [${b.interfaces.join(', ')}]` : ''}`
+        )
+        .join('\n')
+      expanded = expanded.replace('@availableBlocks', blocksList)
+    } else {
+      expanded = expanded.replace('@availableBlocks', '(No hardware blocks available)')
+    }
+  }
+
+  // Expand @projectState
+  if (expanded.includes('@projectState')) {
+    if (dynamicContext.projectState) {
+      const state = dynamicContext.projectState
+      const stateText = `Status: ${state.status}${state.spec ? `\nSpec: ${JSON.stringify(state.spec, null, 2)}` : ''}`
+      expanded = expanded.replace('@projectState', stateText)
+    } else {
+      expanded = expanded.replace('@projectState', '(No project state available)')
+    }
+  }
+
+  return expanded
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -167,16 +206,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
   }
 
+  // Expand template variables in system prompt with dynamic context
+  // This happens BEFORE breakpoint creation so debug shows the actual expanded prompt
+  const expandedSystemPrompt = expandTemplateVariables(systemPrompt, dynamicContext)
+
   // Check for debug_it mode breakpoint
   const skipBreakpoint = context.request.headers.get('X-Skip-Debug-Breakpoint') === 'true'
   if (user.controlMode === 'debug_it' && !skipBreakpoint) {
     // Create a breakpoint record and pause execution
     const breakpointId = crypto.randomUUID()
-    const contextJson = JSON.stringify(dynamicContext, null, 2)
     const inputJson = JSON.stringify(body.input, null, 2)
-    const tokenEstimate = Math.ceil(
-      (promptRow.system_prompt.length + contextJson.length + inputJson.length) / 4
-    ) // ~4 chars per token
+    const tokenEstimate = Math.ceil((expandedSystemPrompt.length + inputJson.length) / 4) // ~4 chars per token
 
     // Breakpoint expires in 5 minutes
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
@@ -194,8 +234,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         body.projectId || null,
         body.threadId || null,
         nodeName,
-        promptRow.system_prompt,
-        contextJson, // Now stores dynamic context
+        expandedSystemPrompt, // Store the expanded prompt with dynamic context
+        JSON.stringify(dynamicContext, null, 2), // Keep raw context for reference
         JSON.stringify(body.input),
         body.config ? JSON.stringify(body.config) : null,
         tokenEstimate,
@@ -206,7 +246,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const breakpointData: BreakpointData = {
       id: breakpointId,
       nodeName,
-      systemPrompt: promptRow.system_prompt,
+      nodeType: node.type,
+      systemPrompt: expandedSystemPrompt, // Show expanded prompt in modal
       dynamicContext,
       fullInput: body.input,
       invocationConfig: body.config || null,
@@ -260,8 +301,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     projectId: body.projectId,
     userId: user.id,
     threadId: body.threadId,
-    systemPrompt, // Required - from database or override header
-    dynamicContext, // Runtime data (blocks, project state, etc.)
+    systemPrompt: expandedSystemPrompt, // Expanded with template variables
+    dynamicContext, // Raw dynamic context (for nodes that need to process it differently)
     llmChat,
   }
 

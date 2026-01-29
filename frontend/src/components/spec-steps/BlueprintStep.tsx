@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
 import { isValidBlueprintUrl, withTimeout, IMAGE_TIMEOUT_MS } from './types'
 import { invokeLangGraphNode, BreakpointCancelledError } from '../../services/langgraph/invoke'
+import { useAuthStore } from '../../stores/auth'
 import type { Project, ProjectSpec } from '../../db/schema'
 
 interface BlueprintStepProps {
@@ -53,6 +54,9 @@ async function invokeBlueprint(
 }
 
 export function BlueprintStep({ project, spec, onComplete, onCancel }: BlueprintStepProps) {
+  const { user } = useAuthStore()
+  const isDebugMode = user?.controlMode === 'debug_it'
+
   // 8 images: 4 Style A (adjective-heavy) + 4 Style B (structured photography)
   const [generating, setGenerating] = useState<boolean[]>([
     true,
@@ -103,7 +107,8 @@ export function BlueprintStep({ project, spec, onComplete, onCancel }: Blueprint
           variation
         ),
         IMAGE_TIMEOUT_MS,
-        'Image generation timed out after 60s'
+        'Image generation timed out after 60s',
+        { skipTimeout: isDebugMode } // No timeout in debug mode - user controls timing
       )
         .then((result) => {
           setBlueprints((prev) => {

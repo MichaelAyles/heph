@@ -162,6 +162,22 @@ export function DebugBreakpointModal() {
               <div className="flex items-center gap-2 text-sm text-steel-dim">
                 <span>Node:</span>
                 <span className="text-amber-400 font-mono">{pendingBreakpoint.nodeName}</span>
+                <span className="text-surface-500">•</span>
+                <span
+                  className={
+                    pendingBreakpoint.nodeType === 'image' ? 'text-purple-400' : 'text-cyan-400'
+                  }
+                >
+                  {pendingBreakpoint.nodeType === 'image' ? 'Image' : 'Chat'}
+                </span>
+                {(pendingBreakpoint.invocationConfig as { model?: string })?.model && (
+                  <>
+                    <span className="text-surface-500">•</span>
+                    <span className="text-steel font-mono text-xs">
+                      {(pendingBreakpoint.invocationConfig as { model?: string }).model}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -458,7 +474,7 @@ export function DebugBreakpointModal() {
                   ) : (
                     testResult && (
                       <>
-                        {/* Outgoing Message */}
+                        {/* Outgoing Message - raw format as sent to LLM */}
                         <div className="border border-amber-500/30 rounded-lg overflow-hidden">
                           <div className="flex items-center justify-between px-3 py-2 bg-amber-500/10">
                             <div className="flex items-center gap-2">
@@ -474,39 +490,10 @@ export function DebugBreakpointModal() {
                               chars total
                             </span>
                           </div>
-                          <div className="p-3 bg-surface-900/50 space-y-3">
-                            {/* System Prompt */}
-                            <div className="border border-surface-700 rounded-lg overflow-hidden">
-                              <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
-                                <span className="text-xs font-medium text-steel-dim">
-                                  System Prompt
-                                </span>
-                                <span className="text-xs text-steel-dim">
-                                  {testResult.systemPrompt.length.toLocaleString()} chars
-                                </span>
-                              </div>
-                              <div className="p-3 bg-surface-900/50">
-                                <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-steel-dim max-h-32 overflow-y-auto">
-                                  {testResult.systemPrompt}
-                                </pre>
-                              </div>
-                            </div>
-                            {/* User Prompt */}
-                            <div className="border border-surface-700 rounded-lg overflow-hidden">
-                              <div className="flex items-center justify-between px-3 py-2 bg-surface-800">
-                                <span className="text-xs font-medium text-steel-dim">
-                                  User Prompt
-                                </span>
-                                <span className="text-xs text-steel-dim">
-                                  {testResult.userPrompt.length.toLocaleString()} chars
-                                </span>
-                              </div>
-                              <div className="p-3 bg-surface-900/50">
-                                <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-steel-dim max-h-48 overflow-y-auto">
-                                  {testResult.userPrompt}
-                                </pre>
-                              </div>
-                            </div>
+                          <div className="p-3 bg-surface-900/50">
+                            <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed text-steel-dim max-h-96 overflow-y-auto">
+                              {`[SYSTEM]\n${testResult.systemPrompt}\n\n[USER]\n${testResult.userPrompt}`}
+                            </pre>
                           </div>
                         </div>
 

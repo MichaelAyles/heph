@@ -33,6 +33,7 @@ export interface DynamicContext {
 export interface BreakpointData {
   id: string
   nodeName: string
+  nodeType: 'chat' | 'image'
   systemPrompt: string
   dynamicContext: DynamicContext
   fullInput: Record<string, unknown>
