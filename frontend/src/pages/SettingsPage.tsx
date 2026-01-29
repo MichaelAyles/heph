@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Zap, Shield, Pencil } from 'lucide-react'
+import { Check, Zap, Shield, Pencil, Bug } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
 
@@ -32,7 +32,7 @@ export function SettingsPage() {
             <p className="text-sm text-steel-dim mb-4">
               Choose how much control you want over the design process.
             </p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className={`grid gap-4 ${user?.isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
               <ControlModeCard
                 icon={Zap}
                 name="Vibe It"
@@ -57,6 +57,16 @@ export function SettingsPage() {
                 onClick={() => handleModeChange('design_it')}
                 disabled={modeUpdating}
               />
+              {user?.isAdmin && (
+                <ControlModeCard
+                  icon={Bug}
+                  name="Debug It"
+                  description="Admin only. Verbose logging, step-through execution, state inspection."
+                  selected={user?.controlMode === 'debug_it'}
+                  onClick={() => handleModeChange('debug_it')}
+                  disabled={modeUpdating}
+                />
+              )}
             </div>
           </section>
         </div>

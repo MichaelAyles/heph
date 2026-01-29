@@ -33,6 +33,7 @@ import {
   FilesStageView,
 } from '@/pages/workspace'
 import { useAuthStore } from '@/stores/auth'
+import { DebugBreakpointModal } from '@/components/debug/DebugBreakpointModal'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -122,6 +123,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AppContent />
+          <DebugBreakpointModal />
         </BrowserRouter>
       </QueryClientProvider>
     </ErrorBoundary>

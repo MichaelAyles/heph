@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
+import { invokeLangGraphNode, BreakpointCancelledError } from '../../services/langgraph/invoke'
 import { BlockSelector } from '../../components/pcb/BlockSelector'
 import { PCB3DViewer } from '../../components/pcb/PCB3DViewer'
 import { GridEditor } from '../../components/pcb/GridEditor'
@@ -32,6 +33,7 @@ import {
   toBlockCatalogEntry,
   validatePCBSuggestion,
   type BlockCatalogEntry,
+  type PCBSuggestionResponse,
 } from '../../prompts/pcb-selection'
 import { validateGrid, fromPlacedBlocks, calculateBoardSize } from '../../services/pcb-grid'
 import { logger } from '../../lib/logger'
@@ -414,27 +416,18 @@ export function PCBStageView() {
         .map((b) => toBlockCatalogEntry(b.definition!))
 
       // Call LangGraph block_selection node
-      const res = await fetch('/api/langgraph/invoke/block_selection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: {
-            projectName: project?.name || 'Untitled',
-            description: spec.finalSpec.summary || project?.description || '',
-            finalSpec: spec.finalSpec,
-            availableBlocks: catalogEntries,
-          },
-          projectId: project?.id,
-        }),
+      const data = await invokeLangGraphNode({
+        nodeName: 'block_selection',
+        input: {
+          projectName: project?.name || 'Untitled',
+          description: spec.finalSpec.summary || project?.description || '',
+          finalSpec: spec.finalSpec,
+          availableBlocks: catalogEntries,
+        },
+        projectId: project?.id,
       })
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to get AI suggestion')
-      }
-
-      const data = await res.json()
-      const suggestion = data.output
+      const suggestion = data.output as unknown as PCBSuggestionResponse
 
       if (!suggestion) {
         throw new Error('Failed to get block selection output')
@@ -464,8 +457,12 @@ export function PCBStageView() {
       setSelectedBlocks(newBlocks)
       savePCBMutation.mutate({ placedBlocks: newBlocks })
     } catch (error) {
-      logger.error('pcb', 'AI suggestion failed', { error })
-      setMergeError(error instanceof Error ? error.message : 'AI suggestion failed')
+      if (error instanceof BreakpointCancelledError) {
+        setMergeError('AI suggestion cancelled at debug breakpoint')
+      } else {
+        logger.error('pcb', 'AI suggestion failed', { error })
+        setMergeError(error instanceof Error ? error.message : 'AI suggestion failed')
+      }
     } finally {
       setIsAiSuggesting(false)
     }

@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
 import { logger } from '../../lib/logger'
+import { invokeLangGraphNode, BreakpointCancelledError } from '../../services/langgraph/invoke'
 import type { Project, ProjectSpec, FinalSpec } from '../../db/schema'
 
 interface FinalizationStepProps {
@@ -15,24 +16,16 @@ interface FinalizationStepProps {
   onComplete: (finalSpec: FinalSpec) => void
 }
 
-interface FinalizationResponse {
-  output: {
-    name: string
-    summary: string
-    pcbSize?: { width: number; height: number; unit: string }
-    inputs?: Array<{ type: string; count: number; notes?: string }>
-    outputs?: Array<{ type: string; count: number; notes?: string }>
-    power?: { source: string; voltage: string; current: string; batteryLife?: string }
-    communication?: { type: string; protocol?: string }
-    enclosure?: { style: string; width: number; height: number; depth: number }
-    estimatedBOM?: Array<{ item: string; quantity: number; unitCost: number }>
-  }
-  nodeId: string
-  debug: {
-    nodeName: string
-    durationMs: number
-    model: string
-  }
+interface FinalizationOutput {
+  name: string
+  summary: string
+  pcbSize?: { width: number; height: number; unit: string }
+  inputs?: Array<{ type: string; count: number; notes?: string }>
+  outputs?: Array<{ type: string; count: number; notes?: string }>
+  power?: { source: string; voltage: string; current: string; batteryLife?: string }
+  communication?: { type: string; protocol?: string }
+  enclosure?: { style: string; width: number; height: number; depth: number }
+  estimatedBOM?: Array<{ item: string; quantity: number; unitCost: number }>
 }
 
 export function FinalizationStep({ project, spec, onComplete }: FinalizationStepProps) {
@@ -41,6 +34,7 @@ export function FinalizationStep({ project, spec, onComplete }: FinalizationStep
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isRunning || spec.finalSpec) return
 
@@ -54,40 +48,36 @@ export function FinalizationStep({ project, spec, onComplete }: FinalizationStep
         const selectedPrompt =
           spec.selectedBlueprint !== null ? spec.blueprints[spec.selectedBlueprint]?.prompt : ''
 
-        const response = await fetch('/api/langgraph/invoke/finalization', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: {
-              description: spec.description,
-              feasibility: spec.feasibility || {},
-              decisions: spec.decisions || [],
-              selectedBlueprint: { prompt: selectedPrompt },
-            },
-            projectId: project.id,
-          }),
+        const data = await invokeLangGraphNode({
+          nodeName: 'finalization',
+          input: {
+            description: spec.description,
+            feasibility: spec.feasibility || {},
+            decisions: spec.decisions || [],
+            selectedBlueprint: { prompt: selectedPrompt },
+          },
+          projectId: project.id,
         })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || `Request failed: ${response.status}`)
-        }
-
-        const data: FinalizationResponse = await response.json()
         // Cast output to FinalSpec and add locked fields
-        const result = data.output as unknown as FinalSpec
+        const result = data.output as unknown as FinalizationOutput as unknown as FinalSpec
         result.locked = true
         result.lockedAt = new Date().toISOString()
         onComplete(result)
       } catch (err) {
-        logger.error('project', 'Failed to generate final spec', { error: err })
-        setError('Failed to generate specification. Please try again.')
+        if (err instanceof BreakpointCancelledError) {
+          setError('Finalization cancelled at debug breakpoint.')
+        } else {
+          logger.error('project', 'Failed to generate final spec', { error: err })
+          setError('Failed to generate specification. Please try again.')
+        }
         setIsRunning(false)
       }
     }
 
     runFinalization()
   }, [project.id, spec, isRunning, onComplete, retryCount])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleRetry = () => {
     setIsRunning(false)

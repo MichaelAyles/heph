@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
 import { logger } from '../../lib/logger'
+import { invokeLangGraphNode, BreakpointCancelledError } from '../../services/langgraph/invoke'
 import type { SuggestedRevisions } from './types'
 import type { Project, ProjectSpec, FeasibilityAnalysis, OpenQuestion } from '../../db/schema'
 
@@ -54,6 +55,7 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (spec.feasibility) return // Already done
     if (isRunning) return
@@ -65,22 +67,13 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
       try {
         setStatus('Checking feasibility with available components...')
 
-        const response = await fetch('/api/langgraph/invoke/feasibility', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: { description: spec.description },
-            projectId: project.id,
-          }),
+        const data = await invokeLangGraphNode({
+          nodeName: 'feasibility',
+          input: { description: spec.description },
+          projectId: project.id,
         })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || `Request failed: ${response.status}`)
-        }
-
-        const data: FeasibilityResponse = await response.json()
-        const result = data.output
+        const result = data.output as FeasibilityResponse['output']
 
         if (!result.manufacturable) {
           onReject(
@@ -114,7 +107,11 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
         }))
         onComplete(feasibility, questions)
       } catch (err) {
-        setError('Failed to analyze feasibility. Please try again.')
+        if (err instanceof BreakpointCancelledError) {
+          setError('Analysis cancelled at debug breakpoint.')
+        } else {
+          setError('Failed to analyze feasibility. Please try again.')
+        }
         logger.error('project', 'Feasibility analysis failed', { error: err })
         setIsRunning(false)
       }
@@ -122,6 +119,7 @@ export function FeasibilityStep({ project, spec, onComplete, onReject }: Feasibi
 
     runAnalysis()
   }, [project.id, spec, isRunning, onComplete, onReject, retryCount])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleRetry = () => {
     setIsRunning(false)

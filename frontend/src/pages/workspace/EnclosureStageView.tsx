@@ -15,6 +15,7 @@ import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { ArrowRight } from 'lucide-react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { logger } from '@/lib/logger'
+import { invokeLangGraphNode, BreakpointCancelledError } from '@/services/langgraph/invoke'
 import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import {
   renderOpenSCAD,
@@ -233,29 +234,20 @@ export function EnclosureStageView() {
       const hasButtons =
         finalSpec?.inputs?.some((i) => i.type.toLowerCase().includes('button')) ?? false
 
-      const response = await fetch('/api/langgraph/invoke/enclosure_validation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: {
-            openScadCode: code,
-            pcbWidth,
-            pcbHeight,
-            hasOled,
-            hasUsb,
-            hasButtons,
-          },
-          projectId: project?.id,
-        }),
+      const data = await invokeLangGraphNode({
+        nodeName: 'enclosure_validation',
+        input: {
+          openScadCode: code,
+          pcbWidth,
+          pcbHeight,
+          hasOled,
+          hasUsb,
+          hasButtons,
+        },
+        projectId: project?.id,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Validation failed: ${response.status}`)
-      }
-
-      const data: EnclosureValidationResponse = await response.json()
-      return data.output.issues
+      return (data.output as EnclosureValidationResponse['output']).issues
     },
     [pcbArtifacts, finalSpec, project?.id]
   )
@@ -266,27 +258,18 @@ export function EnclosureStageView() {
       const pcbWidth = pcbArtifacts?.boardSize?.width ?? 50
       const pcbHeight = pcbArtifacts?.boardSize?.height ?? 40
 
-      const response = await fetch('/api/langgraph/invoke/enclosure_fix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: {
-            openScadCode: code,
-            issues,
-            pcbWidth,
-            pcbHeight,
-          },
-          projectId: project?.id,
-        }),
+      const data = await invokeLangGraphNode({
+        nodeName: 'enclosure_fix',
+        input: {
+          openScadCode: code,
+          issues,
+          pcbWidth,
+          pcbHeight,
+        },
+        projectId: project?.id,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Fix failed: ${response.status}`)
-      }
-
-      const data: EnclosureFixResponse = await response.json()
-      return data.output.fixedCode
+      return (data.output as EnclosureFixResponse['output']).fixedCode
     },
     [pcbArtifacts, project?.id]
   )
@@ -327,28 +310,19 @@ export function EnclosureStageView() {
 
         setValidationStatus('Generating enclosure from blueprint...')
 
-        const response = await fetch('/api/langgraph/invoke/enclosure_vision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: {
-              blueprintImage: `data:image/png;base64,${blueprintBase64}`,
-              pcbWidth,
-              pcbHeight,
-              wallThickness: 2,
-              features,
-            },
-            projectId: project.id,
-          }),
+        const visionData = await invokeLangGraphNode({
+          nodeName: 'enclosure_vision',
+          input: {
+            blueprintImage: `data:image/png;base64,${blueprintBase64}`,
+            pcbWidth,
+            pcbHeight,
+            wallThickness: 2,
+            features,
+          },
+          projectId: project.id,
         })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || `Vision generation failed: ${response.status}`)
-        }
-
-        const data: EnclosureVisionResponse = await response.json()
-        code = data.output.openScadCode
+        code = (visionData.output as EnclosureVisionResponse['output']).openScadCode
       } else {
         // Fallback: text-only generation using enclosure_text node
         const input = buildEnclosureInputFromSpec(
@@ -360,30 +334,21 @@ export function EnclosureStageView() {
 
         setValidationStatus('Generating enclosure design...')
 
-        const response = await fetch('/api/langgraph/invoke/enclosure_text', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: {
-              projectName: input.projectName,
-              description: input.description,
-              boardWidth: input.boardWidth,
-              boardHeight: input.boardHeight,
-              boardThickness: input.boardThickness,
-              wallThickness: input.wallThickness,
-              features: input.features,
-            },
-            projectId: project.id,
-          }),
+        const textData = await invokeLangGraphNode({
+          nodeName: 'enclosure_text',
+          input: {
+            projectName: input.projectName,
+            description: input.description,
+            boardWidth: input.boardWidth,
+            boardHeight: input.boardHeight,
+            boardThickness: input.boardThickness,
+            wallThickness: input.wallThickness,
+            features: input.features,
+          },
+          projectId: project.id,
         })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || `Text generation failed: ${response.status}`)
-        }
-
-        const data: EnclosureTextResponse = await response.json()
-        code = data.output.openScadCode
+        code = (textData.output as EnclosureTextResponse['output']).openScadCode
       }
 
       // Step 2: Validation loop
@@ -430,8 +395,12 @@ export function EnclosureStageView() {
       // Don't show error if operation was aborted
       if (signal.aborted) return
 
-      logger.enclosure('Failed to generate enclosure', { error })
-      setRenderError(error instanceof Error ? error.message : 'Failed to generate enclosure')
+      if (error instanceof BreakpointCancelledError) {
+        setRenderError('Generation cancelled at debug breakpoint')
+      } else {
+        logger.enclosure('Failed to generate enclosure', { error })
+        setRenderError(error instanceof Error ? error.message : 'Failed to generate enclosure')
+      }
     } finally {
       if (!signal.aborted) {
         setIsGenerating(false)
@@ -467,32 +436,23 @@ export function EnclosureStageView() {
       // Step 1: Regenerate with feedback using enclosure_regenerate node
       setValidationStatus('Regenerating with feedback...')
 
-      const response = await fetch('/api/langgraph/invoke/enclosure_regenerate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: {
-            currentCode: openScadCode,
-            feedback,
-            projectName: input.projectName,
-            description: input.description,
-            boardWidth: input.boardWidth,
-            boardHeight: input.boardHeight,
-            boardThickness: input.boardThickness,
-            wallThickness: input.wallThickness,
-            features: input.features,
-          },
-          projectId: project.id,
-        }),
+      const regenData = await invokeLangGraphNode({
+        nodeName: 'enclosure_regenerate',
+        input: {
+          currentCode: openScadCode,
+          feedback,
+          projectName: input.projectName,
+          description: input.description,
+          boardWidth: input.boardWidth,
+          boardHeight: input.boardHeight,
+          boardThickness: input.boardThickness,
+          wallThickness: input.wallThickness,
+          features: input.features,
+        },
+        projectId: project.id,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Regeneration failed: ${response.status}`)
-      }
-
-      const data: EnclosureRegenerateResponse = await response.json()
-      let code = data.output.openScadCode
+      let code = (regenData.output as EnclosureRegenerateResponse['output']).openScadCode
 
       // Step 2: Validation loop
       for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
@@ -536,8 +496,12 @@ export function EnclosureStageView() {
       // Don't show error if operation was aborted
       if (signal.aborted) return
 
-      logger.enclosure('Failed to regenerate enclosure', { error })
-      setRenderError(error instanceof Error ? error.message : 'Failed to regenerate')
+      if (error instanceof BreakpointCancelledError) {
+        setRenderError('Regeneration cancelled at debug breakpoint')
+      } else {
+        logger.enclosure('Failed to regenerate enclosure', { error })
+        setRenderError(error instanceof Error ? error.message : 'Failed to regenerate')
+      }
     } finally {
       if (!signal.aborted) {
         setIsGenerating(false)
@@ -583,25 +547,17 @@ export function EnclosureStageView() {
       const blueprintBase64 = await fetchImageAsBase64(blueprintUrl)
 
       // Send both images to LangGraph enclosure_visual_compare node
-      const response = await fetch('/api/langgraph/invoke/enclosure_visual_compare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: {
-            blueprintImage: `data:image/png;base64,${blueprintBase64}`,
-            stlScreenshot: `data:image/png;base64,${renderBase64}`,
-            designIntent: spec?.description,
-          },
-          projectId: project?.id,
-        }),
+      const compareData = await invokeLangGraphNode({
+        nodeName: 'enclosure_visual_compare',
+        input: {
+          blueprintImage: `data:image/png;base64,${blueprintBase64}`,
+          stlScreenshot: `data:image/png;base64,${renderBase64}`,
+          designIntent: spec?.description,
+        },
+        projectId: project?.id,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Visual comparison failed: ${response.status}`)
-      }
-
-      const data: EnclosureVisualCompareResponse = await response.json()
+      const data = { output: compareData.output as EnclosureVisualCompareResponse['output'] }
 
       // Transform to VisualValidationResult format
       // Cast issues to the expected type with proper category union

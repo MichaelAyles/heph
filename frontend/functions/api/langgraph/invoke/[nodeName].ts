@@ -24,6 +24,21 @@ interface User {
   username: string
   displayName: string | null
   isAdmin: boolean
+  controlMode: string
+}
+
+// Breakpoint data returned when execution is paused in debug_it mode
+interface BreakpointData {
+  id: string
+  nodeName: string
+  systemPrompt: string
+  userContext: string
+  fullInput: Record<string, unknown>
+  invocationConfig: NodeConfig | null
+  tokenEstimate: number
+  projectId?: string
+  threadId?: string
+  expiresAt: string
 }
 
 interface InvokeRequest {
@@ -91,6 +106,55 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       },
       { status: 500 }
     )
+  }
+
+  // Check for debug_it mode breakpoint
+  const skipBreakpoint = context.request.headers.get('X-Skip-Debug-Breakpoint') === 'true'
+  if (user.controlMode === 'debug_it' && !skipBreakpoint) {
+    // Create a breakpoint record and pause execution
+    const breakpointId = crypto.randomUUID()
+    const userContext = JSON.stringify(body.input, null, 2)
+    const tokenEstimate = Math.ceil((promptRow.system_prompt.length + userContext.length) / 4) // ~4 chars per token
+
+    // Breakpoint expires in 5 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
+
+    await env.DB.prepare(
+      `INSERT INTO debug_breakpoints (
+        id, user_id, project_id, thread_id, node_name,
+        system_prompt, user_context, full_input,
+        invocation_config, token_estimate, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        breakpointId,
+        user.id,
+        body.projectId || null,
+        body.threadId || null,
+        nodeName,
+        promptRow.system_prompt,
+        userContext,
+        JSON.stringify(body.input),
+        body.config ? JSON.stringify(body.config) : null,
+        tokenEstimate,
+        expiresAt
+      )
+      .run()
+
+    const breakpointData: BreakpointData = {
+      id: breakpointId,
+      nodeName,
+      systemPrompt: promptRow.system_prompt,
+      userContext,
+      fullInput: body.input,
+      invocationConfig: body.config || null,
+      tokenEstimate,
+      projectId: body.projectId,
+      threadId: body.threadId,
+      expiresAt,
+    }
+
+    return Response.json({ paused: true, breakpointId, breakpointData })
   }
 
   // Create LLM chat function that proxies to our API

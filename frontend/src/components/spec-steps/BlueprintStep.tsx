@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react'
 import { Loader2, XCircle } from 'lucide-react'
 import { isValidBlueprintUrl, withTimeout, IMAGE_TIMEOUT_MS } from './types'
+import { invokeLangGraphNode, BreakpointCancelledError } from '../../services/langgraph/invoke'
 import type { Project, ProjectSpec } from '../../db/schema'
 
 interface BlueprintStepProps {
@@ -35,27 +36,19 @@ async function invokeBlueprint(
   feasibility: { inputs?: { items?: string[] }; outputs?: { items?: string[] } } | undefined,
   variation: number
 ): Promise<{ url: string; prompt: string }> {
-  const response = await fetch('/api/langgraph/invoke/blueprint', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      input: {
-        description,
-        decisions,
-        feasibility,
-        variation,
-      },
-      projectId,
-    }),
+  const data = await invokeLangGraphNode({
+    nodeName: 'blueprint',
+    input: {
+      description,
+      decisions,
+      feasibility,
+      variation,
+    },
+    projectId,
   })
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.error || `Request failed: ${response.status}`)
-  }
-
-  const data: BlueprintResponse = await response.json()
-  return { url: data.output.imageUrl, prompt: data.output.prompt }
+  const output = data.output as BlueprintResponse['output']
+  return { url: output.imageUrl, prompt: output.prompt }
 }
 
 export function BlueprintStep({ project, spec, onComplete }: BlueprintStepProps) {
@@ -123,7 +116,11 @@ export function BlueprintStep({ project, spec, onComplete }: BlueprintStepProps)
           })
         })
         .catch((err) => {
-          setErrors((prev) => [...prev, `Image ${index + 1}: ${err.message}`])
+          const errorMsg =
+            err instanceof BreakpointCancelledError
+              ? `Image ${index + 1}: Cancelled at debug breakpoint`
+              : `Image ${index + 1}: ${err.message}`
+          setErrors((prev) => [...prev, errorMsg])
           setGenerating((prev) => {
             const updated = [...prev]
             updated[index] = false

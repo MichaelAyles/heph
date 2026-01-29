@@ -13,6 +13,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import JSZip from 'jszip'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { logger } from '@/lib/logger'
+import { invokeLangGraphNode, BreakpointCancelledError } from '@/services/langgraph/invoke'
 import { buildFirmwareInputFromSpec, type FirmwareProject } from '@/prompts/firmware'
 import {
   BuildPanel,
@@ -241,30 +242,21 @@ export function FirmwareStageView() {
         project.spec?.pcb
       )
 
-      const response = await fetch('/api/langgraph/invoke/firmware_generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: {
-            projectName: input.projectName,
-            description: input.description,
-            inputs: input.inputs,
-            outputs: input.outputs,
-            communication: input.communication,
-            power: input.power,
-            blocks: input.blocks,
-          },
-          projectId: project.id,
-        }),
+      const genData = await invokeLangGraphNode({
+        nodeName: 'firmware_generate',
+        input: {
+          projectName: input.projectName,
+          description: input.description,
+          inputs: input.inputs,
+          outputs: input.outputs,
+          communication: input.communication,
+          power: input.power,
+          blocks: input.blocks,
+        },
+        projectId: project.id,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Generation failed: ${response.status}`)
-      }
-
-      const data: FirmwareGenerateResponse = await response.json()
-      const result = data.output
+      const result = genData.output as FirmwareGenerateResponse['output']
 
       if (!result.files || result.files.length === 0) {
         throw new Error('No files generated')
@@ -285,8 +277,12 @@ export function FirmwareStageView() {
       // Save to project
       await saveMutation.mutateAsync(firmwareFiles)
     } catch (error) {
-      logger.firmware('Firmware generation failed', { error })
-      setGenerationError(error instanceof Error ? error.message : 'Generation failed')
+      if (error instanceof BreakpointCancelledError) {
+        setGenerationError('Generation cancelled at debug breakpoint')
+      } else {
+        logger.firmware('Firmware generation failed', { error })
+        setGenerationError(error instanceof Error ? error.message : 'Generation failed')
+      }
     } finally {
       setIsGenerating(false)
     }
@@ -317,31 +313,22 @@ export function FirmwareStageView() {
         project.spec?.pcb
       )
 
-      const response = await fetch('/api/langgraph/invoke/firmware_modify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: {
-            currentFiles,
-            request: chatInput,
-            projectName: input.projectName,
-            description: input.description,
-            inputs: input.inputs,
-            outputs: input.outputs,
-            communication: input.communication,
-            power: input.power,
-          },
-          projectId: project.id,
-        }),
+      const modifyData = await invokeLangGraphNode({
+        nodeName: 'firmware_modify',
+        input: {
+          currentFiles,
+          request: chatInput,
+          projectName: input.projectName,
+          description: input.description,
+          inputs: input.inputs,
+          outputs: input.outputs,
+          communication: input.communication,
+          power: input.power,
+        },
+        projectId: project.id,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Modification failed: ${response.status}`)
-      }
-
-      const data: FirmwareModifyResponse = await response.json()
-      const result = data.output
+      const result = modifyData.output as FirmwareModifyResponse['output']
 
       if (!result.files || result.files.length === 0) {
         throw new Error('No files in response')

@@ -68,15 +68,21 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Invalid session' }, { status: 401 })
   }
 
-  // Validate session and get user with admin status
+  // Validate session and get user with admin status and control mode
   const result = await env.DB.prepare(
-    `SELECT u.id, u.username, u.display_name, u.is_admin
+    `SELECT u.id, u.username, u.display_name, u.is_admin, u.control_mode
      FROM sessions s
      JOIN users u ON s.user_id = u.id
      WHERE s.id = ? AND s.expires_at > datetime('now')`
   )
     .bind(sessionId)
-    .first<{ id: string; username: string; display_name: string | null; is_admin: number }>()
+    .first<{
+      id: string
+      username: string
+      display_name: string | null
+      is_admin: number
+      control_mode: string | null
+    }>()
 
   if (!result) {
     return Response.json({ error: 'Session expired' }, { status: 401 })
@@ -96,6 +102,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     username: result.username,
     displayName: result.display_name,
     isAdmin,
+    controlMode: result.control_mode || 'vibe_it',
   }
 
   // Log request for admin users

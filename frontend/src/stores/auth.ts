@@ -6,7 +6,7 @@
 import { create } from 'zustand'
 import { logger } from '@/lib/logger'
 
-export type ControlMode = 'vibe_it' | 'fix_it' | 'design_it'
+export type ControlMode = 'vibe_it' | 'fix_it' | 'design_it' | 'debug_it'
 
 export interface AuthUser {
   id: string

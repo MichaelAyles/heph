@@ -6,9 +6,9 @@
 import type { Env } from '../../../env'
 import { createLogger } from '../../../lib/logger'
 
-type ControlMode = 'vibe_it' | 'fix_it' | 'design_it'
+type ControlMode = 'vibe_it' | 'fix_it' | 'design_it' | 'debug_it'
 
-const VALID_MODES: ControlMode[] = ['vibe_it', 'fix_it', 'design_it']
+const VALID_MODES: ControlMode[] = ['vibe_it', 'fix_it', 'design_it', 'debug_it']
 
 interface User {
   id: string
@@ -32,9 +32,14 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     if (!controlMode || !VALID_MODES.includes(controlMode as ControlMode)) {
       return Response.json(
-        { error: 'Invalid control mode. Must be one of: vibe_it, fix_it, design_it' },
+        { error: 'Invalid control mode. Must be one of: vibe_it, fix_it, design_it, debug_it' },
         { status: 400 }
       )
+    }
+
+    // debug_it mode is admin-only
+    if (controlMode === 'debug_it' && !user.isAdmin) {
+      return Response.json({ error: 'Debug mode is only available to admins' }, { status: 403 })
     }
 
     await env.DB.prepare('UPDATE users SET control_mode = ? WHERE id = ?')

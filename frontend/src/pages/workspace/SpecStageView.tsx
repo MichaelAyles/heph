@@ -270,7 +270,7 @@ export function SpecStageView() {
                   controlMode === 'vibe_it' ||
                   // Fix It: auto-advance if score >= 80 (high confidence)
                   (controlMode === 'fix_it' && spec.feasibility.overallScore >= 80)
-                  // Design It: never auto-advance (require explicit click)
+                  // Design It / Debug It: never auto-advance (require explicit click)
                 }
               />
             )}

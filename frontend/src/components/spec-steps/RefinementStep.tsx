@@ -8,6 +8,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { clsx } from 'clsx'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { logger } from '../../lib/logger'
+import { invokeLangGraphNode, BreakpointCancelledError } from '../../services/langgraph/invoke'
 import type { Project, ProjectSpec, Decision, OpenQuestion } from '../../db/schema'
 
 interface RefinementStepProps {
@@ -60,27 +61,18 @@ export function RefinementStep({ project, spec, onDecisions, onComplete }: Refin
       try {
         const round = Math.floor(currentDecisions.length / 2) + 1
 
-        const response = await fetch('/api/langgraph/invoke/refinement', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: {
-              description: spec.description,
-              feasibility: spec.feasibility,
-              previousDecisions: currentDecisions,
-              round,
-            },
-            projectId: project.id,
-          }),
+        const data = await invokeLangGraphNode({
+          nodeName: 'refinement',
+          input: {
+            description: spec.description,
+            feasibility: spec.feasibility,
+            previousDecisions: currentDecisions,
+            round,
+          },
+          projectId: project.id,
         })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || `Request failed: ${response.status}`)
-        }
-
-        const data: RefinementResponse = await response.json()
-        const result = data.output
+        const result = data.output as RefinementResponse['output']
 
         if (result.complete) {
           onComplete()
@@ -90,7 +82,11 @@ export function RefinementStep({ project, spec, onDecisions, onComplete }: Refin
           onComplete()
         }
       } catch (err) {
-        logger.error('project', 'Refinement request failed', { error: err })
+        if (err instanceof BreakpointCancelledError) {
+          logger.info('project', 'Refinement cancelled at debug breakpoint')
+        } else {
+          logger.error('project', 'Refinement request failed', { error: err })
+        }
         onComplete()
       } finally {
         setIsChecking(false)

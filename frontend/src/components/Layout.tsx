@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
   Network,
   Monitor,
+  Bug,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore, type ControlMode } from '@/stores/auth'
@@ -27,6 +28,7 @@ const MODE_CONFIG: Record<ControlMode, { icon: typeof Zap; label: string; color:
   vibe_it: { icon: Zap, label: 'Vibe It', color: 'text-emerald-400' },
   fix_it: { icon: Shield, label: 'Fix It', color: 'text-copper' },
   design_it: { icon: Pencil, label: 'Design It', color: 'text-blue-400' },
+  debug_it: { icon: Bug, label: 'Debug It', color: 'text-purple-400' },
 }
 
 const navigation = [

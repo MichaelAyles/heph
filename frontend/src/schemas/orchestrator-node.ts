@@ -191,7 +191,7 @@ export type EnhancedOrchestratorEdge = z.infer<typeof EnhancedOrchestratorEdgeSc
  */
 export interface EdgeExecutionContext {
   /** Current orchestrator mode */
-  mode: 'vibe_it' | 'fix_it' | 'design_it'
+  mode: 'vibe_it' | 'fix_it' | 'design_it' | 'debug_it'
   /** Current spec state */
   spec: Record<string, unknown>
   /** Result from the last tool/prompt execution */
