@@ -1,7 +1,8 @@
 /**
- * BlueprintStep - Generates 8 product blueprint images in parallel
+ * BlueprintStep - Generates 8 product blueprint images
  *
  * Uses the LangGraph blueprint node via /api/langgraph/invoke/blueprint
+ * Single invocation generates all variations - one debug breakpoint for all 8 images
  */
 
 import { useState, useEffect } from 'react'
@@ -18,11 +19,19 @@ interface BlueprintStepProps {
   onCancel?: () => void
 }
 
+interface BlueprintImage {
+  imageUrl: string
+  prompt: string
+  style: string
+  variation: number
+}
+
 interface BlueprintResponse {
   output: {
-    imageUrl: string
-    prompt: string
-    style: string
+    images: BlueprintImage[]
+    imageUrl?: string
+    prompt?: string
+    style?: string
   }
   nodeId: string
   debug: {
@@ -31,19 +40,24 @@ interface BlueprintResponse {
   }
 }
 
-async function invokeBlueprint(
+async function invokeBlueprints(
   projectId: string,
-  variation: number
-): Promise<{ url: string; prompt: string }> {
-  // Only pass variation - description, decisions, feasibility come from @projectState dynamic context
+  count: number = 8
+): Promise<{ url: string; prompt: string }[]> {
+  // Single invocation generates all variations
   const data = await invokeLangGraphNode({
     nodeName: 'blueprint',
-    input: { variation },
+    input: { count },
     projectId,
   })
 
   const output = data.output as BlueprintResponse['output']
-  return { url: output.imageUrl, prompt: output.prompt }
+
+  // Map images array to expected format
+  return output.images.map((img) => ({
+    url: img.imageUrl,
+    prompt: img.prompt,
+  }))
 }
 
 export function BlueprintStep({ project, spec: _spec, onComplete, onCancel }: BlueprintStepProps) {
@@ -52,30 +66,10 @@ export function BlueprintStep({ project, spec: _spec, onComplete, onCancel }: Bl
   const { user } = useAuthStore()
   const isDebugMode = user?.controlMode === 'debug_it'
 
-  // 8 images: 4 Style A (adjective-heavy) + 4 Style B (structured photography)
-  const [generating, setGenerating] = useState<boolean[]>([
-    true,
-    true,
-    true,
-    true,
-    true,
-    true,
-    true,
-    true,
-  ])
-  const [blueprints, setBlueprints] = useState<({ url: string; prompt: string } | null)[]>([
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-  ])
-  const [errors, setErrors] = useState<string[]>([])
+  const [generating, setGenerating] = useState(true)
+  const [blueprints, setBlueprints] = useState<{ url: string; prompt: string }[]>([])
+  const [error, setError] = useState<string | null>(null)
   const [hasStarted, setHasStarted] = useState(false)
-  const [hasCompleted, setHasCompleted] = useState(false)
   const [cancelled, setCancelled] = useState(false)
 
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -84,76 +78,65 @@ export function BlueprintStep({ project, spec: _spec, onComplete, onCancel }: Bl
 
     setHasStarted(true)
 
-    // Generate 8 images in parallel (variations 1-8)
-    // Data comes from @projectState dynamic context, only variation is passed as input
-    for (let variation = 1; variation <= 8; variation++) {
-      const index = variation - 1
+    // Single invocation generates all 8 images
+    // In debug mode, user sees one breakpoint and approves all 8 at once
+    const timeout = isDebugMode ? IMAGE_TIMEOUT_MS * 8 : IMAGE_TIMEOUT_MS * 8 // 8x timeout for all images
 
-      withTimeout(
-        invokeBlueprint(project.id, variation),
-        IMAGE_TIMEOUT_MS,
-        'Image generation timed out after 60s',
-        { skipTimeout: isDebugMode } // No timeout in debug mode - user controls timing
-      )
-        .then((result) => {
-          setBlueprints((prev) => {
-            const updated = [...prev]
-            updated[index] = result
-            return updated
-          })
-          setGenerating((prev) => {
-            const updated = [...prev]
-            updated[index] = false
-            return updated
-          })
-        })
-        .catch((err) => {
-          if (err instanceof BreakpointCancelledError) {
-            setCancelled(true)
-            // Stop all pending generations by marking them done
-            setGenerating([false, false, false, false, false, false, false, false])
-            onCancel?.()
-            return
-          }
-          const errorMsg = `Image ${index + 1}: ${err.message}`
-          setErrors((prev) => [...prev, errorMsg])
-          setGenerating((prev) => {
-            const updated = [...prev]
-            updated[index] = false
-            return updated
-          })
-        })
-    }
-  }, [hasStarted, project.id, isDebugMode, onCancel])
-
-  useEffect(() => {
-    if (hasCompleted || cancelled) return
-
-    const allDone = generating.every((g) => !g)
-    const validBlueprints = blueprints.filter(
-      (b): b is { url: string; prompt: string } => b !== null
+    withTimeout(
+      invokeBlueprints(project.id, 8),
+      timeout,
+      'Image generation timed out',
+      { skipTimeout: isDebugMode } // No timeout in debug mode - user controls timing
     )
-
-    if (allDone && validBlueprints.length > 0) {
-      setHasCompleted(true)
-      onComplete(validBlueprints)
-    }
-  }, [generating, blueprints, onComplete, hasCompleted, cancelled])
+      .then((results) => {
+        setBlueprints(results)
+        setGenerating(false)
+        if (results.length > 0) {
+          onComplete(results)
+        }
+      })
+      .catch((err) => {
+        if (err instanceof BreakpointCancelledError) {
+          setCancelled(true)
+          setGenerating(false)
+          onCancel?.()
+          return
+        }
+        setError(err.message)
+        setGenerating(false)
+      })
+  }, [hasStarted, project.id, isDebugMode, onCancel, onComplete])
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const activeCount = generating.filter(Boolean).length
   const totalImages = 8
+  const completedCount = blueprints.length
+
+  // Split blueprints into style groups for display
+  const styleA = blueprints.filter((_, i) => i < 4)
+  const styleB = blueprints.filter((_, i) => i >= 4)
+
+  if (cancelled) {
+    return <div className="text-steel-dim text-sm">Blueprint generation cancelled.</div>
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-copper mb-4">
-        <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
-        <span className="text-sm font-mono">
-          GENERATING BLUEPRINTS... ({totalImages - activeCount}/{totalImages})
-        </span>
+        {generating ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />
+            <span className="text-sm font-mono">
+              GENERATING BLUEPRINTS... ({completedCount}/{totalImages})
+            </span>
+          </>
+        ) : (
+          <span className="text-sm font-mono text-emerald-400">
+            BLUEPRINTS COMPLETE ({completedCount}/{totalImages})
+          </span>
+        )}
       </div>
 
-      {/* Style A: Adjective-heavy prompts (1-4) */}
+      {/* Style A: 3D Render prompts (1-4) */}
       <div>
         <p className="text-xs text-steel-dim mb-2 font-mono">STYLE A: 3D RENDER</p>
         <div className="grid grid-cols-4 gap-3">
@@ -162,15 +145,15 @@ export function BlueprintStep({ project, spec: _spec, onComplete, onCancel }: Bl
               key={index}
               className="aspect-square bg-surface-800 border border-surface-700 flex items-center justify-center"
             >
-              {generating[index] ? (
+              {generating ? (
                 <Loader2 className="w-6 h-6 text-copper animate-spin" strokeWidth={1.5} />
-              ) : blueprints[index] && isValidBlueprintUrl(blueprints[index].url) ? (
+              ) : styleA[index] && isValidBlueprintUrl(styleA[index].url) ? (
                 <img
-                  src={blueprints[index].url}
+                  src={styleA[index].url}
                   alt={`Blueprint ${index + 1}`}
                   className="w-full h-full object-cover"
                 />
-              ) : blueprints[index] ? (
+              ) : styleA[index] ? (
                 <span className="text-steel-dim text-xs">No image</span>
               ) : (
                 <XCircle className="w-6 h-6 text-red-400" strokeWidth={1.5} />
@@ -180,24 +163,24 @@ export function BlueprintStep({ project, spec: _spec, onComplete, onCancel }: Bl
         </div>
       </div>
 
-      {/* Style B: Structured photography prompts (5-8) */}
+      {/* Style B: Product Photography prompts (5-8) */}
       <div>
         <p className="text-xs text-steel-dim mb-2 font-mono">STYLE B: PRODUCT PHOTOGRAPHY</p>
         <div className="grid grid-cols-4 gap-3">
-          {[4, 5, 6, 7].map((index) => (
+          {[0, 1, 2, 3].map((index) => (
             <div
               key={index}
               className="aspect-square bg-surface-800 border border-surface-700 flex items-center justify-center"
             >
-              {generating[index] ? (
+              {generating ? (
                 <Loader2 className="w-6 h-6 text-copper animate-spin" strokeWidth={1.5} />
-              ) : blueprints[index] && isValidBlueprintUrl(blueprints[index].url) ? (
+              ) : styleB[index] && isValidBlueprintUrl(styleB[index].url) ? (
                 <img
-                  src={blueprints[index].url}
-                  alt={`Blueprint ${index + 1}`}
+                  src={styleB[index].url}
+                  alt={`Blueprint ${index + 5}`}
                   className="w-full h-full object-cover"
                 />
-              ) : blueprints[index] ? (
+              ) : styleB[index] ? (
                 <span className="text-steel-dim text-xs">No image</span>
               ) : (
                 <XCircle className="w-6 h-6 text-red-400" strokeWidth={1.5} />
@@ -207,11 +190,9 @@ export function BlueprintStep({ project, spec: _spec, onComplete, onCancel }: Bl
         </div>
       </div>
 
-      {errors.length > 0 && (
+      {error && (
         <div className="text-red-400 text-sm">
-          {errors.map((err, i) => (
-            <p key={i}>{err}</p>
-          ))}
+          <p>{error}</p>
         </div>
       )}
     </div>

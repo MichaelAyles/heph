@@ -36,8 +36,10 @@ const FeasibilitySchema = z.object({
 })
 
 export const BlueprintInputSchema = z.object({
-  // Only variation is required as input - other data comes from @projectState dynamic context
-  variation: z.number().min(1).max(8).default(1),
+  // Number of variations to generate (default 8)
+  count: z.number().min(1).max(8).default(8),
+  // Legacy single-variation field - kept for backwards compatibility
+  variation: z.number().min(1).max(8).optional(),
   // Legacy fields - will be removed once all callers are updated
   description: z.string().optional(),
   decisions: z.array(DecisionSchema).optional(),
@@ -46,10 +48,20 @@ export const BlueprintInputSchema = z.object({
 })
 export type BlueprintInput = z.infer<typeof BlueprintInputSchema>
 
-export const BlueprintOutputSchema = z.object({
+const BlueprintImageSchema = z.object({
   imageUrl: z.string(),
   prompt: z.string(),
   style: z.string(),
+  variation: z.number(),
+})
+
+export const BlueprintOutputSchema = z.object({
+  // Array of generated images
+  images: z.array(BlueprintImageSchema),
+  // Legacy single-image fields for backwards compatibility
+  imageUrl: z.string().optional(),
+  prompt: z.string().optional(),
+  style: z.string().optional(),
 })
 export type BlueprintOutput = z.infer<typeof BlueprintOutputSchema>
 
@@ -102,32 +114,77 @@ async function invokeBlueprint(
     manufacturable: true,
   }
 
-  // Generate all prompts and select the one for this variation
-  const prompts = buildBlueprintPrompts(description, decisions, feasibility)
-  const variationIndex = input.variation - 1
-  const prompt = prompts[variationIndex] || prompts[0]
-
-  // Determine style based on variation (1-4 are renders, 5-8 are photos)
-  const style = input.variation <= 4 ? 'render' : 'photo'
-
   // Check if image generation function is available
   if (!context.llmImage) {
     throw new Error('Image generation not available in this context')
   }
 
-  const response = await context.llmImage({
-    prompt,
-    model: config.model,
-    projectId: context.projectId,
+  // Generate all prompts
+  const prompts = buildBlueprintPrompts(description, decisions, feasibility)
+
+  // Handle legacy single-variation mode
+  if (input.variation !== undefined) {
+    const variationIndex = input.variation - 1
+    const prompt = prompts[variationIndex] || prompts[0]
+    const style = input.variation <= 4 ? 'render' : 'photo'
+
+    const response = await context.llmImage({
+      prompt,
+      model: config.model,
+      projectId: context.projectId,
+    })
+
+    return {
+      output: {
+        images: [{ imageUrl: response.url, prompt, style, variation: input.variation }],
+        imageUrl: response.url,
+        prompt,
+        style,
+      },
+      rawResponse: JSON.stringify({ url: response.url, prompt }),
+    }
+  }
+
+  // Generate all variations in parallel
+  const count = input.count || 8
+  const variations = Array.from({ length: count }, (_, i) => i + 1)
+
+  const imagePromises = variations.map(async (variation) => {
+    const variationIndex = variation - 1
+    const prompt = prompts[variationIndex] || prompts[0]
+    const style = variation <= 4 ? 'render' : 'photo'
+
+    try {
+      const response = await context.llmImage!({
+        prompt,
+        model: config.model,
+        projectId: context.projectId,
+      })
+      return { imageUrl: response.url, prompt, style, variation }
+    } catch (error) {
+      // Return error placeholder so other images can still succeed
+      return {
+        imageUrl: '',
+        prompt,
+        style,
+        variation,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }
+    }
   })
+
+  const images = await Promise.all(imagePromises)
+  const successfulImages = images.filter((img) => img.imageUrl !== '')
 
   return {
     output: {
-      imageUrl: response.url,
-      prompt,
-      style,
+      images: successfulImages,
+      // Legacy fields - use first successful image
+      imageUrl: successfulImages[0]?.imageUrl,
+      prompt: successfulImages[0]?.prompt,
+      style: successfulImages[0]?.style,
     },
-    rawResponse: JSON.stringify({ url: response.url, prompt }),
+    rawResponse: JSON.stringify({ images: successfulImages }),
   }
 }
 
