@@ -33,19 +33,12 @@ interface BlueprintResponse {
 
 async function invokeBlueprint(
   projectId: string,
-  description: string,
-  decisions: { questionId: string; question: string; answer: string; timestamp?: string }[],
-  feasibility: { inputs?: { items?: string[] }; outputs?: { items?: string[] } } | undefined,
   variation: number
 ): Promise<{ url: string; prompt: string }> {
+  // Only pass variation - description, decisions, feasibility come from @projectState dynamic context
   const data = await invokeLangGraphNode({
     nodeName: 'blueprint',
-    input: {
-      description,
-      decisions,
-      feasibility,
-      variation,
-    },
+    input: { variation },
     projectId,
   })
 
@@ -53,7 +46,9 @@ async function invokeBlueprint(
   return { url: output.imageUrl, prompt: output.prompt }
 }
 
-export function BlueprintStep({ project, spec, onComplete, onCancel }: BlueprintStepProps) {
+export function BlueprintStep({ project, spec: _spec, onComplete, onCancel }: BlueprintStepProps) {
+  // Note: spec is available but we get data from @projectState dynamic context instead
+  void _spec
   const { user } = useAuthStore()
   const isDebugMode = user?.controlMode === 'debug_it'
 
@@ -90,22 +85,12 @@ export function BlueprintStep({ project, spec, onComplete, onCancel }: Blueprint
     setHasStarted(true)
 
     // Generate 8 images in parallel (variations 1-8)
+    // Data comes from @projectState dynamic context, only variation is passed as input
     for (let variation = 1; variation <= 8; variation++) {
       const index = variation - 1
 
       withTimeout(
-        invokeBlueprint(
-          project.id,
-          spec.description,
-          spec.decisions || [],
-          spec.feasibility
-            ? {
-                inputs: { items: spec.feasibility.inputs?.items },
-                outputs: { items: spec.feasibility.outputs?.items },
-              }
-            : undefined,
-          variation
-        ),
+        invokeBlueprint(project.id, variation),
         IMAGE_TIMEOUT_MS,
         'Image generation timed out after 60s',
         { skipTimeout: isDebugMode } // No timeout in debug mode - user controls timing
@@ -139,7 +124,7 @@ export function BlueprintStep({ project, spec, onComplete, onCancel }: Blueprint
           })
         })
     }
-  }, [hasStarted, project.id, spec.description, spec.decisions, spec.feasibility])
+  }, [hasStarted, project.id, isDebugMode, onCancel])
 
   useEffect(() => {
     if (hasCompleted || cancelled) return

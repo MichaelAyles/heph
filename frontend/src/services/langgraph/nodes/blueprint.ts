@@ -36,11 +36,13 @@ const FeasibilitySchema = z.object({
 })
 
 export const BlueprintInputSchema = z.object({
-  description: z.string().min(1, 'Description is required'),
-  decisions: z.array(DecisionSchema).default([]),
-  feasibility: FeasibilitySchema.optional(),
-  style: z.enum(['render', 'photo']).default('render'),
+  // Only variation is required as input - other data comes from @projectState dynamic context
   variation: z.number().min(1).max(8).default(1),
+  // Legacy fields - will be removed once all callers are updated
+  description: z.string().optional(),
+  decisions: z.array(DecisionSchema).optional(),
+  feasibility: FeasibilitySchema.optional(),
+  style: z.enum(['render', 'photo']).optional(),
 })
 export type BlueprintInput = z.infer<typeof BlueprintInputSchema>
 
@@ -60,8 +62,30 @@ async function invokeBlueprint(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<BlueprintOutput>> {
-  // Convert input to types expected by buildBlueprintPrompts
-  const decisions: Decision[] = input.decisions.map((d) => ({
+  // Get data from dynamic context (projectState) - this is the preferred source
+  const projectSpec = context.dynamicContext?.projectState?.spec as
+    | {
+        description?: string
+        decisions?: { questionId: string; question: string; answer: string; timestamp?: string }[]
+        feasibility?: {
+          inputs?: { items?: string[] }
+          outputs?: { items?: string[] }
+          communication?: { type: string; confidence: number; notes: string }
+          processing?: { level: string; confidence: number; notes: string }
+          power?: { options: string[]; confidence: number; notes: string }
+          overallScore?: number
+          manufacturable?: boolean
+        }
+      }
+    | undefined
+
+  // Use dynamic context if available, fall back to input for backwards compatibility
+  const description = projectSpec?.description || input.description || ''
+  const rawDecisions = projectSpec?.decisions || input.decisions || []
+  const rawFeasibility = projectSpec?.feasibility || input.feasibility
+
+  // Convert to types expected by buildBlueprintPrompts
+  const decisions: Decision[] = rawDecisions.map((d) => ({
     questionId: d.questionId,
     question: d.question,
     answer: d.answer,
@@ -69,8 +93,8 @@ async function invokeBlueprint(
   }))
 
   const feasibility: FeasibilityAnalysis = {
-    inputs: { items: input.feasibility?.inputs?.items ?? [], confidence: 0 },
-    outputs: { items: input.feasibility?.outputs?.items ?? [], confidence: 0 },
+    inputs: { items: rawFeasibility?.inputs?.items ?? [], confidence: 0 },
+    outputs: { items: rawFeasibility?.outputs?.items ?? [], confidence: 0 },
     communication: { type: 'unknown', confidence: 0, notes: '' },
     processing: { level: 'unknown', confidence: 0, notes: '' },
     power: { options: [], confidence: 0, notes: '' },
@@ -79,7 +103,7 @@ async function invokeBlueprint(
   }
 
   // Generate all prompts and select the one for this variation
-  const prompts = buildBlueprintPrompts(input.description, decisions, feasibility)
+  const prompts = buildBlueprintPrompts(description, decisions, feasibility)
   const variationIndex = input.variation - 1
   const prompt = prompts[variationIndex] || prompts[0]
 
