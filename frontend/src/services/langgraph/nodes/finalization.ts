@@ -13,26 +13,8 @@ import { registerNode } from './registry'
 // Schemas
 // =============================================================================
 
-const DecisionSchema = z.object({
-  question: z.string(),
-  answer: z.string(),
-})
-
-const FeasibilitySchema = z.record(z.string(), z.unknown())
-
-const SelectedBlueprintSchema = z.object({
-  url: z.string().optional(),
-  prompt: z.string(),
-})
-
-// Input is now minimal - all context comes from @variables in system prompt
-// Fields are optional for backward compatibility
-export const FinalizationInputSchema = z.object({
-  description: z.string().optional(),
-  feasibility: FeasibilitySchema.optional(),
-  decisions: z.array(DecisionSchema).optional().default([]),
-  selectedBlueprint: SelectedBlueprintSchema.optional(),
-})
+// Input is empty - all context comes from @variables in system prompt
+export const FinalizationInputSchema = z.object({})
 export type FinalizationInput = z.infer<typeof FinalizationInputSchema>
 
 const PCBSizeSchema = z.object({

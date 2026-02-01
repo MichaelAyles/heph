@@ -15,36 +15,11 @@ import type { Decision, FeasibilityAnalysis } from '../../../db/schema'
 // Schemas
 // =============================================================================
 
-const DecisionSchema = z.object({
-  questionId: z.string(),
-  question: z.string(),
-  answer: z.string(),
-  timestamp: z.string().optional(),
-})
-
-const FeasibilitySchema = z.object({
-  inputs: z
-    .object({
-      items: z.array(z.string()).optional(),
-    })
-    .optional(),
-  outputs: z
-    .object({
-      items: z.array(z.string()).optional(),
-    })
-    .optional(),
-})
-
+// Input is minimal - project data comes from @variables in system prompt
+// Only count is needed as configuration for how many images to generate
 export const BlueprintInputSchema = z.object({
   // Number of variations to generate (default 8)
   count: z.number().min(1).max(8).default(8),
-  // Legacy single-variation field - kept for backwards compatibility
-  variation: z.number().min(1).max(8).optional(),
-  // Legacy fields - will be removed once all callers are updated
-  description: z.string().optional(),
-  decisions: z.array(DecisionSchema).optional(),
-  feasibility: FeasibilitySchema.optional(),
-  style: z.enum(['render', 'photo']).optional(),
 })
 export type BlueprintInput = z.infer<typeof BlueprintInputSchema>
 
@@ -74,7 +49,7 @@ async function invokeBlueprint(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<BlueprintOutput>> {
-  // Get data from dynamic context (projectState) - this is the preferred source
+  // Get data from dynamic context (projectState) via @variables
   const projectSpec = context.dynamicContext?.projectState?.spec as
     | {
         description?: string
@@ -82,19 +57,13 @@ async function invokeBlueprint(
         feasibility?: {
           inputs?: { items?: string[] }
           outputs?: { items?: string[] }
-          communication?: { type: string; confidence: number; notes: string }
-          processing?: { level: string; confidence: number; notes: string }
-          power?: { options: string[]; confidence: number; notes: string }
-          overallScore?: number
-          manufacturable?: boolean
         }
       }
     | undefined
 
-  // Use dynamic context if available, fall back to input for backwards compatibility
-  const description = projectSpec?.description || input.description || ''
-  const rawDecisions = projectSpec?.decisions || input.decisions || []
-  const rawFeasibility = projectSpec?.feasibility || input.feasibility
+  const description = projectSpec?.description || ''
+  const rawDecisions = projectSpec?.decisions || []
+  const rawFeasibility = projectSpec?.feasibility
 
   // Convert to types expected by buildBlueprintPrompts
   const decisions: Decision[] = rawDecisions.map((d) => ({
@@ -121,29 +90,6 @@ async function invokeBlueprint(
 
   // Generate all prompts
   const prompts = buildBlueprintPrompts(description, decisions, feasibility)
-
-  // Handle legacy single-variation mode
-  if (input.variation !== undefined) {
-    const variationIndex = input.variation - 1
-    const prompt = prompts[variationIndex] || prompts[0]
-    const style = input.variation <= 4 ? 'render' : 'photo'
-
-    const response = await context.llmImage({
-      prompt,
-      model: config.model,
-      projectId: context.projectId,
-    })
-
-    return {
-      output: {
-        images: [{ imageUrl: response.url, prompt, style, variation: input.variation }],
-        imageUrl: response.url,
-        prompt,
-        style,
-      },
-      rawResponse: JSON.stringify({ url: response.url, prompt }),
-    }
-  }
 
   // Generate all variations in parallel
   const count = input.count || 8

@@ -8,16 +8,13 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { buildFeasibilityPrompt } from '../../../prompts/feasibility'
 
 // =============================================================================
 // Schemas
 // =============================================================================
 
-export const FeasibilityInputSchema = z.object({
-  description: z.string().min(1, 'Description is required'),
-  availableBlocks: z.array(z.string()).optional(),
-})
+// Input is minimal - all context comes from @variables in system prompt
+export const FeasibilityInputSchema = z.object({})
 export type FeasibilityInput = z.infer<typeof FeasibilityInputSchema>
 
 // Category schemas
@@ -81,15 +78,16 @@ export type FeasibilityOutput = z.infer<typeof FeasibilityOutputSchema>
 // =============================================================================
 
 async function invokeFeasibility(
-  input: FeasibilityInput,
+  _input: FeasibilityInput,
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<FeasibilityOutput>> {
-  // System prompt comes from database with @availableBlocks already expanded
+  // System prompt comes from database with @variables already expanded
+  // Includes @description and @availableBlocks
   const systemPrompt = context.systemPrompt
 
-  // Build user prompt (dynamic context is now in system prompt via @availableBlocks)
-  const userPrompt = buildFeasibilityPrompt(input.description)
+  // Simple user prompt - all context is in the system prompt via @variables
+  const userPrompt = `Analyze the project description provided in the context and determine its feasibility. Return a JSON response with manufacturable, overallScore, and detailed analysis.`
 
   const response = await context.llmChat({
     messages: [
@@ -134,7 +132,7 @@ export const feasibilityNode: LangGraphNode<
   outputSchema: FeasibilityOutputSchema,
   defaultTemperature: 0.3,
   category: 'spec',
-  contextTypes: ['availableBlocks'], // Fetch available PCB blocks at runtime
+  contextTypes: ['availableBlocks', 'projectState'], // Enables @description, @availableBlocks
   invoke: invokeFeasibility,
 }
 

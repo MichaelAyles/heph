@@ -68,16 +68,11 @@ export function RefinementStep({
       setIsChecking(true)
 
       try {
-        const round = Math.floor(currentDecisions.length / 2) + 1
-
+        // All context comes from projectState via @variables in the system prompt
+        // No need to pass data explicitly - the invoke handler fetches it
         const data = await invokeLangGraphNode({
           nodeName: 'refinement',
-          input: {
-            description: spec.description,
-            feasibility: spec.feasibility,
-            previousDecisions: currentDecisions,
-            round,
-          },
+          input: {}, // Empty - context comes from @variables
           projectId: project.id,
         })
 

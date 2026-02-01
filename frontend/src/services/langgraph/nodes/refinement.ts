@@ -8,65 +8,13 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { buildRefinementPrompt } from '../../../prompts/refinement'
-import type { FeasibilityAnalysis, Decision } from '../../../db/schema'
 
 // =============================================================================
 // Schemas
 // =============================================================================
 
-const FeasibilityAnalysisSchema = z.object({
-  communication: z
-    .object({
-      type: z.string(),
-      confidence: z.number(),
-      notes: z.string(),
-    })
-    .optional(),
-  processing: z
-    .object({
-      level: z.string(),
-      confidence: z.number(),
-      notes: z.string(),
-    })
-    .optional(),
-  power: z
-    .object({
-      options: z.array(z.string()),
-      confidence: z.number(),
-      notes: z.string(),
-    })
-    .optional(),
-  inputs: z
-    .object({
-      items: z.array(z.string()),
-      confidence: z.number().optional(),
-    })
-    .optional(),
-  outputs: z
-    .object({
-      items: z.array(z.string()),
-      confidence: z.number().optional(),
-    })
-    .optional(),
-  overallScore: z.number(),
-  manufacturable: z.boolean(),
-  rejectionReason: z.string().optional(),
-})
-
-const DecisionSchema = z.object({
-  questionId: z.string(),
-  question: z.string(),
-  answer: z.string(),
-  timestamp: z.string().optional(),
-})
-
-export const RefinementInputSchema = z.object({
-  description: z.string().min(1, 'Description is required'),
-  feasibility: FeasibilityAnalysisSchema,
-  previousDecisions: z.array(DecisionSchema).default([]),
-  round: z.number().min(1).max(5).default(1),
-})
+// Input is minimal - all context comes from @variables in system prompt
+export const RefinementInputSchema = z.object({})
 export type RefinementInput = z.infer<typeof RefinementInputSchema>
 
 const OpenQuestionSchema = z.object({
@@ -88,39 +36,16 @@ export type RefinementOutput = z.infer<typeof RefinementOutputSchema>
 // =============================================================================
 
 async function invokeRefinement(
-  input: RefinementInput,
+  _input: RefinementInput,
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<RefinementOutput>> {
-  // System prompt comes from database (required)
+  // System prompt comes from database with @variables already expanded
+  // Includes @description, @feasibility, @decisions
   const systemPrompt = context.systemPrompt
 
-  // Convert Zod-parsed input to the types expected by buildRefinementPrompt
-  const feasibility: FeasibilityAnalysis = {
-    communication: input.feasibility.communication ?? { type: 'unknown', confidence: 0, notes: '' },
-    processing: input.feasibility.processing ?? { level: 'unknown', confidence: 0, notes: '' },
-    power: input.feasibility.power ?? { options: [], confidence: 0, notes: '' },
-    inputs: {
-      items: input.feasibility.inputs?.items ?? [],
-      confidence: input.feasibility.inputs?.confidence ?? 0,
-    },
-    outputs: {
-      items: input.feasibility.outputs?.items ?? [],
-      confidence: input.feasibility.outputs?.confidence ?? 0,
-    },
-    overallScore: input.feasibility.overallScore,
-    manufacturable: input.feasibility.manufacturable,
-    rejectionReason: input.feasibility.rejectionReason,
-  }
-
-  const decisions: Decision[] = input.previousDecisions.map((d) => ({
-    questionId: d.questionId,
-    question: d.question,
-    answer: d.answer,
-    timestamp: d.timestamp ?? new Date().toISOString(),
-  }))
-
-  const userPrompt = buildRefinementPrompt(input.description, feasibility, decisions)
+  // Simple user prompt - all context is in the system prompt via @variables
+  const userPrompt = `Based on the project description, feasibility analysis, and previous decisions provided in the context, generate clarifying questions to refine the requirements. Return a JSON response with questions array and complete boolean.`
 
   const response = await context.llmChat({
     messages: [
@@ -171,6 +96,7 @@ export const refinementNode: LangGraphNode<
   outputSchema: RefinementOutputSchema,
   defaultTemperature: 0.4,
   category: 'spec',
+  contextTypes: ['projectState'], // Enables @description, @feasibility, @decisions
   invoke: invokeRefinement,
 }
 

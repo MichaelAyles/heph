@@ -76,9 +76,11 @@ export function FeasibilityStep({
       try {
         setStatus('Checking feasibility with available components...')
 
+        // All context comes from projectState via @variables in the system prompt
+        // No need to pass data explicitly - the invoke handler fetches it
         const data = await invokeLangGraphNode({
           nodeName: 'feasibility',
-          input: { description: spec.description },
+          input: {}, // Empty - context comes from @variables
           projectId: project.id,
         })
 
