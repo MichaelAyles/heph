@@ -60,6 +60,16 @@ export function FinalizationStep({ project, spec, onComplete, onCancel }: Finali
         const result = data.output as unknown as FinalizationOutput as unknown as FinalSpec
         result.locked = true
         result.lockedAt = new Date().toISOString()
+
+        // Add visualization URL from selected blueprint
+        if (
+          spec.selectedBlueprint !== null &&
+          spec.blueprints &&
+          spec.blueprints[spec.selectedBlueprint]?.url
+        ) {
+          result.visualizationUrl = spec.blueprints[spec.selectedBlueprint].url
+        }
+
         onComplete(result)
       } catch (err) {
         if (err instanceof BreakpointCancelledError) {

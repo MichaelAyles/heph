@@ -361,6 +361,7 @@ export interface Blueprint {
 export interface FinalSpec {
   name: string
   summary: string
+  visualizationUrl?: string // URL to selected blueprint image
   pcbSize: { width: number; height: number; unit: 'mm' }
   inputs: { type: string; count: number; notes: string }[]
   outputs: { type: string; count: number; notes: string }[]
