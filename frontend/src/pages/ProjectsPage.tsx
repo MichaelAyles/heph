@@ -369,7 +369,7 @@ export function ProjectsPage() {
                       <div className="flex items-center gap-2 flex-shrink-0 mt-1">
                         <button
                           onClick={(e) => handleDeleteClick(e, project.id)}
-                          className="p-1.5 text-surface-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                          className="p-1.5 text-surface-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
                           title="Delete project"
                         >
                           <Trash2 className="w-4 h-4" strokeWidth={1.5} />
