@@ -410,20 +410,16 @@ export function PCBStageView() {
 
     setIsAiSuggesting(true)
     try {
-      // Build catalog entries
+      // Build catalog entries for validation
       const catalogEntries: BlockCatalogEntry[] = blocksData.blocks
         .filter((b) => b.definition)
         .map((b) => toBlockCatalogEntry(b.definition!))
 
       // Call LangGraph block_selection node
+      // Context (projectName, description, finalSpec, availableBlocks) comes from @variables
       const data = await invokeLangGraphNode({
         nodeName: 'block_selection',
-        input: {
-          projectName: project?.name || 'Untitled',
-          description: spec.finalSpec.summary || project?.description || '',
-          finalSpec: spec.finalSpec,
-          availableBlocks: catalogEntries,
-        },
+        input: {}, // Empty - context comes from @variables
         projectId: project?.id,
       })
 

@@ -30,6 +30,16 @@ const AVAILABLE_VARIABLES = [
     requiresProject: true,
   },
   {
+    name: '@projectName',
+    description: 'Project name from final spec',
+    requiresProject: true,
+  },
+  {
+    name: '@finalSpec',
+    description: 'Full final specification object (JSON)',
+    requiresProject: true,
+  },
+  {
     name: '@decisions',
     description: 'Formatted list of user decisions (question: answer)',
     requiresProject: true,

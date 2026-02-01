@@ -159,6 +159,34 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       tokenEstimate: estimateTokens(descriptionValue),
     })
 
+    // @projectName shortcut
+    const finalSpecObj = dynamicContext.projectState.spec?.finalSpec as
+      | Record<string, unknown>
+      | undefined
+    const projectName = finalSpecObj?.name as string | undefined
+    const projectNameValue = projectName || '(No project name)'
+    variables.push({
+      name: '@projectName',
+      description: 'Project name from final spec',
+      value: projectNameValue,
+      type: 'string',
+      requiresProject: true,
+      tokenEstimate: estimateTokens(projectNameValue),
+    })
+
+    // @finalSpec shortcut
+    const finalSpecFormatted = finalSpecObj
+      ? JSON.stringify(finalSpecObj, null, 2)
+      : '(No final spec available)'
+    variables.push({
+      name: '@finalSpec',
+      description: 'Full final specification object',
+      value: finalSpecObj || null,
+      type: 'object',
+      requiresProject: true,
+      tokenEstimate: estimateTokens(finalSpecFormatted),
+    })
+
     // @decisions shortcut
     const decisions = dynamicContext.projectState.spec?.decisions as
       | Array<{ question: string; answer: string }>
@@ -378,6 +406,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       description: "User's original project description (select a project)",
       value: null,
       type: 'string',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@projectName',
+      description: 'Project name from final spec (select a project)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@finalSpec',
+      description: 'Full final specification object (select a project)',
+      value: null,
+      type: 'object',
       requiresProject: true,
       tokenEstimate: 0,
     })

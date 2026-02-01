@@ -3,75 +3,25 @@
  *
  * Selects and places PCB blocks based on project requirements.
  * Returns a suggested layout with reasoning.
+ *
+ * Uses @variables for context:
+ * - @projectName - Project name from final spec
+ * - @description - User's project description
+ * - @finalSpec - Full final specification object
+ * - @availableBlocks - List of available hardware blocks
  */
 
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import {
-  buildPCBSelectionUserPrompt,
-  parsePCBSuggestionResponse,
-  type PCBSuggestionRequest,
-  type BlockCatalogEntry,
-} from '../../../prompts/pcb-selection'
+import { parsePCBSuggestionResponse } from '../../../prompts/pcb-selection'
 
 // =============================================================================
 // Schemas
 // =============================================================================
 
-const BlockCatalogEntrySchema = z.object({
-  slug: z.string(),
-  name: z.string(),
-  category: z.string(),
-  gridSize: z.tuple([z.number(), z.number()]),
-  description: z.string(),
-  provides: z.array(z.string()).optional(),
-  requires: z.array(z.string()).optional(),
-  interfaces: z.array(z.string()).optional(),
-  edgeMount: z.string().optional(),
-})
-
-const FinalSpecSchema = z.object({
-  name: z.string().optional(),
-  summary: z.string().optional(),
-  inputs: z
-    .array(
-      z.object({
-        type: z.string(),
-        count: z.number(),
-        notes: z.string().optional(),
-      })
-    )
-    .optional(),
-  outputs: z
-    .array(
-      z.object({
-        type: z.string(),
-        count: z.number(),
-        notes: z.string().optional(),
-      })
-    )
-    .optional(),
-  power: z
-    .object({
-      source: z.string(),
-      voltage: z.string(),
-    })
-    .optional(),
-  communication: z
-    .object({
-      type: z.string(),
-      protocol: z.string().optional(),
-    })
-    .optional(),
-})
-
-export const BlockSelectionInputSchema = z.object({
-  projectName: z.string().min(1, 'Project name is required'),
-  description: z.string().min(1, 'Description is required'),
-  finalSpec: FinalSpecSchema.optional().nullable(),
-  availableBlocks: z.array(BlockCatalogEntrySchema),
-})
+// Input is minimal - all context comes from @variables in system prompt
+export const BlockSelectionInputSchema = z.object({})
 export type BlockSelectionInput = z.infer<typeof BlockSelectionInputSchema>
 
 const BlockPlacementSchema = z.object({
@@ -97,22 +47,15 @@ export type BlockSelectionOutput = z.infer<typeof BlockSelectionOutputSchema>
 // =============================================================================
 
 async function invokeBlockSelection(
-  input: BlockSelectionInput,
+  _input: BlockSelectionInput,
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<BlockSelectionOutput>> {
-  // System prompt comes from database (required)
+  // System prompt comes from database with @variables already expanded
   const systemPrompt = context.systemPrompt
 
-  // Build the request for the user prompt builder
-  const request: PCBSuggestionRequest = {
-    projectName: input.projectName,
-    description: input.description,
-    finalSpec: input.finalSpec as PCBSuggestionRequest['finalSpec'],
-    availableBlocks: input.availableBlocks as BlockCatalogEntry[],
-  }
-
-  const userPrompt = buildPCBSelectionUserPrompt(request)
+  // Simple user prompt - all context is in the system prompt via @variables
+  const userPrompt = `Select and place PCB blocks based on the project requirements and available blocks provided in the context. Return the JSON response with blocks, boardSize, and notes.`
 
   const response = await context.llmChat({
     messages: [
@@ -158,6 +101,7 @@ export const blockSelectionNode: LangGraphNode<
   outputSchema: BlockSelectionOutputSchema,
   defaultTemperature: 0.3,
   category: 'spec',
+  contextTypes: ['projectState', 'availableBlocks'], // Enables @projectName, @description, @finalSpec, @availableBlocks
   invoke: invokeBlockSelection,
 }
 

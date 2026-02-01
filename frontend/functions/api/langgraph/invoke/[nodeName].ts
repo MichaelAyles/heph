@@ -204,6 +204,24 @@ function expandTemplateVariables(
     )
   }
 
+  // Expand @projectName shortcut
+  if (expanded.includes('@projectName')) {
+    const finalSpec = dynamicContext.projectState?.spec?.finalSpec as
+      | Record<string, unknown>
+      | undefined
+    const projectName = finalSpec?.name as string | undefined
+    expanded = expanded.replace(/@projectName(?![.\w])/g, projectName || '(No project name)')
+  }
+
+  // Expand @finalSpec shortcut
+  if (expanded.includes('@finalSpec')) {
+    const finalSpec = dynamicContext.projectState?.spec?.finalSpec
+    expanded = expanded.replace(
+      /@finalSpec(?![.\w])/g,
+      finalSpec ? JSON.stringify(finalSpec, null, 2) : '(No final spec available)'
+    )
+  }
+
   // Expand @decisions with special formatting
   if (expanded.includes('@decisions')) {
     const decisions = dynamicContext.projectState?.spec?.decisions as
