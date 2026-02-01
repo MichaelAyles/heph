@@ -4,7 +4,7 @@
  * Provides intellisense-style autocomplete when typing @ in the prompt editor.
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { clsx } from 'clsx'
 
 // Available @variables with descriptions and metadata
@@ -123,73 +123,18 @@ export function PromptEditor({ value, onChange, placeholder, className }: Prompt
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const [showAutocomplete, setShowAutocomplete] = useState(false)
-  const [autocompletePosition, setAutocompletePosition] = useState({ top: 0, left: 0 })
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [filterText, setFilterText] = useState('')
   const [triggerPosition, setTriggerPosition] = useState<number | null>(null)
 
   // Filter variables based on what's typed after @
-  const filteredVariables = AVAILABLE_VARIABLES.filter((v) =>
-    v.name.toLowerCase().includes(filterText.toLowerCase())
-  )
-
-  // Get caret coordinates in textarea
-  const getCaretCoordinates = useCallback(() => {
-    const textarea = textareaRef.current
-    if (!textarea) return { top: 0, left: 0 }
-
-    // Create a mirror div to measure text position
-    const mirror = document.createElement('div')
-    const style = window.getComputedStyle(textarea)
-
-    // Copy styles that affect text positioning
-    const stylesToCopy = [
-      'fontFamily',
-      'fontSize',
-      'fontWeight',
-      'letterSpacing',
-      'lineHeight',
-      'padding',
-      'border',
-      'boxSizing',
-      'whiteSpace',
-      'wordWrap',
-      'overflowWrap',
-    ] as const
-    stylesToCopy.forEach((prop) => {
-      mirror.style.setProperty(
-        prop.replace(/([A-Z])/g, '-$1').toLowerCase(),
-        style.getPropertyValue(prop.replace(/([A-Z])/g, '-$1').toLowerCase())
-      )
-    })
-
-    mirror.style.position = 'absolute'
-    mirror.style.visibility = 'hidden'
-    mirror.style.width = `${textarea.clientWidth}px`
-    mirror.style.height = 'auto'
-    mirror.style.overflow = 'hidden'
-
-    // Get text up to cursor
-    const textBeforeCursor = textarea.value.substring(0, textarea.selectionStart)
-    mirror.textContent = textBeforeCursor
-
-    // Add a span to mark cursor position
-    const marker = document.createElement('span')
-    marker.textContent = '|'
-    mirror.appendChild(marker)
-
-    document.body.appendChild(mirror)
-
-    const markerRect = marker.getBoundingClientRect()
-    const textareaRect = textarea.getBoundingClientRect()
-
-    document.body.removeChild(mirror)
-
-    return {
-      top: markerRect.top - textareaRect.top + textarea.scrollTop + 20,
-      left: markerRect.left - textareaRect.left,
-    }
-  }, [])
+  // Remove @ from filter since variable names include it
+  const filteredVariables = AVAILABLE_VARIABLES.filter((v) => {
+    const searchText = filterText.toLowerCase()
+    const varName = v.name.toLowerCase()
+    // Match against name without @ prefix for easier filtering
+    return varName.includes(searchText) || varName.slice(1).startsWith(searchText)
+  })
 
   // Handle input changes
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -208,10 +153,6 @@ export function PromptEditor({ value, onChange, placeholder, className }: Prompt
       setTriggerPosition(cursorPos - filter.length - 1) // Position of @
       setSelectedIndex(0)
       setShowAutocomplete(true)
-
-      // Position dropdown
-      const coords = getCaretCoordinates()
-      setAutocompletePosition(coords)
     } else {
       setShowAutocomplete(false)
       setTriggerPosition(null)
@@ -307,17 +248,17 @@ export function PromptEditor({ value, onChange, placeholder, className }: Prompt
         placeholder={placeholder}
       />
 
-      {/* Autocomplete Dropdown */}
+      {/* Autocomplete Dropdown - positioned at top-right of textarea */}
       {showAutocomplete && filteredVariables.length > 0 && (
         <div
           ref={dropdownRef}
           className="absolute z-50 bg-surface-800 border border-surface-600 rounded-lg shadow-xl overflow-hidden"
           style={{
-            top: autocompletePosition.top,
-            left: Math.min(autocompletePosition.left, 400), // Prevent going off screen
+            top: 8,
+            right: 8,
             maxHeight: '240px',
             minWidth: '320px',
-            maxWidth: '450px',
+            maxWidth: '400px',
           }}
         >
           <div className="px-2 py-1.5 bg-surface-700/50 border-b border-surface-600">
