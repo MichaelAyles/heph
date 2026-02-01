@@ -3,25 +3,27 @@
  *
  * Generates OpenSCAD code from a blueprint image using multimodal LLM.
  * This is the primary enclosure generation path when a blueprint is available.
+ *
+ * Context from @variables (via projectState):
+ * - @projectName: Product name
+ * - @pcb.boardSize: Board dimensions
+ * - @finalSpec: Final specification with inputs/outputs
+ *
+ * Runtime inputs (must be passed):
+ * - blueprintImage: Base64 image data (fetched at call time)
  */
 
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { buildVisionEnclosurePrompt } from '../../../prompts/enclosure'
 
 // =============================================================================
 // Schemas
 // =============================================================================
 
 export const EnclosureVisionInputSchema = z.object({
+  // Only runtime input - the blueprint image must be passed
   blueprintImage: z.string().min(1, 'Blueprint image URL or base64 is required'),
-  pcbWidth: z.number().positive(),
-  pcbHeight: z.number().positive(),
-  pcbThickness: z.number().positive().default(1.6),
-  wallThickness: z.number().positive().default(2),
-  features: z.array(z.string()).default([]),
-  style: z.string().optional(),
 })
 export type EnclosureVisionInput = z.infer<typeof EnclosureVisionInputSchema>
 
@@ -47,15 +49,11 @@ async function invokeEnclosureVision(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<EnclosureVisionOutput>> {
-  // System prompt comes from database (required)
+  // System prompt comes from database with @variables already expanded
   const systemPrompt = context.systemPrompt
 
-  const userPrompt = buildVisionEnclosurePrompt({
-    pcbWidth: input.pcbWidth,
-    pcbHeight: input.pcbHeight,
-    wallThickness: input.wallThickness,
-    features: input.features,
-  })
+  // Simple user prompt - context is in system prompt, image is attached
+  const userPrompt = `Generate OpenSCAD code for an enclosure based on the provided blueprint image and project context. Output the code in a single code block.`
 
   // Build multimodal message with image
   const response = await context.llmChat({
@@ -93,12 +91,20 @@ async function invokeEnclosureVision(
     designNotes = afterCodeMatch[1].trim()
   }
 
-  // Estimate dimensions
+  // Estimate dimensions from dynamic context
+  const pcb = context.dynamicContext?.projectState?.spec?.pcb as
+    | { boardSize?: { width?: number; height?: number } }
+    | undefined
+  const pcbWidth = pcb?.boardSize?.width ?? 50
+  const pcbHeight = pcb?.boardSize?.height ?? 40
+  const pcbThickness = 1.6
+  const wallThickness = 2
   const clearance = 1.0
+
   const estimatedDimensions = {
-    width: input.pcbWidth + input.wallThickness * 2 + clearance * 2,
-    height: input.pcbHeight + input.wallThickness * 2 + clearance * 2,
-    depth: input.pcbThickness + input.wallThickness * 2 + 10,
+    width: pcbWidth + wallThickness * 2 + clearance * 2,
+    height: pcbHeight + wallThickness * 2 + clearance * 2,
+    depth: pcbThickness + wallThickness * 2 + 10,
   }
 
   return {
@@ -129,6 +135,7 @@ export const enclosureVisionNode: LangGraphNode<
   outputSchema: EnclosureVisionOutputSchema,
   defaultTemperature: 0.3,
   category: 'enclosure',
+  contextTypes: ['projectState'], // Enables @projectName, @pcb.boardSize, @finalSpec
   invoke: invokeEnclosureVision,
 }
 

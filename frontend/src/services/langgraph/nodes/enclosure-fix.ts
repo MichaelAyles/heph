@@ -3,12 +3,18 @@
  *
  * Auto-fixes validation issues in OpenSCAD code.
  * Takes the original code and validation issues, returns fixed code.
+ *
+ * Context from @variables (via projectState):
+ * - @pcb.boardSize: Board dimensions for constraint fixes
+ *
+ * Runtime inputs (must be passed):
+ * - openScadCode: Code to fix (not yet saved to spec)
+ * - issues: Validation issues to fix
  */
 
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { buildFixPrompt, type ValidationIssue } from '../../../prompts/enclosure-validation'
 
 // =============================================================================
 // Schemas
@@ -23,11 +29,9 @@ const ValidationIssueSchema = z.object({
 })
 
 export const EnclosureFixInputSchema = z.object({
+  // Runtime inputs - code and issues are passed at invocation time
   openScadCode: z.string().min(1, 'OpenSCAD code is required'),
   issues: z.array(ValidationIssueSchema),
-  pcbWidth: z.number().positive(),
-  pcbHeight: z.number().positive(),
-  pcbThickness: z.number().positive().default(1.6),
 })
 export type EnclosureFixInput = z.infer<typeof EnclosureFixInputSchema>
 
@@ -47,22 +51,29 @@ async function invokeEnclosureFix(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<EnclosureFixOutput>> {
-  // System prompt comes from database (required)
+  // System prompt comes from database with @variables already expanded
   const systemPrompt = context.systemPrompt
 
-  // Convert Zod-parsed issues to ValidationIssue type
-  const issues: ValidationIssue[] = input.issues.map((issue) => ({
-    severity: issue.severity,
-    category: issue.category,
-    description: issue.description,
-    location: issue.location,
-    fix: issue.fix,
-  }))
+  // Format issues for the prompt
+  const issuesText = input.issues
+    .map(
+      (issue, i) => `${i + 1}. [${issue.severity}] ${issue.category}: ${issue.description}
+   Fix: ${issue.fix}${issue.location ? `\n   Location: ${issue.location}` : ''}`
+    )
+    .join('\n\n')
 
-  const userPrompt = buildFixPrompt(input.openScadCode, issues, {
-    pcbWidth: input.pcbWidth,
-    pcbHeight: input.pcbHeight,
-  })
+  // Build user prompt with code and issues
+  const userPrompt = `Fix the following issues in the OpenSCAD code:
+
+Issues to fix:
+${issuesText}
+
+Current OpenSCAD Code:
+\`\`\`openscad
+${input.openScadCode}
+\`\`\`
+
+Output the fixed code in a single code block.`
 
   const response = await context.llmChat({
     messages: [
@@ -82,7 +93,7 @@ async function invokeEnclosureFix(
   }
 
   // Build changes applied from issues that were marked for fixing
-  const changesApplied = issues
+  const changesApplied = input.issues
     .filter((issue) => issue.severity === 'critical' || issue.severity === 'warning')
     .map((issue) => `${issue.category}: ${issue.description}`)
 
@@ -114,6 +125,7 @@ export const enclosureFixNode: LangGraphNode<
   outputSchema: EnclosureFixOutputSchema,
   defaultTemperature: 0.2,
   category: 'enclosure',
+  contextTypes: ['projectState'], // Enables @pcb.boardSize for constraint fixes
   invoke: invokeEnclosureFix,
 }
 

@@ -14,7 +14,7 @@ import JSZip from 'jszip'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { logger } from '@/lib/logger'
 import { invokeLangGraphNode, BreakpointCancelledError } from '@/services/langgraph/invoke'
-import { buildFirmwareInputFromSpec, type FirmwareProject } from '@/prompts/firmware'
+import type { FirmwareProject } from '@/prompts/firmware'
 import {
   BuildPanel,
   EditorPanel,
@@ -235,24 +235,11 @@ export function FirmwareStageView() {
     setGenerationError(null)
 
     try {
-      const input = buildFirmwareInputFromSpec(
-        project.name || 'PHAESTUS Project',
-        project.description || '',
-        project.spec?.finalSpec || undefined,
-        project.spec?.pcb
-      )
-
+      // Empty input - all context from @variables
+      // Uses @projectName, @description, @finalSpec, @pcb.placedBlocks, @pcb.netList in system prompt
       const genData = await invokeLangGraphNode({
         nodeName: 'firmware_generate',
-        input: {
-          projectName: input.projectName,
-          description: input.description,
-          inputs: input.inputs,
-          outputs: input.outputs,
-          communication: input.communication,
-          power: input.power,
-          blocks: input.blocks,
-        },
+        input: {},
         projectId: project.id,
       })
 
@@ -306,24 +293,13 @@ export function FirmwareStageView() {
           | 'json',
       }))
 
-      const input = buildFirmwareInputFromSpec(
-        project.name || 'PHAESTUS Project',
-        project.description || '',
-        project.spec?.finalSpec || undefined,
-        project.spec?.pcb
-      )
-
+      // Only runtime inputs - files and modification request
+      // Project context accessed via @finalSpec, @pcb.netList in system prompt
       const modifyData = await invokeLangGraphNode({
         nodeName: 'firmware_modify',
         input: {
           currentFiles,
           request: chatInput,
-          projectName: input.projectName,
-          description: input.description,
-          inputs: input.inputs,
-          outputs: input.outputs,
-          communication: input.communication,
-          power: input.power,
         },
         projectId: project.id,
       })

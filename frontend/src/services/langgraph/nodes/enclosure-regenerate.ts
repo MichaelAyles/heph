@@ -3,28 +3,30 @@
  *
  * Regenerates OpenSCAD code based on user feedback.
  * Used for iterative refinement of enclosure designs.
+ *
+ * Context from @variables (via projectState):
+ * - @projectName: Product name
+ * - @description: User's project description
+ * - @pcb.boardSize: Board dimensions
+ * - @finalSpec: Final specification with inputs/outputs
+ *
+ * Runtime inputs (must be passed):
+ * - currentCode: Current OpenSCAD code to modify
+ * - feedback: User feedback for changes
  */
 
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { buildEnclosureRegenerationPrompt, type EnclosureInput } from '../../../prompts/enclosure'
 
 // =============================================================================
 // Schemas
 // =============================================================================
 
 export const EnclosureRegenerateInputSchema = z.object({
+  // Runtime inputs - current code and feedback are passed at invocation time
   currentCode: z.string().min(1, 'Current OpenSCAD code is required'),
   feedback: z.string().min(1, 'Feedback is required'),
-  projectName: z.string().default('project'),
-  description: z.string().default(''),
-  boardWidth: z.number().positive(),
-  boardHeight: z.number().positive(),
-  boardThickness: z.number().positive().default(1.6),
-  wallThickness: z.number().positive().default(2),
-  features: z.array(z.string()).default([]),
-  previousIterations: z.number().min(0).default(0),
 })
 export type EnclosureRegenerateInput = z.infer<typeof EnclosureRegenerateInputSchema>
 
@@ -44,25 +46,21 @@ async function invokeEnclosureRegenerate(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<EnclosureRegenerateOutput>> {
-  // System prompt comes from database (required)
+  // System prompt comes from database with @variables already expanded
   const systemPrompt = context.systemPrompt
 
-  // Build enclosure input for the prompt
-  const enclosureInput: EnclosureInput = {
-    projectName: input.projectName,
-    description: input.description,
-    boardWidth: input.boardWidth,
-    boardHeight: input.boardHeight,
-    boardThickness: input.boardThickness,
-    wallThickness: input.wallThickness,
-    features: input.features,
-  }
+  // Build user prompt with current code and feedback
+  const userPrompt = `Modify the following OpenSCAD enclosure code based on the user's feedback.
 
-  const userPrompt = buildEnclosureRegenerationPrompt(
-    input.currentCode,
-    input.feedback,
-    enclosureInput
-  )
+User Feedback:
+${input.feedback}
+
+Current OpenSCAD Code:
+\`\`\`openscad
+${input.currentCode}
+\`\`\`
+
+Output the modified code in a single code block. After the code, briefly explain what changes were made.`
 
   const response = await context.llmChat({
     messages: [
@@ -119,6 +117,7 @@ export const enclosureRegenerateNode: LangGraphNode<
   outputSchema: EnclosureRegenerateOutputSchema,
   defaultTemperature: 0.3,
   category: 'enclosure',
+  contextTypes: ['projectState'], // Enables @projectName, @description, @pcb.boardSize, @finalSpec
   invoke: invokeEnclosureRegenerate,
 }
 

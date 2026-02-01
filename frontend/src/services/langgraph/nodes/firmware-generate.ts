@@ -3,43 +3,25 @@
  *
  * Generates ESP32-C6 firmware code for hardware projects.
  * Creates a complete PlatformIO project with all necessary files.
+ *
+ * All context comes from @variables in the system prompt:
+ * - @projectName: Product name
+ * - @description: User's project description
+ * - @finalSpec: Final specification with inputs/outputs/communication/power
+ * - @pcb.placedBlocks: Placed blocks for component info
+ * - @pcb.netList: GPIO assignments
  */
 
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { buildFirmwarePrompt, type FirmwareInput } from '../../../prompts/firmware'
 
 // =============================================================================
 // Schemas
 // =============================================================================
 
-const ComponentSchema = z.object({
-  type: z.string(),
-  pin: z.string().optional(),
-  notes: z.string().optional(),
-})
-
-const CommunicationSchema = z.object({
-  type: z.string(),
-  protocol: z.string().optional(),
-})
-
-const PowerSchema = z.object({
-  source: z.string(),
-  voltage: z.string().optional(),
-})
-
-export const FirmwareGenerateInputSchema = z.object({
-  projectName: z.string(),
-  description: z.string(),
-  inputs: z.array(ComponentSchema).default([]),
-  outputs: z.array(ComponentSchema).default([]),
-  communication: CommunicationSchema.default({ type: 'WiFi' }),
-  power: PowerSchema.default({ source: 'USB' }),
-  blocks: z.array(z.string()).default([]),
-  i2cAddresses: z.record(z.string(), z.number()).optional(),
-})
+// Input is empty - all context comes from @variables in system prompt
+export const FirmwareGenerateInputSchema = z.object({})
 export type FirmwareGenerateInput = z.infer<typeof FirmwareGenerateInputSchema>
 
 const FirmwareFileSchema = z.object({
@@ -61,25 +43,15 @@ export type FirmwareGenerateOutput = z.infer<typeof FirmwareGenerateOutputSchema
 // =============================================================================
 
 async function invokeFirmwareGenerate(
-  input: FirmwareGenerateInput,
+  _input: FirmwareGenerateInput,
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<FirmwareGenerateOutput>> {
-  // System prompt comes from database (required)
+  // System prompt comes from database with @variables already expanded
   const systemPrompt = context.systemPrompt
 
-  // Build firmware input for prompt
-  const firmwareInput: FirmwareInput = {
-    projectName: input.projectName,
-    description: input.description,
-    inputs: input.inputs,
-    outputs: input.outputs,
-    communication: input.communication,
-    power: input.power,
-    blocks: input.blocks,
-  }
-
-  const userPrompt = buildFirmwarePrompt(firmwareInput)
+  // Simple user prompt - all context is in the system prompt via @variables
+  const userPrompt = `Generate the complete PlatformIO firmware project based on the context provided. Return a JSON object with a "files" array containing all necessary source files.`
 
   const response = await context.llmChat({
     messages: [
@@ -162,6 +134,7 @@ export const firmwareGenerateNode: LangGraphNode<
   outputSchema: FirmwareGenerateOutputSchema,
   defaultTemperature: 0.3,
   category: 'firmware',
+  contextTypes: ['projectState'], // Enables @projectName, @description, @finalSpec, @pcb.*
   invoke: invokeFirmwareGenerate,
 }
 

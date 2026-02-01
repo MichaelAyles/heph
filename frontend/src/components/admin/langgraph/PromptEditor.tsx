@@ -69,6 +69,7 @@ const AVAILABLE_VARIABLES = [
     description: 'ATTACH visualization at index 0 to LLM call (~258 tokens)',
     requiresProject: true,
   },
+  // Feasibility variables
   {
     name: '@feasibility',
     description: 'Full feasibility analysis object',
@@ -107,6 +108,74 @@ const AVAILABLE_VARIABLES = [
   {
     name: '@feasibility.outputs.items',
     description: 'List of output components',
+    requiresProject: true,
+  },
+  // PCB variables
+  {
+    name: '@pcb',
+    description: 'Full PCB artifacts object',
+    requiresProject: true,
+  },
+  {
+    name: '@pcb.placedBlocks',
+    description: 'Placed blocks with positions and rotations',
+    requiresProject: true,
+  },
+  {
+    name: '@pcb.boardSize',
+    description: 'Board dimensions (width, height in mm)',
+    requiresProject: true,
+  },
+  {
+    name: '@pcb.boardSize.width',
+    description: 'Board width in mm',
+    requiresProject: true,
+  },
+  {
+    name: '@pcb.boardSize.height',
+    description: 'Board height in mm',
+    requiresProject: true,
+  },
+  {
+    name: '@pcb.netList',
+    description: 'GPIO assignments and net connections',
+    requiresProject: true,
+  },
+  {
+    name: '@pcb.designJustifications',
+    description: 'Why blocks were selected',
+    requiresProject: true,
+  },
+  // Enclosure variables
+  {
+    name: '@enclosure',
+    description: 'Full enclosure artifacts object',
+    requiresProject: true,
+  },
+  {
+    name: '@enclosure.openScadCode',
+    description: 'Current OpenSCAD code',
+    requiresProject: true,
+  },
+  {
+    name: '@enclosure.iterations',
+    description: 'Refinement history',
+    requiresProject: true,
+  },
+  // Firmware variables
+  {
+    name: '@firmware',
+    description: 'Full firmware artifacts object',
+    requiresProject: true,
+  },
+  {
+    name: '@firmware.files',
+    description: 'Current firmware source files',
+    requiresProject: true,
+  },
+  {
+    name: '@firmware.buildLog',
+    description: 'Build output/log',
     requiresProject: true,
   },
 ]

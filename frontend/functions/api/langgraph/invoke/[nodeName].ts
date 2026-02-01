@@ -303,6 +303,36 @@ function expandTemplateVariables(
     return formatValue(value)
   })
 
+  // Expand @pcb and @pcb.path shortcuts (PCB artifacts)
+  const pcbPattern = /@pcb(?:\.([a-zA-Z0-9_.]+))?/g
+  expanded = expanded.replace(pcbPattern, (match, path) => {
+    const pcb = dynamicContext.projectState?.spec?.pcb
+    if (!pcb) return '(No PCB data available)'
+    if (!path) return formatValue(pcb)
+    const value = getNestedValue(pcb, path)
+    return formatValue(value)
+  })
+
+  // Expand @enclosure and @enclosure.path shortcuts
+  const enclosurePattern = /@enclosure(?:\.([a-zA-Z0-9_.]+))?/g
+  expanded = expanded.replace(enclosurePattern, (match, path) => {
+    const enclosure = dynamicContext.projectState?.spec?.enclosure
+    if (!enclosure) return '(No enclosure data available)'
+    if (!path) return formatValue(enclosure)
+    const value = getNestedValue(enclosure, path)
+    return formatValue(value)
+  })
+
+  // Expand @firmware and @firmware.path shortcuts
+  const firmwarePattern = /@firmware(?:\.([a-zA-Z0-9_.]+))?/g
+  expanded = expanded.replace(firmwarePattern, (match, path) => {
+    const firmware = dynamicContext.projectState?.spec?.firmware
+    if (!firmware) return '(No firmware data available)'
+    if (!path) return formatValue(firmware)
+    const value = getNestedValue(firmware, path)
+    return formatValue(value)
+  })
+
   // Expand @projectState and @projectState.path
   const projectStatePattern = /@projectState(?:\.([a-zA-Z0-9_.]+))?/g
   expanded = expanded.replace(projectStatePattern, (match, path) => {

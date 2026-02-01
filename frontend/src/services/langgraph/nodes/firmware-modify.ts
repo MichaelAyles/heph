@@ -3,12 +3,19 @@
  *
  * Modifies existing firmware based on chat input.
  * Used for iterative refinement of ESP32-C6 code.
+ *
+ * Context from @variables (via projectState):
+ * - @finalSpec: Final specification with inputs/outputs/communication
+ * - @pcb.netList: GPIO assignments for pin references
+ *
+ * Runtime inputs (must be passed):
+ * - currentFiles: Current source files to modify
+ * - request: Modification request from user
  */
 
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { buildFirmwareModificationPrompt, type FirmwareInput } from '../../../prompts/firmware'
 
 // =============================================================================
 // Schemas
@@ -21,33 +28,10 @@ const FirmwareFileSchema = z.object({
   type: z.enum(['cpp', 'h', 'ini', 'json']).optional(),
 })
 
-const ComponentSchema = z.object({
-  type: z.string(),
-  pin: z.string().optional(),
-  notes: z.string().optional(),
-})
-
-const CommunicationSchema = z.object({
-  type: z.string(),
-  protocol: z.string().optional(),
-})
-
-const PowerSchema = z.object({
-  source: z.string(),
-  voltage: z.string().optional(),
-})
-
 export const FirmwareModifyInputSchema = z.object({
+  // Runtime inputs - files and request are passed at invocation time
   currentFiles: z.array(FirmwareFileSchema),
   request: z.string().min(1, 'Modification request is required'),
-  context: z.string().optional(),
-  // Project context for better modifications
-  projectName: z.string().optional(),
-  description: z.string().optional(),
-  inputs: z.array(ComponentSchema).optional().default([]),
-  outputs: z.array(ComponentSchema).optional().default([]),
-  communication: CommunicationSchema.optional(),
-  power: PowerSchema.optional(),
 })
 export type FirmwareModifyInput = z.infer<typeof FirmwareModifyInputSchema>
 
@@ -67,25 +51,24 @@ async function invokeFirmwareModify(
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<FirmwareModifyOutput>> {
-  // System prompt comes from database (required)
+  // System prompt comes from database with @variables already expanded
   const systemPrompt = context.systemPrompt
 
-  // Build firmware input for modification prompt
-  const firmwareInput: FirmwareInput = {
-    projectName: input.projectName || 'project',
-    description: input.description || 'IoT device',
-    inputs: input.inputs || [],
-    outputs: input.outputs || [],
-    communication: input.communication || { type: 'WiFi' },
-    power: input.power || { source: 'USB' },
-    blocks: [],
-  }
+  // Format current files for the prompt
+  const filesText = input.currentFiles
+    .map((f) => `### ${f.path}\n\`\`\`${f.language || 'cpp'}\n${f.content}\n\`\`\``)
+    .join('\n\n')
 
-  const userPrompt = buildFirmwareModificationPrompt(
-    input.currentFiles.map((f) => ({ path: f.path, content: f.content })),
-    input.request,
-    firmwareInput
-  )
+  // Build user prompt with files and request
+  const userPrompt = `Modify the following firmware files based on the user's request.
+
+User Request:
+${input.request}
+
+Current Files:
+${filesText}
+
+Return a JSON object with a "files" array containing all modified source files. Include all files, even if unchanged.`
 
   const response = await context.llmChat({
     messages: [
@@ -193,6 +176,7 @@ export const firmwareModifyNode: LangGraphNode<
   outputSchema: FirmwareModifyOutputSchema,
   defaultTemperature: 0.3,
   category: 'firmware',
+  contextTypes: ['projectState'], // Enables @finalSpec, @pcb.netList for context
   invoke: invokeFirmwareModify,
 }
 

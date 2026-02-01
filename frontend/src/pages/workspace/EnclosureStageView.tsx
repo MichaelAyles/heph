@@ -23,7 +23,6 @@ import {
   revokeSTLBlobUrl,
   preloadOpenSCAD,
 } from '@/lib/openscadRenderer'
-import { buildFeatureList, buildEnclosureInputFromSpec } from '@/prompts/enclosure'
 import type { ValidationIssue, VisualValidationResult } from '@/prompts/enclosure-validation'
 import { fetchImageAsBase64 } from '@/services/llm'
 import type { STLViewerRef } from '@/components/enclosure/STLViewer'
@@ -222,56 +221,38 @@ export function EnclosureStageView() {
   // Validate OpenSCAD code and return issues using LangGraph node
   const validateCode = useCallback(
     async (code: string): Promise<ValidationIssue[]> => {
-      const pcbWidth = pcbArtifacts?.boardSize?.width ?? 50
-      const pcbHeight = pcbArtifacts?.boardSize?.height ?? 40
-
-      // Check for components
-      const hasOled =
-        finalSpec?.outputs?.some(
-          (o) => o.type.toLowerCase().includes('oled') || o.type.toLowerCase().includes('display')
-        ) ?? false
-      const hasUsb = true // Always has USB-C
-      const hasButtons =
-        finalSpec?.inputs?.some((i) => i.type.toLowerCase().includes('button')) ?? false
-
+      // Only runtime input - code being validated
+      // PCB dimensions and features are now accessed via @pcb.boardSize and @finalSpec in system prompt
       const data = await invokeLangGraphNode({
         nodeName: 'enclosure_validation',
         input: {
           openScadCode: code,
-          pcbWidth,
-          pcbHeight,
-          hasOled,
-          hasUsb,
-          hasButtons,
         },
         projectId: project?.id,
       })
 
       return (data.output as EnclosureValidationResponse['output']).issues
     },
-    [pcbArtifacts, finalSpec, project?.id]
+    [project?.id]
   )
 
   // Fix code based on validation issues using LangGraph node
   const fixCode = useCallback(
     async (code: string, issues: ValidationIssue[]): Promise<string> => {
-      const pcbWidth = pcbArtifacts?.boardSize?.width ?? 50
-      const pcbHeight = pcbArtifacts?.boardSize?.height ?? 40
-
+      // Runtime inputs only - code and issues
+      // PCB dimensions are now accessed via @pcb.boardSize in system prompt
       const data = await invokeLangGraphNode({
         nodeName: 'enclosure_fix',
         input: {
           openScadCode: code,
           issues,
-          pcbWidth,
-          pcbHeight,
         },
         projectId: project?.id,
       })
 
       return (data.output as EnclosureFixResponse['output']).fixedCode
     },
-    [pcbArtifacts, project?.id]
+    [project?.id]
   )
 
   // Generate OpenSCAD code using LangGraph nodes with validation loop
@@ -298,26 +279,21 @@ export function EnclosureStageView() {
       const hasBlueprint = !!blueprintUrl
 
       let code: string
-      const pcbWidth = pcbArtifacts.boardSize?.width ?? 50
-      const pcbHeight = pcbArtifacts.boardSize?.height ?? 40
 
       if (hasBlueprint) {
         // Vision-enabled generation using enclosure_vision node
         setValidationStatus('Analyzing blueprint image...')
 
         const blueprintBase64 = await fetchImageAsBase64(blueprintUrl)
-        const features = buildFeatureList(finalSpec || {})
 
         setValidationStatus('Generating enclosure from blueprint...')
 
+        // Only runtime input - the blueprint image
+        // PCB dimensions and features are accessed via @pcb.boardSize and @finalSpec in system prompt
         const visionData = await invokeLangGraphNode({
           nodeName: 'enclosure_vision',
           input: {
             blueprintImage: `data:image/png;base64,${blueprintBase64}`,
-            pcbWidth,
-            pcbHeight,
-            wallThickness: 2,
-            features,
           },
           projectId: project.id,
         })
@@ -325,26 +301,13 @@ export function EnclosureStageView() {
         code = (visionData.output as EnclosureVisionResponse['output']).openScadCode
       } else {
         // Fallback: text-only generation using enclosure_text node
-        const input = buildEnclosureInputFromSpec(
-          project.name,
-          spec?.description || '',
-          pcbArtifacts,
-          finalSpec || undefined
-        )
-
         setValidationStatus('Generating enclosure design...')
 
+        // Empty input - all context from @variables
+        // Uses @projectName, @description, @pcb.boardSize, @finalSpec in system prompt
         const textData = await invokeLangGraphNode({
           nodeName: 'enclosure_text',
-          input: {
-            projectName: input.projectName,
-            description: input.description,
-            boardWidth: input.boardWidth,
-            boardHeight: input.boardHeight,
-            boardThickness: input.boardThickness,
-            wallThickness: input.wallThickness,
-            features: input.features,
-          },
+          input: {},
           projectId: project.id,
         })
 
@@ -426,28 +389,16 @@ export function EnclosureStageView() {
     setValidationIteration(0)
 
     try {
-      const input = buildEnclosureInputFromSpec(
-        project.name,
-        spec?.description || '',
-        pcbArtifacts,
-        finalSpec || undefined
-      )
-
       // Step 1: Regenerate with feedback using enclosure_regenerate node
       setValidationStatus('Regenerating with feedback...')
 
+      // Only runtime inputs - current code and feedback
+      // Project context accessed via @projectName, @description, @pcb.boardSize, @finalSpec in system prompt
       const regenData = await invokeLangGraphNode({
         nodeName: 'enclosure_regenerate',
         input: {
           currentCode: openScadCode,
           feedback,
-          projectName: input.projectName,
-          description: input.description,
-          boardWidth: input.boardWidth,
-          boardHeight: input.boardHeight,
-          boardThickness: input.boardThickness,
-          wallThickness: input.wallThickness,
-          features: input.features,
         },
         projectId: project.id,
       })

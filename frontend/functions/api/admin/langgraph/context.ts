@@ -301,6 +301,145 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       imageUrl: image0Url || undefined,
     })
 
+    // @pcb shortcuts (PCB artifacts)
+    const pcb = dynamicContext.projectState.spec?.pcb as Record<string, unknown> | undefined
+    if (pcb) {
+      variables.push({
+        name: '@pcb',
+        description: 'Full PCB artifacts object',
+        value: pcb,
+        type: 'object',
+        requiresProject: true,
+        tokenEstimate: estimateTokens(pcb),
+      })
+
+      // @pcb.placedBlocks
+      if (pcb.placedBlocks) {
+        variables.push({
+          name: '@pcb.placedBlocks',
+          description: 'Placed blocks with positions and rotations',
+          value: pcb.placedBlocks,
+          type: 'array',
+          requiresProject: true,
+          tokenEstimate: estimateTokens(pcb.placedBlocks),
+        })
+      }
+
+      // @pcb.boardSize
+      if (pcb.boardSize) {
+        variables.push({
+          name: '@pcb.boardSize',
+          description: 'Board dimensions (width, height in mm)',
+          value: pcb.boardSize,
+          type: 'object',
+          requiresProject: true,
+          tokenEstimate: estimateTokens(pcb.boardSize),
+        })
+      }
+
+      // @pcb.netList
+      if (pcb.netList) {
+        variables.push({
+          name: '@pcb.netList',
+          description: 'GPIO assignments and net connections',
+          value: pcb.netList,
+          type: 'object',
+          requiresProject: true,
+          tokenEstimate: estimateTokens(pcb.netList),
+        })
+      }
+
+      // @pcb.designJustifications
+      if (pcb.designJustifications) {
+        variables.push({
+          name: '@pcb.designJustifications',
+          description: 'Why blocks were selected',
+          value: pcb.designJustifications,
+          type: 'string',
+          requiresProject: true,
+          tokenEstimate: estimateTokens(pcb.designJustifications),
+        })
+      }
+    }
+
+    // @enclosure shortcuts
+    const enclosure = dynamicContext.projectState.spec?.enclosure as
+      | Record<string, unknown>
+      | undefined
+    if (enclosure) {
+      variables.push({
+        name: '@enclosure',
+        description: 'Full enclosure artifacts object',
+        value: enclosure,
+        type: 'object',
+        requiresProject: true,
+        tokenEstimate: estimateTokens(enclosure),
+      })
+
+      // @enclosure.openScadCode
+      if (enclosure.openScadCode) {
+        variables.push({
+          name: '@enclosure.openScadCode',
+          description: 'Current OpenSCAD code',
+          value: enclosure.openScadCode,
+          type: 'string',
+          requiresProject: true,
+          tokenEstimate: estimateTokens(enclosure.openScadCode),
+        })
+      }
+
+      // @enclosure.iterations
+      if (enclosure.iterations) {
+        variables.push({
+          name: '@enclosure.iterations',
+          description: 'Refinement history',
+          value: enclosure.iterations,
+          type: 'array',
+          requiresProject: true,
+          tokenEstimate: estimateTokens(enclosure.iterations),
+        })
+      }
+    }
+
+    // @firmware shortcuts
+    const firmware = dynamicContext.projectState.spec?.firmware as
+      | Record<string, unknown>
+      | undefined
+    if (firmware) {
+      variables.push({
+        name: '@firmware',
+        description: 'Full firmware artifacts object',
+        value: firmware,
+        type: 'object',
+        requiresProject: true,
+        tokenEstimate: estimateTokens(firmware),
+      })
+
+      // @firmware.files
+      if (firmware.files) {
+        variables.push({
+          name: '@firmware.files',
+          description: 'Current source files',
+          value: firmware.files,
+          type: 'array',
+          requiresProject: true,
+          tokenEstimate: estimateTokens(firmware.files),
+        })
+      }
+
+      // @firmware.buildLog
+      if (firmware.buildLog) {
+        variables.push({
+          name: '@firmware.buildLog',
+          description: 'Build output/log',
+          value: firmware.buildLog,
+          type: 'string',
+          requiresProject: true,
+          tokenEstimate: estimateTokens(firmware.buildLog),
+        })
+      }
+    }
+
     // @feasibility shortcuts
     const feasibility = dynamicContext.projectState.spec?.feasibility as
       | Record<string, unknown>
@@ -486,6 +625,73 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       description: 'AI-revised project description (select a project)',
       value: null,
       type: 'string',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    // PCB placeholders
+    variables.push({
+      name: '@pcb',
+      description: 'Full PCB artifacts (select a project)',
+      value: null,
+      type: 'object',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@pcb.placedBlocks',
+      description: 'Placed blocks with positions (select a project)',
+      value: null,
+      type: 'array',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@pcb.boardSize',
+      description: 'Board dimensions (select a project)',
+      value: null,
+      type: 'object',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@pcb.netList',
+      description: 'GPIO assignments (select a project)',
+      value: null,
+      type: 'object',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    // Enclosure placeholders
+    variables.push({
+      name: '@enclosure',
+      description: 'Full enclosure artifacts (select a project)',
+      value: null,
+      type: 'object',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@enclosure.openScadCode',
+      description: 'Current OpenSCAD code (select a project)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    // Firmware placeholders
+    variables.push({
+      name: '@firmware',
+      description: 'Full firmware artifacts (select a project)',
+      value: null,
+      type: 'object',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@firmware.files',
+      description: 'Current source files (select a project)',
+      value: null,
+      type: 'array',
       requiresProject: true,
       tokenEstimate: 0,
     })
