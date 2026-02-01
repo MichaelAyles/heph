@@ -43,6 +43,8 @@ export interface BreakpointData {
   projectId?: string
   threadId?: string
   expiresAt: string
+  /** Images extracted from @image: variables that will be attached to the LLM call */
+  extractedImages?: Array<{ url: string; label: string }>
 }
 
 interface DebugBreakpointState {

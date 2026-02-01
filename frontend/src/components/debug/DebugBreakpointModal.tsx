@@ -26,6 +26,7 @@ import {
   AlertCircle,
   ArrowRight,
   ArrowLeft,
+  Image,
 } from 'lucide-react'
 import { useDebugBreakpointStore } from '../../stores/debug-breakpoint'
 
@@ -33,6 +34,7 @@ export function DebugBreakpointModal() {
   const { pendingBreakpoint, resolveWith } = useDebugBreakpointStore()
   const [systemPromptSectionExpanded, setSystemPromptSectionExpanded] = useState(false)
   const [dynamicContextExpanded, setDynamicContextExpanded] = useState(true)
+  const [attachedImagesExpanded, setAttachedImagesExpanded] = useState(true)
   const [userInputExpanded, setUserInputExpanded] = useState(true)
   const [timeRemaining, setTimeRemaining] = useState<number>(0)
 
@@ -399,6 +401,78 @@ export function DebugBreakpointModal() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Attached Images Section - for @image: variables */}
+          {pendingBreakpoint.extractedImages && pendingBreakpoint.extractedImages.length > 0 && (
+            <div className="border border-purple-500/30 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setAttachedImagesExpanded(!attachedImagesExpanded)}
+                className="w-full flex items-center justify-between p-3 bg-purple-500/10 hover:bg-purple-500/20 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  {attachedImagesExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-purple-400" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-purple-400" />
+                  )}
+                  <Image className="w-4 h-4 text-purple-400" />
+                  <span className="font-medium text-purple-300">Attached Images</span>
+                  <span className="text-xs text-purple-400/70">(@image: variables)</span>
+                </div>
+                <span className="text-xs text-steel-dim">
+                  {pendingBreakpoint.extractedImages.length} image
+                  {pendingBreakpoint.extractedImages.length !== 1 ? 's' : ''} • ~
+                  {(pendingBreakpoint.extractedImages.length * 258).toLocaleString()} tokens
+                </span>
+              </button>
+              {attachedImagesExpanded && (
+                <div className="p-4 bg-surface-900/50">
+                  <div className="grid grid-cols-2 gap-4">
+                    {pendingBreakpoint.extractedImages.map((img, index) => (
+                      <div
+                        key={index}
+                        className="border border-surface-700 rounded-lg overflow-hidden"
+                      >
+                        <div className="px-3 py-2 bg-surface-800 flex items-center justify-between">
+                          <span className="font-mono text-xs text-purple-400">
+                            @image:{img.label}
+                          </span>
+                        </div>
+                        <div className="p-3 bg-surface-900/50 flex items-center justify-center">
+                          <img
+                            src={img.url}
+                            alt={`Attached image: ${img.label}`}
+                            className="max-w-full max-h-48 rounded border border-surface-700 object-contain bg-surface-800"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                              const parent = e.currentTarget.parentElement
+                              if (parent) {
+                                const errorMsg = document.createElement('span')
+                                errorMsg.className = 'text-xs text-red-400'
+                                errorMsg.textContent = `Failed to load: ${img.url}`
+                                parent.appendChild(errorMsg)
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="px-3 py-1 bg-surface-800/50 border-t border-surface-700">
+                          <a
+                            href={img.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-steel-dim hover:text-copper truncate block"
+                            title={img.url}
+                          >
+                            {img.url}
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

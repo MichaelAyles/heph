@@ -30,6 +30,15 @@ interface DynamicContext {
   }
 }
 
+/**
+ * Estimate token count for a value (~4 chars per token)
+ */
+function estimateTokens(value: unknown): number {
+  if (value === null || value === undefined) return 0
+  const str = typeof value === 'string' ? value : JSON.stringify(value)
+  return Math.ceil(str.length / 4)
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, data, request } = context
   const user = data.user as User | undefined
@@ -91,27 +100,31 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
   }
 
-  // Build available variables with their current values
+  // Build available variables with their current values and token estimates
   const variables: Array<{
     name: string
     description: string
     value: unknown
     type: 'string' | 'object' | 'array'
     requiresProject: boolean
+    tokenEstimate: number
+    imageUrl?: string // For @image: variables, the actual image URL to preview
   }> = []
 
   // @availableBlocks
+  const availableBlocksValue = dynamicContext.availableBlocks
+    .map(
+      (b) =>
+        `- ${b.name} (${b.category}): ${b.description}${b.interfaces?.length ? ` [${b.interfaces.join(', ')}]` : ''}`
+    )
+    .join('\n')
   variables.push({
     name: '@availableBlocks',
     description: 'List of available hardware blocks formatted for prompts',
-    value: dynamicContext.availableBlocks
-      .map(
-        (b) =>
-          `- ${b.name} (${b.category}): ${b.description}${b.interfaces?.length ? ` [${b.interfaces.join(', ')}]` : ''}`
-      )
-      .join('\n'),
+    value: availableBlocksValue,
     type: 'string',
     requiresProject: false,
+    tokenEstimate: estimateTokens(availableBlocksValue),
   })
 
   // @projectState (requires project)
@@ -122,6 +135,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: dynamicContext.projectState,
       type: 'object',
       requiresProject: true,
+      tokenEstimate: estimateTokens(dynamicContext.projectState),
     })
 
     variables.push({
@@ -130,16 +144,19 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: dynamicContext.projectState.status,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: estimateTokens(dynamicContext.projectState.status),
     })
 
     // @description shortcut
     const description = dynamicContext.projectState.spec?.description as string | undefined
+    const descriptionValue = description || '(No description available)'
     variables.push({
       name: '@description',
       description: "User's original project description",
-      value: description || '(No description available)',
+      value: descriptionValue,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: estimateTokens(descriptionValue),
     })
 
     // @decisions shortcut
@@ -156,6 +173,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: decisionsFormatted,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: estimateTokens(decisionsFormatted),
     })
 
     // @selectedBlueprintPrompt shortcut
@@ -177,6 +195,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: blueprintPrompt,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: estimateTokens(blueprintPrompt),
     })
 
     // @visualization - all blueprint renders
@@ -194,6 +213,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: visualizationsFormatted,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: estimateTokens(visualizationsFormatted),
     })
 
     // @visualization.selected - the selected blueprint
@@ -217,9 +237,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: selectedVisualization,
       type: 'object',
       requiresProject: true,
+      tokenEstimate: estimateTokens(selectedVisualization),
     })
 
     // @image: variables - these ATTACH images to the LLM call (not just text)
+    // Image tokens: Gemini uses ~258 tokens per image (fixed), other models vary
     const selectedImageUrl =
       typeof selectedIndex === 'number' &&
       blueprints &&
@@ -227,22 +249,28 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       selectedIndex < blueprints.length
         ? blueprints[selectedIndex]?.url || null
         : null
+    const imageSelectedValue = selectedImageUrl
+      ? `[Will attach: ${selectedImageUrl}]`
+      : '(No image available)'
     variables.push({
       name: '@image:visualization.selected',
-      description: 'ATTACH the selected visualization image to the LLM call (multimodal)',
-      value: selectedImageUrl ? `[Will attach: ${selectedImageUrl}]` : '(No image available)',
+      description: 'ATTACH the selected visualization image to the LLM call (~258 img tokens)',
+      value: imageSelectedValue,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: selectedImageUrl ? 258 : 0, // Gemini image token estimate
+      imageUrl: selectedImageUrl || undefined,
     })
+    const image0Url = blueprints && blueprints[0]?.url ? blueprints[0].url : null
+    const image0Value = image0Url ? `[Will attach: ${image0Url}]` : '(No image available)'
     variables.push({
       name: '@image:visualization.0',
-      description: 'ATTACH visualization at index 0 to the LLM call (multimodal)',
-      value:
-        blueprints && blueprints[0]?.url
-          ? `[Will attach: ${blueprints[0].url}]`
-          : '(No image available)',
+      description: 'ATTACH visualization at index 0 to the LLM call (~258 img tokens)',
+      value: image0Value,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: image0Url ? 258 : 0, // Gemini image token estimate
+      imageUrl: image0Url || undefined,
     })
 
     // @feasibility shortcuts
@@ -256,6 +284,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         value: feasibility,
         type: 'object',
         requiresProject: true,
+        tokenEstimate: estimateTokens(feasibility),
       })
 
       // Add specific feasibility fields
@@ -267,6 +296,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           value: revisions.revisedDescription,
           type: 'string',
           requiresProject: true,
+          tokenEstimate: estimateTokens(revisions.revisedDescription),
         })
         variables.push({
           name: '@feasibility.suggestedRevisions.summary',
@@ -274,6 +304,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           value: revisions.summary,
           type: 'string',
           requiresProject: true,
+          tokenEstimate: estimateTokens(revisions.summary),
         })
         variables.push({
           name: '@feasibility.suggestedRevisions.changes',
@@ -281,6 +312,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           value: revisions.changes,
           type: 'array',
           requiresProject: true,
+          tokenEstimate: estimateTokens(revisions.changes),
         })
       }
 
@@ -292,6 +324,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           value: comm.type,
           type: 'string',
           requiresProject: true,
+          tokenEstimate: estimateTokens(comm.type),
         })
       }
 
@@ -302,6 +335,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           value: feasibility.overallScore,
           type: 'string',
           requiresProject: true,
+          tokenEstimate: estimateTokens(feasibility.overallScore),
         })
       }
 
@@ -313,6 +347,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           value: inputs.items,
           type: 'array',
           requiresProject: true,
+          tokenEstimate: estimateTokens(inputs.items),
         })
       }
 
@@ -324,6 +359,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           value: outputs.items,
           type: 'array',
           requiresProject: true,
+          tokenEstimate: estimateTokens(outputs.items),
         })
       }
     }
@@ -335,6 +371,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'object',
       requiresProject: true,
+      tokenEstimate: 0,
     })
     variables.push({
       name: '@description',
@@ -342,6 +379,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: 0,
     })
     variables.push({
       name: '@decisions',
@@ -349,6 +387,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: 0,
     })
     variables.push({
       name: '@selectedBlueprintPrompt',
@@ -356,6 +395,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: 0,
     })
     variables.push({
       name: '@visualization',
@@ -363,6 +403,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: 0,
     })
     variables.push({
       name: '@visualization.selected',
@@ -370,6 +411,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'object',
       requiresProject: true,
+      tokenEstimate: 0,
     })
     variables.push({
       name: '@image:visualization.selected',
@@ -377,6 +419,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: 258, // Gemini image token estimate
     })
     variables.push({
       name: '@image:visualization.0',
@@ -384,6 +427,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: 258, // Gemini image token estimate
     })
     variables.push({
       name: '@feasibility',
@@ -391,6 +435,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'object',
       requiresProject: true,
+      tokenEstimate: 0,
     })
     variables.push({
       name: '@feasibility.suggestedRevisions.revisedDescription',
@@ -398,6 +443,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       value: null,
       type: 'string',
       requiresProject: true,
+      tokenEstimate: 0,
     })
   }
 

@@ -16,6 +16,7 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  Image,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -32,6 +33,8 @@ interface Variable {
   value: unknown
   type: 'string' | 'object' | 'array'
   requiresProject: boolean
+  tokenEstimate: number
+  imageUrl?: string
 }
 
 interface ContextResponse {
@@ -222,6 +225,13 @@ export function ContextVariables() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-steel-dim">{variable.type}</span>
+                    <span className="text-xs text-copper">~{variable.tokenEstimate} tokens</span>
+                    {variable.imageUrl && (
+                      <span className="text-xs text-purple-400 flex items-center gap-1">
+                        <Image className="w-3 h-3" />
+                        image
+                      </span>
+                    )}
                     {hasValue && (
                       <button
                         onClick={() => copyToClipboard(variable.name, variable.name)}
@@ -246,6 +256,19 @@ export function ContextVariables() {
                 {/* Variable Value */}
                 {(isExpanded || !isLongValue) && (
                   <div className="p-3 bg-surface-900/50">
+                    {/* Image Preview for @image: variables */}
+                    {variable.imageUrl && (
+                      <div className="mb-3">
+                        <img
+                          src={variable.imageUrl}
+                          alt={`Preview for ${variable.name}`}
+                          className="max-w-48 max-h-48 rounded border border-surface-700 object-contain bg-surface-800"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </div>
+                    )}
                     {hasValue ? (
                       <pre
                         className={clsx(
