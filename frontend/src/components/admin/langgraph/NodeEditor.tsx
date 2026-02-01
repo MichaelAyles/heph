@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Save, RotateCcw, CheckCircle, XCircle } from 'lucide-react'
 import { clsx } from 'clsx'
+import { PromptEditor } from './PromptEditor'
 
 interface OrchestratorPrompt {
   id: number
@@ -183,15 +184,12 @@ export function NodeEditor({ selectedNode, onNodeSelect }: NodeEditorProps) {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-steel-dim">System Prompt</label>
-                    {hasChanges && (
-                      <span className="text-xs text-amber-400">Unsaved changes</span>
-                    )}
+                    {hasChanges && <span className="text-xs text-amber-400">Unsaved changes</span>}
                   </div>
-                  <textarea
+                  <PromptEditor
                     value={currentPrompt}
-                    onChange={(e) => handlePromptChange(prompt.nodeName, e.target.value)}
-                    className="w-full h-64 px-3 py-2 bg-surface-900 border border-surface-700 rounded text-sm text-steel font-mono resize-y focus:outline-none focus:border-copper"
-                    placeholder="Enter system prompt..."
+                    onChange={(value) => handlePromptChange(prompt.nodeName, value)}
+                    placeholder="Enter system prompt... (type @ for variables)"
                   />
                 </div>
 
