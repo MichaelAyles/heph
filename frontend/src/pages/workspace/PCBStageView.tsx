@@ -439,16 +439,17 @@ export function PCBStageView() {
       setGridWidth(Math.max(2, suggestion.boardSize.width))
       setGridHeight(Math.max(4, suggestion.boardSize.height))
 
-      // Convert to PlacedBlock format
-      const newBlocks: PlacedBlock[] = suggestion.blocks.map(
-        (b: { slug: string; gridX: number; gridY: number; rotation: 0 | 180 }, idx: number) => ({
-          blockId: `${b.slug}-${Date.now()}-${idx}`,
-          blockSlug: b.slug,
-          gridX: b.gridX,
-          gridY: b.gridY,
-          rotation: b.rotation,
-        })
+      // Convert to PlacedBlock format (filter out remote blocks which don't have grid coordinates)
+      const gridBlocks = suggestion.blocks.filter(
+        (b) => b.gridX !== undefined && b.gridY !== undefined
       )
+      const newBlocks: PlacedBlock[] = gridBlocks.map((b, idx) => ({
+        blockId: `${b.slug}-${Date.now()}-${idx}`,
+        blockSlug: b.slug,
+        gridX: b.gridX!,
+        gridY: b.gridY!,
+        rotation: b.rotation ?? 0,
+      }))
 
       setSelectedBlocks(newBlocks)
       savePCBMutation.mutate({ placedBlocks: newBlocks })

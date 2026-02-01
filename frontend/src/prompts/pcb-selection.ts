@@ -36,25 +36,28 @@ export interface PCBSuggestionRequest {
 export interface PCBSuggestionResponse {
   blocks: Array<{
     slug: string
-    gridX: number
-    gridY: number
-    rotation: 0 | 180
+    gridX?: number
+    gridY?: number
+    rotation?: 0 | 180
     reason: string
+    isRemote?: boolean
   }>
   boardSize: { width: number; height: number }
   notes: string
 }
 
 // Zod schema for response validation with sensible defaults
+// gridX/gridY are optional to support remote blocks which don't have grid positions
 const PCBBlockSchema = z.object({
   slug: z.string(),
-  gridX: z.number(),
-  gridY: z.number(),
+  gridX: z.number().optional(),
+  gridY: z.number().optional(),
   rotation: z
     .union([z.literal(0), z.literal(180)])
     .optional()
     .default(0),
   reason: z.string().optional().default(''),
+  isRemote: z.boolean().optional(), // Flag for remote blocks that don't go on the grid
 })
 
 const PCBSuggestionResponseSchema = z.object({
@@ -214,14 +217,17 @@ export function parsePCBSuggestionResponse(content: string): PCBSuggestionRespon
 
   const parsed = result.data
 
-  // Calculate board size if not provided
+  // Calculate board size if not provided (only from grid-placed blocks)
   let boardSize = parsed.boardSize
   if (!boardSize) {
     let maxX = 0
     let maxY = 0
     for (const block of parsed.blocks) {
-      maxX = Math.max(maxX, block.gridX + 1)
-      maxY = Math.max(maxY, block.gridY + 1)
+      // Skip remote blocks (no grid position)
+      if (block.gridX !== undefined && block.gridY !== undefined) {
+        maxX = Math.max(maxX, block.gridX + 1)
+        maxY = Math.max(maxY, block.gridY + 1)
+      }
     }
     boardSize = { width: Math.max(2, maxX), height: Math.max(4, maxY) }
   }
@@ -231,8 +237,9 @@ export function parsePCBSuggestionResponse(content: string): PCBSuggestionRespon
       slug: b.slug,
       gridX: b.gridX,
       gridY: b.gridY,
-      rotation: b.rotation as 0 | 180,
+      rotation: b.rotation as 0 | 180 | undefined,
       reason: b.reason,
+      isRemote: b.isRemote,
     })),
     boardSize,
     notes: parsed.notes,
@@ -267,8 +274,10 @@ export function validatePCBSuggestion(
   }
 
   // Check for overlaps (basic check - doesn't account for block sizes)
+  // Skip remote blocks which don't have grid positions
   const positions = new Set<string>()
   for (const block of suggestion.blocks) {
+    if (block.gridX === undefined || block.gridY === undefined) continue // Skip remote blocks
     const key = `${block.gridX},${block.gridY}`
     if (positions.has(key)) {
       errors.push(`Multiple blocks at position (${block.gridX},${block.gridY})`)
@@ -276,8 +285,9 @@ export function validatePCBSuggestion(
     positions.add(key)
   }
 
-  // Check bounds
+  // Check bounds (skip remote blocks)
   for (const block of suggestion.blocks) {
+    if (block.gridX === undefined || block.gridY === undefined) continue // Skip remote blocks
     if (block.gridX < 0 || block.gridY < 0) {
       errors.push(`Block ${block.slug} has negative position`)
     }

@@ -26,10 +26,11 @@ export type BlockSelectionInput = z.infer<typeof BlockSelectionInputSchema>
 
 const BlockPlacementSchema = z.object({
   slug: z.string(),
-  gridX: z.number(),
-  gridY: z.number(),
-  rotation: z.union([z.literal(0), z.literal(180)]),
+  gridX: z.number().optional(), // Optional for remote blocks
+  gridY: z.number().optional(), // Optional for remote blocks
+  rotation: z.union([z.literal(0), z.literal(180)]).optional(),
   reason: z.string(),
+  isRemote: z.boolean().optional(), // Flag for remote blocks that don't go on the grid
 })
 
 export const BlockSelectionOutputSchema = z.object({
