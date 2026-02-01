@@ -8,7 +8,6 @@
 import { z } from 'zod'
 import type { LangGraphNode, NodeConfig, NodeContext, NodeInvokeResult } from './types'
 import { registerNode } from './registry'
-import { buildFinalSpecPrompt } from '../../../prompts/finalSpec'
 
 // =============================================================================
 // Schemas
@@ -26,11 +25,13 @@ const SelectedBlueprintSchema = z.object({
   prompt: z.string(),
 })
 
+// Input is now minimal - all context comes from @variables in system prompt
+// Fields are optional for backward compatibility
 export const FinalizationInputSchema = z.object({
-  description: z.string().min(1, 'Description is required'),
-  feasibility: FeasibilitySchema,
-  decisions: z.array(DecisionSchema).default([]),
-  selectedBlueprint: SelectedBlueprintSchema,
+  description: z.string().optional(),
+  feasibility: FeasibilitySchema.optional(),
+  decisions: z.array(DecisionSchema).optional().default([]),
+  selectedBlueprint: SelectedBlueprintSchema.optional(),
 })
 export type FinalizationInput = z.infer<typeof FinalizationInputSchema>
 
@@ -89,19 +90,15 @@ export type FinalizationOutput = z.infer<typeof FinalizationOutputSchema>
 // =============================================================================
 
 async function invokeFinalization(
-  input: FinalizationInput,
+  _input: FinalizationInput,
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<FinalizationOutput>> {
-  // System prompt comes from database (required)
+  // System prompt comes from database with @variables already expanded
   const systemPrompt = context.systemPrompt
 
-  const userPrompt = buildFinalSpecPrompt(
-    input.description,
-    input.feasibility,
-    input.decisions,
-    input.selectedBlueprint.prompt
-  )
+  // Simple user prompt - all context is in the system prompt via @variables
+  const userPrompt = `Generate the final specification JSON based on the context provided. Include all required fields: name, summary, pcbSize, inputs, outputs, power, communication, enclosure, and estimatedBOM.`
 
   const response = await context.llmChat({
     messages: [
@@ -146,6 +143,7 @@ export const finalizationNode: LangGraphNode<
   outputSchema: FinalizationOutputSchema,
   defaultTemperature: 0.3,
   category: 'spec',
+  contextTypes: ['projectState'], // Enables @description, @feasibility, @decisions, @selectedBlueprintPrompt
   invoke: invokeFinalization,
 }
 

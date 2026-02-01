@@ -38,6 +38,7 @@ interface BreakpointData {
   systemPromptTemplate: string // Raw template with @variables
   systemPromptExpanded: string // Expanded with actual values
   dynamicContext: DynamicContext
+  extractedImages: Array<{ url: string; label: string }> // Images from @image: variables
   fullInput: Record<string, unknown>
   invocationConfig: NodeConfig | null
   tokenEstimate: number
@@ -87,6 +88,64 @@ function formatValue(value: unknown): string {
 }
 
 /**
+ * Result of template expansion including extracted images
+ */
+interface TemplateExpansionResult {
+  text: string
+  images: Array<{ url: string; label: string }>
+}
+
+/**
+ * Resolve an image variable path to a URL
+ * Supports: @image:visualization.selected, @image:visualization.0, etc.
+ */
+function resolveImageUrl(path: string, dynamicContext: DynamicContext): string | null {
+  const spec = dynamicContext.projectState?.spec
+  const blueprints = spec?.blueprints as Array<{ url?: string; prompt?: string }> | undefined
+
+  // @image:visualization.selected - the selected blueprint image
+  if (path === 'visualization.selected') {
+    const selectedIndex = spec?.selectedBlueprint
+    if (
+      typeof selectedIndex === 'number' &&
+      blueprints &&
+      selectedIndex >= 0 &&
+      selectedIndex < blueprints.length
+    ) {
+      return blueprints[selectedIndex]?.url || null
+    }
+    return null
+  }
+
+  // @image:visualization.N - specific blueprint by index
+  const indexMatch = path.match(/^visualization\.(\d+)$/)
+  if (indexMatch) {
+    const index = parseInt(indexMatch[1], 10)
+    if (blueprints && index >= 0 && index < blueprints.length) {
+      return blueprints[index]?.url || null
+    }
+    return null
+  }
+
+  // @image:visualization - all blueprints (returns first one, use .selected or .N for specific)
+  if (path === 'visualization') {
+    if (blueprints && blueprints.length > 0 && blueprints[0]?.url) {
+      return blueprints[0].url
+    }
+    return null
+  }
+
+  // Generic path resolution for future extensibility
+  // e.g., @image:projectState.spec.someImageField
+  const value = getNestedValue(dynamicContext, path)
+  if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:'))) {
+    return value
+  }
+
+  return null
+}
+
+/**
  * Expand template variables in system prompt with dynamic context
  *
  * Supported patterns:
@@ -95,9 +154,31 @@ function formatValue(value: unknown): string {
  * - @projectState.path.to.value - Nested property access (e.g., @projectState.spec.feasibility.suggestedRevisions.revisedDescription)
  * - @feasibility - Shortcut for @projectState.spec.feasibility
  * - @feasibility.path - Nested access from feasibility (e.g., @feasibility.suggestedRevisions.revisedDescription)
+ * - @description - Shortcut for @projectState.spec.description
+ * - @decisions - Formatted list of user decisions (question: answer)
+ * - @selectedBlueprintPrompt - The selected blueprint's prompt text
+ * - @visualization - All blueprint renders
+ * - @visualization.selected - The selected blueprint render
+ * - @image:path - Include image in LLM call (e.g., @image:visualization.selected)
  */
-function expandTemplateVariables(prompt: string, dynamicContext: DynamicContext): string {
+function expandTemplateVariables(
+  prompt: string,
+  dynamicContext: DynamicContext
+): TemplateExpansionResult {
+  const extractedImages: Array<{ url: string; label: string }> = []
   let expanded = prompt
+
+  // Extract @image: patterns FIRST (before other expansions)
+  // Pattern: @image:path (e.g., @image:visualization.selected)
+  const imagePattern = /@image:([a-zA-Z0-9_.]+)/g
+  expanded = expanded.replace(imagePattern, (match, path) => {
+    const imageUrl = resolveImageUrl(path, dynamicContext)
+    if (imageUrl) {
+      extractedImages.push({ url: imageUrl, label: path })
+      return `[Attached image: ${path}]`
+    }
+    return `(Image not available: ${path})`
+  })
 
   // Special formatting for @availableBlocks (as a list)
   if (expanded.includes('@availableBlocks')) {
@@ -111,6 +192,86 @@ function expandTemplateVariables(prompt: string, dynamicContext: DynamicContext)
       expanded = expanded.replace(/@availableBlocks(?![.\w])/g, blocksList)
     } else {
       expanded = expanded.replace(/@availableBlocks(?![.\w])/g, '(No hardware blocks available)')
+    }
+  }
+
+  // Expand @description shortcut (must come before @projectState to avoid partial matches)
+  if (expanded.includes('@description')) {
+    const description = dynamicContext.projectState?.spec?.description
+    expanded = expanded.replace(
+      /@description(?![.\w])/g,
+      description || '(No description available)'
+    )
+  }
+
+  // Expand @decisions with special formatting
+  if (expanded.includes('@decisions')) {
+    const decisions = dynamicContext.projectState?.spec?.decisions as
+      | Array<{ question: string; questionId?: string; answer: string }>
+      | undefined
+    if (decisions && decisions.length > 0) {
+      const formatted = decisions.map((d) => `- ${d.question}: ${d.answer}`).join('\n')
+      expanded = expanded.replace(/@decisions(?![.\w])/g, formatted)
+    } else {
+      expanded = expanded.replace(/@decisions(?![.\w])/g, '(No user decisions recorded)')
+    }
+  }
+
+  // Expand @selectedBlueprintPrompt - extracts the prompt from blueprints[selectedBlueprint]
+  if (expanded.includes('@selectedBlueprintPrompt')) {
+    const spec = dynamicContext.projectState?.spec
+    const selectedIndex = spec?.selectedBlueprint
+    const blueprints = spec?.blueprints as Array<{ prompt?: string; url?: string }> | undefined
+    let blueprintPrompt = '(No blueprint selected)'
+    if (
+      typeof selectedIndex === 'number' &&
+      blueprints &&
+      selectedIndex >= 0 &&
+      selectedIndex < blueprints.length
+    ) {
+      blueprintPrompt = blueprints[selectedIndex]?.prompt || '(No prompt for selected blueprint)'
+    }
+    expanded = expanded.replace(/@selectedBlueprintPrompt(?![.\w])/g, blueprintPrompt)
+  }
+
+  // Expand @visualization.selected first (more specific pattern)
+  if (expanded.includes('@visualization.selected')) {
+    const spec = dynamicContext.projectState?.spec
+    const selectedIndex = spec?.selectedBlueprint
+    const blueprints = spec?.blueprints as Array<{ prompt?: string; url?: string }> | undefined
+    let selectedVisualization = '(No visualization selected)'
+    if (
+      typeof selectedIndex === 'number' &&
+      blueprints &&
+      selectedIndex >= 0 &&
+      selectedIndex < blueprints.length
+    ) {
+      const selected = blueprints[selectedIndex]
+      selectedVisualization = JSON.stringify(
+        {
+          index: selectedIndex,
+          url: selected?.url || null,
+          prompt: selected?.prompt || null,
+        },
+        null,
+        2
+      )
+    }
+    expanded = expanded.replace(/@visualization\.selected(?![.\w])/g, selectedVisualization)
+  }
+
+  // Expand @visualization - all blueprint renders
+  if (expanded.includes('@visualization')) {
+    const blueprints = dynamicContext.projectState?.spec?.blueprints as
+      | Array<{ prompt?: string; url?: string }>
+      | undefined
+    if (blueprints && blueprints.length > 0) {
+      const formatted = blueprints
+        .map((b, i) => `[${i}] URL: ${b.url || '(pending)'}\n    Prompt: ${b.prompt || '(none)'}`)
+        .join('\n')
+      expanded = expanded.replace(/@visualization(?!\.)/g, formatted)
+    } else {
+      expanded = expanded.replace(/@visualization(?!\.)/g, '(No visualizations generated)')
     }
   }
 
@@ -136,7 +297,7 @@ function expandTemplateVariables(prompt: string, dynamicContext: DynamicContext)
     return formatValue(value)
   })
 
-  return expanded
+  return { text: expanded, images: extractedImages }
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -259,7 +420,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   // Expand template variables in system prompt with dynamic context
   // This happens BEFORE breakpoint creation so debug shows the actual expanded prompt
-  const expandedSystemPrompt = expandTemplateVariables(systemPrompt, dynamicContext)
+  const { text: expandedSystemPrompt, images: extractedImages } = expandTemplateVariables(
+    systemPrompt,
+    dynamicContext
+  )
 
   // Check for debug_it mode breakpoint
   const skipBreakpoint = context.request.headers.get('X-Skip-Debug-Breakpoint') === 'true'
@@ -301,6 +465,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       systemPromptTemplate: systemPrompt, // Raw template with @variables
       systemPromptExpanded: expandedSystemPrompt, // Expanded for actual LLM call
       dynamicContext,
+      extractedImages, // Images from @image: variables
       fullInput: body.input,
       invocationConfig: body.config || null,
       tokenEstimate,
@@ -313,7 +478,29 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   // Create LLM chat function that proxies to our API
+  // Automatically injects @image: extracted images into user messages
   const llmChat = async (params: LLMChatParams): Promise<LLMChatResponse> => {
+    // If we have extracted images from @image: variables, inject them into the first user message
+    let messages = params.messages
+    if (extractedImages.length > 0) {
+      messages = params.messages.map((msg, index) => {
+        // Find the first user message and make it multimodal
+        if (msg.role === 'user' && index === params.messages.findIndex((m) => m.role === 'user')) {
+          // Convert to multimodal format
+          const textContent = typeof msg.content === 'string' ? msg.content : ''
+          const imageContents = extractedImages.map((img) => ({
+            type: 'image_url' as const,
+            image_url: { url: img.url },
+          }))
+          return {
+            role: 'user' as const,
+            content: [{ type: 'text' as const, text: textContent }, ...imageContents],
+          }
+        }
+        return msg
+      })
+    }
+
     // Call the internal LLM API
     const llmResponse = await fetch(new URL('/api/llm/chat', context.request.url), {
       method: 'POST',
@@ -322,7 +509,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         Cookie: context.request.headers.get('Cookie') || '',
       },
       body: JSON.stringify({
-        messages: params.messages,
+        messages,
         temperature: params.temperature,
         model: params.model,
         maxTokens: params.maxTokens,

@@ -14,103 +14,44 @@ PHAESTUS is an AI-powered hardware design platform that transforms natural langu
 
 **Deterministic Grid Layout**: 12.7mm grid with pre-routed bus interfaces eliminates autorouting failures and enables predictable board dimensions with parametric enclosures.
 
-## Deployment
-
-**Live**: https://phaestus.app
-
-**CI/CD**: Deployments happen automatically via GitHub Actions on push to `main`. The workflow:
-1. Runs tests (`pnpm test:run`)
-2. Builds (`pnpm build`)
-3. Deploys to Cloudflare Pages (from `frontend/` directory to pick up `wrangler.toml` and `functions/`)
-
-**Manual deployment** (if needed):
-```bash
-cd frontend && pnpm build && pnpm exec wrangler pages deploy dist --project-name=phaestus
-```
-
-**Cloudflare Resources**:
-- D1 Database: `phaestus`
-- R2 Bucket: `phaestus-assets`
-- Secrets: `OPENROUTER_API_KEY`, `TEXT_MODEL_SLUG`, `IMAGE_MODEL_SLUG`
-
 ## Commands
 
 All commands run from `frontend/` (monorepo with single package):
 
 ```bash
-# Development
-pnpm dev           # Frontend only (port 5173, no API)
 pnpm dev:full      # Full stack with D1/R2 (port 8788)
-
-# Testing
-pnpm test          # Watch mode
-pnpm test:run      # Single run
-pnpm test:coverage # With coverage
-pnpm test src/prompts/feasibility.test.ts  # Run single test file
-
-# Build & Deploy
-pnpm build         # TypeScript + Vite build
 pnpm check         # Run all CI checks (typecheck, lint, test, build)
-pnpm deploy        # Check + deploy to Cloudflare Pages
-
-# Code Quality
-pnpm typecheck     # Type checking
-pnpm lint          # ESLint
-pnpm lint:fix      # Fix lint issues
-pnpm format        # Prettier
-
-# Database
-pnpm db:migrate        # Run migrations locally
-pnpm db:migrate:remote # Run migrations on production D1
-pnpm db:reset          # Reset local DB and re-run all migrations
+pnpm test:run      # Single test run
 ```
-
-**Path Aliases**: `@/` resolves to `frontend/src/`. For functions, use `@/../functions/` (e.g., `import { extractAndValidateJson } from '@/../functions/lib/json'`).
-
-**IMPORTANT - Functions Import Rules**:
-- Files in `functions/` are bundled separately by wrangler, which does NOT resolve `@/` aliases
-- If a `src/` file is imported by functions code (directly or transitively), it MUST use relative imports, not `@/`
-- Safe pattern: Files only used by frontend can use `@/`. Files used by functions must use relative paths.
-- Example: `functions/lib/block-validator.ts` imports from `../../src/schemas/block` (relative), not `@/schemas/block`
 
 ## Pre-Commit Checklist
 
-Before committing, always run the full CI check locally:
+**CRITICAL: NEVER commit when `pnpm check` fails.**
 
 ```bash
 cd frontend && pnpm check
 ```
 
-This runs `typecheck && test:run && build` which matches CI. The build step includes wrangler bundling the functions, which catches:
-- Path alias resolution failures in functions code
-- Missing dependencies
-- Bundle size issues
+This runs `typecheck && test:run && build` which matches CI.
 
-**CRITICAL: NEVER commit when `pnpm check` fails.** Even if you believe failures are "pre-existing" or "unrelated" to your changes:
-- CI will fail regardless, blocking deployment
-- If tests fail, you MUST fix them before committing
-- Do NOT assume failures are pre-existing without verifying `main` has the same failures
-- If you cannot fix a test, explicitly ask the user before proceeding
-
-**Common CI failures not caught by `pnpm typecheck` alone**:
-1. **`@/` aliases in functions-imported files** - wrangler can't resolve them
-2. **Missing exports** - TypeScript may pass but bundler fails
-3. **Circular dependencies** - Can cause bundle failures
+**Functions Import Rules**:
+- Files in `functions/` are bundled separately by wrangler, which does NOT resolve `@/` aliases
+- If a `src/` file is imported by functions code (directly or transitively), it MUST use relative imports
+- Example: `functions/lib/block-validator.ts` imports from `../../src/schemas/block` (relative), not `@/schemas/block`
 
 ## Architecture
 
 ### The Spec Pipeline (Core Flow)
 
-The app guides users through a 5-step process implemented in `src/pages/SpecPage.tsx` (362 lines, orchestration only). Step components are in `src/components/spec-steps/`:
+5-step process in `src/pages/SpecPage.tsx`. Step components in `src/components/spec-steps/`:
 
-| Step | Status Value | Component | What Happens |
-|------|--------------|-----------|--------------|
-| 0 | `analyzing` | FeasibilityStep | LLM scores idea, checks against available components |
-| 1 | `refining` | RefinementStep | Iterative Q&A to lock down decisions (2-3 rounds) |
-| 2 | `generating` | BlueprintStep | 4 product renders generated in parallel |
-| 3 | `selecting` | SelectionStep | User picks design, can regenerate with feedback |
-| 4 | `finalizing` | FinalizationStep | LLM generates locked spec with BOM |
-| 5 | `complete` | → SpecViewerPage | Final spec displayed |
+| Step | Status | Component | What Happens |
+|------|--------|-----------|--------------|
+| 0 | `analyzing` | FeasibilityStep | LLM scores idea against available components |
+| 1 | `refining` | RefinementStep | Iterative Q&A (2-3 rounds) |
+| 2 | `generating` | BlueprintStep | 4 product renders in parallel |
+| 3 | `selecting` | SelectionStep | User picks design |
+| 4 | `finalizing` | FinalizationStep | Locked spec with BOM |
 
 **Project Status Values**: `draft`, `analyzing`, `refining`, `generating`, `selecting`, `finalizing`, `complete`, `rejected`
 
@@ -118,7 +59,7 @@ The app guides users through a 5-step process implemented in `src/pages/SpecPage
 
 ### Available Hardware Components
 
-The feasibility prompt (`src/prompts/feasibility.ts`) defines what can be built:
+Defined in `src/prompts/feasibility.ts`:
 
 - **MCU**: ESP32-C6 (WiFi 6, BLE 5.3, Zigbee/Thread)
 - **Sensors**: BME280, SHT40, LIS3DH, VEML7700, VL53L0X, PIR
@@ -127,804 +68,107 @@ The feasibility prompt (`src/prompts/feasibility.ts`) defines what can be built:
 - **Displays**: 0.96" OLED (I2C), SPI LCD
 - **Input**: Up to 4 buttons, rotary encoder
 
-When creating example prompts, use ONLY these components or the project will be rejected.
-
-### Blog System
-
-Development blog documenting PHAESTUS progress. 40 posts with images.
-
-**Structure**:
-- `frontend/public/blogs/blogXXXX/` - Blog directories (4-digit zero-padded)
-- `frontend/public/blogs/blogXXXX/blog.md` - Markdown content
-- `frontend/public/blogs/blogXXXX/*.png` - Images (referenced in markdown)
-- `frontend/src/data/blog-manifest.json` - Pre-generated index of all blogs
-
-**Manifest Schema** (`blog-manifest.json`):
-```json
-{
-  "generatedAt": "2026-01-20T...",
-  "entries": [
-    {
-      "slug": "blog0040",
-      "number": 40,
-      "title": "Blog 40: Gerber Merging - Why We Gave Up on KiCad Native Files",
-      "date": "2026-01-19",
-      "excerpt": "First 200 chars of content...",
-      "thumbnailPath": "/blogs/blog0040/...",  // null if no thumbnail
-      "markdownPath": "/blogs/blog0040/blog.md",
-      "readingTime": 4
-    }
-  ]
-}
-```
-
-**Components**:
-- `src/pages/BlogPage.tsx` - Blog listing with cards
-- `src/pages/BlogPostPage.tsx` - Individual post with client-side markdown rendering
-- `src/components/blog/BlogCard.tsx` - Card component with thumbnail
-- `src/pages/AdminBlogPage.tsx` - Admin blog management
-- `src/components/admin/BlogSettingsModal.tsx` - Blog settings
-
-**Adding a New Blog**:
-1. Create `frontend/public/blogs/blogXXXX/blog.md`
-2. Add images to the same directory (URL-encode spaces in markdown: `![alt](image%20name.png)`)
-3. Update `frontend/src/data/blog-manifest.json`:
-   - Add entry to `entries` array (newest first)
-   - Set `thumbnailPath` to image path or `null`
-   - Update `generatedAt` timestamp
-
-**Routes**:
-- `/blog` - Blog listing
-- `/blog/:slug` - Individual post (e.g., `/blog/blog0037`)
-
 ### Key Directories
 
-- `src/pages/` - Route components (SpecPage.tsx orchestrates the pipeline)
-- `src/pages/workspace/` - Workspace stage views (Spec, PCB, Enclosure, Firmware, Export)
-- `src/components/spec-steps/` - Individual step components (Feasibility, Refinement, Blueprint, Selection, Finalization)
-- `src/components/admin/langgraph/` - LangGraph admin UI (NodeEditor, StructureViewer, SubgraphSelector, FlowGraph)
-- `src/components/debug/` - Debug mode components (DebugBreakpointModal)
-- `src/types/langgraph.ts` - Shared types for LangGraph visualization
-- `src/prompts/` - LLM prompt templates (feasibility, refinement, blueprint, firmware, enclosure, orchestrator)
-- `src/services/` - LLM client, PCB merging, KiCad parsing, Gerber merging
-- `src/services/orchestrator/` - Modular orchestrator (tools/, helpers/, types.ts, orchestrator.ts, index.ts)
-- `src/services/langgraph/` - LangGraph state machine (state.ts, graph.ts, checkpointer.ts, nodes/)
-- `src/services/gerber-merge.ts` - Gerber layer merging for manufacturing (~800 lines)
-- `src/services/bom-generator.ts` - BOM aggregation with nofit marking
-- `src/components/pcb/RemoteTypeBlocksPreview.tsx` - Cable-connected blocks preview
-- `src/components/pcb/BoardSelector` - Board selection (in PCBStageView)
-- `src/services/design-document.ts` - Design JSON/Markdown export
-- `src/lib/tokn/` - TOKN KiCad parser (sexpr.ts, kicadSch.ts, connectivity.ts, toknEncoder.ts)
-- `src/stores/` - Zustand state (auth, workspace, debug-breakpoint)
-- `src/components/admin/blocks/` - Block management UI (BlockImportWizard, BlockEditor)
-- `functions/api/` - Cloudflare Pages Functions (auth, llm, projects, admin, orchestrator)
-- `functions/api/admin/orchestrator/` - Admin API for managing orchestrator prompts, edges, and hooks
-- `functions/api/admin/blocks/` - Block management API (generate, upload, import, CRUD)
-- `functions/lib/` - Shared utilities (gemini.ts, logger.ts, json.ts, block-validator.ts)
-- `scripts/` - CLI tools (export-kicad-block.ts)
-- `migrations/` - D1 SQL migrations (18 migrations)
+```
+src/pages/                    Route components
+src/pages/workspace/          Workspace stages (Spec, PCB, Enclosure, Firmware, Export)
+src/components/spec-steps/    Pipeline step components
+src/prompts/                  LLM prompt templates
+src/services/                 LLM client, PCB/Gerber merging
+src/services/langgraph/       State machine (state.ts, graph.ts, checkpointer.ts)
+src/lib/tokn/                 KiCad S-expression parser
+src/stores/                   Zustand state
+functions/api/                Cloudflare Pages Functions
+functions/lib/                Shared utilities (gemini.ts, logger.ts, json.ts)
+```
 
-### Database Schema
+### Database Schema (D1)
 
-Key tables in D1 (18 migrations):
-
-**Core Tables:**
-- **users**: id, username, password_hash (bcrypt, auto-upgraded from plaintext on login), is_admin, control_mode, is_approved
-- **sessions**: id, user_id, expires_at (7-day sliding expiry, extended on activity)
-- **projects**: id, user_id, name, description, status, spec (JSON ProjectSpec)
-- **pcb_blocks**: 21 pre-seeded circuit modules with definition (JSON), version, files (schematic, PCB, STEP)
-- **llm_requests**: Usage tracking with cost_usd, latency_ms
-- **debug_logs**: Admin logging (category, level, request_id for correlation)
-- **conversations**: project_id, messages (JSON), timestamps
-- **gallery_visibility**: project_id, visibility (public/private/anonymous)
-
-**Orchestrator Tables (migrations 0013-0016):**
-- **orchestrator_prompts**: 8 pre-seeded agent prompts (orchestrator, feasibility, enclosure, enclosure_vision, firmware, naming, enclosure_review, firmware_review) with node_name, system_prompt, category (agent/generator/reviewer), stage, token_estimate, version
-- **orchestrator_edges**: Workflow graph defining transitions between orchestrator nodes
-- **orchestrator_hooks**: Pre/post execution hooks for orchestrator node workflows
-- **context_tags**: Dynamic context tagging for orchestrator state management
-
-**Block Tables (migrations 0017-0018):**
-- **pcb_blocks.definition**: JSON block.json schema with metadata, electrical, physical properties
-- **pcb_blocks.version**: Schema version tracking for block definitions
-
-**Debug Tables (migration 0034):**
-- **debug_breakpoints**: Stores paused LLM execution state for debug_it mode (id, user_id, node_name, system_prompt, user_context, full_input, invocation_config, expires_at)
-
-### LLM Integration
-
-All requests proxy through `/api/llm/*`:
-- Supports OpenRouter and Google Gemini APIs
-- Model selection: request → env var → DB setting → hardcoded default
-- Gemini requires message format conversion (system → user+model ack)
-- Cost tracked per request in `llm_requests` table
-
-**Response Parsing**: Uses regex `/\{[\s\S]*\}/` to extract JSON from LLM responses. Fragile but works.
+**Core**: `users`, `sessions`, `projects`, `pcb_blocks`, `llm_requests`, `conversations`
+**Orchestrator**: `orchestrator_prompts`, `orchestrator_edges`, `orchestrator_hooks`
+**Debug**: `debug_breakpoints` (for debug_it mode)
 
 ### Auth
 
 - Session cookies, 7-day expiry, HttpOnly
-- WorkOS AuthKit OAuth integration available
 - Default user: `mike`/`mike` (admin)
-- User approval workflow (is_approved flag)
 - Control modes: `vibe_it`, `fix_it`, `design_it`, `debug_it` (admin-only)
-- Public routes: `/api/auth/*`, `/api/blocks`, `/api/images`, `/api/gallery/*`
 
-### Frontend Routes
-
-| Route | Page | Description |
-|-------|------|-------------|
-| `/` | HomePage | Landing page |
-| `/login` | LoginPage | Authentication |
-| `/projects` | ProjectsPage | User's project list |
-| `/projects/new` | NewProjectPage | Create new project |
-| `/projects/:id` | SpecPage | 5-step spec pipeline |
-| `/projects/:id/workspace` | WorkspacePage | PCB/Enclosure/Firmware/Export stages |
-| `/projects/:id/view` | SpecViewerPage | View completed spec |
-| `/blog` | BlogPage | Development blog listing |
-| `/blog/:slug` | BlogPostPage | Individual blog post |
-| `/gallery` | GalleryPage | Public project showcase |
-| `/admin` | AdminPage | Admin dashboard |
-| `/admin/logs` | AdminLogsPage | Debug log viewer |
-| `/admin/users` | AdminUsersPage | User management |
-| `/admin/blocks` | AdminBlocksPage | PCB block management |
-| `/admin/llms` | AdminLLMsPage | LLM model configuration |
-| `/admin/langgraph` | AdminLangGraphPage | LangGraph admin (Debugger, Threads, Structure, Prompts tabs) |
-| `/admin/blog` | AdminBlogPage | Blog management |
-
-## Development Workflow
-
-Two servers running in dev:
-- **Vite (5173)** - Frontend with hot reload, proxies `/api/*` to wrangler
-- **Wrangler Pages (8788)** - API functions with D1/R2 bindings
-
-Use `pnpm dev:full` to start both together.
-
-## Common Issues & Patterns
-
-### Race Conditions in SpecPage
-
-The step calculation and render conditions can race with async mutations. Pattern:
-- `currentStep` is calculated from `spec` state (immediate)
-- `project.status` comes from server (async via mutation + query invalidation)
-- **Fix**: Don't gate renders on `project.status` when `currentStep` already captures the logic
-
-**NOTE**: Race conditions have been largely resolved by the SpecPage refactor. Step components now receive explicit props and callbacks, reducing tight coupling to server state.
+## Patterns
 
 ### LLM Response Handling
 
 ```typescript
-// Pattern used throughout SpecPage
 const response = await llm.chat({ messages, temperature: 0.3, projectId })
 const jsonMatch = response.content.match(/\{[\s\S]*\}/)
 if (!jsonMatch) throw new Error('No JSON in response')
 const result = JSON.parse(jsonMatch[0])
 ```
 
-### Image Generation
+Better: Use `extractAndValidateJson` from `functions/lib/json.ts` with Zod schemas.
 
-```typescript
-// 4 variations generated in parallel
-const prompts = buildBlueprintPrompts(description, decisions, feasibility)
-prompts.forEach((prompt, i) => {
-  generateImage(prompt).then(url => setBlueprints(...))
-})
-```
+### Step Component Pattern
 
-### State Updates in Pipeline Steps
-
-Each step component receives `onComplete` callback. Pattern:
+Each step receives `onComplete` callback:
 1. Component does async work (LLM call, image gen)
 2. On success, calls `onComplete(result)`
-3. Parent updates mutation, which invalidates query
-4. Query refetch triggers re-render with new step
+3. Parent updates mutation → query invalidation → re-render
 
-### Blueprint Regeneration with Feedback
+## Blog System
 
-Users can click a blueprint to enter detail view, provide feedback, and regenerate just that image:
-```typescript
-const newPrompt = `${originalPrompt} User feedback: ${feedback}`
-const newUrl = await generateImage(newPrompt)
-// Update just the one blueprint in the array
-```
+40 posts in `frontend/public/blogs/blogXXXX/`. Manifest at `src/data/blog-manifest.json`.
 
-### Debug Logging
+**Adding a Blog**:
+1. Create `frontend/public/blogs/blogXXXX/blog.md`
+2. Add images to same directory
+3. Update `frontend/src/data/blog-manifest.json` (newest first)
 
-Use the logger utility for admin-visible logs:
-```typescript
-import { createLogger } from '../lib/logger'
+## Deployment
 
-const logger = createLogger(env, user, requestId)
-await logger.llm('Chat completed', { model, tokens, latencyMs })
-await logger.error('llm', 'API failed', { error: errorText })
-```
+**Live**: https://phaestus.app
 
-Categories: `general`, `api`, `auth`, `llm`, `project`, `image`, `db`, `middleware`
-Levels: `debug`, `info`, `warn`, `error`
+CI/CD via GitHub Actions on push to `main`: tests → build → Cloudflare Pages deploy.
 
-Logs are stored in D1 for admin users and viewable via `GET /api/admin/logs`.
+**Manual**: `cd frontend && pnpm build && pnpm exec wrangler pages deploy dist --project-name=phaestus`
 
-### Guardrails
+## Technical Debt
 
-- **Max refinement rounds**: 5 question/answer cycles, then proceeds to blueprints
-- **Input length limit**: 2000 characters on description (~500 tokens)
-- **Image timeout**: 60 seconds per image generation
-- **LLM retry**: 3 attempts with exponential backoff (1s, 2s), 4xx errors fail immediately
+**Remaining**:
+- Standardize error logging (replace console.error with logger utility)
+- Migrate remaining JSON parsing to `extractAndValidateJson`
+- Incomplete I2C validation (regex misses variable-stored addresses)
 
-## Testing
-
-Vitest with 600 tests, ~65% overall coverage. Target 90%+ on core modules.
-
-**Fully Tested (90%+)**:
-- `src/prompts/*.ts` - All prompt template builders (96.51%)
-- `src/db/schema.ts` - Row transforms (100%)
-- `src/stores/auth.ts` - Auth state (100%)
-- `src/stores/workspace.ts` - Workspace state (100%)
-- `functions/lib/*.ts` - Logger, Gemini, JSON utilities (93.51%)
-- `functions/api/llm/pricing.ts` - Cost calculations (100%)
-
-**Partially Tested**:
-- `src/services/llm.ts` - LLM client (61%)
-- `src/services/orchestrator/` - Multi-agent orchestration (modular, ~34%)
-- `src/services/pcb-merge.ts` - KiCad block merging (46%)
-
-**Not Tested**:
-- `src/lib/openscadRenderer.ts` - WASM wrapper (0%)
-- API handlers - Need miniflare mocking
-
-## Known Technical Debt
-
-### Fixed Issues
-- ~~**Plaintext passwords**~~ - FIXED: bcrypt with auto-upgrade on login
-- ~~**Streaming token counts**~~ - FIXED: Estimated at ~4 chars/token
-- ~~**No retry logic**~~ - FIXED: Exponential backoff (3 attempts, 1s/2s delays), 4xx errors fail immediately
-- ~~**Duplication**~~ - FIXED: Shared `functions/lib/gemini.ts` utility
-- ~~**JSON Parsing Fragility**~~ - FIXED: Zod validation utilities in `functions/lib/json.ts` (see below)
-- ~~**Memory Leak in Orchestrator**~~ - FIXED: `trimConversationHistory()` limits to 15 messages
-- ~~**API Key Exposure**~~ - FIXED: Error responses sanitized in `image.ts`
-- ~~**Session ID Regex**~~ - FIXED: UUID format validation in `_middleware.ts`
-- ~~**SpecPage size**~~ - FIXED: Split into 8 components (1253 → 362 lines, 71% reduction)
-- ~~**Missing Input Validation**~~ - FIXED: Server-side length limits enforced
-- ~~**No Rate Limiting**~~ - FIXED: 5 attempts/15min window, 30min lockout on login
-- ~~**Type Unsafety**~~ - FIXED: Added runtime guards in SpecPage handlers
-- ~~**Missing Error Boundary**~~ - FIXED: ErrorBoundary component at app root
-- ~~**No Request Size Limits**~~ - FIXED: 10MB general, 5MB for specs
-- ~~**Session Cleanup**~~ - FIXED: Admin endpoint `/api/admin/cleanup-sessions`
-
-### Remaining Issues
-
-#### Medium Priority
-1. ~~**Orchestrator complexity**~~ - FIXED: Split into modular architecture in `src/services/orchestrator/`
-2. **Standardize error logging** - Replace console.error with logger utility throughout (68 calls to migrate)
-3. **Use extractAndValidateJson** - Migrate remaining JSON parsing in step components
-
-#### Low Priority
-4. **Incomplete I2C Validation** - Regex-based firmware validation misses variable-stored addresses
-5. **Missing Pagination Bounds** - Large offset values can cause expensive queries
-
-## Zod JSON Validation
-
-Safe JSON parsing with schema validation is available in `functions/lib/json.ts`:
-
-```typescript
-import { extractAndValidateJson } from '@/../functions/lib/json'
-import { FeasibilityResponseSchema } from '@/schemas/llm-responses'
-
-// Parse and validate LLM response in one step
-const result = extractAndValidateJson(response.content, FeasibilityResponseSchema)
-if (!result.success) {
-  console.error('Parse error:', result.error) // Detailed validation errors
-  return
-}
-const data = result.data // Fully typed!
-```
-
-**Available functions:**
-- `extractAndValidateJson<T>(content, schema)` - Extract JSON from LLM responses with validation
-- `safeJsonParseWithSchema<T>(json, schema)` - Parse pure JSON with validation
-- `extractJsonFromContent<T>(content)` - Legacy extraction without validation (deprecated)
-
-**Pre-built schemas:** See `src/schemas/llm-responses.ts` for common response types.
-
-## Quick Reference
-
-| What | Where |
-|------|-------|
-| Example prompts | `src/pages/NewProjectPage.tsx` lines 6-13 |
-| Available components | `src/prompts/feasibility.ts` lines 10-45 |
-| Step components | `src/components/spec-steps/` |
-| Step orchestration | `src/pages/SpecPage.tsx` |
-| Workspace stages | `src/pages/workspace/*StageView.tsx` |
-| Error boundary | `src/components/ErrorBoundary.tsx` |
-| LLM chat | `functions/api/llm/chat.ts` |
-| Image generation | `functions/api/llm/image.ts` |
-| Auth middleware | `functions/api/_middleware.ts` |
-| Rate limiting | `functions/api/auth/login.ts` |
-| Session cleanup | `functions/api/admin/cleanup-sessions.ts` |
-| Project CRUD | `functions/api/projects/` |
-| Gemini format util | `functions/lib/gemini.ts` |
-| Logger utility | `functions/lib/logger.ts` |
-| JSON validation | `functions/lib/json.ts` |
-| LLM response schemas | `src/schemas/llm-responses.ts` |
-| Pricing calculations | `functions/api/llm/pricing.ts` |
-| Admin logs API | `functions/api/admin/logs.ts` |
-| LangGraph admin page | `src/pages/AdminLangGraphPage.tsx` |
-| LangGraph node editor | `src/components/admin/langgraph/NodeEditor.tsx` |
-| LangGraph structure viewer | `src/components/admin/langgraph/StructureViewer.tsx` |
-| LangGraph invoke API | `functions/api/langgraph/invoke/[nodeName].ts` |
-| Debug breakpoint modal | `src/components/debug/DebugBreakpointModal.tsx` |
-| Debug breakpoint store | `src/stores/debug-breakpoint.ts` |
-| Breakpoint resolve API | `functions/api/langgraph/breakpoint/[id]/resolve.ts` |
-| Breakpoint test API | `functions/api/langgraph/breakpoint/[id]/test.ts` |
-| Orchestrator prompts API | `functions/api/admin/orchestrator/` |
-| TOKN KiCad parser | `src/lib/tokn/` |
-| KiCad file parser | `src/services/kicad-parser.ts` |
-| Block definition schema | `src/schemas/block.ts` |
-| Block import wizard | `src/components/admin/blocks/BlockImportWizard.tsx` |
-| Block generation prompt | `src/prompts/block-generation.ts` |
-| Admin blocks API | `functions/api/admin/blocks/` |
-| Block file serving | `functions/api/blocks/[slug]/files/` |
-| Block import API | `functions/api/admin/blocks/import.ts` |
-| Block validator | `functions/lib/block-validator.ts` |
-| Gerber merger | `src/services/gerber-merge.ts` |
-| Remote board service | `src/services/remote-board.ts` |
-| BOM generator | `src/services/bom-generator.ts` |
-| Design document export | `src/services/design-document.ts` |
-| Remote-type blocks preview | `src/components/pcb/RemoteTypeBlocksPreview.tsx` |
-| Board selector | `src/pages/workspace/PCBStageView.tsx` (BoardSelector component) |
-| LangGraph state | `src/services/langgraph/state.ts` |
-| LangGraph graph | `src/services/langgraph/graph.ts` |
-| LangGraph checkpointer | `src/services/langgraph/checkpointer.ts` |
-| LangGraph nodes | `src/services/langgraph/nodes/` |
-| LangGraph types | `src/types/langgraph.ts` |
-| KiCad export script | `scripts/export-kicad-block.ts` |
-| Blog listing page | `src/pages/BlogPage.tsx` |
-| Blog post page | `src/pages/BlogPostPage.tsx` |
-| Blog manifest | `src/data/blog-manifest.json` |
-| Blog content | `public/blogs/blogXXXX/blog.md` (40 posts) |
-
-## Cost Insights
-
-Image generation dominates costs at ~2000x the price of text completions:
-- `gemini-3-flash-preview`: ~$0.000001/request
-- `gemini-2.5-flash-image`: $0.002/image
-
-Consider caching images aggressively and batching requests.
-
-## Workspace Pipeline
-
-Post-spec stages for hardware generation:
-
-| Stage | Key Files | What Happens |
-|-------|-----------|--------------|
-| PCB | `pages/workspace/PCBStageView.tsx`, `services/pcb-merge.ts` | Block selection, KiCad schematic merging, board selector for main/remote-type blocks |
-| Enclosure | `pages/workspace/EnclosureStageView.tsx`, `lib/openscadRenderer.ts` | OpenSCAD generation, STL preview |
-| Firmware | `pages/workspace/FirmwareStageView.tsx`, `prompts/firmware.ts` | ESP32 code generation, Monaco editor |
-| Export | `pages/workspace/ExportStageView.tsx` | Spec MD/JSON, BOM CSV, Design Document, Panelized Gerbers, ZIP downloads |
-
-**Orchestrator** (`services/orchestrator/`): Multi-agent system that can autonomously progress through stages using tools defined in `prompts/orchestrator.ts`. Modular architecture with separate files for tools, helpers, and types.
-
-### TOKN KiCad Parser
-
-Custom TypeScript implementation for parsing KiCad files (`src/lib/tokn/`):
-
-| File | Purpose |
-|------|---------|
-| `sexpr.ts` | S-expression tokenizer and parser |
-| `kicadSch.ts` | Schematic parser (components, wires, labels, pins) |
-| `connectivity.ts` | Net list builder using union-find algorithm |
-| `toknEncoder.ts` | Compact TOKN format encoder (~92% token reduction) |
-
-Used by the block import wizard to extract components, nets, and bus signals from KiCad files.
-
-### Block Import System
-
-Admin block management (`/admin/blocks`):
-
-1. **Block Import Wizard** - Upload KiCad files (.kicad_sch, .kicad_pcb)
-   - TOKN parser extracts components, nets, board dimensions
-   - LLM generates block.json with metadata, electrical specs, physical properties
-   - Zod validation against BlockDefinition schema
-   - User review/edit JSON before saving
-   - Files uploaded to R2, definition stored in D1
-
-2. **Manual Editor** - Direct JSON editing for advanced users
-
-**Block Definition Schema** (`src/schemas/block.ts`):
-- `metadata`: name, category, description, grid dimensions
-- `electrical`: interfaces (I2C, SPI, GPIO), power (mA draw), bus signals
-- `physical`: connectors, edge connections, mounting
-- `files`: schematic, PCB, STEP model references
-
-### LangGraph Node System
-
-LangGraph nodes are standalone LLM-powered functions stored in `orchestrator_prompts` table. Each node has:
-- A system prompt (editable via admin UI)
-- Input/output Zod schemas
-- Optional dynamic context requirements (`contextTypes`)
-
-| Node Name | Category | Stage | Purpose |
-|-----------|----------|-------|---------|
-| `feasibility` | agent | spec | Analyzes user description against available hardware blocks |
-| `naming` | generator | spec | Generates creative project names |
-| `enclosure` | generator | enclosure | Generates OpenSCAD code for basic enclosures |
-| `enclosure_vision` | generator | enclosure | Blueprint-aware enclosure generation using product images |
-| `firmware` | generator | firmware | Generates ESP32-C6 firmware (Arduino/PlatformIO) |
-| `enclosure_review` | reviewer | enclosure | Reviews OpenSCAD against specification |
-| `firmware_review` | reviewer | firmware | Reviews firmware code for correctness |
-
-**Admin Management**: The LangGraph admin page (`/admin/langgraph`) provides:
-- **Prompts tab**: Edit system prompts with token estimation, deep-link via `?node=feasibility`
-- **Debugger tab**: Visual execution debugging with React Flow graph
-- **Threads tab**: Checkpoint/state inspection
-- **Structure tab**: Read-only tree view of graph hierarchy
-
-### LangGraph Architecture
-
-The orchestrator uses a **hierarchical subgraph architecture** for state machine-based multi-agent workflows (`src/services/langgraph/`):
-
-```
-OrchestratorGraph (parent)
-├── router
-├── spec_stage (subgraph) → feasibility_check, refinement_loop, blueprint_generation, finalization
-├── pcb_stage (subgraph) → block_selection, placement_optimization, design_validation
-├── enclosure_stage (subgraph) → dimension_analysis, openscad_generation, review_loop
-├── firmware_stage (subgraph) → component_analysis, code_generation, review_loop
-└── export_stage (subgraph) → gerber_merge, bom_generation, zip_packaging
-```
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `state.ts` | 604 | Orchestrator state definition and reducers |
-| `graph.ts` | 450 | LangGraph graph definition with nodes and edges |
-| `checkpointer.ts` | 628 | D1-backed state persistence for resumable workflows |
-| `nodes/` | - | Individual node implementations |
-
-**Key Features**:
-- **Subgraph Architecture** - Parent orchestrator coordinates 5 stage subgraphs
-- **Checkpointing** - Workflows can be paused and resumed across sessions
-- **State Reducers** - Immutable state updates with conflict resolution
-- **Tool Integration** - 6 tool modules (control, enclosure, firmware, pcb, spec, index)
-- **Dynamic Context** - Runtime data injection based on node `contextTypes` (availableBlocks, projectState)
-
-**Admin Page** (`/admin/langgraph`) - 4 tabs:
-- **Debugger**: Visual execution debugging with subgraph selector, React Flow graph
-- **Threads**: Checkpoint/state inspection with namespace support
-- **Structure**: Read-only tree view of code-defined graph hierarchy
-- **Prompts**: Edit node system prompts (deep-link: `?node=feasibility`)
-
-### Debug Mode (debug_it)
-
-Admin-only control mode that pauses execution before each LLM call, showing a breakpoint modal.
-
-**How it works**:
-1. User sets control mode to `debug_it` in Settings
-2. When a LangGraph node is invoked, execution pauses before the LLM call
-3. A modal displays:
-   - **System Prompt** (with Reload and Edit buttons)
-   - **Dynamic Context** (available blocks, project state fetched at runtime)
-   - **User Input** (the request parameters)
-4. User can:
-   - **Edit** - Opens prompt editor in new tab (`/admin/langgraph?node=xxx`)
-   - **Reload** - Fetches updated prompt from database
-   - **Test** - Runs the LLM call and shows outgoing/incoming messages without continuing
-   - **Continue** - Proceeds with execution
-   - **Cancel** - Aborts and navigates to projects list
-
-**Key Files**:
-- `src/stores/debug-breakpoint.ts` - Zustand store for breakpoint modal state
-- `src/components/debug/DebugBreakpointModal.tsx` - The breakpoint inspection modal
-- `functions/api/langgraph/invoke/[nodeName].ts` - Creates breakpoints when debug_it mode active
-- `functions/api/langgraph/breakpoint/[id]/resolve.ts` - Continues or cancels execution
-- `functions/api/langgraph/breakpoint/[id]/test.ts` - Test LLM call without resolving
-
-**Dynamic Context System**:
-Nodes declare what runtime data they need via `contextTypes`:
-```typescript
-// In node definition
-contextTypes: ['availableBlocks', 'projectState']
-```
-
-The invoke handler fetches this data at runtime:
-- `availableBlocks` - Active PCB blocks from database with name, category, description, interfaces
-- `projectState` - Current project status and spec
-
-This separates static prompts (edited in admin) from dynamic runtime data.
-
-### Gerber Merging
-
-PHAESTUS uses Gerber-based merging for manufacturing output (`src/services/gerber-merge.ts`, ~800 lines):
-
-**Why Gerbers, not KiCad S-expressions?**
-- Gerbers are flat vector graphics without electrical context
-- No net ID conflicts, no symbol library dependencies
-- ~400 lines vs thousands for KiCad parsing
-- Blog 40 documents this architectural decision
-
-**Process**:
-1. Each block exports 4-layer Gerbers (F.Cu, In1.Cu, In2.Cu, B.Cu) + masks, silk, edge cuts
-2. Gerber merger calculates actual block dimensions from edge cuts (or copper fallback)
-3. Blocks are stacked based on actual heights with 1mm overlap for bus connectors
-4. Layers concatenated to produce merged manufacturing files
-
-**Dynamic Height Stacking**:
-- Blocks are sorted by gridY (descending) and stacked from top to bottom
-- Y offset = sum of preceding block heights minus overlaps
-- This handles blocks of any size, not just 12.7mm grid-aligned ones
-- Fixes gaps that occurred when blocks weren't exactly 12.7mm tall
-
-**Supported Layers**:
-- Copper: `F.Cu`, `In1.Cu`, `In2.Cu`, `B.Cu`
-- Silkscreen: `F.SilkS`, `B.SilkS`
-- Solder mask: `F.Mask`, `B.Mask`
-- Edge cuts, drill files (Excellon)
-
-### Remote-Type Blocks (Cable-Connected)
-
-Blocks that connect to the main board via cable (FFC, JST, etc.) rather than through the bus connector. These are typically user interface panels, displays, or off-board connectors.
-
-**Identifying Remote-Type Blocks**:
-- Blocks with `isRemote: true` in their definition
-- Blocks without a `gridSize` property (cannot be placed on the grid)
-- Examples: button panels, display modules, USB connectors
-
-**Board Selector UI**:
-- Located in gerbers and 3D view modes
-- "Main Board" button - shows grid-based blocks
-- "Cable-Connected" button - shows remote-type blocks (only visible if any exist)
-- Selecting a board automatically reloads gerbers for that board
-
-**Per-Board Generation**:
-- Main board schematic/PCB stored in `pcbArtifacts.schematicData`/`pcbData`
-- Remote-type blocks schematic/PCB stored in `pcbArtifacts.remoteTypeSchematicData`/`remoteTypePcbData`
-- Each board type gets independent merged gerbers
-
-**UI Components**:
-- `BoardSelector` (in PCBStageView.tsx) - Switch between main and cable-connected
-- `RemoteTypeBlocksPreview.tsx` - Preview of cable-connected blocks in grid view
-
-**Schema** (`src/db/schema.ts`):
-```typescript
-interface PCBArtifacts {
-  // Main board
-  schematicData?: string
-  pcbData?: string
-  // Remote-type blocks (cable-connected)
-  remoteTypeSchematicData?: string
-  remoteTypePcbData?: string
-  // Common
-  placedBlocks: PlacedBlock[]
-  boardSize?: { width: number; height: number; unit: 'mm' }
-  // ...
-}
-```
-
-### Block Upload Requirements
-
-Blocks require 5 files for complete import (`functions/lib/block-validator.ts`):
-
-| File | Extension | Required | Purpose |
-|------|-----------|----------|---------|
-| Schematic | `.kicad_sch` | Yes | Circuit schematic |
-| PCB | `.kicad_pcb` | Yes | Board layout |
-| STEP | `.step` / `.stp` | Yes | 3D model for enclosure fitting |
-| Gerbers | `gerbers/*.gbr` | Yes | Manufacturing files (ZIP) |
-| Definition | `block.json` | Yes | Metadata, electrical, physical specs |
-| Thumbnail | `.png` | No | Preview image |
-
-**KiCad Export Script** (`scripts/export-kicad-block.ts`):
-```bash
-pnpm export-block <path-to-kicad-project> [--upload] [--slug name]
-```
-- Exports 4-layer gerbers + drill files
-- Generates STEP 3D model
-- Creates ZIP with all required files
-- Optional: uploads directly to admin/blocks/import API
-
-## API Endpoints (40+ endpoints)
-
-**LLM** (`/api/llm/*`):
-- `POST /api/llm/chat` - Main chat endpoint with retry logic
-- `POST /api/llm/image` - Image generation with cost tracking
-- `POST /api/llm/stream` - Server-sent events streaming
-- `POST /api/llm/tools` - Gemini function calling
-
-**Projects** (`/api/projects/*`):
-- `GET /api/projects` - List with pagination and status filter
-- `POST /api/projects` - Create new project
-- `GET /api/projects/{id}` - Get project details
-- `PUT /api/projects/{id}` - Update project
-- `DELETE /api/projects/{id}` - Delete project
-- `GET /api/projects/{id}/conversations` - Get conversation history
-- `POST /api/projects/{id}/visibility` - Set gallery visibility
-
-**Auth** (`/api/auth/*`):
-- `POST /api/auth/login` - Credential login with rate limiting
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Current user info
-- `POST /api/auth/callback` - OAuth callback
-- `POST /api/auth/workos` - WorkOS OAuth
-
-**Gallery** (`/api/gallery/*`):
-- `GET /api/gallery` - Public project gallery
-- `GET /api/gallery/{id}` - Get public project details
-
-**Admin** (`/api/admin/*`):
-- `GET /api/admin/logs` - View debug logs
-- `POST /api/admin/cleanup-sessions` - Remove expired sessions
-- `GET /api/admin/users` - User management
-
-**Admin Blocks** (`/api/admin/blocks/*`):
-- `GET /api/admin/blocks` - List blocks with filtering
-- `POST /api/admin/blocks` - Create block from JSON definition
-- `POST /api/admin/blocks/generate` - LLM-assisted generation from KiCad files
-- `POST /api/admin/blocks/upload` - Upload KiCad files to R2
-- `PUT /api/admin/blocks/{slug}` - Update block definition
-- `DELETE /api/admin/blocks/{slug}` - Delete block
-
-**Admin Orchestrator** (`/api/admin/orchestrator/*`):
-- `GET /api/admin/orchestrator/prompts` - List all orchestrator prompts
-- `POST /api/admin/orchestrator/prompts` - Create new prompt
-- `PUT /api/admin/orchestrator/prompts/{node_name}` - Update prompt
-- `POST /api/admin/orchestrator/prompts/{node_name}/reset` - Reset to default
-- `GET /api/admin/orchestrator/edges` - Get workflow graph
-- `PUT /api/admin/orchestrator/edges` - Update workflow
-- `GET /api/admin/orchestrator/hooks` - Get hook configuration
-- `PUT /api/admin/orchestrator/hooks` - Update hooks
-
-**Public Orchestrator** (`/api/orchestrator/*`):
-- `GET /api/orchestrator/prompts/{node_name}` - Get runtime prompt (used by orchestrator service)
-
-**Admin LangGraph** (`/api/admin/langgraph/*`):
-- `GET /api/admin/langgraph/graph` - Get code-defined graph structure (orchestrator + subgraphs)
-- `GET /api/admin/langgraph/threads` - List checkpointed threads
-- `DELETE /api/admin/langgraph/threads/{id}` - Delete thread checkpoint
-
-**LangGraph Invoke** (`/api/langgraph/*`):
-- `POST /api/langgraph/invoke/{nodeName}` - Invoke a LangGraph node (pauses if debug_it mode)
-- `POST /api/langgraph/breakpoint/{id}/resolve` - Continue or cancel a debug breakpoint
-- `POST /api/langgraph/breakpoint/{id}/test` - Test LLM call without resolving breakpoint
-
-**Blocks** (`/api/blocks/*`):
-- `GET /api/blocks` - List all PCB blocks
-- `GET /api/blocks/{slug}` - Block details
-- `GET /api/blocks/{slug}/files/*` - Block file serving (schematic, PCB, STEP, thumbnail)
-
-**Settings** (`/api/settings/*`):
-- `GET /api/settings` - User settings
-- `PUT /api/settings` - Update settings
-- `GET /api/settings/usage` - Usage/cost tracking
-
-## Manufacturing Output System
-
-**CURRENT SPRINT FOCUS**: Get a real board manufactured and ordered!
-
-### End-to-End Flow
-
-```
-KiCad Files → Block Import → Database + R2 → PCB Stage → Manufacturing Export → ZIP → Fab House
-```
-
-### Block Import Pipeline (Admin)
-
-1. **Upload**: User provides `.kicad_sch`, `.kicad_pcb`, gerber ZIP, STEP, position file
-2. **Parse**: TOKN parser extracts components, nets, board dimensions (~92% token reduction)
-3. **Generate**: LLM creates `block.json` with bus taps, I2C addresses, power specs
-4. **Validate**: Zod schema + semantic validation (edge connections, reserved addresses)
-5. **Store**: Definition → D1 `pcb_blocks`, Files → R2 `blocks/{slug}/`
-
-**Key Files**:
-- `src/components/admin/blocks/BlockImportWizard.tsx` - 3-step wizard UI
-- `src/lib/tokn/` - KiCad S-expression parser
-- `src/prompts/block-generation.ts` - LLM prompt for block.json generation
-- `functions/api/admin/blocks/generate.ts` - API endpoint for LLM generation
-- `functions/api/admin/blocks/upload.ts` - R2 file upload
+## Manufacturing System
 
 ### Gerber Merging (`src/services/gerber-merge.ts`)
 
-**Critical Constants**:
 ```typescript
 const GRID_SIZE_MM = 12.7        // 0.5" grid unit
 const VERTICAL_OVERLAP_MM = 1.0  // Bus connector overlap
 ```
 
-**Coordinate Transform** (Dynamic Height-Based):
-1. Find unified bounds using **edge cuts** (not copper/silkscreen) - includes width AND height
-2. Normalize block to origin: `normalized = raw - minX/minY`
-3. Calculate Y offsets by stacking blocks based on actual heights (not fixed grid)
-4. Offset by: `X = gridX * 12.7mm`, `Y = calculated offset from stacking`
+Blocks stacked by actual height from edge cuts layer, not fixed grid. 1mm overlap for bus connector pads.
 
-**Stacking Algorithm**:
-1. Group blocks by column (gridX)
-2. Sort each column by gridY descending (highest first)
-3. Stack from Y=0 upward: `nextY = currentY + blockHeight - 1mm overlap`
-4. This produces tight stacking regardless of actual block dimensions
+### Block Requirements
 
-**Why 1mm Vertical Overlap?**
-- Bus connector pads need to merge at block seams
-- Without overlap, pads would be 1mm apart
-- Each block boundary overlaps by 1mm for proper electrical connection
+Each block needs: `.kicad_sch`, `.kicad_pcb`, `.step`, `gerbers.zip`, `block.json`
 
-### BOM & Centroid Generation
+Schema in `src/schemas/block.ts`: metadata, electrical (interfaces, power), physical (connectors).
 
-**BOM** (`src/services/bom-generator.ts`):
-- Aggregates components by value+footprint
-- Prefixes references: `prefixReference("R1", "bme280-sensor")` → `"BME280_R1"`
-- Marks nofit components (0R resistors not populated)
-- Exports: Standard CSV and LCSC-compatible CSV
+### Remote-Type Blocks
 
-**Centroid** (`src/services/centroid-merge.ts`):
-- Parses KiCad `.pos` files
-- Applies grid offset + panel offset for final coordinates
-- Filters out nofit components (SMT won't place them)
-- Exports: CSV and KiCad `.pos` format
+Cable-connected blocks (`isRemote: true`) generate separate board artifacts stored in `pcbArtifacts.remoteType*` fields.
 
-### Manufacturing Export ZIP
+## Quick Reference
 
-```
-{project}-manufacturing.zip
-├── gerbers/
-│   ├── *-F_Cu.gtl, *-B_Cu.gbl      (copper)
-│   ├── *-In1_Cu.g1, *-In2_Cu.g2    (inner layers)
-│   ├── *-F_Mask.gts, *-B_Mask.gbs  (solder mask)
-│   ├── *-F_SilkS.gto, *-B_SilkS.gbo (silkscreen)
-│   ├── *-Edge_Cuts.gm1             (board outline)
-│   └── *.drl                        (drill)
-├── *-bom.csv                        (component list)
-├── *-bom-lcsc.csv                   (LCSC format)
-├── *-centroid.csv                   (pick-and-place)
-├── *-tap-config.json                (0R resistor states)
-└── README.txt
-```
-
-### Manufacturing Data Flow
-
-```
-PCBArtifacts (placedBlocks, resistorTapStates)
-         ↓
-Load gerber ZIPs + position files from R2
-         ↓
-mergeGerbers() → per-board merged gerbers
-         ↓
-generateManufacturingBOM() → component aggregation
-         ↓
-Package ZIP → Download → Send to fab house
-```
-
-### Required Block Files (R2 Storage)
-
-Each block in `blocks/{slug}/` needs:
-- `{slug}.kicad_sch` - Schematic source
-- `{slug}.kicad_pcb` - PCB layout source
-- `{slug}.step` - 3D model for enclosure
-- `{slug}-gerbers.zip` - Manufacturing gerbers (10 layers)
-- `{slug}-pos.csv` - Component positions
-- `block.json` - Full definition
-
-### Gerber Debug Logging
-
-When debugging gerber loading issues, the browser console will show:
-- `Fetching gerbers from /api/blocks/{slug}/files/{filename}`
-- `Got gerber ZIP blob: {size} bytes`
-- `ZIP contains {count} files: [filenames]`
-- `Matched {filename} to {layer}` or `No layer match for file: {filename}`
-
-This helps diagnose issues with gerber file naming conventions.
-
-### Common Manufacturing Issues
-
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| Blocks misaligned | Using copper/silk for bounds | Use edge cuts layer |
-| V-score over short board | Full-width top v-score | Split by max-height |
-| Components not merged | Wrong board size | Parse actual gerber dimensions |
-| BOM missing data | No MPN/LCSC in block.json | Add to components array |
-
-### LCSC BOM Format
-
-```csv
-Quantity,Manufacture Part Number,Manufacturer,Description,LCSC Part Number,Package,Customer Part Number
-10,RC0402FR-0710KL,Yageo,10k 0402,C25744,0402,"BME280_R1, BME280_R2..."
-```
-
-Requires `mpn` and optionally `lcscPartNumber` in `BlockComponentSchema`.
+| What | Where |
+|------|-------|
+| Example prompts | `src/pages/NewProjectPage.tsx:6-13` |
+| Available components | `src/prompts/feasibility.ts:10-45` |
+| LLM chat API | `functions/api/llm/chat.ts` |
+| Auth middleware | `functions/api/_middleware.ts` |
+| Block schema | `src/schemas/block.ts` |
+| Gerber merger | `src/services/gerber-merge.ts` |
+| LangGraph state | `src/services/langgraph/state.ts` |
+| Debug breakpoint | `src/components/debug/DebugBreakpointModal.tsx` |

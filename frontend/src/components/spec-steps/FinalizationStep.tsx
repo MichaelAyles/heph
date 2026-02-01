@@ -48,17 +48,11 @@ export function FinalizationStep({ project, spec, onComplete, onCancel }: Finali
       try {
         setStatus('Creating comprehensive product specification...')
 
-        const selectedPrompt =
-          spec.selectedBlueprint !== null ? spec.blueprints[spec.selectedBlueprint]?.prompt : ''
-
+        // All context comes from projectState via @variables in the system prompt
+        // No need to pass data explicitly - the invoke handler fetches it
         const data = await invokeLangGraphNode({
           nodeName: 'finalization',
-          input: {
-            description: spec.description,
-            feasibility: spec.feasibility || {},
-            decisions: spec.decisions || [],
-            selectedBlueprint: { prompt: selectedPrompt },
-          },
+          input: {}, // Empty - context comes from @variables
           projectId: project.id,
         })
 

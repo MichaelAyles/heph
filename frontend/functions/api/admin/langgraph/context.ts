@@ -132,6 +132,119 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       requiresProject: true,
     })
 
+    // @description shortcut
+    const description = dynamicContext.projectState.spec?.description as string | undefined
+    variables.push({
+      name: '@description',
+      description: "User's original project description",
+      value: description || '(No description available)',
+      type: 'string',
+      requiresProject: true,
+    })
+
+    // @decisions shortcut
+    const decisions = dynamicContext.projectState.spec?.decisions as
+      | Array<{ question: string; answer: string }>
+      | undefined
+    const decisionsFormatted =
+      decisions && decisions.length > 0
+        ? decisions.map((d) => `- ${d.question}: ${d.answer}`).join('\n')
+        : '(No user decisions recorded)'
+    variables.push({
+      name: '@decisions',
+      description: 'Formatted list of user decisions (question: answer)',
+      value: decisionsFormatted,
+      type: 'string',
+      requiresProject: true,
+    })
+
+    // @selectedBlueprintPrompt shortcut
+    const spec = dynamicContext.projectState.spec as Record<string, unknown> | null
+    const selectedIndex = spec?.selectedBlueprint as number | undefined
+    const blueprints = spec?.blueprints as Array<{ prompt?: string; url?: string }> | undefined
+    let blueprintPrompt = '(No blueprint selected)'
+    if (
+      typeof selectedIndex === 'number' &&
+      blueprints &&
+      selectedIndex >= 0 &&
+      selectedIndex < blueprints.length
+    ) {
+      blueprintPrompt = blueprints[selectedIndex]?.prompt || '(No prompt for selected blueprint)'
+    }
+    variables.push({
+      name: '@selectedBlueprintPrompt',
+      description: "The selected blueprint's prompt text",
+      value: blueprintPrompt,
+      type: 'string',
+      requiresProject: true,
+    })
+
+    // @visualization - all blueprint renders
+    const visualizationsFormatted =
+      blueprints && blueprints.length > 0
+        ? blueprints
+            .map(
+              (b, i) => `[${i}] URL: ${b.url || '(pending)'}\n    Prompt: ${b.prompt || '(none)'}`
+            )
+            .join('\n')
+        : '(No visualizations generated)'
+    variables.push({
+      name: '@visualization',
+      description: 'All generated product visualization renders',
+      value: visualizationsFormatted,
+      type: 'string',
+      requiresProject: true,
+    })
+
+    // @visualization.selected - the selected blueprint
+    let selectedVisualization: unknown = '(No visualization selected)'
+    if (
+      typeof selectedIndex === 'number' &&
+      blueprints &&
+      selectedIndex >= 0 &&
+      selectedIndex < blueprints.length
+    ) {
+      const selected = blueprints[selectedIndex]
+      selectedVisualization = {
+        index: selectedIndex,
+        url: selected?.url || null,
+        prompt: selected?.prompt || null,
+      }
+    }
+    variables.push({
+      name: '@visualization.selected',
+      description: 'The user-selected visualization render',
+      value: selectedVisualization,
+      type: 'object',
+      requiresProject: true,
+    })
+
+    // @image: variables - these ATTACH images to the LLM call (not just text)
+    const selectedImageUrl =
+      typeof selectedIndex === 'number' &&
+      blueprints &&
+      selectedIndex >= 0 &&
+      selectedIndex < blueprints.length
+        ? blueprints[selectedIndex]?.url || null
+        : null
+    variables.push({
+      name: '@image:visualization.selected',
+      description: 'ATTACH the selected visualization image to the LLM call (multimodal)',
+      value: selectedImageUrl ? `[Will attach: ${selectedImageUrl}]` : '(No image available)',
+      type: 'string',
+      requiresProject: true,
+    })
+    variables.push({
+      name: '@image:visualization.0',
+      description: 'ATTACH visualization at index 0 to the LLM call (multimodal)',
+      value:
+        blueprints && blueprints[0]?.url
+          ? `[Will attach: ${blueprints[0].url}]`
+          : '(No image available)',
+      type: 'string',
+      requiresProject: true,
+    })
+
     // @feasibility shortcuts
     const feasibility = dynamicContext.projectState.spec?.feasibility as
       | Record<string, unknown>
@@ -221,6 +334,55 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       description: 'Full project state object (select a project to view)',
       value: null,
       type: 'object',
+      requiresProject: true,
+    })
+    variables.push({
+      name: '@description',
+      description: "User's original project description (select a project)",
+      value: null,
+      type: 'string',
+      requiresProject: true,
+    })
+    variables.push({
+      name: '@decisions',
+      description: 'Formatted list of user decisions (select a project)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+    })
+    variables.push({
+      name: '@selectedBlueprintPrompt',
+      description: "The selected blueprint's prompt text (select a project)",
+      value: null,
+      type: 'string',
+      requiresProject: true,
+    })
+    variables.push({
+      name: '@visualization',
+      description: 'All generated product visualization renders (select a project)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+    })
+    variables.push({
+      name: '@visualization.selected',
+      description: 'The user-selected visualization render (select a project)',
+      value: null,
+      type: 'object',
+      requiresProject: true,
+    })
+    variables.push({
+      name: '@image:visualization.selected',
+      description: 'ATTACH the selected visualization image to the LLM call (select a project)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+    })
+    variables.push({
+      name: '@image:visualization.0',
+      description: 'ATTACH visualization at index 0 to the LLM call (select a project)',
+      value: null,
+      type: 'string',
       requiresProject: true,
     })
     variables.push({
