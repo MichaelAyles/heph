@@ -20,6 +20,8 @@ interface BlockInfo {
   category: string
   description: string
   interfaces: string[]
+  gridSize?: [number, number] // [width, height] in grid units
+  isRemote?: boolean
 }
 
 interface DynamicContext {
@@ -73,6 +75,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           category: def?.metadata?.category || def?.category || 'unknown',
           description: def?.metadata?.description || def?.description || '',
           interfaces: def?.electrical?.interfaces ? Object.keys(def.electrical.interfaces) : [],
+          gridSize: def?.gridSize as [number, number] | undefined,
+          isRemote: def?.isRemote as boolean | undefined,
         }
       } catch {
         return {
@@ -113,10 +117,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   // @availableBlocks
   const availableBlocksValue = dynamicContext.availableBlocks
-    .map(
-      (b) =>
-        `- ${b.name} (${b.category}): ${b.description}${b.interfaces?.length ? ` [${b.interfaces.join(', ')}]` : ''}`
-    )
+    .map((b) => {
+      const sizeStr = b.gridSize
+        ? `${b.gridSize[0]}x${b.gridSize[1]}`
+        : b.isRemote
+          ? 'remote'
+          : 'unknown'
+      return `- ${b.name} slug:${b.slug}, type:${b.category}, size:${sizeStr} desc:"${b.description}"`
+    })
     .join('\n')
   variables.push({
     name: '@availableBlocks',
