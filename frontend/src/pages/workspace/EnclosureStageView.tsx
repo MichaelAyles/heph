@@ -282,19 +282,13 @@ export function EnclosureStageView() {
 
       if (hasBlueprint) {
         // Vision-enabled generation using enclosure_vision node
-        setValidationStatus('Analyzing blueprint image...')
-
-        const blueprintBase64 = await fetchImageAsBase64(blueprintUrl)
-
         setValidationStatus('Generating enclosure from blueprint...')
 
-        // Only runtime input - the blueprint image
+        // Empty input - blueprint image comes from @image:visualization.selected
         // PCB dimensions and features are accessed via @pcb.boardSize and @finalSpec in system prompt
         const visionData = await invokeLangGraphNode({
           nodeName: 'enclosure_vision',
-          input: {
-            blueprintImage: `data:image/png;base64,${blueprintBase64}`,
-          },
+          input: {},
           projectId: project.id,
         })
 
