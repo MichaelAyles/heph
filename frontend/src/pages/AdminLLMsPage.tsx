@@ -48,6 +48,15 @@ interface UsageData {
   }
 }
 
+interface OpenRouterCredits {
+  credits: {
+    total: number
+    used: number
+    remaining: number
+  } | null
+  error?: string
+}
+
 async function fetchSettings(): Promise<{ settings: Settings }> {
   const response = await fetch('/api/settings')
   if (!response.ok) throw new Error('Failed to fetch settings')
@@ -57,6 +66,12 @@ async function fetchSettings(): Promise<{ settings: Settings }> {
 async function fetchUsage(): Promise<UsageData> {
   const response = await fetch('/api/settings/usage')
   if (!response.ok) throw new Error('Failed to fetch usage')
+  return response.json()
+}
+
+async function fetchOpenRouterCredits(): Promise<OpenRouterCredits> {
+  const response = await fetch('/api/settings/openrouter-credits')
+  if (!response.ok) throw new Error('Failed to fetch OpenRouter credits')
   return response.json()
 }
 
@@ -96,6 +111,12 @@ export function AdminLLMsPage() {
   const { data: usageData } = useQuery({
     queryKey: ['usage'],
     queryFn: fetchUsage,
+  })
+
+  const { data: openRouterCredits, isLoading: creditsLoading } = useQuery({
+    queryKey: ['openrouter-credits'],
+    queryFn: fetchOpenRouterCredits,
+    staleTime: 60000, // Cache for 1 minute
   })
 
   const mutation = useMutation({
@@ -339,10 +360,40 @@ export function AdminLLMsPage() {
                 USAGE STATISTICS
               </h3>
 
+              {/* OpenRouter Balance */}
+              {provider === 'openrouter' && (
+                <div className="mb-6 p-3 bg-surface-900 border border-copper/30">
+                  <div className="text-xs text-steel-dim mb-1 flex items-center gap-2">
+                    OpenRouter Account Balance
+                    {creditsLoading && (
+                      <Loader2 className="w-3 h-3 animate-spin text-steel-dim" strokeWidth={1.5} />
+                    )}
+                  </div>
+                  {openRouterCredits?.credits ? (
+                    <div className="flex items-baseline gap-4">
+                      <div>
+                        <span className="text-lg font-mono text-emerald-400">
+                          {formatCost(openRouterCredits.credits.remaining)}
+                        </span>
+                        <span className="text-xs text-steel-dim ml-1">remaining</span>
+                      </div>
+                      <div className="text-xs text-steel-dim">
+                        {formatCost(openRouterCredits.credits.used)} used of{' '}
+                        {formatCost(openRouterCredits.credits.total)} total
+                      </div>
+                    </div>
+                  ) : openRouterCredits?.error ? (
+                    <div className="text-xs text-amber-400">{openRouterCredits.error}</div>
+                  ) : !creditsLoading ? (
+                    <div className="text-xs text-steel-dim">Unable to fetch balance</div>
+                  ) : null}
+                </div>
+              )}
+
               {/* Summary Cards */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-3 bg-surface-900 border border-surface-600">
-                  <div className="text-xs text-steel-dim mb-1">Your Usage</div>
+                  <div className="text-xs text-steel-dim mb-1">Your Usage (Tracked)</div>
                   <div className="text-lg font-mono text-copper">
                     {formatCost(usageData.user.totals.totalCost)}
                   </div>
@@ -352,7 +403,7 @@ export function AdminLLMsPage() {
                   </div>
                 </div>
                 <div className="p-3 bg-surface-900 border border-surface-600">
-                  <div className="text-xs text-steel-dim mb-1">All Users (All Time)</div>
+                  <div className="text-xs text-steel-dim mb-1">All Users (Tracked)</div>
                   <div className="text-lg font-mono text-copper">
                     {formatCost(usageData.all.totals.totalCost)}
                   </div>
