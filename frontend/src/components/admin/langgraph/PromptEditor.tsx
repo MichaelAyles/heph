@@ -2,183 +2,26 @@
  * PromptEditor - Textarea with @variable autocomplete
  *
  * Provides intellisense-style autocomplete when typing @ in the prompt editor.
+ * Variables are fetched dynamically from the context API.
  */
 
 import { useState, useRef, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 
-// Available @variables with descriptions and metadata
-const AVAILABLE_VARIABLES = [
-  {
-    name: '@availableBlocks',
-    description: 'List of available hardware blocks formatted for prompts',
-    requiresProject: false,
-  },
-  {
-    name: '@projectState',
-    description: 'Full project state object',
-    requiresProject: true,
-  },
-  {
-    name: '@projectState.status',
-    description: 'Current project status',
-    requiresProject: true,
-  },
-  {
-    name: '@description',
-    description: "User's original project description",
-    requiresProject: true,
-  },
-  {
-    name: '@projectName',
-    description: 'Project name from final spec',
-    requiresProject: true,
-  },
-  {
-    name: '@finalSpec',
-    description: 'Full final specification object (JSON)',
-    requiresProject: true,
-  },
-  {
-    name: '@decisions',
-    description: 'Formatted list of user decisions (question: answer)',
-    requiresProject: true,
-  },
-  {
-    name: '@selectedBlueprintPrompt',
-    description: "The selected blueprint's prompt text",
-    requiresProject: true,
-  },
-  {
-    name: '@visualization',
-    description: 'All generated product visualization renders',
-    requiresProject: true,
-  },
-  {
-    name: '@visualization.selected',
-    description: 'The user-selected visualization render',
-    requiresProject: true,
-  },
-  {
-    name: '@image:visualization.selected',
-    description: 'ATTACH the selected visualization image to LLM call (~258 tokens)',
-    requiresProject: true,
-  },
-  {
-    name: '@image:visualization.0',
-    description: 'ATTACH visualization at index 0 to LLM call (~258 tokens)',
-    requiresProject: true,
-  },
-  // Feasibility variables
-  {
-    name: '@feasibility',
-    description: 'Full feasibility analysis object',
-    requiresProject: true,
-  },
-  {
-    name: '@feasibility.suggestedRevisions.revisedDescription',
-    description: 'AI-revised project description',
-    requiresProject: true,
-  },
-  {
-    name: '@feasibility.suggestedRevisions.summary',
-    description: 'Summary of suggested changes',
-    requiresProject: true,
-  },
-  {
-    name: '@feasibility.suggestedRevisions.changes',
-    description: 'List of suggested changes',
-    requiresProject: true,
-  },
-  {
-    name: '@feasibility.communication.type',
-    description: 'Communication type (e.g., BLE 5.0)',
-    requiresProject: true,
-  },
-  {
-    name: '@feasibility.overallScore',
-    description: 'Feasibility score (0-100)',
-    requiresProject: true,
-  },
-  {
-    name: '@feasibility.inputs.items',
-    description: 'List of input components',
-    requiresProject: true,
-  },
-  {
-    name: '@feasibility.outputs.items',
-    description: 'List of output components',
-    requiresProject: true,
-  },
-  // PCB variables
-  {
-    name: '@pcb',
-    description: 'Full PCB artifacts object',
-    requiresProject: true,
-  },
-  {
-    name: '@pcb.placedBlocks',
-    description: 'Placed blocks with positions and rotations',
-    requiresProject: true,
-  },
-  {
-    name: '@pcb.boardSize',
-    description: 'Board dimensions (width, height in mm)',
-    requiresProject: true,
-  },
-  {
-    name: '@pcb.boardSize.width',
-    description: 'Board width in mm',
-    requiresProject: true,
-  },
-  {
-    name: '@pcb.boardSize.height',
-    description: 'Board height in mm',
-    requiresProject: true,
-  },
-  {
-    name: '@pcb.netList',
-    description: 'GPIO assignments and net connections',
-    requiresProject: true,
-  },
-  {
-    name: '@pcb.designJustifications',
-    description: 'Why blocks were selected',
-    requiresProject: true,
-  },
-  // Enclosure variables
-  {
-    name: '@enclosure',
-    description: 'Full enclosure artifacts object',
-    requiresProject: true,
-  },
-  {
-    name: '@enclosure.openScadCode',
-    description: 'Current OpenSCAD code',
-    requiresProject: true,
-  },
-  {
-    name: '@enclosure.iterations',
-    description: 'Refinement history',
-    requiresProject: true,
-  },
-  // Firmware variables
-  {
-    name: '@firmware',
-    description: 'Full firmware artifacts object',
-    requiresProject: true,
-  },
-  {
-    name: '@firmware.files',
-    description: 'Current firmware source files',
-    requiresProject: true,
-  },
-  {
-    name: '@firmware.buildLog',
-    description: 'Build output/log',
-    requiresProject: true,
-  },
-]
+interface Variable {
+  name: string
+  description: string
+  requiresProject: boolean
+}
+
+interface ContextResponse {
+  variables: Array<{
+    name: string
+    description: string
+    requiresProject: boolean
+  }>
+}
 
 interface PromptEditorProps {
   value: string
@@ -196,9 +39,26 @@ export function PromptEditor({ value, onChange, placeholder, className }: Prompt
   const [filterText, setFilterText] = useState('')
   const [triggerPosition, setTriggerPosition] = useState<number | null>(null)
 
+  // Fetch available variables from context API
+  const { data: contextData } = useQuery({
+    queryKey: ['admin-langgraph-context-variables'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/langgraph/context')
+      if (!res.ok) throw new Error('Failed to fetch context')
+      return res.json() as Promise<ContextResponse>
+    },
+    staleTime: 60000, // Cache for 1 minute
+  })
+
+  // Transform API response to autocomplete format
+  const availableVariables: Variable[] = (contextData?.variables || []).map((v) => ({
+    name: v.name,
+    description: v.description,
+    requiresProject: v.requiresProject,
+  }))
+
   // Filter variables based on what's typed after @
-  // Remove @ from filter since variable names include it
-  const filteredVariables = AVAILABLE_VARIABLES.filter((v) => {
+  const filteredVariables = availableVariables.filter((v) => {
     const searchText = filterText.toLowerCase()
     const varName = v.name.toLowerCase()
     // Match against name without @ prefix for easier filtering

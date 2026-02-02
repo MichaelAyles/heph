@@ -135,6 +135,24 @@ function resolveImageUrl(path: string, dynamicContext: DynamicContext): string |
     return null
   }
 
+  // @image:pcb.assembly3d - 3D render of main PCB assembly
+  if (path === 'pcb.assembly3d') {
+    const pcb = spec?.pcb as { assembly3dImage?: string } | undefined
+    if (pcb?.assembly3dImage) {
+      return `data:image/png;base64,${pcb.assembly3dImage}`
+    }
+    return null
+  }
+
+  // @image:pcb.remoteTypeAssembly3d - 3D render of cable-connected PCB
+  if (path === 'pcb.remoteTypeAssembly3d') {
+    const pcb = spec?.pcb as { remoteTypeAssembly3dImage?: string } | undefined
+    if (pcb?.remoteTypeAssembly3dImage) {
+      return `data:image/png;base64,${pcb.remoteTypeAssembly3dImage}`
+    }
+    return null
+  }
+
   // Generic path resolution for future extensibility
   // e.g., @image:projectState.spec.someImageField
   const value = getNestedValue(dynamicContext, path)
