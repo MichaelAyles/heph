@@ -4,15 +4,37 @@
  * Displays a 3D visualization of the PCB with placed blocks.
  * Loads real STEP models when available, falls back to colored boxes.
  * Uses React Three Fiber for rendering with orbit controls.
+ * Exposes ref for taking screenshots and exporting GLTF.
  */
 
-import { Suspense, useRef, useMemo, useState, useEffect } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import {
+  Suspense,
+  useRef,
+  useMemo,
+  useState,
+  useEffect,
+  useImperativeHandle,
+  forwardRef,
+  useCallback,
+} from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Box, Html, PerspectiveCamera } from '@react-three/drei'
 import * as THREE from 'three'
-import { Loader2, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
+import { Loader2, Maximize2, Minimize2, RotateCcw, Camera, Download, Save } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { PlacedBlock, PcbBlock, BlockCategory } from '@/db/schema'
+import { logger } from '@/lib/logger'
+
+/**
+ * Ref interface for PCB3DViewer component
+ * Allows parent components to take screenshots and export models
+ */
+export interface PCB3DViewerRef {
+  /** Take a screenshot and return as base64 PNG */
+  takeScreenshot: () => Promise<string | null>
+  /** Export scene as GLTF/GLB blob */
+  exportGLTF: () => Promise<Blob | null>
+}
 // Dynamically import OCCT to avoid loading 1MB+ WASM on every page
 let occtPromise: Promise<typeof import('occt-import-js')> | null = null
 function getOcct() {
@@ -39,6 +61,23 @@ const CATEGORY_COLORS: Record<BlockCategory, string> = {
   output: '#f59e0b', // Amber - LEDs, displays
   connector: '#6b7280', // Gray - Connectors
   utility: '#8b5cf6', // Purple - Utility
+}
+
+/**
+ * Helper component to capture WebGL renderer and scene for export
+ */
+function ExportHelper({
+  onReady,
+}: {
+  onReady: (gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => void
+}) {
+  const { gl, scene, camera } = useThree()
+
+  useEffect(() => {
+    onReady(gl, scene, camera)
+  }, [gl, scene, camera, onReady])
+
+  return null
 }
 
 // Mesh with color data from STEP file
@@ -73,6 +112,10 @@ interface PCB3DViewerProps {
   className?: string
   /** Auto-rotate the view */
   autoRotate?: boolean
+  /** Callback when user captures image to save to project */
+  onCapture?: (base64Png: string) => void
+  /** Show the "Save to Project" button */
+  showCaptureButton?: boolean
 }
 
 interface BlockMeshProps {
@@ -436,15 +479,89 @@ function LoadingSpinner() {
 /**
  * PCB 3D Viewer Component
  */
-export function PCB3DViewer({
-  boardSize,
-  placedBlocks,
-  blocks,
-  className,
-  autoRotate = false,
-}: PCB3DViewerProps) {
+export const PCB3DViewer = forwardRef<PCB3DViewerRef, PCB3DViewerProps>(function PCB3DViewer(
+  { boardSize, placedBlocks, blocks, className, autoRotate = false, onCapture, showCaptureButton },
+  ref
+) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [rotation, setRotation] = useState(autoRotate)
+  const [isCapturing, setIsCapturing] = useState(false)
+  const glRef = useRef<THREE.WebGLRenderer | null>(null)
+  const sceneRef = useRef<THREE.Scene | null>(null)
+  const cameraRef = useRef<THREE.Camera | null>(null)
+
+  // Handle WebGL renderer ready
+  const handleExportReady = useCallback(
+    (gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => {
+      glRef.current = gl
+      sceneRef.current = scene
+      cameraRef.current = camera
+    },
+    []
+  )
+
+  // Expose screenshot and export methods via ref
+  useImperativeHandle(
+    ref,
+    () => ({
+      takeScreenshot: async (): Promise<string | null> => {
+        const gl = glRef.current
+        if (!gl) {
+          logger.warn('ui', 'WebGL renderer not ready for screenshot')
+          return null
+        }
+
+        try {
+          // Force a render to ensure we capture the current state
+          const canvas = gl.domElement
+          const dataUrl = canvas.toDataURL('image/png')
+          const base64 = dataUrl.split(',')[1]
+          return base64
+        } catch (error) {
+          logger.error('ui', 'Failed to take screenshot', { error })
+          return null
+        }
+      },
+
+      exportGLTF: async (): Promise<Blob | null> => {
+        const scene = sceneRef.current
+        if (!scene) {
+          logger.warn('ui', 'Scene not ready for GLTF export')
+          return null
+        }
+
+        try {
+          // Dynamically import GLTFExporter to avoid bundling it unnecessarily
+          const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js')
+          const exporter = new GLTFExporter()
+
+          return new Promise((resolve) => {
+            exporter.parse(
+              scene,
+              (gltf) => {
+                // gltf is ArrayBuffer for binary, object for JSON
+                if (gltf instanceof ArrayBuffer) {
+                  resolve(new Blob([gltf], { type: 'model/gltf-binary' }))
+                } else {
+                  const json = JSON.stringify(gltf)
+                  resolve(new Blob([json], { type: 'model/gltf+json' }))
+                }
+              },
+              (error) => {
+                logger.error('ui', 'Failed to export GLTF', { error })
+                resolve(null)
+              },
+              { binary: true } // Export as GLB for smaller file size
+            )
+          })
+        } catch (error) {
+          logger.error('ui', 'Failed to load GLTF exporter', { error })
+          return null
+        }
+      },
+    }),
+    []
+  )
 
   // Calculate board size from blocks if not provided
   const calculatedBoardSize = useMemo(() => {
@@ -471,6 +588,76 @@ export function PCB3DViewer({
     }
   }, [boardSize, placedBlocks, blocks])
 
+  // Handlers for UI buttons
+  const handleScreenshot = useCallback(async () => {
+    const gl = glRef.current
+    if (!gl) return
+
+    try {
+      const canvas = gl.domElement
+      const dataUrl = canvas.toDataURL('image/png')
+
+      // Create download link
+      const link = document.createElement('a')
+      link.download = 'pcb-assembly-3d.png'
+      link.href = dataUrl
+      link.click()
+    } catch (error) {
+      logger.error('ui', 'Failed to download screenshot', { error })
+    }
+  }, [])
+
+  const handleExportGLTF = useCallback(async () => {
+    const scene = sceneRef.current
+    if (!scene) return
+
+    try {
+      const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js')
+      const exporter = new GLTFExporter()
+
+      exporter.parse(
+        scene,
+        (gltf) => {
+          const blob =
+            gltf instanceof ArrayBuffer
+              ? new Blob([gltf], { type: 'model/gltf-binary' })
+              : new Blob([JSON.stringify(gltf)], { type: 'model/gltf+json' })
+
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.download = 'pcb-assembly.glb'
+          link.href = url
+          link.click()
+          URL.revokeObjectURL(url)
+        },
+        (error) => {
+          logger.error('ui', 'Failed to export GLTF', { error })
+        },
+        { binary: true }
+      )
+    } catch (error) {
+      logger.error('ui', 'Failed to load GLTF exporter', { error })
+    }
+  }, [])
+
+  // Handler to capture and save to project
+  const handleCaptureToProject = useCallback(async () => {
+    const gl = glRef.current
+    if (!gl || !onCapture) return
+
+    setIsCapturing(true)
+    try {
+      const canvas = gl.domElement
+      const dataUrl = canvas.toDataURL('image/png')
+      const base64 = dataUrl.split(',')[1]
+      onCapture(base64)
+    } catch (error) {
+      logger.error('ui', 'Failed to capture image', { error })
+    } finally {
+      setIsCapturing(false)
+    }
+  }, [onCapture])
+
   if (placedBlocks.length === 0) {
     return (
       <div className={clsx('flex items-center justify-center bg-surface-900', className)}>
@@ -488,6 +675,35 @@ export function PCB3DViewer({
     >
       {/* Controls */}
       <div className="absolute top-2 right-2 z-10 flex gap-1">
+        {showCaptureButton && onCapture && (
+          <button
+            onClick={handleCaptureToProject}
+            disabled={isCapturing}
+            className={clsx(
+              'p-1.5 rounded transition-colors',
+              isCapturing
+                ? 'bg-copper/50 text-surface-900 cursor-wait'
+                : 'bg-copper text-surface-900 hover:bg-copper/80'
+            )}
+            title="Capture 3D view for enclosure generation"
+          >
+            <Save className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          onClick={handleScreenshot}
+          className="p-1.5 bg-surface-800 text-steel rounded hover:bg-surface-700 transition-colors"
+          title="Download PNG screenshot"
+        >
+          <Camera className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleExportGLTF}
+          className="p-1.5 bg-surface-800 text-steel rounded hover:bg-surface-700 transition-colors"
+          title="Download 3D model (GLTF)"
+        >
+          <Download className="w-4 h-4" />
+        </button>
         <button
           onClick={() => setRotation(!rotation)}
           className={clsx(
@@ -512,6 +728,7 @@ export function PCB3DViewer({
       {/* 3D Canvas */}
       <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }}>
         <Suspense fallback={<LoadingSpinner />}>
+          <ExportHelper onReady={handleExportReady} />
           <Scene
             boardSize={calculatedBoardSize}
             placedBlocks={placedBlocks}
@@ -535,6 +752,6 @@ export function PCB3DViewer({
       </div>
     </div>
   )
-}
+})
 
 export default PCB3DViewer

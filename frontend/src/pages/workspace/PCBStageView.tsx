@@ -200,6 +200,21 @@ export function PCBStageView() {
     },
   })
 
+  // Handle capturing 3D view for enclosure generation
+  const handleCapture3DImage = useCallback(
+    (base64Png: string) => {
+      // Determine which board is selected and save to appropriate field
+      const isRemoteBoard = selectedBoardId === REMOTE_TYPE_BOARD_ID
+      const field = isRemoteBoard ? 'remoteTypeAssembly3dImage' : 'assembly3dImage'
+
+      savePCBMutation.mutate({
+        placedBlocks: selectedBlocks,
+        [field]: base64Png,
+      })
+    },
+    [selectedBoardId, selectedBlocks, savePCBMutation]
+  )
+
   // Handle block selection from sidebar
   const handleSelectBlock = (block: PcbBlock) => {
     // Auto-place on next available grid position
@@ -865,6 +880,8 @@ export function PCBStageView() {
                         placedBlocks={viewingBlocks}
                         blocks={blocksData.blocks}
                         className="w-full h-full"
+                        showCaptureButton
+                        onCapture={handleCapture3DImage}
                       />
                     ) : (
                       <div className="flex-1 flex items-center justify-center h-full">

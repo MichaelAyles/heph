@@ -162,6 +162,10 @@ export interface PCBArtifacts {
   panelGerbers?: PanelGerberArtifacts
   // Board outline info from content-based calculation
   boardOutline?: { width: number; height: number; marginMm: number }
+  // 3D assembly image (base64 PNG) for enclosure generator
+  assembly3dImage?: string
+  // Remote-type 3D assembly image
+  remoteTypeAssembly3dImage?: string
 }
 
 // =============================================================================

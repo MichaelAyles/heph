@@ -368,6 +368,34 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           tokenEstimate: estimateTokens(pcb.designJustifications),
         })
       }
+
+      // @image:pcb.assembly3d - 3D render of assembled PCB
+      const assembly3dImage = pcb.assembly3dImage as string | undefined
+      if (assembly3dImage) {
+        variables.push({
+          name: '@image:pcb.assembly3d',
+          description: 'ATTACH 3D render of assembled PCB to the LLM call (~258 img tokens)',
+          value: `[Will attach: base64 PNG image (${Math.round(assembly3dImage.length / 1024)}KB)]`,
+          type: 'string',
+          requiresProject: true,
+          tokenEstimate: 258, // Gemini image token estimate
+          imageUrl: `data:image/png;base64,${assembly3dImage}`,
+        })
+      }
+
+      // @image:pcb.remoteTypeAssembly3d - 3D render of remote-type blocks
+      const remoteTypeAssembly3dImage = pcb.remoteTypeAssembly3dImage as string | undefined
+      if (remoteTypeAssembly3dImage) {
+        variables.push({
+          name: '@image:pcb.remoteTypeAssembly3d',
+          description: 'ATTACH 3D render of cable-connected PCB to the LLM call (~258 img tokens)',
+          value: `[Will attach: base64 PNG image (${Math.round(remoteTypeAssembly3dImage.length / 1024)}KB)]`,
+          type: 'string',
+          requiresProject: true,
+          tokenEstimate: 258,
+          imageUrl: `data:image/png;base64,${remoteTypeAssembly3dImage}`,
+        })
+      }
     }
 
     // @enclosure shortcuts
@@ -668,6 +696,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       type: 'object',
       requiresProject: true,
       tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@image:pcb.assembly3d',
+      description: 'ATTACH 3D render of assembled PCB (capture from 3D view)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+      tokenEstimate: 258,
+    })
+    variables.push({
+      name: '@image:pcb.remoteTypeAssembly3d',
+      description: 'ATTACH 3D render of cable-connected PCB (capture from 3D view)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+      tokenEstimate: 258,
     })
     // Enclosure placeholders
     variables.push({
