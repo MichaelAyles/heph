@@ -8,9 +8,7 @@ import type {
   User,
   ChatMessage,
   ChatRequest,
-  MessageContent,
   OpenAIMessage,
-  OpenAIContent,
 } from '../../lib/message-types'
 
 /**
@@ -176,6 +174,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     let content: string
     let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
 
+    let actualCostUsd: number | undefined
+
     if (provider === 'openrouter') {
       const choices = result.choices as Array<{ message: { content: string } }>
       content = choices?.[0]?.message?.content || ''
@@ -183,6 +183,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         prompt_tokens: number
         completion_tokens: number
         total_tokens: number
+        total_cost?: number // OpenRouter returns actual cost in USD
       }
       usage = usageData
         ? {
@@ -191,6 +192,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             totalTokens: usageData.total_tokens,
           }
         : undefined
+      // Use OpenRouter's actual cost if available (credits = USD)
+      actualCostUsd = usageData?.total_cost
     } else {
       const candidates = result.candidates as Array<{
         content: { parts: Array<{ text: string }> }
@@ -220,7 +223,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       usage?.completionTokens || 0,
       latencyMs,
       'success',
-      null
+      null,
+      actualCostUsd
     )
 
     // Log full conversation
@@ -265,10 +269,12 @@ async function logLlmRequest(
   completionTokens: number,
   latencyMs: number,
   status: string,
-  errorMessage: string | null
+  errorMessage: string | null,
+  actualCostUsd?: number
 ) {
   const id = crypto.randomUUID().replace(/-/g, '')
-  const costUsd = calculateCost(model, promptTokens, completionTokens)
+  // Use actual cost from provider if available, otherwise estimate
+  const costUsd = actualCostUsd ?? calculateCost(model, promptTokens, completionTokens)
 
   await env.DB.prepare(
     `

@@ -90,6 +90,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const result = await response.json()
     const latencyMs = Date.now() - startTime
 
+    // Get actual cost from OpenRouter if available
+    const usageData = result.usage as
+      | {
+          prompt_tokens?: number
+          completion_tokens?: number
+          total_cost?: number
+        }
+      | undefined
+    const actualCostUsd = usageData?.total_cost
+
     // Extract image from response - handle various formats
     let imageUrl: string | null = null
     let rawResponse: string | null = null
@@ -176,9 +186,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
     }
 
-    // Log successful request with cost
+    // Log successful request with cost (prefer actual cost from OpenRouter)
     const id = crypto.randomUUID().replace(/-/g, '')
-    const costUsd = calculateImageCost(model)
+    const costUsd = actualCostUsd ?? calculateImageCost(model)
     await env.DB.prepare(
       `INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
        VALUES (?, ?, NULL, ?, 0, 0, 0, ?, ?, 'success', NULL, datetime('now'))`

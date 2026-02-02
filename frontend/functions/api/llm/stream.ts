@@ -153,6 +153,13 @@ async function processStream(
   let fullContent = ''
   const startTime = Date.now()
 
+  // Track usage data from stream (OpenRouter sends it in final message)
+  let streamUsage: {
+    promptTokens?: number
+    completionTokens?: number
+    totalCost?: number
+  } = {}
+
   try {
     while (true) {
       const { done, value } = await reader.read()
@@ -171,8 +178,23 @@ async function processStream(
 
           if (provider === 'openrouter') {
             token = parsed.choices?.[0]?.delta?.content || ''
+            // Capture usage data from final chunk (OpenRouter includes it when finish_reason is set)
+            if (parsed.usage) {
+              streamUsage = {
+                promptTokens: parsed.usage.prompt_tokens,
+                completionTokens: parsed.usage.completion_tokens,
+                totalCost: parsed.usage.total_cost,
+              }
+            }
           } else {
             token = parsed.candidates?.[0]?.content?.parts?.[0]?.text || ''
+            // Gemini usage metadata
+            if (parsed.usageMetadata) {
+              streamUsage = {
+                promptTokens: parsed.usageMetadata.promptTokenCount,
+                completionTokens: parsed.usageMetadata.candidatesTokenCount,
+              }
+            }
           }
 
           if (token) {
@@ -191,21 +213,22 @@ async function processStream(
       encoder.encode(`data: ${JSON.stringify({ done: true, content: fullContent })}\n\n`)
     )
 
-    // Log the request with estimated token counts
-    // Estimate: ~4 characters per token
+    // Use actual usage data if available, otherwise estimate
     const latencyMs = Date.now() - startTime
-    const estimatedCompletionTokens = Math.ceil(fullContent.length / 4)
-    const estimatedPromptTokens = Math.ceil(JSON.stringify(messages).length / 4)
+    const promptTokens = streamUsage.promptTokens ?? Math.ceil(JSON.stringify(messages).length / 4)
+    const completionTokens = streamUsage.completionTokens ?? Math.ceil(fullContent.length / 4)
+
     await logLlmRequest(
       env,
       userId,
       projectId,
       model,
-      estimatedPromptTokens,
-      estimatedCompletionTokens,
+      promptTokens,
+      completionTokens,
       latencyMs,
       'success',
-      null
+      null,
+      streamUsage.totalCost
     )
 
     // Log full conversation
@@ -216,8 +239,8 @@ async function processStream(
       messages,
       fullContent,
       model,
-      estimatedPromptTokens,
-      estimatedCompletionTokens,
+      promptTokens,
+      completionTokens,
       latencyMs,
       'success',
       null
@@ -239,10 +262,12 @@ async function logLlmRequest(
   completionTokens: number,
   latencyMs: number,
   status: string,
-  errorMessage: string | null
+  errorMessage: string | null,
+  actualCostUsd?: number
 ) {
   const id = crypto.randomUUID().replace(/-/g, '')
-  const costUsd = calculateCost(model, promptTokens, completionTokens)
+  // Use actual cost from provider if available, otherwise estimate
+  const costUsd = actualCostUsd ?? calculateCost(model, promptTokens, completionTokens)
 
   await env.DB.prepare(
     `
