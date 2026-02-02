@@ -14,6 +14,7 @@ import {
   Terminal,
   Clock,
   HardDrive,
+  Usb,
 } from 'lucide-react'
 
 export interface CompileResult {
@@ -30,6 +31,9 @@ interface BuildPanelProps {
   compileResult: CompileResult | null
   onDownloadBinary: () => void
   onRetry: () => void
+  onFlashToDevice?: () => void
+  isFlashing?: boolean
+  isWebSerialSupported?: boolean
 }
 
 export function BuildPanel({
@@ -37,6 +41,9 @@ export function BuildPanel({
   compileResult,
   onDownloadBinary,
   onRetry,
+  onFlashToDevice,
+  isFlashing = false,
+  isWebSerialSupported = false,
 }: BuildPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const outputRef = useRef<HTMLPreElement>(null)
@@ -51,6 +58,7 @@ export function BuildPanel({
   // Auto-expand on compile start
   useEffect(() => {
     if (isCompiling) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncing UI state with prop change
       setIsExpanded(true)
     }
   }, [isCompiling])
@@ -130,7 +138,9 @@ export function BuildPanel({
           >
             {compileResult?.buildOutput || (isCompiling ? 'Starting compilation...\n' : '')}
             {compileResult?.error && (
-              <span className="text-red-400">{'\n'}Error: {compileResult.error}</span>
+              <span className="text-red-400">
+                {'\n'}Error: {compileResult.error}
+              </span>
             )}
           </pre>
 
@@ -146,13 +156,30 @@ export function BuildPanel({
                 </button>
               )}
               {compileResult.success && compileResult.firmware && (
-                <button
-                  onClick={onDownloadBinary}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-ash bg-emerald-600 hover:bg-emerald-500 rounded transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  Download firmware.bin ({(compileResult.firmwareSize! / 1024).toFixed(1)} KB)
-                </button>
+                <>
+                  <button
+                    onClick={onDownloadBinary}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-ash bg-emerald-600 hover:bg-emerald-500 rounded transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download firmware.bin ({(compileResult.firmwareSize! / 1024).toFixed(1)} KB)
+                  </button>
+                  {isWebSerialSupported && onFlashToDevice && (
+                    <button
+                      onClick={onFlashToDevice}
+                      disabled={isFlashing}
+                      className={clsx(
+                        'flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded transition-colors',
+                        isFlashing
+                          ? 'text-steel-dim bg-amber-600/50 cursor-not-allowed'
+                          : 'text-ash bg-amber-600 hover:bg-amber-500'
+                      )}
+                    >
+                      <Usb className="w-4 h-4" />
+                      {isFlashing ? 'Flashing...' : 'Flash to Device'}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}

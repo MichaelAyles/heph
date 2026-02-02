@@ -8,6 +8,7 @@ export { EditorPanel } from './EditorPanel'
 export { FileTreeItem } from './FileTreeItem'
 export { FileTreePanel } from './FileTreePanel'
 export { FirmwareHeader } from './FirmwareHeader'
+export { FlashModal } from './FlashModal'
 export { FooterActions } from './FooterActions'
 export { NotReadyState } from './NotReadyState'
 

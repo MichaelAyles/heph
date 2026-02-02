@@ -20,6 +20,7 @@ import {
   EditorPanel,
   FileTreePanel,
   FirmwareHeader,
+  FlashModal,
   FooterActions,
   NotReadyState,
   type CompileResult,
@@ -33,6 +34,7 @@ import {
   getFilesForSave,
   generateReadme,
 } from '@/components/firmware'
+import { isWebSerialSupported } from '@/services/webserial-flash'
 
 // =============================================================================
 // LangGraph API Response Types
@@ -95,6 +97,11 @@ export function FirmwareStageView() {
   const [isCompiling, setIsCompiling] = useState(false)
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null)
   const [selectedBoard, setSelectedBoard] = useState('esp32-c6-devkitc-1')
+
+  // Flash state
+  const [showFlashModal, setShowFlashModal] = useState(false)
+  const [isFlashing, setIsFlashing] = useState(false)
+  const webSerialSupported = isWebSerialSupported()
 
   const spec = project?.spec
   const enclosureComplete = spec?.stages?.enclosure?.status === 'complete'
@@ -473,6 +480,12 @@ export function FirmwareStageView() {
     URL.revokeObjectURL(url)
   }
 
+  // Open flash modal
+  const handleFlashToDevice = () => {
+    if (!compileResult?.firmware) return
+    setShowFlashModal(true)
+  }
+
   if (!enclosureComplete) {
     return <NotReadyState />
   }
@@ -525,7 +538,24 @@ export function FirmwareStageView() {
         compileResult={compileResult}
         onDownloadBinary={handleDownloadBinary}
         onRetry={handleCompile}
+        onFlashToDevice={handleFlashToDevice}
+        isFlashing={isFlashing}
+        isWebSerialSupported={webSerialSupported}
       />
+
+      {/* Flash modal */}
+      {compileResult?.firmware && (
+        <FlashModal
+          isOpen={showFlashModal}
+          onClose={() => {
+            setShowFlashModal(false)
+            setIsFlashing(false)
+          }}
+          firmwareBase64={compileResult.firmware}
+          firmwareSize={compileResult.firmwareSize || 0}
+          projectName={project?.name || 'PHAESTUS Firmware'}
+        />
+      )}
 
       {/* Footer actions */}
       <FooterActions
