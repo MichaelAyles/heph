@@ -128,6 +128,8 @@ export interface DynamicContext {
     category: string
     description: string
     interfaces?: string[]
+    gridSize?: [number, number] // [width, height] in grid units
+    isRemote?: boolean
   }>
   /** Current project state (spec, PCB artifacts, etc.) */
   projectState?: {

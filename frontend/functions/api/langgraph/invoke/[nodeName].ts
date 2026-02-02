@@ -180,14 +180,18 @@ function expandTemplateVariables(
     return `(Image not available: ${path})`
   })
 
-  // Special formatting for @availableBlocks (as a list)
+  // Special formatting for @availableBlocks (as a list with slug and size)
   if (expanded.includes('@availableBlocks')) {
     if (dynamicContext.availableBlocks && dynamicContext.availableBlocks.length > 0) {
       const blocksList = dynamicContext.availableBlocks
-        .map(
-          (b) =>
-            `- ${b.name} (${b.category}): ${b.description}${b.interfaces?.length ? ` [${b.interfaces.join(', ')}]` : ''}`
-        )
+        .map((b) => {
+          const sizeStr = b.gridSize
+            ? `${b.gridSize[0]}x${b.gridSize[1]}`
+            : b.isRemote
+              ? 'remote'
+              : 'unknown'
+          return `- ${b.name} slug:${b.slug}, type:${b.category}, size:${sizeStr} desc:"${b.description}"`
+        })
         .join('\n')
       expanded = expanded.replace(/@availableBlocks(?![.\w])/g, blocksList)
     } else {
@@ -438,6 +442,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             category: def?.metadata?.category || def?.category || 'unknown',
             description: def?.metadata?.description || def?.description || '',
             interfaces: def?.electrical?.interfaces ? Object.keys(def.electrical.interfaces) : [],
+            gridSize: def?.gridSize as [number, number] | undefined,
+            isRemote: def?.isRemote as boolean | undefined,
           }
         } catch {
           return {
