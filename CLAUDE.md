@@ -4,13 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PHAESTUS is an AI-powered hardware design platform that transforms natural language specifications into manufacturable hardware designs. Users describe what they want to build, and the system guides them through feasibility analysis, requirement refinement, visual design selection, and final specification generation.
+PHAESTUS is a frontend-heavy web app that uses LLMs to design hardware products from natural language. It generates a PRD, designs the circuit (PCB, Gerbers, BOM), creates a parametric enclosure, and generates firmware. Users can flash devices directly via WebSerial after receiving manufactured boards.
 
 **Stack**: React 19 + TypeScript, Cloudflare Pages Functions, D1 (SQLite), R2 storage, Tailwind CSS 4, Zustand, TanStack Query
 
+### Architecture
+
+- **Frontend (80%)**: React SPA with heavy client-side processing. Manufacturing file operations (Gerber merging, BOM generation, panelization) run entirely in the browser (`src/services/`).
+- **Backend (20%)**: Cloudflare Pages Functions—a thin proxy layer that hides API keys, manages D1/R2 storage, and routes to external microservices. No persistent server.
+- **External Services**: PlatformIO microservice for firmware compilation, KiCad microservice for file generation (URLs via env vars, host-agnostic).
+
 ### Design Philosophy
 
-**Module-Based Hardware Design**: AI selects from pre-validated circuit blocks rather than generating novel circuits. This gives ~100% success rate vs ~70% for AI-generated circuits, with tractable validation via interface type-checking.
+**Module-Based Hardware Design**: AI selects from pre-validated circuit blocks rather than generating novel circuits. ~100% success rate vs ~70% for AI-generated circuits, with validation via interface type-checking.
 
 **Deterministic Grid Layout**: 12.7mm grid with pre-routed bus interfaces eliminates autorouting failures and enables predictable board dimensions with parametric enclosures.
 
