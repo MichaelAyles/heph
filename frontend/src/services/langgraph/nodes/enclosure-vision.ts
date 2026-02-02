@@ -8,9 +8,9 @@
  * - @projectName: Product name
  * - @pcb.boardSize: Board dimensions
  * - @finalSpec: Final specification with inputs/outputs
+ * - @image:visualization.selected: The selected blueprint image (injected automatically)
  *
- * Runtime inputs (must be passed):
- * - blueprintImage: Base64 image data (fetched at call time)
+ * No runtime inputs required - all context comes from @variables.
  */
 
 import { z } from 'zod'
@@ -22,8 +22,7 @@ import { registerNode } from './registry'
 // =============================================================================
 
 export const EnclosureVisionInputSchema = z.object({
-  // Only runtime input - the blueprint image must be passed
-  blueprintImage: z.string().min(1, 'Blueprint image URL or base64 is required'),
+  // No required inputs - blueprint image comes from @image:visualization.selected
 })
 export type EnclosureVisionInput = z.infer<typeof EnclosureVisionInputSchema>
 
@@ -45,32 +44,22 @@ export type EnclosureVisionOutput = z.infer<typeof EnclosureVisionOutputSchema>
 // =============================================================================
 
 async function invokeEnclosureVision(
-  input: EnclosureVisionInput,
+  _input: EnclosureVisionInput,
   config: NodeConfig,
   context: NodeContext
 ): Promise<NodeInvokeResult<EnclosureVisionOutput>> {
   // System prompt comes from database with @variables already expanded
   const systemPrompt = context.systemPrompt
 
-  // Simple user prompt - context is in system prompt, image is attached
+  // Simple user prompt - context is in system prompt
+  // Image is injected automatically via @image:visualization.selected in the template
   const userPrompt = `Generate OpenSCAD code for an enclosure based on the provided blueprint image and project context. Output the code in a single code block.`
 
-  // Build multimodal message with image
+  // The invoke endpoint will inject the image from @image: variables into the first user message
   const response = await context.llmChat({
     messages: [
       { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: userPrompt },
-          {
-            type: 'image_url',
-            image_url: {
-              url: input.blueprintImage,
-            },
-          },
-        ],
-      },
+      { role: 'user', content: userPrompt },
     ],
     temperature: config.temperature ?? 0.3,
     model: config.model,
