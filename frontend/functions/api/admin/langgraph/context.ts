@@ -435,6 +435,46 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           tokenEstimate: estimateTokens(enclosure.iterations),
         })
       }
+
+      // @enclosureSCAD shortcuts - easier access to SCAD code drafts
+      const iterations = enclosure.iterations as
+        | Array<{ feedback: string; openScadCode: string; stlUrl?: string; timestamp: string }>
+        | undefined
+
+      // @enclosureSCAD.latest - current active code
+      variables.push({
+        name: '@enclosureSCAD.latest',
+        description: 'Latest/current OpenSCAD code',
+        value: enclosure.openScadCode || '(No SCAD code yet)',
+        type: 'string',
+        requiresProject: true,
+        tokenEstimate: estimateTokens(enclosure.openScadCode),
+      })
+
+      // @enclosureSCAD.count - number of iterations
+      const iterationCount = iterations?.length || 0
+      variables.push({
+        name: '@enclosureSCAD.count',
+        description: 'Number of SCAD iterations/drafts',
+        value: iterationCount,
+        type: 'string',
+        requiresProject: true,
+        tokenEstimate: 1,
+      })
+
+      // @enclosureSCAD.N - specific drafts by index
+      if (iterations && iterations.length > 0) {
+        iterations.forEach((iter, idx) => {
+          variables.push({
+            name: `@enclosureSCAD.${idx}`,
+            description: `Draft ${idx}: ${iter.feedback.slice(0, 50)}${iter.feedback.length > 50 ? '...' : ''}`,
+            value: iter.openScadCode,
+            type: 'string',
+            requiresProject: true,
+            tokenEstimate: estimateTokens(iter.openScadCode),
+          })
+        })
+      }
     }
 
     // @firmware shortcuts
@@ -725,6 +765,31 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     variables.push({
       name: '@enclosure.openScadCode',
       description: 'Current OpenSCAD code (select a project)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    // @enclosureSCAD placeholders
+    variables.push({
+      name: '@enclosureSCAD.latest',
+      description: 'Latest/current OpenSCAD code (select a project)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@enclosureSCAD.count',
+      description: 'Number of SCAD iterations/drafts (select a project)',
+      value: null,
+      type: 'string',
+      requiresProject: true,
+      tokenEstimate: 0,
+    })
+    variables.push({
+      name: '@enclosureSCAD.0',
+      description: 'First SCAD draft (select a project)',
       value: null,
       type: 'string',
       requiresProject: true,

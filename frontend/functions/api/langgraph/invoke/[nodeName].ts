@@ -335,6 +335,40 @@ function expandTemplateVariables(
     return formatValue(value)
   })
 
+  // Expand @enclosureSCAD shortcuts (must come before @enclosure to avoid partial matches)
+  const enclosureSCADPattern = /@enclosureSCAD\.([a-zA-Z0-9]+)/g
+  expanded = expanded.replace(enclosureSCADPattern, (match, key) => {
+    const enclosure = dynamicContext.projectState?.spec?.enclosure as
+      | {
+          openScadCode?: string
+          iterations?: Array<{ feedback: string; openScadCode: string }>
+        }
+      | undefined
+    if (!enclosure) return '(No enclosure data available)'
+
+    // @enclosureSCAD.latest - current active code
+    if (key === 'latest') {
+      return enclosure.openScadCode || '(No SCAD code yet)'
+    }
+
+    // @enclosureSCAD.count - number of iterations
+    if (key === 'count') {
+      return String(enclosure.iterations?.length || 0)
+    }
+
+    // @enclosureSCAD.N - specific draft by index
+    const index = parseInt(key, 10)
+    if (!isNaN(index)) {
+      const iterations = enclosure.iterations || []
+      if (index >= 0 && index < iterations.length) {
+        return iterations[index].openScadCode
+      }
+      return `(No SCAD draft at index ${index})`
+    }
+
+    return `(Unknown enclosureSCAD property: ${key})`
+  })
+
   // Expand @enclosure and @enclosure.path shortcuts
   const enclosurePattern = /@enclosure(?:\.([a-zA-Z0-9_.]+))?/g
   expanded = expanded.replace(enclosurePattern, (match, path) => {
