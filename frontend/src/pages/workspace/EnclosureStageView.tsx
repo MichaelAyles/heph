@@ -14,6 +14,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { ArrowRight } from 'lucide-react'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
+import { useAuthStore } from '@/stores/auth'
 import { logger } from '@/lib/logger'
 import { invokeLangGraphNode, BreakpointCancelledError } from '@/services/langgraph/invoke'
 import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
@@ -108,6 +109,9 @@ interface EnclosureVisualCompareResponse {
 export function EnclosureStageView() {
   const { project } = useWorkspaceContext()
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
+  const controlMode = user?.controlMode || 'fix_it'
+  const isDebugMode = controlMode === 'debug_it'
 
   // UI state
   const [currentStep, setCurrentStep] = useState<EnclosureStep>('generate')
@@ -124,6 +128,7 @@ export function EnclosureStageView() {
   const [validationStatus, setValidationStatus] = useState<string | null>(null)
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
   const [validationIteration, setValidationIteration] = useState(0)
+  const [isValidating, setIsValidating] = useState(false)
 
   // Visual validation state
   const [showComparison, setShowComparison] = useState(false)
@@ -308,7 +313,24 @@ export function EnclosureStageView() {
         code = (textData.output as EnclosureTextResponse['output']).openScadCode
       }
 
-      // Step 2: Validation loop
+      // Check if aborted before continuing
+      if (signal.aborted) return
+
+      // Save raw draft immediately (before validation)
+      // This captures the unmodified LLM output as draft 0
+      setOpenScadCode(code)
+      saveEnclosureMutation.mutate({ openScadCode: code })
+
+      // In debug mode, skip validation loop - user can run it manually
+      if (isDebugMode) {
+        setValidationStatus('Raw draft saved - validation skipped (debug mode)')
+        setCurrentStep('edit')
+        const timeoutId = setTimeout(() => setValidationStatus(null), 3000)
+        signal.addEventListener('abort', () => clearTimeout(timeoutId))
+        return
+      }
+
+      // Step 2: Validation loop (non-debug mode)
       for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
         setValidationIteration(iteration)
         setValidationStatus(
@@ -342,6 +364,7 @@ export function EnclosureStageView() {
       setValidationStatus('Generation complete!')
       setOpenScadCode(code)
       setCurrentStep('edit')
+      // Save validated version (this will be a new iteration since we already saved the raw draft)
       saveEnclosureMutation.mutate({ openScadCode: code })
 
       // Clear status after a moment (with cleanup)
@@ -463,6 +486,48 @@ export function EnclosureStageView() {
     validateCode,
     fixCode,
   ])
+
+  // Run a single validation + fix iteration (debug mode)
+  const handleRunValidation = useCallback(async () => {
+    if (!openScadCode || !project) return
+
+    setIsValidating(true)
+    setRenderError(null)
+    setValidationIteration((prev) => prev + 1)
+
+    try {
+      setValidationStatus('Running validation...')
+      const issues = await validateCode(openScadCode)
+      setValidationIssues(issues)
+
+      const criticalIssues = issues.filter((i) => i.severity === 'critical')
+      const warningIssues = issues.filter((i) => i.severity === 'warning')
+
+      if (criticalIssues.length === 0 && warningIssues.length === 0) {
+        setValidationStatus('All checks passed!')
+        setTimeout(() => setValidationStatus(null), 3000)
+        return
+      }
+
+      // Fix issues (prioritize critical, then warnings)
+      const issuesToFix = criticalIssues.length > 0 ? criticalIssues : warningIssues
+      setValidationStatus(
+        `Fixing ${issuesToFix.length} ${criticalIssues.length > 0 ? 'critical' : 'warning'} issues...`
+      )
+
+      const fixedCode = await fixCode(openScadCode, issuesToFix)
+      setOpenScadCode(fixedCode)
+      saveEnclosureMutation.mutate({ openScadCode: fixedCode })
+
+      setValidationStatus('Validation iteration complete - code updated')
+      setTimeout(() => setValidationStatus(null), 3000)
+    } catch (error) {
+      logger.enclosure('Validation failed', { error })
+      setRenderError(error instanceof Error ? error.message : 'Validation failed')
+    } finally {
+      setIsValidating(false)
+    }
+  }, [openScadCode, project, validateCode, fixCode, saveEnclosureMutation])
 
   // Perform visual validation by comparing render to blueprint using LangGraph node
   const performVisualValidation = useCallback(async () => {
@@ -688,11 +753,15 @@ export function EnclosureStageView() {
               onFeedbackChange={setFeedback}
               isGenerating={isGenerating}
               isRendering={isRendering}
+              isValidating={isValidating}
               validationStatus={validationStatus}
               validationIteration={validationIteration}
+              validationIssues={validationIssues}
+              debugMode={isDebugMode}
               onRender={handleRender}
               onRegenerate={handleRegenerate}
               onDownloadSource={handleDownloadSource}
+              onRunValidation={handleRunValidation}
             />
 
             {/* Right: 3D Preview */}

@@ -29,11 +29,15 @@ export interface EditorPanelProps {
   onFeedbackChange: (feedback: string) => void
   isGenerating: boolean
   isRendering: boolean
+  isValidating: boolean
   validationStatus: string | null
   validationIteration: number
+  validationIssues: ValidationIssue[]
+  debugMode: boolean
   onRender: () => void
   onRegenerate: () => void
   onDownloadSource: () => void
+  onRunValidation: () => void
 }
 
 export interface PreviewPanelProps {

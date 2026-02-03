@@ -3,7 +3,7 @@
  */
 
 import { clsx } from 'clsx'
-import { Download, Play, MessageSquare, RefreshCw, Loader2 } from 'lucide-react'
+import { Download, Play, MessageSquare, RefreshCw, Loader2, CheckCircle, Bug } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import type { EditorPanelProps } from './types'
 import { MAX_VALIDATION_ITERATIONS } from './types'
@@ -15,16 +15,30 @@ export function EditorPanel({
   onFeedbackChange,
   isGenerating,
   isRendering,
+  isValidating,
   validationStatus,
   validationIteration,
+  validationIssues,
+  debugMode,
   onRender,
   onRegenerate,
   onDownloadSource,
+  onRunValidation,
 }: EditorPanelProps) {
+  const criticalCount = validationIssues.filter((i) => i.severity === 'critical').length
+  const warningCount = validationIssues.filter((i) => i.severity === 'warning').length
   return (
     <div className="bg-surface-900 rounded-lg border border-surface-700 flex flex-col min-h-0 overflow-hidden">
       <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-steel">OpenSCAD Code</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-medium text-steel">OpenSCAD Code</h3>
+          {debugMode && (
+            <span className="px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-400 rounded flex items-center gap-1">
+              <Bug className="w-3 h-3" />
+              Debug
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={onDownloadSource}
@@ -34,6 +48,31 @@ export function EditorPanel({
             <Download className="w-3.5 h-3.5" />
             .scad
           </button>
+          {debugMode && (
+            <button
+              onClick={onRunValidation}
+              disabled={isValidating || !openScadCode}
+              className={clsx(
+                'px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1.5 transition-colors',
+                isValidating || !openScadCode
+                  ? 'bg-surface-700 text-steel-dim cursor-not-allowed'
+                  : 'bg-amber-600 text-surface-900 hover:bg-amber-500'
+              )}
+              title="Run one validation + fix iteration"
+            >
+              {isValidating ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Validating...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Validate
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={onRender}
             disabled={isRendering || !openScadCode}
@@ -58,6 +97,19 @@ export function EditorPanel({
           </button>
         </div>
       </div>
+      {/* Validation issues summary (debug mode) */}
+      {debugMode && validationIssues.length > 0 && (
+        <div className="px-4 py-2 border-b border-surface-700 bg-surface-800/50 text-xs">
+          <div className="flex items-center gap-3">
+            <span className="text-steel-dim">Last validation:</span>
+            {criticalCount > 0 && <span className="text-red-400">{criticalCount} critical</span>}
+            {warningCount > 0 && <span className="text-amber-400">{warningCount} warnings</span>}
+            {criticalCount === 0 && warningCount === 0 && (
+              <span className="text-green-400">All checks passed</span>
+            )}
+          </div>
+        </div>
+      )}
       <div className="flex-1 min-h-0">
         <Editor
           height="100%"
