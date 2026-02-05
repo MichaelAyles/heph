@@ -46,6 +46,18 @@ jobs:
       - name: Build
         run: pnpm --filter phaestus build
 
+      - name: Install kicad-service dependencies
+        run: npm ci --prefix kicad-service
+
+      - name: Build kicad-service
+        run: npm --prefix kicad-service run build
+
+      - name: Install platformio-service dependencies
+        run: npm ci --prefix platformio-service
+
+      - name: Build platformio-service
+        run: npm --prefix platformio-service run build
+
       - name: Deploy to Cloudflare Pages
         working-directory: frontend
         env:

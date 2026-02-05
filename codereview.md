@@ -91,3 +91,4 @@ Method: Static review + automated checks (`pnpm --dir frontend typecheck`, `pnpm
 - 2026-02-05: Added optional bearer-token auth for internal microservice boundaries (`SERVICE_AUTH_TOKEN` on services, `INTERNAL_SERVICE_TOKEN` on frontend functions), and forwarded auth headers for KiCad/PlatformIO service calls.
 - 2026-02-05: Reworked LangGraph `projects.spec` writes in `state.ts` and `history.ts` to atomic compare-and-set updates (`WHERE updated_at = ?`) with retry, reducing lost-update race conditions.
 - 2026-02-05: Removed React runtime-safety anti-patterns in block editors: no ref reads during render in `LcscPartPicker`, and no synchronous `setState`-in-effect initialization flows in BOM editor/tab reset paths.
+- 2026-02-05: Expanded CI/deploy workflows to install and build `kicad-service` and `platformio-service` so service regressions are caught before merge/deploy.
