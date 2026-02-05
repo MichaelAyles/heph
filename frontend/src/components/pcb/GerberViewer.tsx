@@ -143,7 +143,7 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
             // Parse the gerber content
             const parser = createParser()
             parser.feed(content)
-            const parseTree = parser.result()
+            const parseTree = parser.results()
 
             // Plot to image tree
             const imageTree = plotTree(parseTree as never)
