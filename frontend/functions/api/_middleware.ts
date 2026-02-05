@@ -33,11 +33,20 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // Check request size for POST/PUT/PATCH requests
   if (['POST', 'PUT', 'PATCH'].includes(method)) {
     const contentLength = context.request.headers.get('Content-Length')
-    if (contentLength) {
-      const size = parseInt(contentLength, 10)
-      const limit = path.includes('/projects/') ? MAX_SPEC_SIZE : MAX_REQUEST_SIZE
+    const limit = path.includes('/projects/') ? MAX_SPEC_SIZE : MAX_REQUEST_SIZE
 
+    if (contentLength && Number.isFinite(parseInt(contentLength, 10))) {
+      const size = parseInt(contentLength, 10)
       if (size > limit) {
+        return Response.json(
+          { error: `Request body too large. Maximum size is ${Math.floor(limit / 1024 / 1024)}MB` },
+          { status: 413 }
+        )
+      }
+    } else if (context.request.body) {
+      // Fallback for chunked/streamed requests where Content-Length is absent.
+      const bodySize = (await context.request.clone().arrayBuffer()).byteLength
+      if (bodySize > limit) {
         return Response.json(
           { error: `Request body too large. Maximum size is ${Math.floor(limit / 1024 / 1024)}MB` },
           { status: 413 }
