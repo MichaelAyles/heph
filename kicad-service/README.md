@@ -110,6 +110,7 @@ Create a new web service pointing to this directory with Docker as the environme
 ## Environment Variables
 
 - `PORT`: Server port (default: 3000)
+- `SERVICE_AUTH_TOKEN`: Optional bearer token. When set, all endpoints except `/health` require `Authorization: Bearer <token>`.
 
 ## KiCad CLI Commands Used
 

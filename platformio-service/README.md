@@ -72,6 +72,7 @@ docker-compose up -d
 1. Connect this directory to Railway
 2. Railway will auto-detect the Dockerfile
 3. Set `PLATFORMIO_SERVICE_URL` secret in your frontend deployment
+4. Set `SERVICE_AUTH_TOKEN` in this service and `INTERNAL_SERVICE_TOKEN` in frontend with the same value
 
 ## Testing
 
@@ -95,3 +96,4 @@ curl -X POST http://localhost:3002/compile \
 - Timeout is 5 minutes per compilation
 - Max file size is 10MB total
 - Docker image is ~2GB due to ESP32 toolchain
+- All endpoints except `/health` require `Authorization: Bearer <SERVICE_AUTH_TOKEN>` when `SERVICE_AUTH_TOKEN` is configured

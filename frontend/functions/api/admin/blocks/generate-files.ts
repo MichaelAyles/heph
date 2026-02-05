@@ -120,8 +120,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const startTime = Date.now()
 
+    const serviceHeaders: HeadersInit = {}
+    if (env.INTERNAL_SERVICE_TOKEN) {
+      serviceHeaders.Authorization = `Bearer ${env.INTERNAL_SERVICE_TOKEN}`
+    }
+
     const response = await fetch(`${kicadServiceUrl}/process`, {
       method: 'POST',
+      headers: serviceHeaders,
       body: serviceFormData,
     })
 

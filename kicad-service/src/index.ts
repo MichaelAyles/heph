@@ -6,6 +6,18 @@ import { unlinkSync, existsSync } from 'fs'
 
 const app = express()
 const PORT = process.env.PORT || 3000
+const INTERNAL_TOKEN = process.env.SERVICE_AUTH_TOKEN
+
+function isAuthorizedInternalRequest(req: Request): boolean {
+  // If token isn't configured, keep local/dev behavior unchanged.
+  if (!INTERNAL_TOKEN) return true
+
+  const auth = req.headers.authorization
+  if (!auth?.startsWith('Bearer ')) return false
+
+  const token = auth.slice('Bearer '.length).trim()
+  return token === INTERNAL_TOKEN
+}
 
 // Configure multer for file uploads
 const upload = multer({
@@ -48,6 +60,20 @@ app.get('/health', (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
   })
+})
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path === '/health') {
+    next()
+    return
+  }
+
+  if (!isAuthorizedInternalRequest(req)) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  next()
 })
 
 // Process KiCad files endpoint

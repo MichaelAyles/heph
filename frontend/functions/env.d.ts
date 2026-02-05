@@ -26,6 +26,9 @@ export interface Env {
 
   // PlatformIO compile service URL
   PLATFORMIO_SERVICE_URL?: string
+
+  // Shared bearer token for internal microservice calls
+  INTERNAL_SERVICE_TOKEN?: string
 }
 
 // Extend the context with our typed env

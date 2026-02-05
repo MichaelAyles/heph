@@ -14,6 +14,18 @@ import os from 'os'
 
 const app = express()
 const PORT = process.env.PORT || 3000
+const INTERNAL_TOKEN = process.env.SERVICE_AUTH_TOKEN
+
+function isAuthorizedInternalRequest(req: express.Request): boolean {
+  // If token isn't configured, keep local/dev behavior unchanged.
+  if (!INTERNAL_TOKEN) return true
+
+  const auth = req.headers.authorization
+  if (!auth?.startsWith('Bearer ')) return false
+
+  const token = auth.slice('Bearer '.length).trim()
+  return token === INTERNAL_TOKEN
+}
 
 // Multer config for file uploads
 const storage = multer.diskStorage({
@@ -39,6 +51,20 @@ app.get('/health', (req, res) => {
     service: 'platformio-compile',
     timestamp: new Date().toISOString(),
   })
+})
+
+app.use((req, res, next) => {
+  if (req.path === '/health') {
+    next()
+    return
+  }
+
+  if (!isAuthorizedInternalRequest(req)) {
+    res.status(401).json({ success: false, error: 'Unauthorized' })
+    return
+  }
+
+  next()
 })
 
 // Compile endpoint - accepts JSON with file contents

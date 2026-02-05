@@ -71,9 +71,14 @@ export const onRequestPost: PagesFunction<Env, '', AuthenticatedRequest> = async
     const startTime = Date.now()
 
     // Call PlatformIO service
+    const serviceHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (env.INTERNAL_SERVICE_TOKEN) {
+      serviceHeaders.Authorization = `Bearer ${env.INTERNAL_SERVICE_TOKEN}`
+    }
+
     const response = await fetch(`${serviceUrl}/compile`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: serviceHeaders,
       body: JSON.stringify({
         files: body.files,
         board: body.board || 'esp32-c6-devkitc-1',
