@@ -5,12 +5,24 @@
  * Uses the WebSerial API (Chrome/Edge 89+).
  */
 
-/// <reference types="w3c-web-serial" />
-
 import { ESPLoader, Transport, type LoaderOptions, type FlashOptions } from 'esptool-js'
 
+interface WebSerialPortFilter {
+  usbVendorId: number
+}
+
+interface WebSerialPort {
+  [key: string]: unknown
+}
+
+interface WebSerialLikeNavigator extends Navigator {
+  serial: {
+    requestPort: (options: { filters: WebSerialPortFilter[] }) => Promise<WebSerialPort>
+  }
+}
+
 // USB Vendor IDs for common ESP32 USB-to-serial chips
-const ESP32_USB_FILTERS: SerialPortFilter[] = [
+const ESP32_USB_FILTERS: WebSerialPortFilter[] = [
   { usbVendorId: 0x10c4 }, // Silicon Labs CP210x
   { usbVendorId: 0x1a86 }, // CH340/CH341
   { usbVendorId: 0x303a }, // Espressif native USB (ESP32-S2/S3/C3/C6)
@@ -57,7 +69,7 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
  * WebSerial flash service for ESP32 devices
  */
 export class WebSerialFlashService {
-  private port: SerialPort | null = null
+  private port: WebSerialPort | null = null
   private transport: Transport | null = null
   private esploader: ESPLoader | null = null
   private isConnected = false
@@ -103,7 +115,8 @@ export class WebSerialFlashService {
       this.emitTerminal('info', 'Requesting serial port access...')
 
       // Request port with ESP32 USB vendor ID filters
-      this.port = await navigator.serial.requestPort({ filters: ESP32_USB_FILTERS })
+      const webSerialNavigator = navigator as WebSerialLikeNavigator
+      this.port = await webSerialNavigator.serial.requestPort({ filters: ESP32_USB_FILTERS })
 
       this.emitTerminal('info', 'Serial port selected')
       this.emitProgress({ stage: 'connecting', progress: 20, message: 'Opening port...' })
