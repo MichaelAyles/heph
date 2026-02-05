@@ -22,6 +22,23 @@ export interface CompileResult {
   error?: string
 }
 
+function resolveSafeProjectPath(projectDir: string, inputPath: string): string {
+  // Reject empty, absolute, or null-byte paths up front.
+  if (!inputPath || inputPath.includes('\0') || path.isAbsolute(inputPath)) {
+    throw new Error(`Invalid file path: ${inputPath}`)
+  }
+
+  const normalized = path.normalize(inputPath)
+  const resolved = path.resolve(projectDir, normalized)
+  const projectRoot = path.resolve(projectDir) + path.sep
+
+  if (!resolved.startsWith(projectRoot)) {
+    throw new Error(`Path traversal is not allowed: ${inputPath}`)
+  }
+
+  return resolved
+}
+
 /**
  * Generate platformio.ini if not provided
  */
@@ -203,7 +220,7 @@ export async function compileFirmware(input: CompileInput): Promise<CompileResul
         filePath = 'src/main.cpp'
       }
 
-      const fullPath = path.join(projectDir, filePath)
+      const fullPath = resolveSafeProjectPath(projectDir, filePath)
       const dir = path.dirname(fullPath)
 
       // Create directory if needed
