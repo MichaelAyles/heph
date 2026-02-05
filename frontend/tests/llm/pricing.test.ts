@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculateCost, calculateImageCost } from './pricing'
+import { calculateCost, calculateImageCost } from '../../functions/api/llm/pricing'
 
 describe('pricing module', () => {
   describe('calculateCost', () => {
