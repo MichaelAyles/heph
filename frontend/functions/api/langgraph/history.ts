@@ -22,6 +22,39 @@ interface CheckpointSummary {
   currentNode: string | null
 }
 
+async function updateProjectSpecAtomic(
+  env: Env,
+  projectId: string,
+  patch: (spec: Record<string, unknown>) => Record<string, unknown>,
+  maxRetries = 3
+): Promise<void> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const current = await env.DB.prepare('SELECT spec, updated_at FROM projects WHERE id = ?')
+      .bind(projectId)
+      .first<{ spec: string | null; updated_at: string }>()
+
+    if (!current) {
+      throw new Error('Project not found')
+    }
+
+    const existingSpec = current.spec ? JSON.parse(current.spec) : {}
+    const updatedSpec = patch(existingSpec)
+    const nextUpdatedAt = new Date().toISOString()
+
+    const updateResult = await env.DB.prepare(
+      'UPDATE projects SET spec = ?, updated_at = ? WHERE id = ? AND updated_at = ?'
+    )
+      .bind(JSON.stringify(updatedSpec), nextUpdatedAt, projectId, current.updated_at)
+      .run()
+
+    if (updateResult.meta.changes > 0) {
+      return
+    }
+  }
+
+  throw new Error('Failed to update project spec due to concurrent modification')
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, data } = context
   const user = data.user as User | undefined
@@ -123,17 +156,11 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     .run()
 
   // Also clear orchestrator state from project spec
-  const specResult = await env.DB.prepare('SELECT spec FROM projects WHERE id = ?')
-    .bind(threadId)
-    .first<{ spec: string | null }>()
-
-  if (specResult?.spec) {
-    const existingSpec = JSON.parse(specResult.spec)
-    delete existingSpec.orchestratorState
-    await env.DB.prepare('UPDATE projects SET spec = ?, updated_at = ? WHERE id = ?')
-      .bind(JSON.stringify(existingSpec), new Date().toISOString(), threadId)
-      .run()
-  }
+  await updateProjectSpecAtomic(env, threadId, (existingSpec) => {
+    const nextSpec = { ...existingSpec }
+    delete nextSpec.orchestratorState
+    return nextSpec
+  })
 
   return Response.json({
     success: true,

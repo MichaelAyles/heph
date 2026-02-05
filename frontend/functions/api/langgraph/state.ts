@@ -23,6 +23,39 @@ interface LangGraphState {
   updatedAt: string
 }
 
+async function updateProjectSpecAtomic(
+  env: Env,
+  projectId: string,
+  patch: (spec: Record<string, unknown>) => Record<string, unknown>,
+  maxRetries = 3
+): Promise<void> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const current = await env.DB.prepare('SELECT spec, updated_at FROM projects WHERE id = ?')
+      .bind(projectId)
+      .first<{ spec: string | null; updated_at: string }>()
+
+    if (!current) {
+      throw new Error('Project not found')
+    }
+
+    const existingSpec = current.spec ? JSON.parse(current.spec) : {}
+    const updatedSpec = patch(existingSpec)
+    const nextUpdatedAt = new Date().toISOString()
+
+    const updateResult = await env.DB.prepare(
+      'UPDATE projects SET spec = ?, updated_at = ? WHERE id = ? AND updated_at = ?'
+    )
+      .bind(JSON.stringify(updatedSpec), nextUpdatedAt, projectId, current.updated_at)
+      .run()
+
+    if (updateResult.meta.changes > 0) {
+      return
+    }
+  }
+
+  throw new Error('Failed to update project spec due to concurrent modification')
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, data } = context
   const user = data.user as User | undefined
@@ -163,12 +196,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     .run()
 
   // Also update project spec with orchestrator state
-  const specResult = await env.DB.prepare('SELECT spec FROM projects WHERE id = ?')
-    .bind(body.thread_id)
-    .first<{ spec: string | null }>()
-
-  const existingSpec = specResult?.spec ? JSON.parse(specResult.spec) : {}
-  const updatedSpec = {
+  await updateProjectSpecAtomic(env, body.thread_id, (existingSpec) => ({
     ...existingSpec,
     orchestratorState: {
       conversationHistory: [],
@@ -177,11 +205,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       currentStage: body.state.currentStage ?? 'spec',
       updatedAt: new Date().toISOString(),
     },
-  }
-
-  await env.DB.prepare('UPDATE projects SET spec = ?, updated_at = ? WHERE id = ?')
-    .bind(JSON.stringify(updatedSpec), new Date().toISOString(), body.thread_id)
-    .run()
+  }))
 
   return Response.json({
     success: true,

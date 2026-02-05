@@ -89,3 +89,4 @@ Method: Static review + automated checks (`pnpm --dir frontend typecheck`, `pnpm
 - 2026-02-05: Moved `pricing.test.ts` out of `/frontend/functions/api` route tree to `/frontend/tests/llm/pricing.test.ts` and updated imports to avoid accidental API route exposure.
 - 2026-02-05: Hardened public-route auth bypass logic in middleware to exact-match route prefixes (`path === route || path.startsWith(route + '/')`) instead of raw `startsWith(route)`.
 - 2026-02-05: Added optional bearer-token auth for internal microservice boundaries (`SERVICE_AUTH_TOKEN` on services, `INTERNAL_SERVICE_TOKEN` on frontend functions), and forwarded auth headers for KiCad/PlatformIO service calls.
+- 2026-02-05: Reworked LangGraph `projects.spec` writes in `state.ts` and `history.ts` to atomic compare-and-set updates (`WHERE updated_at = ?`) with retry, reducing lost-update race conditions.
