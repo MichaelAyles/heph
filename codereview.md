@@ -87,3 +87,4 @@ Method: Static review + automated checks (`pnpm --dir frontend typecheck`, `pnpm
 ## Remediation Log
 
 - 2026-02-05: Moved `pricing.test.ts` out of `/frontend/functions/api` route tree to `/frontend/tests/llm/pricing.test.ts` and updated imports to avoid accidental API route exposure.
+- 2026-02-05: Hardened public-route auth bypass logic in middleware to exact-match route prefixes (`path === route || path.startsWith(route + '/')`) instead of raw `startsWith(route)`.

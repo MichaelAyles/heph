@@ -58,8 +58,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // Store request ID for logging
   context.data.requestId = requestId
 
+  const isPublicRoute = PUBLIC_ROUTES.some((route) => path === route || path.startsWith(`${route}/`))
+
   // Allow public routes
-  if (PUBLIC_ROUTES.some((route) => path.startsWith(route))) {
+  if (isPublicRoute) {
     return context.next()
   }
 
