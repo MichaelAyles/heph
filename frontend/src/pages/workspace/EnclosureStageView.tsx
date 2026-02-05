@@ -420,7 +420,7 @@ export function EnclosureStageView() {
         setIsGenerating(false)
       }
     }
-  }, [project, spec, pcbArtifacts, finalSpec, saveEnclosureMutation, validateCode, fixCode])
+  }, [project, spec, pcbArtifacts, finalSpec, isDebugMode, saveEnclosureMutation, validateCode, fixCode])
 
   // Regenerate with feedback using LangGraph node (includes validation loop)
   const handleRegenerate = useCallback(async () => {
