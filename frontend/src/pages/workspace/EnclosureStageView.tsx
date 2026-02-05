@@ -187,21 +187,49 @@ export function EnclosureStageView() {
 
   // Mutation to save enclosure data
   const saveEnclosureMutation = useMutation({
-    mutationFn: async (data: { openScadCode: string; stlUrl?: string }) => {
-      const res = await fetch(`/api/projects/${project?.id}`, {
+    mutationFn: async (data: { openScadCode: string; stlUrl?: string; feedback?: string }) => {
+      if (!project?.id) throw new Error('Project is required to save enclosure data')
+
+      // Fetch latest project spec before each write to avoid stale-spec overwrite races.
+      const projectRes = await fetch(`/api/projects/${project.id}`)
+      if (!projectRes.ok) throw new Error('Failed to load latest project state')
+
+      const projectData = (await projectRes.json()) as {
+        project?: {
+          spec?: {
+            enclosure?: {
+              iterations?: Array<{
+                feedback?: string
+                openScadCode?: string
+                stlUrl?: string
+                timestamp?: string
+              }>
+              [key: string]: unknown
+            }
+            stages?: Record<string, unknown>
+            [key: string]: unknown
+          } | null
+        }
+      }
+
+      const latestSpec = projectData.project?.spec || {}
+      const latestEnclosure = latestSpec.enclosure || {}
+      const latestIterations = latestEnclosure.iterations || []
+
+      const res = await fetch(`/api/projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spec: {
-            ...spec,
+            ...latestSpec,
             enclosure: {
-              ...spec?.enclosure,
+              ...latestEnclosure,
               openScadCode: data.openScadCode,
               stlUrl: data.stlUrl,
               iterations: [
-                ...(spec?.enclosure?.iterations || []),
+                ...latestIterations,
                 {
-                  feedback: feedback || 'Initial generation',
+                  feedback: data.feedback || feedback || 'Initial generation',
                   openScadCode: data.openScadCode,
                   stlUrl: data.stlUrl,
                   timestamp: new Date().toISOString(),
@@ -209,7 +237,7 @@ export function EnclosureStageView() {
               ],
             },
             stages: {
-              ...spec?.stages,
+              ...latestSpec.stages,
               enclosure: { status: 'in_progress' },
             },
           },
@@ -319,7 +347,10 @@ export function EnclosureStageView() {
       // Save raw draft immediately (before validation)
       // This captures the unmodified LLM output as draft 0
       setOpenScadCode(code)
-      saveEnclosureMutation.mutate({ openScadCode: code })
+      await saveEnclosureMutation.mutateAsync({
+        openScadCode: code,
+        feedback: 'Initial generation (raw draft)',
+      })
 
       // In debug mode, skip validation loop - user can run it manually
       if (isDebugMode) {
@@ -365,7 +396,10 @@ export function EnclosureStageView() {
       setOpenScadCode(code)
       setCurrentStep('edit')
       // Save validated version (this will be a new iteration since we already saved the raw draft)
-      saveEnclosureMutation.mutate({ openScadCode: code })
+      await saveEnclosureMutation.mutateAsync({
+        openScadCode: code,
+        feedback: 'Initial generation (validated)',
+      })
 
       // Clear status after a moment (with cleanup)
       const timeoutId = setTimeout(() => setValidationStatus(null), 3000)
@@ -455,7 +489,7 @@ export function EnclosureStageView() {
       setValidationStatus('Regeneration complete!')
       setOpenScadCode(code)
       setFeedback('')
-      saveEnclosureMutation.mutate({ openScadCode: code })
+      await saveEnclosureMutation.mutateAsync({ openScadCode: code, feedback })
 
       // Clear status after a moment (with cleanup)
       const timeoutId = setTimeout(() => setValidationStatus(null), 3000)
@@ -517,7 +551,10 @@ export function EnclosureStageView() {
 
       const fixedCode = await fixCode(openScadCode, issuesToFix)
       setOpenScadCode(fixedCode)
-      saveEnclosureMutation.mutate({ openScadCode: fixedCode })
+      await saveEnclosureMutation.mutateAsync({
+        openScadCode: fixedCode,
+        feedback: 'Manual validation iteration',
+      })
 
       setValidationStatus('Validation iteration complete - code updated')
       setTimeout(() => setValidationStatus(null), 3000)
