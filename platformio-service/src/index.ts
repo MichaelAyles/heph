@@ -120,6 +120,7 @@ app.post('/compile', express.json({ limit: '10mb' }), async (req, res) => {
 // Multipart upload endpoint (alternative for large files)
 app.post('/compile-upload', upload.array('files', 20), async (req, res) => {
   const startTime = Date.now()
+  let uploadDir: string | null = null
 
   try {
     const uploadedFiles = req.files as Express.Multer.File[]
@@ -138,8 +139,8 @@ app.post('/compile-upload', upload.array('files', 20), async (req, res) => {
       }))
     )
 
-    // Clean up uploaded files
-    const uploadDir = path.dirname(uploadedFiles[0].path)
+    // Track upload directory for guaranteed cleanup
+    uploadDir = path.dirname(uploadedFiles[0].path)
 
     const board = (req.body.board as string) || 'esp32-c6-devkitc-1'
     const framework = (req.body.framework as string) || 'arduino'
@@ -147,9 +148,6 @@ app.post('/compile-upload', upload.array('files', 20), async (req, res) => {
     console.log(`Compiling firmware (upload) with ${files.length} files...`)
 
     const result = await compileFirmware({ files, board, framework })
-
-    // Clean up
-    await fs.rm(uploadDir, { recursive: true, force: true })
 
     const duration = Date.now() - startTime
     console.log(`Compilation ${result.success ? 'succeeded' : 'failed'} in ${duration}ms`)
@@ -178,6 +176,10 @@ app.post('/compile-upload', upload.array('files', 20), async (req, res) => {
       error: error instanceof Error ? error.message : 'Internal server error',
       duration,
     })
+  } finally {
+    if (uploadDir) {
+      await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => {})
+    }
   }
 })
 
