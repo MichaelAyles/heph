@@ -141,9 +141,14 @@ export function GerberViewer({ layers, className }: GerberViewerProps) {
 
           try {
             // Parse the gerber content
-            const parser = createParser()
+            const parser = createParser() as unknown as {
+              feed: (chunk: string) => void
+              result?: () => unknown
+              results?: () => unknown
+            }
             parser.feed(content)
-            const parseTree = parser.results()
+            const parseTree =
+              parser.results?.() ?? parser.result?.() ?? (() => { throw new Error('Failed to parse Gerber') })()
 
             // Plot to image tree
             const imageTree = plotTree(parseTree as never)

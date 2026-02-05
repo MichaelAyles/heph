@@ -15,7 +15,7 @@ interface WebSerialPort {
   [key: string]: unknown
 }
 
-interface WebSerialLikeNavigator extends Navigator {
+interface WebSerialLikeNavigator {
   serial: {
     requestPort: (options: { filters: WebSerialPortFilter[] }) => Promise<WebSerialPort>
   }
@@ -115,7 +115,7 @@ export class WebSerialFlashService {
       this.emitTerminal('info', 'Requesting serial port access...')
 
       // Request port with ESP32 USB vendor ID filters
-      const webSerialNavigator = navigator as WebSerialLikeNavigator
+      const webSerialNavigator = navigator as unknown as WebSerialLikeNavigator
       this.port = await webSerialNavigator.serial.requestPort({ filters: ESP32_USB_FILTERS })
 
       this.emitTerminal('info', 'Serial port selected')
