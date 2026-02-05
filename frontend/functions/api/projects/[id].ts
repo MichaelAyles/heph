@@ -140,9 +140,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     updates.push('updated_at = ?')
     values.push(new Date().toISOString())
-    values.push(projectId)
+    values.push(projectId, user.id)
 
-    const result = await env.DB.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`)
+    const result = await env.DB.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`)
       .bind(...values)
       .run()
 
@@ -152,7 +152,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     })
 
     // Fetch updated project
-    const row = await env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(projectId).first()
+    const row = await env.DB.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?')
+      .bind(projectId, user.id)
+      .first()
 
     return Response.json({
       project: {
