@@ -6,7 +6,7 @@
  * - Block library (editable=false) for browsing available blocks
  */
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { clsx } from 'clsx'
 import {
   Cpu,
@@ -275,7 +275,13 @@ export function BlockViewer({ block, editable = false, onSave, className }: Bloc
       <div className="p-6">
         {activeTab === 'bus' && <BusInterfaceTab definition={definition} />}
         {activeTab === 'edges' && <EdgesTab definition={definition} />}
-        {activeTab === 'components' && <ComponentsTab block={block} editable={editable} />}
+        {activeTab === 'components' && (
+          <ComponentsTab
+            key={`${block.slug}:${block.updatedAt ?? ''}:${definition.version}`}
+            block={block}
+            editable={editable}
+          />
+        )}
         {activeTab === 'files' && <FilesTab block={block} editable={editable} />}
       </div>
     </div>
@@ -630,15 +636,18 @@ function LcscPartPicker({
   anchorRef,
 }: LcscPartPickerProps) {
   const [search, setSearch] = useState('')
+  const [popoverTop, setPopoverTop] = useState(200)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
+  const handleClose = useCallback(() => {
+    setSearch('')
+    onClose()
+  }, [onClose])
 
   // Focus search input when opening
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => searchInputRef.current?.focus(), 50)
-    } else {
-      setSearch('')
     }
   }, [isOpen])
 
@@ -653,25 +662,44 @@ function LcscPartPicker({
         anchorRef.current &&
         !anchorRef.current.contains(e.target as Node)
       ) {
-        onClose()
+        handleClose()
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen, onClose, anchorRef])
+  }, [isOpen, anchorRef, handleClose])
 
   // Close on Escape
   useEffect(() => {
     if (!isOpen) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') handleClose()
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, handleClose])
+
+  // Track popover position from anchor outside render.
+  useEffect(() => {
+    if (!isOpen) return
+
+    const updatePopoverPosition = () => {
+      const anchorRect = anchorRef.current?.getBoundingClientRect()
+      setPopoverTop(anchorRect ? anchorRect.bottom + 8 : 200)
+    }
+
+    updatePopoverPosition()
+    window.addEventListener('resize', updatePopoverPosition)
+    window.addEventListener('scroll', updatePopoverPosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updatePopoverPosition)
+      window.removeEventListener('scroll', updatePopoverPosition, true)
+    }
+  }, [isOpen, anchorRef])
 
   // Score parts for matching
   const scoredParts = useMemo(() => {
@@ -747,9 +775,7 @@ function LcscPartPicker({
         width: '420px',
         maxHeight: '480px',
         // Position below anchor, shifted left to avoid going off-screen
-        top: anchorRef.current
-          ? anchorRef.current.getBoundingClientRect().bottom + 8
-          : 200,
+        top: popoverTop,
         right: 24,
       }}
     >
@@ -758,7 +784,7 @@ function LcscPartPicker({
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-white">Select LCSC Part</span>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1 text-steel hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
@@ -793,10 +819,10 @@ function LcscPartPicker({
               </span>
             </div>
             <button
-              onClick={() => {
-                onSelect(recommendedPart)
-                onClose()
-              }}
+                  onClick={() => {
+                    onSelect(recommendedPart)
+                    handleClose()
+                  }}
               className="w-full text-left p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/20 transition-colors"
             >
               <div className="flex items-center justify-between mb-1">
@@ -835,7 +861,7 @@ function LcscPartPicker({
                   key={`${part.lcscPartNumber}-${i}`}
                   onClick={() => {
                     onSelect(part)
-                    onClose()
+                    handleClose()
                   }}
                   className="w-full text-left px-3 py-2.5 hover:bg-surface-700 transition-colors"
                 >
@@ -936,12 +962,6 @@ function ComponentsTab({
     }
     return parts.sort((a, b) => a.value.localeCompare(b.value))
   }, [allBlocksData])
-
-  // Reset when definition changes
-  useEffect(() => {
-    setComponents(definition?.components || [])
-    setHasChanges(false)
-  }, [definition])
 
   // Save mutation
   const saveMutation = useMutation({

@@ -5,7 +5,7 @@
  * Allows adding MPN, manufacturer, and LCSC part numbers for ordering.
  */
 
-import { useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Save, X, Plus, Trash2, Upload, ExternalLink } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -42,24 +42,26 @@ export function BlockBOMEditor({ slug, onClose }: BlockBOMEditorProps) {
     },
   })
 
-  // Initialize components from definition or legacy format
-  useEffect(() => {
-    if (data?.block) {
-      if (data.block.definition?.components) {
-        setComponents(data.block.definition.components)
-      } else if (data.block.components) {
-        // Convert legacy format to new format
-        setComponents(
-          data.block.components.map((c) => ({
-            reference: c.ref,
-            value: c.value,
-            footprint: c.package,
-            quantity: 1,
-          }))
-        )
-      }
+  const initialComponents = useMemo<BlockComponentDef[]>(() => {
+    if (!data?.block) return []
+
+    if (data.block.definition?.components) {
+      return data.block.definition.components
     }
+
+    if (data.block.components) {
+      return data.block.components.map((c) => ({
+        reference: c.ref,
+        value: c.value,
+        footprint: c.package,
+        quantity: 1,
+      }))
+    }
+
+    return []
   }, [data])
+
+  const effectiveComponents = hasChanges ? components : initialComponents
 
   // Update component mutation
   const updateMutation = useMutation({
@@ -121,7 +123,8 @@ export function BlockBOMEditor({ slug, onClose }: BlockBOMEditorProps) {
 
   const updateComponent = (index: number, field: keyof BlockComponentDef, value: string | number) => {
     setComponents((prev) => {
-      const updated = [...prev]
+      const base = hasChanges ? prev : initialComponents
+      const updated = [...base]
       updated[index] = { ...updated[index], [field]: value }
       return updated
     })
@@ -129,10 +132,11 @@ export function BlockBOMEditor({ slug, onClose }: BlockBOMEditorProps) {
   }
 
   const addComponent = () => {
+    const base = hasChanges ? components : initialComponents
     setComponents((prev) => [
-      ...prev,
+      ...(hasChanges ? prev : base),
       {
-        reference: `C${prev.length + 1}`,
+        reference: `C${base.length + 1}`,
         value: '',
         footprint: '',
         quantity: 1,
@@ -142,12 +146,15 @@ export function BlockBOMEditor({ slug, onClose }: BlockBOMEditorProps) {
   }
 
   const removeComponent = (index: number) => {
-    setComponents((prev) => prev.filter((_, i) => i !== index))
+    setComponents((prev) => {
+      const base = hasChanges ? prev : initialComponents
+      return base.filter((_, i) => i !== index)
+    })
     setHasChanges(true)
   }
 
   const handleSave = () => {
-    updateMutation.mutate(components)
+    updateMutation.mutate(effectiveComponents)
   }
 
   const handleStepUpload = () => {
@@ -189,7 +196,7 @@ export function BlockBOMEditor({ slug, onClose }: BlockBOMEditorProps) {
           <div>
             <h2 className="text-lg font-medium text-steel">Edit BOM: {data.block.name}</h2>
             <p className="text-xs text-steel-dim mt-1">
-              {components.length} components | {slug}
+              {effectiveComponents.length} components | {slug}
             </p>
           </div>
           <button onClick={onClose} className="text-steel-dim hover:text-steel p-2">
@@ -272,7 +279,7 @@ export function BlockBOMEditor({ slug, onClose }: BlockBOMEditorProps) {
                 </tr>
               </thead>
               <tbody>
-                {components.map((component, index) => (
+                {effectiveComponents.map((component, index) => (
                   <tr key={index} className="border-b border-surface-700 hover:bg-surface-800/50">
                     <td className="px-3 py-2">
                       <input
@@ -371,19 +378,21 @@ export function BlockBOMEditor({ slug, onClose }: BlockBOMEditorProps) {
             <div className="grid grid-cols-3 gap-4 text-xs">
               <div>
                 <span className="text-steel-dim">Total Components:</span>
-                <span className="ml-2 text-steel">{components.length}</span>
+                <span className="ml-2 text-steel">{effectiveComponents.length}</span>
               </div>
               <div>
                 <span className="text-steel-dim">With LCSC Part #:</span>
                 <span
                   className={clsx(
                     'ml-2',
-                    components.filter((c) => c.lcscPartNumber).length === components.length
+                    effectiveComponents.filter((c) => c.lcscPartNumber).length ===
+                      effectiveComponents.length
                       ? 'text-emerald-400'
                       : 'text-amber-400'
                   )}
                 >
-                  {components.filter((c) => c.lcscPartNumber).length}/{components.length}
+                  {effectiveComponents.filter((c) => c.lcscPartNumber).length}/
+                  {effectiveComponents.length}
                 </span>
               </div>
               <div>
@@ -391,12 +400,12 @@ export function BlockBOMEditor({ slug, onClose }: BlockBOMEditorProps) {
                 <span
                   className={clsx(
                     'ml-2',
-                    components.filter((c) => c.mpn).length === components.length
+                    effectiveComponents.filter((c) => c.mpn).length === effectiveComponents.length
                       ? 'text-emerald-400'
                       : 'text-amber-400'
                   )}
                 >
-                  {components.filter((c) => c.mpn).length}/{components.length}
+                  {effectiveComponents.filter((c) => c.mpn).length}/{effectiveComponents.length}
                 </span>
               </div>
             </div>
