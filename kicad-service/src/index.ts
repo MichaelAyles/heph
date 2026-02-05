@@ -130,10 +130,7 @@ app.post(
 
       const response: ErrorResponse = {
         error: error instanceof Error ? error.message : 'Processing failed',
-        details:
-          error instanceof Error && error.stack
-            ? error.stack.split('\n').slice(0, 3).join('\n')
-            : undefined,
+        details: 'See server logs for diagnostics',
       }
 
       res.status(500).json(response)
