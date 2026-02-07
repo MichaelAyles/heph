@@ -654,11 +654,13 @@ export function EnclosureStageView() {
     setIsRendering(true)
     setRenderError(null)
 
-    // Cleanup old blob URL
+    // Clear all old render state so the viewer unmounts and shows loading,
+    // and any errors from this render will be visible (not hidden behind old model)
     if (stlBlobUrl) {
       revokeSTLBlobUrl(stlBlobUrl)
-      setStlBlobUrl(null)
     }
+    setStlBlobUrl(null)
+    setStlData(null)
 
     try {
       const result = await renderOpenSCAD(openScadCode)

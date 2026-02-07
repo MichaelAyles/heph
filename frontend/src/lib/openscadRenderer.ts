@@ -80,8 +80,11 @@ async function loadOpenSCAD(): Promise<OpenSCADModule> {
       const OpenSCADFactory = (await import(/* @vite-ignore */ modulePath)).default
 
       // Initialize with noInitialRun to prevent auto-execution
+      // noExitRuntime prevents the runtime from shutting down after callMain,
+      // which is required for calling callMain multiple times (re-rendering)
       const module: OpenSCADModule = await OpenSCADFactory({
         noInitialRun: true,
+        noExitRuntime: true,
         print: (text: string) => {
           if (!filterWarning([text])) {
             console.log('[OpenSCAD]', text)
@@ -141,6 +144,14 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
 
   try {
     const module = await loadOpenSCAD()
+
+    // Clean up any stale output from a previous render to prevent
+    // reading old data if this render fails
+    try {
+      module.FS.unlink('/output.stl')
+    } catch {
+      // File may not exist
+    }
 
     // Write the OpenSCAD code to a virtual file
     module.FS.writeFile('/input.scad', code)
