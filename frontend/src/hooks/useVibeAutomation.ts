@@ -14,6 +14,14 @@ interface UseVibeAutomationParams {
  */
 export function useVibeAutomation({ enabled, key, run, onError }: UseVibeAutomationParams) {
   const startedKeysRef = useRef<Set<string>>(new Set())
+  const runRef = useRef(run)
+  const onErrorRef = useRef(onError)
+
+  // Keep latest callbacks without retriggering/aborting active automations on every render.
+  useEffect(() => {
+    runRef.current = run
+    onErrorRef.current = onError
+  }, [onError, run])
 
   useEffect(() => {
     if (!enabled) return
@@ -22,17 +30,17 @@ export function useVibeAutomation({ enabled, key, run, onError }: UseVibeAutomat
     startedKeysRef.current.add(key)
 
     const controller = new AbortController()
-    void run(controller.signal).catch((error) => {
+    void runRef.current(controller.signal).catch((error) => {
       logger.warn('orchestrator', 'Vibe automation task failed', {
         key,
         error: error instanceof Error ? error.message : String(error),
       })
-      onError?.(error)
+      onErrorRef.current?.(error)
       startedKeysRef.current.delete(key)
     })
 
     return () => {
       controller.abort()
     }
-  }, [enabled, key, onError, run])
+  }, [enabled, key])
 }
