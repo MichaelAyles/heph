@@ -109,11 +109,12 @@ export function createRemoteBoard(
       height: gridHeight * GRID_SIZE_MM - (gridHeight - 1) * VERTICAL_OVERLAP_MM,
       unit: 'mm',
     },
-    connectionMapping: template?.suggestedSignals.map((signal) => ({
-      remoteSignal: signal,
-      mainSignal: signal,
-      connectorType: connector?.id || 'JST-PH-4',
-    })) || [],
+    connectionMapping:
+      template?.suggestedSignals.map((signal) => ({
+        remoteSignal: signal,
+        mainSignal: signal,
+        connectorType: connector?.id || 'JST-PH-4',
+      })) || [],
     gridWidth,
     gridHeight,
   }
@@ -182,11 +183,26 @@ export function getMainBoardSignals(
 
   // Always include standard bus signals
   const standardSignals: BusSignal[] = [
-    'GND', '3V3', '5V0',
-    'I2C1_SDA', 'I2C1_SCL',
-    'GPIO_0', 'GPIO_1', 'GPIO_2', 'GPIO_3',
-    'SPI_MOSI', 'SPI_MISO', 'SPI_SCK', 'SPI_CS0',
-    'AUX_0', 'AUX_1', 'AUX_2', 'AUX_3', 'AUX_4', 'AUX_5', 'AUX_6',
+    'GND',
+    '3V3',
+    '5V0',
+    'I2C1_SDA',
+    'I2C1_SCL',
+    'GPIO_0',
+    'GPIO_1',
+    'GPIO_2',
+    'GPIO_3',
+    'SPI_MOSI',
+    'SPI_MISO',
+    'SPI_SCK',
+    'SPI_CS0',
+    'AUX_0',
+    'AUX_1',
+    'AUX_2',
+    'AUX_3',
+    'AUX_4',
+    'AUX_5',
+    'AUX_6',
   ]
 
   for (const signal of standardSignals) {
@@ -264,10 +280,7 @@ export function addConnectionMapping(
 /**
  * Remove a connection mapping from remote board
  */
-export function removeConnectionMapping(
-  remoteBoard: RemoteBoard,
-  index: number
-): RemoteBoard {
+export function removeConnectionMapping(remoteBoard: RemoteBoard, index: number): RemoteBoard {
   return {
     ...remoteBoard,
     connectionMapping: remoteBoard.connectionMapping.filter((_, i) => i !== index),
@@ -320,10 +333,7 @@ export function addBlockToRemoteBoard(
 /**
  * Remove a block from a remote board
  */
-export function removeBlockFromRemoteBoard(
-  remoteBoard: RemoteBoard,
-  blockId: string
-): RemoteBoard {
+export function removeBlockFromRemoteBoard(remoteBoard: RemoteBoard, blockId: string): RemoteBoard {
   return {
     ...remoteBoard,
     placedBlocks: remoteBoard.placedBlocks.filter((b) => b.blockId !== blockId),
@@ -373,7 +383,7 @@ export function recalculateBoardSize(
  * Generate a unique slug for a remote board
  */
 export function generateRemoteBoardSlug(name: string, existingSlugs: string[]): string {
-  let slug = name
+  const slug = name
     .toLowerCase()
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-]/g, '')

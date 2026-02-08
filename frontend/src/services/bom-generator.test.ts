@@ -6,7 +6,7 @@ import {
   bomToLCSCCSV,
   type ManufacturingBOM,
 } from './bom-generator'
-import type { PCBArtifacts, PcbBlock, PlacedBlock, ResistorTapState } from '../db/schema'
+import type { PCBArtifacts, PcbBlock } from '../db/schema'
 
 // =============================================================================
 // Test Data
@@ -186,9 +186,7 @@ describe('generateManufacturingBOM', () => {
     const bom = generateManufacturingBOM(artifacts, [sampleBlock])
 
     // Find the nofit 10k resistor entry
-    const nofitEntry = bom.entries.find(
-      (e) => e.value === '10k' && e.nofit === true
-    )
+    const nofitEntry = bom.entries.find((e) => e.value === '10k' && e.nofit === true)
     expect(nofitEntry).toBeDefined()
     expect(nofitEntry?.nofitReason).toBe('Isolated')
   })
@@ -359,7 +357,9 @@ describe('bomToCSV', () => {
 
     const csv = bomToCSV(bom)
 
-    expect(csv).toContain('Line,Designator,Value,Footprint,Quantity,Manufacturer,MPN,Board,NoFit,NoFit Reason')
+    expect(csv).toContain(
+      'Line,Designator,Value,Footprint,Quantity,Manufacturer,MPN,Board,NoFit,NoFit Reason'
+    )
   })
 
   it('formats entries correctly', () => {
@@ -481,7 +481,9 @@ describe('bomToLCSCCSV', () => {
 
     const csv = bomToLCSCCSV(bom)
 
-    expect(csv).toContain('Quantity,Manufacture Part Number,Manufacturer,Description,LCSC Part Number,Package,Customer Part Number')
+    expect(csv).toContain(
+      'Quantity,Manufacture Part Number,Manufacturer,Description,LCSC Part Number,Package,Customer Part Number'
+    )
   })
 
   it('excludes nofit entries', () => {

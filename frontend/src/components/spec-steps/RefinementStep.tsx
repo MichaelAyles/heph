@@ -9,11 +9,13 @@ import { clsx } from 'clsx'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { logger } from '../../lib/logger'
 import { invokeLangGraphNode, BreakpointCancelledError } from '../../services/langgraph/invoke'
+import { runOrchestratorNode } from '../../services/langgraph/orchestrator-runner'
 import type { Project, ProjectSpec, Decision, OpenQuestion } from '../../db/schema'
 
 interface RefinementStepProps {
   project: Project
   spec: ProjectSpec
+  autoProceed?: boolean
   onDecisions: (decisions: Decision[]) => void
   onComplete: () => void
   onCancel?: () => void
@@ -43,6 +45,7 @@ const MAX_REFINEMENT_ROUNDS = 5
 export function RefinementStep({
   project,
   spec,
+  autoProceed = false,
   onDecisions,
   onComplete,
   onCancel,
@@ -54,6 +57,7 @@ export function RefinementStep({
   const [otherText, setOtherText] = useState<Record<string, string>>({})
   const [allDecisions, setAllDecisions] = useState<Decision[]>(spec.decisions || [])
   const [cancelled, setCancelled] = useState(false)
+  const [countdown, setCountdown] = useState<number | null>(null)
 
   const checkForMoreQuestions = useCallback(
     async (currentDecisions: Decision[]) => {
@@ -70,11 +74,17 @@ export function RefinementStep({
       try {
         // All context comes from projectState via @variables in the system prompt
         // No need to pass data explicitly - the invoke handler fetches it
-        const data = await invokeLangGraphNode({
-          nodeName: 'refinement',
-          input: {}, // Empty - context comes from @variables
-          projectId: project.id,
-        })
+        const data = autoProceed
+          ? await runOrchestratorNode({
+              nodeName: 'refinement',
+              input: {}, // Empty - context comes from @variables
+              projectId: project.id,
+            })
+          : await invokeLangGraphNode({
+              nodeName: 'refinement',
+              input: {}, // Empty - context comes from @variables
+              projectId: project.id,
+            })
 
         const result = data.output as RefinementResponse['output']
 
@@ -99,7 +109,7 @@ export function RefinementStep({
         setIsChecking(false)
       }
     },
-    [project.id, spec.feasibility, spec.description, onComplete, onCancel, cancelled]
+    [autoProceed, project.id, spec.feasibility, spec.description, onComplete, onCancel, cancelled]
   )
 
   const handleAnswer = (questionId: string, _question: string, answer: string) => {
@@ -129,7 +139,7 @@ export function RefinementStep({
     }
   }
 
-  const handleSubmitAnswers = () => {
+  const handleSubmitAnswers = useCallback(() => {
     const newDecisions: Decision[] = []
     Object.entries(selectedAnswers).forEach(([questionId, answer]) => {
       const question = pendingQuestions.find((q) => q.id === questionId)
@@ -149,8 +159,9 @@ export function RefinementStep({
     onDecisions(updatedDecisions)
     setPendingQuestions([])
     setSelectedAnswers({})
+    setCountdown(null)
     checkForMoreQuestions(updatedDecisions)
-  }
+  }, [checkForMoreQuestions, onDecisions, pendingQuestions, selectedAnswers, allDecisions])
 
   useEffect(() => {
     if (pendingQuestions.length === 0 && !isChecking) {
@@ -158,6 +169,50 @@ export function RefinementStep({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Vibe mode: auto-select the most likely option (first option) for each question.
+  useEffect(() => {
+    if (!autoProceed || isChecking || pendingQuestions.length === 0) return
+
+    setSelectedAnswers((prev) => {
+      const next = { ...prev }
+      for (const question of pendingQuestions) {
+        if (!next[question.id] && question.options.length > 0) {
+          next[question.id] = question.options[0]
+        }
+      }
+      return next
+    })
+  }, [autoProceed, isChecking, pendingQuestions])
+
+  // Vibe mode: countdown before automatically continuing to next refinement round.
+  useEffect(() => {
+    if (!autoProceed || isChecking || pendingQuestions.length === 0) {
+      setCountdown(null)
+      return
+    }
+
+    const allAnswered = Object.keys(selectedAnswers).length === pendingQuestions.length
+    if (!allAnswered) {
+      setCountdown(null)
+      return
+    }
+
+    setCountdown(5)
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null) return null
+        if (prev <= 1) {
+          clearInterval(interval)
+          handleSubmitAnswers()
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [autoProceed, isChecking, pendingQuestions.length, selectedAnswers, handleSubmitAnswers])
 
   if (isChecking) {
     return (
@@ -256,7 +311,7 @@ export function RefinementStep({
           onClick={handleSubmitAnswers}
           className="w-full py-3 bg-copper-gradient text-ash font-semibold hover:opacity-90 transition-opacity"
         >
-          Continue
+          {countdown !== null ? `Continue (${countdown}s)` : 'Continue'}
         </button>
       )}
     </div>

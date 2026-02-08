@@ -13,10 +13,7 @@ import {
   type GerberBlock,
   type MergedGerbers,
 } from '../src/services/gerber-merge'
-import {
-  calculatePanelLayout,
-  mergeIntoPanelGerbers,
-} from '../src/services/panel-merge'
+import { calculatePanelLayout, mergeIntoPanelGerbers } from '../src/services/panel-merge'
 import type { PlacedBlock, RemoteBoard, PanelConfiguration } from '../src/db/schema'
 import {
   type JlcpcbComponent,
@@ -35,10 +32,10 @@ const PROJECT_SLUG = 'test-project'
 // Main board blocks - vertical stack, 2 units wide, 4 units tall
 // ESP32 (2x2) at top, battery+IO (1x1 each) below, USB-C (2x1) at bottom
 const MAIN_BOARD_BLOCKS: PlacedBlock[] = [
-  { blockId: 'esp32-1', blockSlug: 'esp32-c6-mcu', gridX: 0, gridY: 2, rotation: 0 },     // 2x2 at top (Y:2-3)
+  { blockId: 'esp32-1', blockSlug: 'esp32-c6-mcu', gridX: 0, gridY: 2, rotation: 0 }, // 2x2 at top (Y:2-3)
   { blockId: 'batt-1', blockSlug: '1x1-jst-ph-battery-connector', gridX: 0, gridY: 1, rotation: 0 }, // 1x1 left
-  { blockId: 'io-1', blockSlug: '1x1-io-block', gridX: 1, gridY: 1, rotation: 0 },        // 1x1 right
-  { blockId: 'usbc-1', blockSlug: '2x1-usbc-power', gridX: 0, gridY: 0, rotation: 0 },    // 2x1 at bottom
+  { blockId: 'io-1', blockSlug: '1x1-io-block', gridX: 1, gridY: 1, rotation: 0 }, // 1x1 right
+  { blockId: 'usbc-1', blockSlug: '2x1-usbc-power', gridX: 0, gridY: 0, rotation: 0 }, // 2x1 at bottom
 ]
 
 // Remote board
@@ -101,7 +98,9 @@ async function loadBlockGerbersFromApi(slug: string): Promise<MergedGerbers | nu
     }
 
     // Fetch the gerbers ZIP
-    const gerbersRes = await fetch(`https://phaestus.app/api/blocks/${slug}/files/${block.files.gerbers}`)
+    const gerbersRes = await fetch(
+      `https://phaestus.app/api/blocks/${slug}/files/${block.files.gerbers}`
+    )
     if (!gerbersRes.ok) {
       console.log(`  Block ${slug}: Gerbers fetch returned ${gerbersRes.status}`)
       return null
@@ -318,12 +317,7 @@ function generateComponentBOM(
  * - LCSC Part # (Cxxxxxx format)
  */
 function bomToLCSCCSV(bomMap: Map<string, BOMEntry>): string {
-  const headers = [
-    'Comment',
-    'Designator',
-    'Footprint',
-    'LCSC Part #',
-  ]
+  const headers = ['Comment', 'Designator', 'Footprint', 'LCSC Part #']
 
   // Filter out DNP entries and entries without LCSC numbers (they can't be ordered)
   const sortedEntries = Array.from(bomMap.values())
@@ -353,10 +347,7 @@ function bomToLCSCCSV(bomMap: Map<string, BOMEntry>): string {
     return field
   }
 
-  return [
-    headers.join(','),
-    ...rows.map((row) => row.map(escapeField).join(',')),
-  ].join('\n')
+  return [headers.join(','), ...rows.map((row) => row.map(escapeField).join(','))].join('\n')
 }
 
 // =============================================================================
@@ -370,11 +361,7 @@ const GRID_SIZE_MM = 12.7
  * - Must be top-side (JLCPCB only does single-sided assembly)
  * - Must have LCSC part number (nofit components excluded)
  */
-function shouldIncludeInCentroid(
-  entry: PositionEntry,
-  blockSlug: string,
-  ref: string
-): boolean {
+function shouldIncludeInCentroid(entry: PositionEntry, blockSlug: string, ref: string): boolean {
   // Filter out bottom-side components
   if (entry.side.toLowerCase() === 'bottom') {
     return false
@@ -389,7 +376,7 @@ function shouldIncludeInCentroid(
   // Find component in definition (handle grouped refs)
   for (const comp of definition.components) {
     const refs = comp.reference.split(/,\s*/)
-    if (refs.some(r => r.trim() === ref)) {
+    if (refs.some((r) => r.trim() === ref)) {
       // Found it - include only if it has LCSC number
       return !!comp.lcscPartNumber
     }
@@ -406,7 +393,10 @@ function generateComponentCentroid(
   panelConfig: PanelConfiguration,
   jlcpcbComponents: JlcpcbComponent[],
   footprintPatterns: FootprintPattern[]
-): { csv: string; stats: { total: number; included: number; filteredBottom: number; filteredNofit: number } } {
+): {
+  csv: string
+  stats: { total: number; included: number; filteredBottom: number; filteredNofit: number }
+} {
   // JLCPCB CPL format: Designator, Mid X (with mm), Mid Y (with mm), Layer, Rotation
   const lines = ['Designator,Mid X,Mid Y,Layer,Rotation']
   let total = 0
@@ -463,7 +453,12 @@ function generateComponentCentroid(
 
       // Apply JLCPCB rotation offset
       const lcscPartNumber = getLcscPartNumber(block.blockSlug, entry.ref)
-      const rotationOffset = getRotationOffset(lcscPartNumber, entry.package, jlcpcbComponents, footprintPatterns)
+      const rotationOffset = getRotationOffset(
+        lcscPartNumber,
+        entry.package,
+        jlcpcbComponents,
+        footprintPatterns
+      )
       const adjustedRotation = applyRotationOffset(entry.rot, rotationOffset)
 
       // JLCPCB format: Designator, Mid X (mm), Mid Y (mm), Layer, Rotation
@@ -512,7 +507,12 @@ function generateComponentCentroid(
 
         // Apply JLCPCB rotation offset
         const lcscPartNumber = getLcscPartNumber(block.blockSlug, entry.ref)
-        const rotationOffset = getRotationOffset(lcscPartNumber, entry.package, jlcpcbComponents, footprintPatterns)
+        const rotationOffset = getRotationOffset(
+          lcscPartNumber,
+          entry.package,
+          jlcpcbComponents,
+          footprintPatterns
+        )
         const adjustedRotation = applyRotationOffset(entry.rot, rotationOffset)
 
         // JLCPCB format: Designator, Mid X (mm), Mid Y (mm), Layer, Rotation
@@ -526,7 +526,7 @@ function generateComponentCentroid(
 
   return {
     csv: lines.join('\n'),
-    stats: { total, included, filteredBottom, filteredNofit }
+    stats: { total, included, filteredBottom, filteredNofit },
   }
 }
 
@@ -557,7 +557,10 @@ async function main() {
   // Load gerbers for all blocks
   const blockGerbers = new Map<string, MergedGerbers>()
   const positionFiles = new Map<string, string>()
-  const blockDimensions = new Map<string, { width: number; height: number; minX: number; minY: number }>()
+  const blockDimensions = new Map<
+    string,
+    { width: number; height: number; minX: number; minY: number }
+  >()
 
   for (const slug of uniqueSlugs) {
     console.log(`\nLoading ${slug}...`)
@@ -569,7 +572,9 @@ async function main() {
       if (gerbers.edgeCuts) {
         const dims = parseBoardDimensionsFromEdgeCuts(gerbers.edgeCuts)
         blockDimensions.set(slug, dims)
-        console.log(`  Board dims: ${dims.width.toFixed(2)} x ${dims.height.toFixed(2)} mm, origin (${dims.minX.toFixed(2)}, ${dims.minY.toFixed(2)})`)
+        console.log(
+          `  Board dims: ${dims.width.toFixed(2)} x ${dims.height.toFixed(2)} mm, origin (${dims.minX.toFixed(2)}, ${dims.minY.toFixed(2)})`
+        )
       }
     }
 
@@ -606,7 +611,9 @@ async function main() {
       jlcpcbComponents = data.components || []
       console.log(`  Loaded ${jlcpcbComponents.length} component rotation offsets`)
     } else {
-      console.log(`  Warning: Could not fetch components (${componentsRes.status}), using empty list`)
+      console.log(
+        `  Warning: Could not fetch components (${componentsRes.status}), using empty list`
+      )
     }
 
     if (patternsRes.ok) {
@@ -662,7 +669,9 @@ async function main() {
     ? parseBoardDimensionsFromEdgeCuts(mainBoardGerbers.edgeCuts)
     : { width: 50.8, height: 12.7, minX: 0, minY: 0 } // 4 units x 1 unit default
 
-  console.log(`  Main board size: ${mainBoardDims.width.toFixed(1)} x ${mainBoardDims.height.toFixed(1)} mm`)
+  console.log(
+    `  Main board size: ${mainBoardDims.width.toFixed(1)} x ${mainBoardDims.height.toFixed(1)} mm`
+  )
 
   // ==========================================================================
   // Merge remote board gerbers
@@ -670,7 +679,11 @@ async function main() {
 
   console.log('\nMerging remote board gerbers...')
 
-  const remoteBoardGerbers: Array<{ board: RemoteBoard; gerbers: MergedGerbers; actualSize: { width: number; height: number } }> = []
+  const remoteBoardGerbers: Array<{
+    board: RemoteBoard
+    gerbers: MergedGerbers
+    actualSize: { width: number; height: number }
+  }> = []
 
   for (const remote of REMOTE_BOARDS) {
     const remoteBlocks: GerberBlock[] = []
@@ -712,10 +725,12 @@ async function main() {
       remoteBoardGerbers.push({
         board: remote,
         gerbers,
-        actualSize: { width: actualSize.width, height: actualSize.height }
+        actualSize: { width: actualSize.width, height: actualSize.height },
       })
       console.log(`  Merged ${remoteBlocks.length} blocks into remote board: ${remote.name}`)
-      console.log(`    Actual size from gerbers: ${actualSize.width.toFixed(1)} x ${actualSize.height.toFixed(1)} mm`)
+      console.log(
+        `    Actual size from gerbers: ${actualSize.width.toFixed(1)} x ${actualSize.height.toFixed(1)} mm`
+      )
     }
   }
 
@@ -740,8 +755,12 @@ async function main() {
       remoteBoardsWithActualSizes
     )
 
-    console.log(`  Panel size: ${panelConfig.panelSize.width.toFixed(1)} x ${panelConfig.panelSize.height.toFixed(1)} mm`)
-    console.log(`  Main board position: (${panelConfig.mainBoardPosition.x}, ${panelConfig.mainBoardPosition.y})`)
+    console.log(
+      `  Panel size: ${panelConfig.panelSize.width.toFixed(1)} x ${panelConfig.panelSize.height.toFixed(1)} mm`
+    )
+    console.log(
+      `  Main board position: (${panelConfig.mainBoardPosition.x}, ${panelConfig.mainBoardPosition.y})`
+    )
     console.log(`  V-score lines: ${panelConfig.vScoreLines.length}`)
     console.log(`  Routed edges: ${panelConfig.routedEdges?.length || 0}`)
 
@@ -767,7 +786,7 @@ async function main() {
       routedEdges: [],
       panelSize: {
         width: mainBoardDims.width + 12, // 5mm margin + 1mm board margin each side
-        height: mainBoardDims.height + 12
+        height: mainBoardDims.height + 12,
       },
       panelMargin: 5,
     }
@@ -799,21 +818,22 @@ async function main() {
   }
 
   if (panelGerbers.routedEdges) {
-    fs.writeFileSync(path.join(gerberDir, `${PROJECT_SLUG}-RoutedEdges.gbr`), panelGerbers.routedEdges)
+    fs.writeFileSync(
+      path.join(gerberDir, `${PROJECT_SLUG}-RoutedEdges.gbr`),
+      panelGerbers.routedEdges
+    )
     console.log('  Written: RoutedEdges.gbr')
   }
 
   console.log('  Written: 10 gerber layer files')
 
   // BOM - component level
-  const allPlacedBlocks = [
-    ...MAIN_BOARD_BLOCKS,
-    ...REMOTE_BOARDS.flatMap(r => r.placedBlocks),
-  ]
   const { bom: mainBOM } = generateComponentBOM(positionFiles, MAIN_BOARD_BLOCKS, 'M_')
   const { bom: remoteBOM } = generateComponentBOM(
     positionFiles,
-    REMOTE_BOARDS.flatMap(r => r.placedBlocks.map(b => ({ ...b, blockId: `${r.id}_${b.blockId}` }))),
+    REMOTE_BOARDS.flatMap((r) =>
+      r.placedBlocks.map((b) => ({ ...b, blockId: `${r.id}_${b.blockId}` }))
+    ),
     'R_'
   )
 
@@ -838,10 +858,20 @@ async function main() {
   console.log(`  Written: bom.csv (JLCPCB format, ${combinedBOM.size} unique parts)`)
 
   // Centroid - component level with panel coordinates (filtered for assembly)
-  const centroidResult = generateComponentCentroid(positionFiles, blockDimensions, MAIN_BOARD_BLOCKS, REMOTE_BOARDS, panelConfig, jlcpcbComponents, footprintPatterns)
+  const centroidResult = generateComponentCentroid(
+    positionFiles,
+    blockDimensions,
+    MAIN_BOARD_BLOCKS,
+    REMOTE_BOARDS,
+    panelConfig,
+    jlcpcbComponents,
+    footprintPatterns
+  )
   fs.writeFileSync(path.join(OUTPUT_DIR, `${PROJECT_SLUG}-centroid.csv`), centroidResult.csv)
   console.log(`  Written: centroid.csv (${centroidResult.stats.included} components for assembly)`)
-  console.log(`    Filtered: ${centroidResult.stats.filteredBottom} bottom-side, ${centroidResult.stats.filteredNofit} nofit/no-LCSC`)
+  console.log(
+    `    Filtered: ${centroidResult.stats.filteredBottom} bottom-side, ${centroidResult.stats.filteredNofit} nofit/no-LCSC`
+  )
 
   // Panel config JSON
   fs.writeFileSync(
@@ -863,10 +893,10 @@ Routed Edges: ${panelConfig.routedEdges?.length || 0}
 
 === BLOCKS ===
 Main Board:
-${MAIN_BOARD_BLOCKS.map(b => `  - ${b.blockSlug} at (${b.gridX}, ${b.gridY})`).join('\n')}
+${MAIN_BOARD_BLOCKS.map((b) => `  - ${b.blockSlug} at (${b.gridX}, ${b.gridY})`).join('\n')}
 
 Remote Boards:
-${REMOTE_BOARDS.map(r => `  ${r.name}:\n${r.placedBlocks.map(b => `    - ${b.blockSlug} at (${b.gridX}, ${b.gridY})`).join('\n')}`).join('\n')}
+${REMOTE_BOARDS.map((r) => `  ${r.name}:\n${r.placedBlocks.map((b) => `    - ${b.blockSlug} at (${b.gridX}, ${b.gridY})`).join('\n')}`).join('\n')}
 
 === FILES ===
 gerbers/

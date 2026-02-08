@@ -1,8 +1,9 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import JSZip from 'jszip'
+import { useNavigate } from 'react-router-dom'
 import {
   Cpu,
   ArrowRight,
@@ -16,8 +17,9 @@ import {
 import { clsx } from 'clsx'
 import { useWorkspaceContext } from '../../components/workspace/WorkspaceLayout'
 import { invokeLangGraphNode, BreakpointCancelledError } from '../../services/langgraph/invoke'
+import { runOrchestratorNode } from '../../services/langgraph/orchestrator-runner'
 import { BlockSelector } from '../../components/pcb/BlockSelector'
-import { PCB3DViewer } from '../../components/pcb/PCB3DViewer'
+import { PCB3DViewer, type PCB3DViewerRef } from '../../components/pcb/PCB3DViewer'
 import { GridEditor } from '../../components/pcb/GridEditor'
 import { BusConnectionDiagram } from '../../components/pcb/BusConnectionDiagram'
 import { GerberViewer } from '../../components/pcb/GerberViewer'
@@ -37,6 +39,7 @@ import {
 } from '../../prompts/pcb-selection'
 import { validateGrid, fromPlacedBlocks, calculateBoardSize } from '../../services/pcb-grid'
 import { logger } from '../../lib/logger'
+import { useAuthStore } from '../../stores/auth'
 import type {
   PcbBlock,
   PlacedBlock,
@@ -50,6 +53,10 @@ type PCBStep = 'select_blocks' | 'generating' | 'preview'
 
 export function PCBStageView() {
   const { project } = useWorkspaceContext()
+  const navigate = useNavigate()
+  const { user } = useAuthStore()
+  const controlMode = user?.controlMode || 'fix_it'
+  const isVibeMode = controlMode === 'vibe_it'
   const queryClient = useQueryClient()
   const [currentStep, setCurrentStep] = useState<PCBStep>('select_blocks')
   const [selectedBlocks, setSelectedBlocks] = useState<PlacedBlock[]>([])
@@ -62,8 +69,13 @@ export function PCBStageView() {
   const [gerberLayers, setGerberLayers] = useState<Record<string, string>>({})
   const [isLoadingGerbers, setIsLoadingGerbers] = useState(false)
   const [configuredTapStates, setConfiguredTapStates] = useState<ResistorTapState[]>([])
+  const [autoGenerateCountdown, setAutoGenerateCountdown] = useState<number | null>(null)
   // Selected board for gerbers/3D view: null = main board, '__remote_type__' = cable-connected blocks
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null)
+  const viewerRef = useRef<PCB3DViewerRef>(null)
+  const autoAiSuggestedRef = useRef(false)
+  const autoGenerateScheduledRef = useRef(false)
+  const autoAdvanceStartedRef = useRef(false)
 
   const specComplete = project?.status === 'complete'
   const spec = project?.spec
@@ -199,6 +211,35 @@ export function PCBStageView() {
       queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
     },
   })
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  const completePCBStageAndAdvance = useCallback(async () => {
+    if (!project?.id || !spec) return
+
+    const res = await fetch(`/api/projects/${project.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spec: {
+          ...spec,
+          stages: {
+            ...spec.stages,
+            pcb: {
+              status: 'complete',
+              completedAt: new Date().toISOString(),
+            },
+          },
+        },
+      }),
+    })
+
+    if (res.ok) {
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      navigate(`/project/${project.id}/enclosure`)
+    }
+  }, [navigate, project?.id, queryClient, spec])
 
   // Handle capturing 3D view for enclosure generation
   const handleCapture3DImage = useCallback(
@@ -420,65 +461,74 @@ export function PCBStageView() {
   }, [selectedBoardId, viewMode]) // Intentionally exclude loadGerbers to avoid infinite loop
 
   // Handle AI suggestion
-  const handleAiSuggest = useCallback(async () => {
-    if (!blocksData?.blocks || !spec?.finalSpec) return
+  const handleAiSuggest = useCallback(
+    async (viaOrchestrator = false) => {
+      if (!blocksData?.blocks || !spec?.finalSpec) return
 
-    setIsAiSuggesting(true)
-    try {
-      // Build catalog entries for validation
-      const catalogEntries: BlockCatalogEntry[] = blocksData.blocks
-        .filter((b) => b.definition)
-        .map((b) => toBlockCatalogEntry(b.definition!))
+      setIsAiSuggesting(true)
+      try {
+        // Build catalog entries for validation
+        const catalogEntries: BlockCatalogEntry[] = blocksData.blocks
+          .filter((b) => b.definition)
+          .map((b) => toBlockCatalogEntry(b.definition!))
 
-      // Call LangGraph block_selection node
-      // Context (projectName, description, finalSpec, availableBlocks) comes from @variables
-      const data = await invokeLangGraphNode({
-        nodeName: 'block_selection',
-        input: {}, // Empty - context comes from @variables
-        projectId: project?.id,
-      })
+        // Call LangGraph block_selection node
+        // Context (projectName, description, finalSpec, availableBlocks) comes from @variables
+        const data = viaOrchestrator
+          ? await runOrchestratorNode({
+              nodeName: 'block_selection',
+              input: {}, // Empty - context comes from @variables
+              projectId: project?.id,
+            })
+          : await invokeLangGraphNode({
+              nodeName: 'block_selection',
+              input: {}, // Empty - context comes from @variables
+              projectId: project?.id,
+            })
 
-      const suggestion = data.output as unknown as PCBSuggestionResponse
+        const suggestion = data.output as unknown as PCBSuggestionResponse
 
-      if (!suggestion) {
-        throw new Error('Failed to get block selection output')
+        if (!suggestion) {
+          throw new Error('Failed to get block selection output')
+        }
+
+        // Validate suggestion
+        const validation = validatePCBSuggestion(suggestion, catalogEntries)
+        if (!validation.valid) {
+          logger.warn('pcb', 'AI suggestion has validation issues', { errors: validation.errors })
+        }
+
+        // Update grid size
+        setGridWidth(Math.max(2, suggestion.boardSize.width))
+        setGridHeight(Math.max(4, suggestion.boardSize.height))
+
+        // Convert to PlacedBlock format (filter out remote blocks which don't have grid coordinates)
+        const gridBlocks = suggestion.blocks.filter(
+          (b) => b.gridX !== undefined && b.gridY !== undefined
+        )
+        const newBlocks: PlacedBlock[] = gridBlocks.map((b, idx) => ({
+          blockId: `${b.slug}-${Date.now()}-${idx}`,
+          blockSlug: b.slug,
+          gridX: b.gridX!,
+          gridY: b.gridY!,
+          rotation: b.rotation ?? 0,
+        }))
+
+        setSelectedBlocks(newBlocks)
+        savePCBMutation.mutate({ placedBlocks: newBlocks })
+      } catch (error) {
+        if (error instanceof BreakpointCancelledError) {
+          setMergeError('AI suggestion cancelled at debug breakpoint')
+        } else {
+          logger.error('pcb', 'AI suggestion failed', { error })
+          setMergeError(error instanceof Error ? error.message : 'AI suggestion failed')
+        }
+      } finally {
+        setIsAiSuggesting(false)
       }
-
-      // Validate suggestion
-      const validation = validatePCBSuggestion(suggestion, catalogEntries)
-      if (!validation.valid) {
-        logger.warn('pcb', 'AI suggestion has validation issues', { errors: validation.errors })
-      }
-
-      // Update grid size
-      setGridWidth(Math.max(2, suggestion.boardSize.width))
-      setGridHeight(Math.max(4, suggestion.boardSize.height))
-
-      // Convert to PlacedBlock format (filter out remote blocks which don't have grid coordinates)
-      const gridBlocks = suggestion.blocks.filter(
-        (b) => b.gridX !== undefined && b.gridY !== undefined
-      )
-      const newBlocks: PlacedBlock[] = gridBlocks.map((b, idx) => ({
-        blockId: `${b.slug}-${Date.now()}-${idx}`,
-        blockSlug: b.slug,
-        gridX: b.gridX!,
-        gridY: b.gridY!,
-        rotation: b.rotation ?? 0,
-      }))
-
-      setSelectedBlocks(newBlocks)
-      savePCBMutation.mutate({ placedBlocks: newBlocks })
-    } catch (error) {
-      if (error instanceof BreakpointCancelledError) {
-        setMergeError('AI suggestion cancelled at debug breakpoint')
-      } else {
-        logger.error('pcb', 'AI suggestion failed', { error })
-        setMergeError(error instanceof Error ? error.message : 'AI suggestion failed')
-      }
-    } finally {
-      setIsAiSuggesting(false)
-    }
-  }, [blocksData?.blocks, spec?.finalSpec, project, savePCBMutation])
+    },
+    [blocksData?.blocks, spec?.finalSpec, project, savePCBMutation]
+  )
 
   // Handle schematic and PCB merge - the critical integration!
   const handleMergeSchematic = useCallback(async () => {
@@ -608,9 +658,9 @@ export function PCBStageView() {
       })
 
       setCurrentStep('preview')
-      setViewMode('gerbers')
-      // Load gerber files for display
-      loadGerbers()
+      // Vibe mode defaults to 3D to highlight the generated board assembly.
+      setViewMode('3d')
+      setSelectedBoardId(null)
     } catch (error) {
       logger.error('pcb', 'Merge failed', { error })
       setMergeError(error instanceof Error ? error.message : 'Failed to merge schematics')
@@ -618,14 +668,7 @@ export function PCBStageView() {
     } finally {
       setIsMerging(false)
     }
-  }, [
-    selectedBlocks,
-    blocksData?.blocks,
-    blockDefinitions,
-    project?.name,
-    savePCBMutation,
-    loadGerbers,
-  ])
+  }, [selectedBlocks, blocksData?.blocks, blockDefinitions, project?.name, savePCBMutation])
 
   // Handle documentation download
   const handleDownloadDocs = useCallback(() => {
@@ -658,6 +701,115 @@ export function PCBStageView() {
       setCurrentStep('preview')
     }
   }, [pcbArtifacts?.schematicData])
+
+  // Vibe mode: automatically request AI block suggestions when entering PCB stage.
+  useEffect(() => {
+    if (!isVibeMode || !specComplete) return
+    if (autoAiSuggestedRef.current) return
+    if (!spec?.finalSpec || !blocksData?.blocks) return
+    if (selectedBlocks.length > 0 || pcbArtifacts?.schematicData) return
+    if (isAiSuggesting || isMerging) return
+
+    autoAiSuggestedRef.current = true
+    void handleAiSuggest(true)
+  }, [
+    blocksData?.blocks,
+    handleAiSuggest,
+    isAiSuggesting,
+    isMerging,
+    isVibeMode,
+    pcbArtifacts?.schematicData,
+    selectedBlocks.length,
+    spec?.finalSpec,
+    specComplete,
+  ])
+
+  // Vibe mode: start a 5s countdown before auto-generating merged PCB artifacts.
+  useEffect(() => {
+    if (!isVibeMode || !specComplete) return
+    if (autoGenerateScheduledRef.current) return
+    if (selectedBlocks.length === 0 || pcbArtifacts?.schematicData) return
+    if (isAiSuggesting || isMerging || !blocksData?.blocks) return
+
+    autoGenerateScheduledRef.current = true
+    setAutoGenerateCountdown(5)
+
+    const interval = setInterval(() => {
+      setAutoGenerateCountdown((prev) => {
+        if (prev === null) return null
+        if (prev <= 1) {
+          clearInterval(interval)
+          void handleMergeSchematic()
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [
+    blocksData?.blocks,
+    handleMergeSchematic,
+    isAiSuggesting,
+    isMerging,
+    isVibeMode,
+    pcbArtifacts?.schematicData,
+    selectedBlocks.length,
+    specComplete,
+  ])
+
+  // Vibe mode: capture 3D screenshots (main + remote) and advance to enclosure.
+  useEffect(() => {
+    if (!isVibeMode || !project?.id) return
+    if (autoAdvanceStartedRef.current) return
+    if (!pcbArtifacts?.schematicData || selectedBlocks.length === 0) return
+    if (isMerging || savePCBMutation.isPending) return
+
+    autoAdvanceStartedRef.current = true
+
+    void (async () => {
+      try {
+        setViewMode('3d')
+        setSelectedBoardId(null)
+        await sleep(1500)
+
+        const mainCapture = await viewerRef.current?.takeScreenshot()
+        if (mainCapture) {
+          await savePCBMutation.mutateAsync({
+            placedBlocks: selectedBlocks,
+            assembly3dImage: mainCapture,
+          })
+        }
+
+        if (remoteTypeBlocks.length > 0) {
+          setSelectedBoardId(REMOTE_TYPE_BOARD_ID)
+          await sleep(1500)
+
+          const remoteCapture = await viewerRef.current?.takeScreenshot()
+          if (remoteCapture) {
+            await savePCBMutation.mutateAsync({
+              placedBlocks: selectedBlocks,
+              remoteTypeAssembly3dImage: remoteCapture,
+            })
+          }
+        }
+
+        await completePCBStageAndAdvance()
+      } catch (error) {
+        logger.error('pcb', 'Vibe automation failed while capturing 3D views', { error })
+      }
+    })()
+  }, [
+    REMOTE_TYPE_BOARD_ID,
+    completePCBStageAndAdvance,
+    isMerging,
+    isVibeMode,
+    pcbArtifacts?.schematicData,
+    project?.id,
+    remoteTypeBlocks.length,
+    savePCBMutation,
+    selectedBlocks,
+  ])
 
   if (!specComplete) {
     return (
@@ -727,6 +879,9 @@ export function PCBStageView() {
               onComplete={() => {
                 queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
                 queryClient.invalidateQueries({ queryKey: ['projects'] })
+                if (isVibeMode && project?.id) {
+                  navigate(`/project/${project.id}/enclosure`)
+                }
               }}
             />
           </div>
@@ -742,7 +897,9 @@ export function PCBStageView() {
               Block Catalog
             </span>
             <button
-              onClick={handleAiSuggest}
+              onClick={() => {
+                void handleAiSuggest(false)
+              }}
               disabled={isAiSuggesting || !spec?.finalSpec}
               className={clsx(
                 'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
@@ -771,6 +928,12 @@ export function PCBStageView() {
 
         {/* Main panel */}
         <main className="flex-1 flex flex-col min-h-0 p-4 gap-4">
+          {autoGenerateCountdown !== null && (
+            <div className="px-3 py-2 rounded border border-copper/30 bg-copper/10 text-copper text-sm">
+              Vibe mode: auto-generating PCB artifacts in {autoGenerateCountdown}s...
+            </div>
+          )}
+
           {/* View mode toolbar */}
           <PCBViewerToolbar
             viewMode={viewMode}
@@ -876,6 +1039,7 @@ export function PCBStageView() {
                   <div className="flex-1 min-h-0">
                     {viewingBlocks.length > 0 ? (
                       <PCB3DViewer
+                        ref={viewerRef}
                         boardSize={pcbArtifacts?.boardSize}
                         placedBlocks={viewingBlocks}
                         blocks={blocksData.blocks}

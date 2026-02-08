@@ -9,7 +9,6 @@ import {
   calculatePanelArea,
   getPanelSummary,
   PANEL_DEFAULTS,
-  GRID_SIZE_MM,
 } from './panel-merge'
 import type { RemoteBoard, PCBArtifacts, PanelConfiguration } from '../db/schema'
 
@@ -17,7 +16,12 @@ import type { RemoteBoard, PCBArtifacts, PanelConfiguration } from '../db/schema
 // Test Data
 // =============================================================================
 
-const createRemoteBoard = (id: string, name: string, width: number, height: number): RemoteBoard => ({
+const createRemoteBoard = (
+  id: string,
+  name: string,
+  width: number,
+  height: number
+): RemoteBoard => ({
   id,
   name,
   slug: name.toLowerCase().replace(/\s+/g, '-'),
@@ -45,7 +49,10 @@ describe('calculatePanelLayout', () => {
     expect(result.remoteBoards).toHaveLength(0)
     // Panel size includes margins + boardMargin clearance
     expect(result.panelSize.width).toBe(
-      PANEL_DEFAULTS.margin + mainBoardSize.width + PANEL_DEFAULTS.margin + PANEL_DEFAULTS.boardMargin * 2
+      PANEL_DEFAULTS.margin +
+        mainBoardSize.width +
+        PANEL_DEFAULTS.margin +
+        PANEL_DEFAULTS.boardMargin * 2
     )
     expect(result.panelSize.height).toBe(
       mainBoardSize.height + PANEL_DEFAULTS.margin * 2 + PANEL_DEFAULTS.boardMargin * 2
@@ -130,13 +137,11 @@ describe('generateVScoreLinesWithActualSizes', () => {
       new Map(),
       panelSize,
       5, // margin
-      1  // boardMargin
+      1 // boardMargin
     )
 
     // Should have left edge v-score
-    const leftLine = lines.find(
-      (l) => l.orientation === 'vertical' && l.position === mainPos.x - 1
-    )
+    const leftLine = lines.find((l) => l.orientation === 'vertical' && l.position === mainPos.x - 1)
     expect(leftLine).toBeDefined()
     expect(leftLine?.startMm).toBe(0)
     expect(leftLine?.endMm).toBe(panelSize.height)
@@ -160,7 +165,7 @@ describe('generateVScoreLinesWithActualSizes', () => {
       new Map(),
       panelSize,
       5, // margin
-      1  // boardMargin
+      1 // boardMargin
     )
 
     // Bottom v-score at margin - boardMargin
@@ -177,9 +182,7 @@ describe('generateVScoreLinesWithActualSizes', () => {
     const mainSize = { width: 50, height: 40 }
     const panelSize = { width: 100, height: 70 }
 
-    const remotePositions = [
-      { remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 },
-    ]
+    const remotePositions = [{ remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 }]
     const actualSizes = new Map([['rb1', { width: 25, height: 60 }]])
 
     const lines = generateVScoreLinesWithActualSizes(
@@ -189,7 +192,7 @@ describe('generateVScoreLinesWithActualSizes', () => {
       actualSizes,
       panelSize,
       5, // margin
-      1  // boardMargin
+      1 // boardMargin
     )
 
     // Top v-score for remote board (height 60 = max)
@@ -240,7 +243,7 @@ describe('generateRoutedEdgesWithActualSizes', () => {
       new Map(),
       5, // margin
       1, // boardMargin
-      2  // routeBitDiameter
+      2 // routeBitDiameter
     )
 
     expect(edges).toHaveLength(0)
@@ -250,9 +253,7 @@ describe('generateRoutedEdgesWithActualSizes', () => {
     const mainPos = { x: 5, y: 5 }
     const mainSize = { width: 50, height: 60 } // Taller main board
 
-    const remotePositions = [
-      { remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 },
-    ]
+    const remotePositions = [{ remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 }]
     const actualSizes = new Map([['rb1', { width: 25, height: 40 }]]) // Shorter remote
 
     const edges = generateRoutedEdgesWithActualSizes(
@@ -262,7 +263,7 @@ describe('generateRoutedEdgesWithActualSizes', () => {
       actualSizes,
       5, // margin
       1, // boardMargin
-      2  // routeBitDiameter
+      2 // routeBitDiameter
     )
 
     expect(edges).toHaveLength(1)
@@ -280,9 +281,7 @@ describe('generateRoutedEdgesWithActualSizes', () => {
     const mainPos = { x: 5, y: 5 }
     const mainSize = { width: 50, height: 30 } // Short main
 
-    const remotePositions = [
-      { remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 },
-    ]
+    const remotePositions = [{ remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 }]
     const actualSizes = new Map([['rb1', { width: 25, height: 50 }]]) // Tall remote
 
     const edges = generateRoutedEdgesWithActualSizes(
@@ -352,9 +351,7 @@ describe('generateRoutedEdgesGerber', () => {
   })
 
   it('generates valid gerber with edge data', () => {
-    const gerber = generateRoutedEdgesGerber([
-      { x1: 10, y1: 20, x2: 50, y2: 20 },
-    ])
+    const gerber = generateRoutedEdgesGerber([{ x1: 10, y1: 20, x2: 50, y2: 20 }])
 
     expect(gerber).toContain('G04 Routed edges layer')
     expect(gerber).toContain('%MOMM*%')
@@ -363,10 +360,7 @@ describe('generateRoutedEdgesGerber', () => {
   })
 
   it('uses custom route width', () => {
-    const gerber = generateRoutedEdgesGerber(
-      [{ x1: 0, y1: 0, x2: 10, y2: 0 }],
-      3.0
-    )
+    const gerber = generateRoutedEdgesGerber([{ x1: 0, y1: 0, x2: 10, y2: 0 }], 3.0)
     expect(gerber).toContain('%ADD10C,3.000000*%')
   })
 })
