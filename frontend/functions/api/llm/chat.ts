@@ -68,12 +68,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ).first()
 
     const provider = (settings?.llm_provider as string) || 'openrouter'
-    // Priority: request body > env var > database > hardcoded fallback
+    const defaultTextModel =
+      env.TEXT_MODEL_SLUG || (settings?.default_model as string) || 'google/gemini-2.0-flash-001'
+    const imageModelAliasTarget = env.IMAGE_MODEL_SLUG || defaultTextModel
+    const requestedModel = body.model
     const model =
-      body.model ||
-      env.TEXT_MODEL_SLUG ||
-      (settings?.default_model as string) ||
-      'google/gemini-2.0-flash-001'
+      requestedModel === '__text_model__'
+        ? defaultTextModel
+        : requestedModel === '__image_model__'
+          ? imageModelAliasTarget
+          : requestedModel || defaultTextModel
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 4096
 

@@ -39,8 +39,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
     }
 
-    // Use the configured image model from .dev.vars
-    const model = body.model || env.IMAGE_MODEL_SLUG
+    const defaultImageModel = env.IMAGE_MODEL_SLUG
+    const defaultTextModel = env.TEXT_MODEL_SLUG
+    const requestedModel = body.model
+    const model =
+      requestedModel === '__image_model__'
+        ? defaultImageModel || defaultTextModel
+        : requestedModel === '__text_model__'
+          ? defaultTextModel || defaultImageModel
+          : requestedModel || defaultImageModel
     if (!model) {
       return Response.json(
         { error: 'IMAGE_MODEL_SLUG not configured in .dev.vars' },

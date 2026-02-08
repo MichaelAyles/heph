@@ -404,6 +404,26 @@ function expandTemplateVariables(
   return { text: expanded, images: extractedImages }
 }
 
+function resolveModelAliasesInPrompt(
+  prompt: string,
+  env: Env
+): { prompt: string; preferredModelAlias?: '__text_model__' | '__image_model__' } {
+  const textModel = env.TEXT_MODEL_SLUG || 'google/gemini-2.0-flash-001'
+  const imageModel = env.IMAGE_MODEL_SLUG || textModel
+
+  let preferredModelAlias: '__text_model__' | '__image_model__' | undefined
+  if (prompt.includes('__image_model__')) {
+    preferredModelAlias = '__image_model__'
+  } else if (prompt.includes('__text_model__')) {
+    preferredModelAlias = '__text_model__'
+  }
+
+  return {
+    preferredModelAlias,
+    prompt: prompt.replace(/__text_model__/g, textModel).replace(/__image_model__/g, imageModel),
+  }
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, data, params } = context
   const user = data.user as User | undefined
@@ -526,9 +546,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   // Expand template variables in system prompt with dynamic context
   // This happens BEFORE breakpoint creation so debug shows the actual expanded prompt
-  const { text: expandedSystemPrompt, images: extractedImages } = expandTemplateVariables(
+  const { text: expandedTemplatePrompt, images: extractedImages } = expandTemplateVariables(
     systemPrompt,
     dynamicContext
+  )
+  const { prompt: expandedSystemPrompt, preferredModelAlias } = resolveModelAliasesInPrompt(
+    expandedTemplatePrompt,
+    env
   )
 
   // Check for debug_it mode breakpoint
@@ -617,7 +641,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body: JSON.stringify({
         messages,
         temperature: params.temperature,
-        model: params.model,
+        model: params.model || preferredModelAlias,
         maxTokens: params.maxTokens,
         projectId: params.projectId || body.projectId,
       }),
@@ -651,7 +675,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       },
       body: JSON.stringify({
         prompt: params.prompt,
-        model: params.model,
+        model: params.model || preferredModelAlias,
       }),
     })
 
