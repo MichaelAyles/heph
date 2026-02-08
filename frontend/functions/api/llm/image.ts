@@ -32,7 +32,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Get settings
     const settings = await env.DB.prepare(
-      'SELECT llm_provider, default_model, openrouter_api_key FROM system_settings WHERE id = 1'
+      `SELECT llm_provider, default_model, openrouter_text_model, openrouter_image_model,
+              vertex_text_model, vertex_image_model, openrouter_api_key
+       FROM system_settings WHERE id = 1`
     ).first()
 
     const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''

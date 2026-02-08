@@ -548,8 +548,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   // Expand template variables in system prompt with dynamic context
   // This happens BEFORE breakpoint creation so debug shows the actual expanded prompt
   const settingsRow = await env.DB.prepare(
-    'SELECT llm_provider, default_model FROM system_settings WHERE id = 1'
-  ).first<{ llm_provider: string | null; default_model: string | null }>()
+    `SELECT llm_provider, default_model, openrouter_text_model, openrouter_image_model,
+            vertex_text_model, vertex_image_model
+     FROM system_settings WHERE id = 1`
+  ).first<{
+    llm_provider: string | null
+    default_model: string | null
+    openrouter_text_model: string | null
+    openrouter_image_model: string | null
+    vertex_text_model: string | null
+    vertex_image_model: string | null
+  }>()
   const modelDefaults = getProviderModelDefaults(env, settingsRow || undefined)
 
   const { text: expandedTemplatePrompt, images: extractedImages } = expandTemplateVariables(

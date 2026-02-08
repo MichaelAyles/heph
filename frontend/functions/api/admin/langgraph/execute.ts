@@ -82,7 +82,9 @@ async function callLLM(
 
   // Get settings
   const settings = await env.DB.prepare(
-    'SELECT llm_provider, default_model, openrouter_api_key, gemini_api_key FROM system_settings WHERE id = 1'
+    `SELECT llm_provider, default_model, openrouter_text_model, openrouter_image_model,
+            vertex_text_model, vertex_image_model, openrouter_api_key, gemini_api_key
+     FROM system_settings WHERE id = 1`
   ).first()
 
   const provider = getProviderMode(env, (settings?.llm_provider as string) || null)

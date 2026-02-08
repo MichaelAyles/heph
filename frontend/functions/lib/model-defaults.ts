@@ -5,6 +5,10 @@ export type LLMProviderMode = 'openrouter' | 'vertex'
 interface SettingsLike {
   llm_provider?: string | null
   default_model?: string | null
+  openrouter_text_model?: string | null
+  openrouter_image_model?: string | null
+  vertex_text_model?: string | null
+  vertex_image_model?: string | null
 }
 
 export interface ProviderModelDefaults {
@@ -32,13 +36,27 @@ export function getProviderModelDefaults(
   env: Env,
   settings?: SettingsLike | null
 ): ProviderModelDefaults {
-  const fallbackText = (settings?.default_model as string) || 'google/gemini-2.0-flash-001'
+  const openrouterTextModel =
+    settings?.openrouter_text_model ||
+    env.OPENROUTER_TEXT_MODEL_SLUG ||
+    env.TEXT_MODEL_SLUG ||
+    'google/gemini-3-flash-preview'
+  const openrouterImageModel =
+    settings?.openrouter_image_model ||
+    env.OPENROUTER_IMAGE_MODEL_SLUG ||
+    env.IMAGE_MODEL_SLUG ||
+    'google/gemini-2.5-flash-image'
 
-  const openrouterTextModel = env.OPENROUTER_TEXT_MODEL_SLUG || env.TEXT_MODEL_SLUG || fallbackText
-  const openrouterImageModel = env.OPENROUTER_IMAGE_MODEL_SLUG || env.IMAGE_MODEL_SLUG || null
-
-  const vertexTextModel = env.VERTEX_TEXT_MODEL_SLUG || env.TEXT_MODEL_SLUG || fallbackText
-  const vertexImageModel = env.VERTEX_IMAGE_MODEL_SLUG || env.IMAGE_MODEL_SLUG || null
+  const vertexTextModel =
+    settings?.vertex_text_model ||
+    env.VERTEX_TEXT_MODEL_SLUG ||
+    env.TEXT_MODEL_SLUG ||
+    'gemini-3-flash-preview'
+  const vertexImageModel =
+    settings?.vertex_image_model ||
+    env.VERTEX_IMAGE_MODEL_SLUG ||
+    env.IMAGE_MODEL_SLUG ||
+    'gemini-2.5-flash-image'
 
   const providerMode = getProviderMode(env, settings?.llm_provider)
   const active =

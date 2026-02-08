@@ -36,6 +36,14 @@ interface Settings {
   hasGeminiKey: boolean
 }
 
+const OPENROUTER_TEXT_OPTIONS = ['google/gemini-3-flash-preview', 'google/gemini-3-pro-preview']
+const OPENROUTER_IMAGE_OPTIONS = [
+  'google/gemini-2.5-flash-image',
+  'google/gemini-3-pro-image-preview',
+]
+const VERTEX_TEXT_OPTIONS = ['gemini-3-flash-preview', 'gemini-3-pro-preview']
+const VERTEX_IMAGE_OPTIONS = ['gemini-2.5-flash-image', 'gemini-3-pro-image-preview']
+
 interface UsageStats {
   model: string
   requestCount: number
@@ -83,6 +91,10 @@ async function fetchOpenRouterCredits(): Promise<OpenRouterCredits> {
 
 async function updateSettings(data: {
   llmProvider?: LLMProvider
+  openrouterTextModel?: string
+  openrouterImageModel?: string
+  vertexTextModel?: string
+  vertexImageModel?: string
 }): Promise<{ settings: Settings }> {
   const response = await fetch('/api/settings', {
     method: 'PUT',
@@ -135,6 +147,10 @@ export function AdminLLMsPage() {
   })
 
   const [provider, setProvider] = useState<LLMProvider>('openrouter')
+  const [openrouterTextModel, setOpenrouterTextModel] = useState(OPENROUTER_TEXT_OPTIONS[0])
+  const [openrouterImageModel, setOpenrouterImageModel] = useState(OPENROUTER_IMAGE_OPTIONS[0])
+  const [vertexTextModel, setVertexTextModel] = useState(VERTEX_TEXT_OPTIONS[0])
+  const [vertexImageModel, setVertexImageModel] = useState(VERTEX_IMAGE_OPTIONS[0])
   const [saved, setSaved] = useState(false)
 
   // Test state
@@ -150,11 +166,21 @@ export function AdminLLMsPage() {
   useEffect(() => {
     if (data?.settings) {
       setProvider(data.settings.llmProvider)
+      setOpenrouterTextModel(data.settings.openrouterTextModel || OPENROUTER_TEXT_OPTIONS[0])
+      setOpenrouterImageModel(data.settings.openrouterImageModel || OPENROUTER_IMAGE_OPTIONS[0])
+      setVertexTextModel(data.settings.vertexTextModel || VERTEX_TEXT_OPTIONS[0])
+      setVertexImageModel(data.settings.vertexImageModel || VERTEX_IMAGE_OPTIONS[0])
     }
   }, [data])
 
   const handleSave = () => {
-    mutation.mutate({ llmProvider: provider })
+    mutation.mutate({
+      llmProvider: provider,
+      openrouterTextModel,
+      openrouterImageModel,
+      vertexTextModel,
+      vertexImageModel,
+    })
   }
 
   const handleTestText = async () => {
@@ -340,21 +366,67 @@ export function AdminLLMsPage() {
                   {settings?.imageModel || 'Not configured'}
                 </code>
               </div>
-              <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
-                <span className="text-sm text-steel-dim">OpenRouter Default (Text/Image)</span>
-                <code className="text-xs text-steel font-mono text-right">
-                  {settings?.openrouterTextModel || 'Not configured'}
-                  <br />
-                  {settings?.openrouterImageModel || 'Not configured'}
-                </code>
+              <div className="grid grid-cols-2 gap-3 p-3 bg-surface-900 border border-surface-600">
+                <span className="text-sm text-steel-dim col-span-2">OpenRouter Defaults</span>
+                <label className="text-xs text-steel-dim">
+                  Text model
+                  <select
+                    value={openrouterTextModel}
+                    onChange={(e) => setOpenrouterTextModel(e.target.value)}
+                    className="mt-1 w-full bg-surface-800 border border-surface-600 px-2 py-1 text-steel font-mono text-xs"
+                  >
+                    {OPENROUTER_TEXT_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-steel-dim">
+                  Image model
+                  <select
+                    value={openrouterImageModel}
+                    onChange={(e) => setOpenrouterImageModel(e.target.value)}
+                    className="mt-1 w-full bg-surface-800 border border-surface-600 px-2 py-1 text-steel font-mono text-xs"
+                  >
+                    {OPENROUTER_IMAGE_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-              <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
-                <span className="text-sm text-steel-dim">Vertex Default (Text/Image)</span>
-                <code className="text-xs text-steel font-mono text-right">
-                  {settings?.vertexTextModel || 'Not configured'}
-                  <br />
-                  {settings?.vertexImageModel || 'Not configured'}
-                </code>
+              <div className="grid grid-cols-2 gap-3 p-3 bg-surface-900 border border-surface-600">
+                <span className="text-sm text-steel-dim col-span-2">Vertex Defaults</span>
+                <label className="text-xs text-steel-dim">
+                  Text model
+                  <select
+                    value={vertexTextModel}
+                    onChange={(e) => setVertexTextModel(e.target.value)}
+                    className="mt-1 w-full bg-surface-800 border border-surface-600 px-2 py-1 text-steel font-mono text-xs"
+                  >
+                    {VERTEX_TEXT_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-steel-dim">
+                  Image model
+                  <select
+                    value={vertexImageModel}
+                    onChange={(e) => setVertexImageModel(e.target.value)}
+                    className="mt-1 w-full bg-surface-800 border border-surface-600 px-2 py-1 text-steel font-mono text-xs"
+                  >
+                    {VERTEX_IMAGE_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
           </section>
