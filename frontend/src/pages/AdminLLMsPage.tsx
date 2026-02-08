@@ -147,7 +147,7 @@ export function AdminLLMsPage() {
     },
   })
 
-  const [provider, setProvider] = useState<LLMProvider>('openrouter')
+  const [provider, setProvider] = useState<ProviderMode>('openrouter')
   const [openrouterTextModel, setOpenrouterTextModel] = useState(OPENROUTER_TEXT_OPTIONS[0])
   const [openrouterImageModel, setOpenrouterImageModel] = useState(OPENROUTER_IMAGE_OPTIONS[0])
   const [vertexTextModel, setVertexTextModel] = useState(VERTEX_TEXT_OPTIONS[0])
@@ -166,7 +166,7 @@ export function AdminLLMsPage() {
   // Sync state when data loads
   useEffect(() => {
     if (data?.settings) {
-      setProvider(data.settings.llmProvider)
+      setProvider(data.settings.providerMode)
       setOpenrouterTextModel(data.settings.openrouterTextModel || OPENROUTER_TEXT_OPTIONS[0])
       setOpenrouterImageModel(data.settings.openrouterImageModel || OPENROUTER_IMAGE_OPTIONS[0])
       setVertexTextModel(data.settings.vertexTextModel || VERTEX_TEXT_OPTIONS[0])
@@ -174,17 +174,63 @@ export function AdminLLMsPage() {
     }
   }, [data])
 
-  const handleSave = () => {
-    mutation.mutate({
-      llmProvider: provider,
-      openrouterTextModel,
-      openrouterImageModel,
-      vertexTextModel,
-      vertexImageModel,
-    })
+  const buildSettingsPayload = (overrides?: {
+    provider?: ProviderMode
+    openrouterTextModel?: string
+    openrouterImageModel?: string
+    vertexTextModel?: string
+    vertexImageModel?: string
+  }) => {
+    const nextProvider = overrides?.provider ?? provider
+    return {
+      llmProvider: (nextProvider === 'openrouter' ? 'openrouter' : 'gemini') as LLMProvider,
+      openrouterTextModel: overrides?.openrouterTextModel ?? openrouterTextModel,
+      openrouterImageModel: overrides?.openrouterImageModel ?? openrouterImageModel,
+      vertexTextModel: overrides?.vertexTextModel ?? vertexTextModel,
+      vertexImageModel: overrides?.vertexImageModel ?? vertexImageModel,
+    }
   }
 
-  const activeProviderLabel = provider === 'openrouter' ? 'openrouter' : 'vertex'
+  const persistSettings = async (overrides?: {
+    provider?: ProviderMode
+    openrouterTextModel?: string
+    openrouterImageModel?: string
+    vertexTextModel?: string
+    vertexImageModel?: string
+  }) => {
+    await mutation.mutateAsync(buildSettingsPayload(overrides))
+  }
+
+  const handleSave = () => {
+    void persistSettings()
+  }
+
+  const handleProviderChange = (nextProvider: ProviderMode) => {
+    setProvider(nextProvider)
+    void persistSettings({ provider: nextProvider })
+  }
+
+  const handleOpenrouterTextModelChange = (nextModel: string) => {
+    setOpenrouterTextModel(nextModel)
+    void persistSettings({ openrouterTextModel: nextModel })
+  }
+
+  const handleOpenrouterImageModelChange = (nextModel: string) => {
+    setOpenrouterImageModel(nextModel)
+    void persistSettings({ openrouterImageModel: nextModel })
+  }
+
+  const handleVertexTextModelChange = (nextModel: string) => {
+    setVertexTextModel(nextModel)
+    void persistSettings({ vertexTextModel: nextModel })
+  }
+
+  const handleVertexImageModelChange = (nextModel: string) => {
+    setVertexImageModel(nextModel)
+    void persistSettings({ vertexImageModel: nextModel })
+  }
+
+  const activeProviderLabel = provider
   const activeTextModelPreview = provider === 'openrouter' ? openrouterTextModel : vertexTextModel
   const activeImageModelPreview =
     provider === 'openrouter' ? openrouterImageModel : vertexImageModel
@@ -195,6 +241,8 @@ export function AdminLLMsPage() {
     setTextTestError(null)
 
     try {
+      await persistSettings()
+
       const response = await fetch('/api/langgraph/invoke/admin_test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -226,6 +274,8 @@ export function AdminLLMsPage() {
     setImageTestError(null)
 
     try {
+      await persistSettings()
+
       const response = await fetch('/api/llm/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -378,7 +428,7 @@ export function AdminLLMsPage() {
                   Text model
                   <select
                     value={openrouterTextModel}
-                    onChange={(e) => setOpenrouterTextModel(e.target.value)}
+                    onChange={(e) => handleOpenrouterTextModelChange(e.target.value)}
                     className="mt-1 w-full bg-surface-800 border border-surface-600 px-2 py-1 text-steel font-mono text-xs"
                   >
                     {OPENROUTER_TEXT_OPTIONS.map((m) => (
@@ -392,7 +442,7 @@ export function AdminLLMsPage() {
                   Image model
                   <select
                     value={openrouterImageModel}
-                    onChange={(e) => setOpenrouterImageModel(e.target.value)}
+                    onChange={(e) => handleOpenrouterImageModelChange(e.target.value)}
                     className="mt-1 w-full bg-surface-800 border border-surface-600 px-2 py-1 text-steel font-mono text-xs"
                   >
                     {OPENROUTER_IMAGE_OPTIONS.map((m) => (
@@ -409,7 +459,7 @@ export function AdminLLMsPage() {
                   Text model
                   <select
                     value={vertexTextModel}
-                    onChange={(e) => setVertexTextModel(e.target.value)}
+                    onChange={(e) => handleVertexTextModelChange(e.target.value)}
                     className="mt-1 w-full bg-surface-800 border border-surface-600 px-2 py-1 text-steel font-mono text-xs"
                   >
                     {VERTEX_TEXT_OPTIONS.map((m) => (
@@ -423,7 +473,7 @@ export function AdminLLMsPage() {
                   Image model
                   <select
                     value={vertexImageModel}
-                    onChange={(e) => setVertexImageModel(e.target.value)}
+                    onChange={(e) => handleVertexImageModelChange(e.target.value)}
                     className="mt-1 w-full bg-surface-800 border border-surface-600 px-2 py-1 text-steel font-mono text-xs"
                   >
                     {VERTEX_IMAGE_OPTIONS.map((m) => (
@@ -448,13 +498,13 @@ export function AdminLLMsPage() {
                 name="OpenRouter"
                 description="300+ models including Gemini, Claude, GPT-4"
                 selected={provider === 'openrouter'}
-                onClick={() => setProvider('openrouter')}
+                onClick={() => handleProviderChange('openrouter')}
               />
               <ProviderCard
                 name="Vertex AI"
                 description="Google Vertex-hosted Gemini models"
-                selected={provider === 'gemini'}
-                onClick={() => setProvider('gemini')}
+                selected={provider === 'vertex'}
+                onClick={() => handleProviderChange('vertex')}
               />
             </div>
           </section>
