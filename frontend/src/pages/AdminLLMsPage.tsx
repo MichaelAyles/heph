@@ -184,6 +184,11 @@ export function AdminLLMsPage() {
     })
   }
 
+  const activeProviderLabel = provider === 'openrouter' ? 'openrouter' : 'vertex'
+  const activeTextModelPreview = provider === 'openrouter' ? openrouterTextModel : vertexTextModel
+  const activeImageModelPreview =
+    provider === 'openrouter' ? openrouterImageModel : vertexImageModel
+
   const handleTestText = async () => {
     setTextTestLoading(true)
     setTextTestResult(null)
@@ -358,13 +363,13 @@ export function AdminLLMsPage() {
               <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
                 <span className="text-sm text-steel-dim">Active Text Model</span>
                 <code className="text-sm text-copper font-mono">
-                  {settings?.textModel || 'Not configured'}
+                  {`${activeProviderLabel}:${activeTextModelPreview || 'Not configured'}`}
                 </code>
               </div>
               <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
                 <span className="text-sm text-steel-dim">Active Image Model</span>
                 <code className="text-sm text-copper font-mono">
-                  {settings?.imageModel || 'Not configured'}
+                  {`${activeProviderLabel}:${activeImageModelPreview || 'Not configured'}`}
                 </code>
               </div>
               <div className="grid grid-cols-2 gap-3 p-3 bg-surface-900 border border-surface-600">
