@@ -503,17 +503,95 @@ export function PCBStageView() {
         setGridWidth(Math.max(2, suggestion.boardSize.width))
         setGridHeight(Math.max(4, suggestion.boardSize.height))
 
-        // Convert to PlacedBlock format (filter out remote blocks which don't have grid coordinates)
-        const gridBlocks = suggestion.blocks.filter(
-          (b) => b.gridX !== undefined && b.gridY !== undefined
-        )
-        const newBlocks: PlacedBlock[] = gridBlocks.map((b, idx) => ({
-          blockId: `${b.slug}-${Date.now()}-${idx}`,
-          blockSlug: b.slug,
-          gridX: b.gridX!,
-          gridY: b.gridY!,
-          rotation: b.rotation ?? 0,
-        }))
+        const occupied = new Set<string>()
+        const newBlocks: PlacedBlock[] = []
+        const nextOpenGridPos = () => {
+          let x = 0
+          let y = 0
+          while (occupied.has(`${x},${y}`)) {
+            x++
+            if (x >= Math.max(2, suggestion.boardSize.width)) {
+              x = 0
+              y++
+            }
+          }
+          occupied.add(`${x},${y}`)
+          return { x, y }
+        }
+
+        // Convert to PlacedBlock format.
+        // Keep remote blocks even when the model omits grid coordinates.
+        for (const [idx, block] of suggestion.blocks.entries()) {
+          const def = blockDefinitions.get(block.slug)
+
+          let gridX = block.gridX
+          let gridY = block.gridY
+
+          // Fast fallback: if a remote block has no grid coords, park it in next free slot.
+          if ((gridX === undefined || gridY === undefined) && def?.isRemote) {
+            const pos = nextOpenGridPos()
+            gridX = pos.x
+            gridY = pos.y
+          }
+
+          if (gridX === undefined || gridY === undefined) continue
+
+          occupied.add(`${gridX},${gridY}`)
+          newBlocks.push({
+            blockId: `${block.slug}-${Date.now()}-${idx}`,
+            blockSlug: block.slug,
+            gridX,
+            gridY,
+            rotation: block.rotation ?? 0,
+          })
+        }
+
+        // Hack for submission speed:
+        // If user intent suggests buttons and AI skipped remote button board(s),
+        // force-add one peripheral button board plus its mating connector.
+        const intentText = `${project?.description ?? ''} ${JSON.stringify(spec?.finalSpec ?? {})}`
+        const wantsButtons = /\b(button|buttons|keypad|switch|switches|press)\b/i.test(intentText)
+        const hasRemoteButtonBlock = newBlocks.some((b) => {
+          const def = blockDefinitions.get(b.blockSlug)
+          if (!def?.isRemote) return false
+          return /\b(button|keypad|switch)\b/i.test(`${def.name} ${def.slug} ${def.description}`)
+        })
+
+        if (wantsButtons && !hasRemoteButtonBlock) {
+          const remoteButtonDef = blocksData.blocks
+            .map((b) => b.definition)
+            .find(
+              (def) =>
+                def?.isRemote &&
+                /\b(button|keypad|switch)\b/i.test(`${def.name} ${def.slug} ${def.description}`)
+            )
+
+          if (remoteButtonDef) {
+            const pos = nextOpenGridPos()
+            newBlocks.push({
+              blockId: `${remoteButtonDef.slug}-${Date.now()}-forced-remote`,
+              blockSlug: remoteButtonDef.slug,
+              gridX: pos.x,
+              gridY: pos.y,
+              rotation: 0,
+            })
+
+            const matingConnectorSlug = remoteButtonDef.remote?.matingConnectorSlug
+            if (
+              matingConnectorSlug &&
+              !newBlocks.some((b) => b.blockSlug === matingConnectorSlug)
+            ) {
+              const connectorPos = nextOpenGridPos()
+              newBlocks.push({
+                blockId: `${matingConnectorSlug}-${Date.now()}-forced-connector`,
+                blockSlug: matingConnectorSlug,
+                gridX: connectorPos.x,
+                gridY: connectorPos.y,
+                rotation: 0,
+              })
+            }
+          }
+        }
 
         setSelectedBlocks(newBlocks)
         savePCBMutation.mutate({ placedBlocks: newBlocks })
@@ -528,7 +606,7 @@ export function PCBStageView() {
         setIsAiSuggesting(false)
       }
     },
-    [blocksData?.blocks, spec?.finalSpec, project, savePCBMutation]
+    [blockDefinitions, blocksData?.blocks, spec?.finalSpec, project, savePCBMutation]
   )
 
   // Handle schematic and PCB merge - the critical integration!
