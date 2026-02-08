@@ -9,6 +9,7 @@ import type { Env } from '../../env'
 import { calculateCost } from './pricing'
 import { createLogger } from '../../lib/logger'
 import { getVertexAccessToken, getVertexUrl } from '../../lib/vertex-auth'
+import { getProviderModelDefaults, getProviderMode } from '../../lib/model-defaults'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
 import type {
   PagesFunction,
@@ -345,14 +346,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'SELECT llm_provider, default_model, openrouter_api_key, gemini_api_key FROM system_settings WHERE id = 1'
     ).first()
 
-    const provider = env.GCP_SERVICE_ACCOUNT_JSON
-      ? 'vertex'
-      : (settings?.llm_provider as string) || 'openrouter'
-    const model =
-      body.model ||
-      env.TEXT_MODEL_SLUG ||
-      (settings?.default_model as string) ||
-      'google/gemini-2.0-flash-001'
+    const provider = getProviderMode(env, (settings?.llm_provider as string) || null)
+    const defaults = getProviderModelDefaults(
+      env,
+      settings as { llm_provider?: string; default_model?: string }
+    )
+    const model = body.model || defaults.active.textModel
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 8192
 

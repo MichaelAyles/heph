@@ -8,6 +8,7 @@
  */
 
 import type { Env } from '../../../env'
+import { getProviderModelDefaults } from '../../../lib/model-defaults'
 import {
   getNode,
   hasNode,
@@ -406,10 +407,10 @@ function expandTemplateVariables(
 
 function resolveModelAliasesInPrompt(
   prompt: string,
-  env: Env
+  defaults: { textModel: string; imageModel: string | null }
 ): { prompt: string; preferredModelAlias?: '__text_model__' | '__image_model__' } {
-  const textModel = env.TEXT_MODEL_SLUG || 'google/gemini-2.0-flash-001'
-  const imageModel = env.IMAGE_MODEL_SLUG || textModel
+  const textModel = defaults.textModel
+  const imageModel = defaults.imageModel || textModel
 
   let preferredModelAlias: '__text_model__' | '__image_model__' | undefined
   if (prompt.includes('__image_model__')) {
@@ -546,13 +547,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   // Expand template variables in system prompt with dynamic context
   // This happens BEFORE breakpoint creation so debug shows the actual expanded prompt
+  const settingsRow = await env.DB.prepare(
+    'SELECT llm_provider, default_model FROM system_settings WHERE id = 1'
+  ).first<{ llm_provider: string | null; default_model: string | null }>()
+  const modelDefaults = getProviderModelDefaults(env, settingsRow || undefined)
+
   const { text: expandedTemplatePrompt, images: extractedImages } = expandTemplateVariables(
     systemPrompt,
     dynamicContext
   )
   const { prompt: expandedSystemPrompt, preferredModelAlias } = resolveModelAliasesInPrompt(
     expandedTemplatePrompt,
-    env
+    modelDefaults.active
   )
 
   // Check for debug_it mode breakpoint

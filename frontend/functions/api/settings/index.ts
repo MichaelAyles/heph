@@ -1,5 +1,6 @@
 import type { Env } from '../../env'
 import { createLogger } from '../../lib/logger'
+import { getProviderModelDefaults, getProviderMode } from '../../lib/model-defaults'
 
 interface PagesFunction<E> {
   (context: {
@@ -17,15 +18,19 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     'SELECT llm_provider, openrouter_api_key, gemini_api_key FROM system_settings WHERE id = 1'
   ).first()
 
-  // Get model slugs from environment
-  const textModel = env.TEXT_MODEL_SLUG || 'google/gemini-2.0-flash-001'
-  const imageModel = env.IMAGE_MODEL_SLUG || null
+  const providerMode = getProviderMode(env, (row?.llm_provider as string) || null)
+  const models = getProviderModelDefaults(env, { llm_provider: row?.llm_provider as string })
 
   return Response.json({
     settings: {
       llmProvider: (row?.llm_provider as string) || 'openrouter',
-      textModel,
-      imageModel,
+      providerMode,
+      textModel: models.active.textModel,
+      imageModel: models.active.imageModel,
+      openrouterTextModel: models.openrouter.textModel,
+      openrouterImageModel: models.openrouter.imageModel,
+      vertexTextModel: models.vertex.textModel,
+      vertexImageModel: models.vertex.imageModel,
       hasOpenRouterKey: !!(row?.openrouter_api_key || env.OPENROUTER_API_KEY),
       hasGeminiKey: !!row?.gemini_api_key,
     },
@@ -55,14 +60,19 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       'SELECT llm_provider, openrouter_api_key, gemini_api_key FROM system_settings WHERE id = 1'
     ).first()
 
-    const textModel = env.TEXT_MODEL_SLUG || 'google/gemini-2.0-flash-001'
-    const imageModel = env.IMAGE_MODEL_SLUG || null
+    const providerMode = getProviderMode(env, (row?.llm_provider as string) || null)
+    const models = getProviderModelDefaults(env, { llm_provider: row?.llm_provider as string })
 
     return Response.json({
       settings: {
         llmProvider: row!.llm_provider,
-        textModel,
-        imageModel,
+        providerMode,
+        textModel: models.active.textModel,
+        imageModel: models.active.imageModel,
+        openrouterTextModel: models.openrouter.textModel,
+        openrouterImageModel: models.openrouter.imageModel,
+        vertexTextModel: models.vertex.textModel,
+        vertexImageModel: models.vertex.imageModel,
         hasOpenRouterKey: !!(row?.openrouter_api_key || env.OPENROUTER_API_KEY),
         hasGeminiKey: !!row?.gemini_api_key,
       },

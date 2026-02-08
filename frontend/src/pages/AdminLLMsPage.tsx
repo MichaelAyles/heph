@@ -21,11 +21,17 @@ import {
 import { clsx } from 'clsx'
 
 type LLMProvider = 'openrouter' | 'gemini'
+type ProviderMode = 'openrouter' | 'vertex'
 
 interface Settings {
   llmProvider: LLMProvider
+  providerMode: ProviderMode
   textModel: string
   imageModel: string | null
+  openrouterTextModel: string
+  openrouterImageModel: string | null
+  vertexTextModel: string
+  vertexImageModel: string | null
   hasOpenRouterKey: boolean
   hasGeminiKey: boolean
 }
@@ -312,9 +318,16 @@ export function AdminLLMsPage() {
               DEFAULT MODELS
             </h3>
             <p className="text-sm text-steel-dim mb-4">
-              Models are configured via environment variables.
+              Provider defaults are configured via environment variables. Active models follow the
+              selected provider.
             </p>
             <div className="space-y-3">
+              <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-copper/40">
+                <span className="text-sm text-steel">Active Provider Models</span>
+                <span className="text-xs text-copper font-mono uppercase">
+                  {settings?.providerMode || 'unknown'}
+                </span>
+              </div>
               <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
                 <span className="text-sm text-steel-dim">Text Model</span>
                 <code className="text-sm text-copper font-mono">
@@ -325,6 +338,22 @@ export function AdminLLMsPage() {
                 <span className="text-sm text-steel-dim">Image Model</span>
                 <code className="text-sm text-copper font-mono">
                   {settings?.imageModel || 'Not configured'}
+                </code>
+              </div>
+              <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
+                <span className="text-sm text-steel-dim">OpenRouter Default (Text/Image)</span>
+                <code className="text-xs text-steel font-mono text-right">
+                  {settings?.openrouterTextModel || 'Not configured'}
+                  <br />
+                  {settings?.openrouterImageModel || 'Not configured'}
+                </code>
+              </div>
+              <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
+                <span className="text-sm text-steel-dim">Vertex Default (Text/Image)</span>
+                <code className="text-xs text-steel font-mono text-right">
+                  {settings?.vertexTextModel || 'Not configured'}
+                  <br />
+                  {settings?.vertexImageModel || 'Not configured'}
                 </code>
               </div>
             </div>
@@ -344,8 +373,8 @@ export function AdminLLMsPage() {
                 onClick={() => setProvider('openrouter')}
               />
               <ProviderCard
-                name="Gemini API"
-                description="Direct access to Google Gemini models"
+                name="Vertex AI"
+                description="Google Vertex-hosted Gemini models"
                 selected={provider === 'gemini'}
                 onClick={() => setProvider('gemini')}
               />

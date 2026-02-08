@@ -34,6 +34,8 @@ import {
   type OrchestratorEdge,
 } from '../../../lib/graph-builder'
 import { convertToGeminiFormat } from '../../../lib/gemini'
+import { getVertexAccessToken, getVertexUrl } from '../../../lib/vertex-auth'
+import { getProviderModelDefaults, getProviderMode } from '../../../lib/model-defaults'
 import { OPENROUTER_API_URL, APP_URL } from '../../../lib/config'
 
 interface ExecuteRequest {
@@ -83,8 +85,12 @@ async function callLLM(
     'SELECT llm_provider, default_model, openrouter_api_key, gemini_api_key FROM system_settings WHERE id = 1'
   ).first()
 
-  const provider = (settings?.llm_provider as string) || 'openrouter'
-  const model = env.TEXT_MODEL_SLUG || (settings?.default_model as string) || 'google/gemini-2.0-flash-001'
+  const provider = getProviderMode(env, (settings?.llm_provider as string) || null)
+  const defaults = getProviderModelDefaults(
+    env,
+    settings as { llm_provider?: string; default_model?: string }
+  )
+  const model = defaults.active.textModel
   const temperature = 0.7
   const maxTokens = 4096
 
@@ -98,7 +104,31 @@ async function callLLM(
   let apiKey: string
   let response: Response
 
-  if (provider === 'openrouter') {
+  if (provider === 'vertex') {
+    const accessToken = await getVertexAccessToken(env.GCP_SERVICE_ACCOUNT_JSON!)
+    const projectId = env.GCP_PROJECT_ID || 'phaestus-app-api'
+    const region = env.GCP_REGION || 'europe-west2'
+    const geminiMessages = messages.map((m) => ({
+      role: m.role === 'system' ? 'user' : m.role === 'assistant' ? 'model' : 'user',
+      content: m.content,
+    }))
+    const contents = convertToGeminiFormat(geminiMessages)
+
+    response = await fetch(getVertexUrl(projectId, region, model, 'generateContent'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+        },
+      }),
+    })
+  } else if (provider === 'openrouter') {
     apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
     if (!apiKey) {
       throw new Error('OpenRouter API key not configured')
@@ -114,7 +144,10 @@ async function callLLM(
       },
       body: JSON.stringify({
         model,
-        messages: messages.map((m) => ({ role: m.role === 'system' ? 'system' : m.role, content: m.content })),
+        messages: messages.map((m) => ({
+          role: m.role === 'system' ? 'system' : m.role,
+          content: m.content,
+        })),
         temperature,
         max_tokens: maxTokens,
       }),
@@ -169,7 +202,10 @@ async function callLLM(
   } else {
     const candidates = result.candidates as Array<{ content: { parts: Array<{ text: string }> } }>
     content = candidates?.[0]?.content?.parts?.[0]?.text || ''
-    const usageMetadata = result.usageMetadata as { promptTokenCount: number; candidatesTokenCount: number }
+    const usageMetadata = result.usageMetadata as {
+      promptTokenCount: number
+      candidatesTokenCount: number
+    }
     promptTokens = usageMetadata?.promptTokenCount
     completionTokens = usageMetadata?.candidatesTokenCount
   }
@@ -185,7 +221,10 @@ function detectIntent(message: string): 'new_project' | 'load_project' | 'questi
   const lower = message.toLowerCase()
 
   // Question patterns
-  const questionPatterns = [/^(what|how|why|when|where|who|can you|could you|is it|are there)\b/i, /\?$/]
+  const questionPatterns = [
+    /^(what|how|why|when|where|who|can you|could you|is it|are there)\b/i,
+    /\?$/,
+  ]
   if (questionPatterns.some((p) => p.test(lower))) {
     if (!/can you (build|make|create|design)/i.test(lower)) {
       return 'question'
@@ -211,10 +250,7 @@ function detectIntent(message: string): 'new_project' | 'load_project' | 'questi
 // Edge Evaluation
 // =============================================================================
 
-function evaluateEdgeCondition(
-  edge: OrchestratorEdge,
-  state: GraphState
-): boolean {
+function evaluateEdgeCondition(edge: OrchestratorEdge, state: GraphState): boolean {
   if (!edge.condition) {
     return true // No condition = always take
   }
@@ -305,9 +341,7 @@ async function executeNode(
   // Execute node with LLM if it has a system prompt
   else if (prompt?.system_prompt) {
     // Build context from state
-    const contextParts: string[] = [
-      `User Request: ${state.userRequest}`,
-    ]
+    const contextParts: string[] = [`User Request: ${state.userRequest}`]
 
     if (state.intent) {
       contextParts.push(`Detected Intent: ${state.intent}`)
@@ -564,19 +598,40 @@ export const onRequestPost: PagesFunction<Env, '', AuthenticatedRequest> = async
   // Execute in the background
   const executePromise = (async () => {
     try {
-      const result = await executeGraph(body.message, threadId, graphStructure, context.env, sendEvent, maxNodes)
+      const result = await executeGraph(
+        body.message,
+        threadId,
+        graphStructure,
+        context.env,
+        sendEvent,
+        maxNodes
+      )
 
       // Store execution in database
-      const startedAt = (events.find((e) => e.type === 'graph_start')?.timestamp as number) || Date.now()
-      const endedAt = (events.find((e) => e.type === 'graph_end')?.timestamp as number) || Date.now()
-      const graphEndEvent = events.find((e) => e.type === 'graph_end') as { totalDurationMs?: number } | undefined
+      const startedAt =
+        (events.find((e) => e.type === 'graph_start')?.timestamp as number) || Date.now()
+      const endedAt =
+        (events.find((e) => e.type === 'graph_end')?.timestamp as number) || Date.now()
+      const graphEndEvent = events.find((e) => e.type === 'graph_end') as
+        | { totalDurationMs?: number }
+        | undefined
       const durationMs = graphEndEvent?.totalDurationMs
 
       await DB.prepare(
         `INSERT INTO execution_runs (id, thread_id, user_id, input, events, started_at, ended_at, duration_ms, success)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-        .bind(runId, threadId, user?.id || null, body.message, JSON.stringify(events), startedAt, endedAt, durationMs || null, result.success ? 1 : 0)
+        .bind(
+          runId,
+          threadId,
+          user?.id || null,
+          body.message,
+          JSON.stringify(events),
+          startedAt,
+          endedAt,
+          durationMs || null,
+          result.success ? 1 : 0
+        )
         .run()
 
       // Send final metadata
