@@ -33,6 +33,7 @@ interface Settings {
   vertexTextModel: string
   vertexImageModel: string | null
   hasOpenRouterKey: boolean
+  hasVertexKey: boolean
   hasGeminiKey: boolean
 }
 
@@ -331,8 +332,8 @@ export function AdminLLMsPage() {
               <span className={settings?.hasOpenRouterKey ? 'text-emerald-400' : 'text-steel-dim'}>
                 {settings?.hasOpenRouterKey ? '✓' : '○'} OpenRouter key
               </span>
-              <span className={settings?.hasGeminiKey ? 'text-emerald-400' : 'text-steel-dim'}>
-                {settings?.hasGeminiKey ? '✓' : '○'} Gemini key
+              <span className={settings?.hasVertexKey ? 'text-emerald-400' : 'text-steel-dim'}>
+                {settings?.hasVertexKey ? '✓' : '○'} Vertex key
               </span>
             </div>
           </section>
@@ -355,13 +356,13 @@ export function AdminLLMsPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
-                <span className="text-sm text-steel-dim">Text Model</span>
+                <span className="text-sm text-steel-dim">Active Text Model</span>
                 <code className="text-sm text-copper font-mono">
                   {settings?.textModel || 'Not configured'}
                 </code>
               </div>
               <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
-                <span className="text-sm text-steel-dim">Image Model</span>
+                <span className="text-sm text-steel-dim">Active Image Model</span>
                 <code className="text-sm text-copper font-mono">
                   {settings?.imageModel || 'Not configured'}
                 </code>

@@ -28,8 +28,9 @@ export interface ProviderModelDefaults {
 }
 
 export function getProviderMode(env: Env, llmProvider?: string | null): LLMProviderMode {
-  if (env.GCP_SERVICE_ACCOUNT_JSON) return 'vertex'
-  return llmProvider === 'openrouter' ? 'openrouter' : 'vertex'
+  if (llmProvider === 'openrouter') return 'openrouter'
+  if (llmProvider === 'gemini' || llmProvider === 'vertex') return 'vertex'
+  return env.GCP_SERVICE_ACCOUNT_JSON ? 'vertex' : 'openrouter'
 }
 
 export function getProviderModelDefaults(

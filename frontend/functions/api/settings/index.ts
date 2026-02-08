@@ -31,6 +31,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       vertexTextModel: models.vertex.textModel,
       vertexImageModel: models.vertex.imageModel,
       hasOpenRouterKey: !!(row?.openrouter_api_key || env.OPENROUTER_API_KEY),
+      hasVertexKey: !!env.GCP_SERVICE_ACCOUNT_JSON,
       hasGeminiKey: !!row?.gemini_api_key,
     },
   })
@@ -120,6 +121,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         vertexTextModel: models.vertex.textModel,
         vertexImageModel: models.vertex.imageModel,
         hasOpenRouterKey: !!(row?.openrouter_api_key || env.OPENROUTER_API_KEY),
+        hasVertexKey: !!env.GCP_SERVICE_ACCOUNT_JSON,
         hasGeminiKey: !!row?.gemini_api_key,
       },
     })
