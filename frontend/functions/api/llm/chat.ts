@@ -4,6 +4,7 @@ import { createLogger } from '../../lib/logger'
 import { convertToGeminiFormat } from '../../lib/gemini'
 import { getVertexAccessToken, getVertexUrl } from '../../lib/vertex-auth'
 import { getProviderModelDefaults, getProviderMode } from '../../lib/model-defaults'
+import { getSystemSettings } from '../../lib/system-settings'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
 import type {
   PagesFunction,
@@ -65,11 +66,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // Get settings
-    const settings = await env.DB.prepare(
-      `SELECT llm_provider, default_model, openrouter_text_model, openrouter_image_model,
-              vertex_text_model, vertex_image_model, openrouter_api_key, gemini_api_key
-       FROM system_settings WHERE id = 1`
-    ).first()
+    const settings = await getSystemSettings(env)
 
     const provider = getProviderMode(env, (settings?.llm_provider as string) || null)
     const defaults = getProviderModelDefaults(

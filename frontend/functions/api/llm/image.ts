@@ -2,6 +2,7 @@ import type { Env } from '../../env'
 import { calculateImageCost } from './pricing'
 import { createLogger } from '../../lib/logger'
 import { getProviderModelDefaults } from '../../lib/model-defaults'
+import { getSystemSettings } from '../../lib/system-settings'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
 import type { PagesFunction, User } from '../../lib/message-types'
 
@@ -31,11 +32,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // Get settings
-    const settings = await env.DB.prepare(
-      `SELECT llm_provider, default_model, openrouter_text_model, openrouter_image_model,
-              vertex_text_model, vertex_image_model, openrouter_api_key
-       FROM system_settings WHERE id = 1`
-    ).first()
+    const settings = await getSystemSettings(env)
 
     const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
     if (!apiKey) {

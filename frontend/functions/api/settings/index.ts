@@ -1,6 +1,7 @@
 import type { Env } from '../../env'
 import { createLogger } from '../../lib/logger'
 import { getProviderModelDefaults, getProviderMode } from '../../lib/model-defaults'
+import { getSystemSettings } from '../../lib/system-settings'
 
 interface PagesFunction<E> {
   (context: {
@@ -14,14 +15,10 @@ interface PagesFunction<E> {
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env } = context
 
-  const row = await env.DB.prepare(
-    `SELECT llm_provider, default_model, openrouter_text_model, openrouter_image_model,
-            vertex_text_model, vertex_image_model, openrouter_api_key, gemini_api_key
-     FROM system_settings WHERE id = 1`
-  ).first()
+  const row = await getSystemSettings(env)
 
   const providerMode = getProviderMode(env, (row?.llm_provider as string) || null)
-  const models = getProviderModelDefaults(env, { llm_provider: row?.llm_provider as string })
+  const models = getProviderModelDefaults(env, row || undefined)
 
   return Response.json({
     settings: {
@@ -74,39 +71,43 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       body.vertexTextModel !== undefined ||
       body.vertexImageModel !== undefined
     ) {
-      await env.DB.prepare(
-        `UPDATE system_settings
-         SET llm_provider = COALESCE(?, llm_provider),
-             openrouter_text_model = COALESCE(?, openrouter_text_model),
-             openrouter_image_model = COALESCE(?, openrouter_image_model),
-             vertex_text_model = COALESCE(?, vertex_text_model),
-             vertex_image_model = COALESCE(?, vertex_image_model),
-             updated_at = ?
-         WHERE id = 1`
-      )
-        .bind(
-          body.llmProvider ?? null,
-          body.openrouterTextModel?.trim() ?? null,
-          body.openrouterImageModel?.trim() ?? null,
-          body.vertexTextModel?.trim() ?? null,
-          body.vertexImageModel?.trim() ?? null,
-          new Date().toISOString()
+      try {
+        await env.DB.prepare(
+          `UPDATE system_settings
+           SET llm_provider = COALESCE(?, llm_provider),
+               openrouter_text_model = COALESCE(?, openrouter_text_model),
+               openrouter_image_model = COALESCE(?, openrouter_image_model),
+               vertex_text_model = COALESCE(?, vertex_text_model),
+               vertex_image_model = COALESCE(?, vertex_image_model),
+               updated_at = ?
+           WHERE id = 1`
         )
-        .run()
+          .bind(
+            body.llmProvider ?? null,
+            body.openrouterTextModel?.trim() ?? null,
+            body.openrouterImageModel?.trim() ?? null,
+            body.vertexTextModel?.trim() ?? null,
+            body.vertexImageModel?.trim() ?? null,
+            new Date().toISOString()
+          )
+          .run()
+      } catch {
+        // Legacy schema fallback: only provider is persisted.
+        if (body.llmProvider !== undefined) {
+          await env.DB.prepare(
+            'UPDATE system_settings SET llm_provider = ?, updated_at = ? WHERE id = 1'
+          )
+            .bind(body.llmProvider, new Date().toISOString())
+            .run()
+        }
+      }
     }
 
     // Fetch updated settings
-    const row = await env.DB.prepare(
-      `SELECT llm_provider, default_model, openrouter_text_model, openrouter_image_model,
-              vertex_text_model, vertex_image_model, openrouter_api_key, gemini_api_key
-       FROM system_settings WHERE id = 1`
-    ).first()
+    const row = await getSystemSettings(env)
 
     const providerMode = getProviderMode(env, (row?.llm_provider as string) || null)
-    const models = getProviderModelDefaults(
-      env,
-      row as { llm_provider?: string; default_model?: string }
-    )
+    const models = getProviderModelDefaults(env, row || undefined)
 
     return Response.json({
       settings: {
