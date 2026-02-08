@@ -357,7 +357,7 @@ export function AdminLLMsPage() {
               <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-copper/40">
                 <span className="text-sm text-steel">Active Provider Models</span>
                 <span className="text-xs text-copper font-mono uppercase">
-                  {settings?.providerMode || 'unknown'}
+                  {activeProviderLabel}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 px-3 bg-surface-900 border border-surface-600">
