@@ -77,8 +77,8 @@ export function PCBStageView() {
   const autoGenerateScheduledRef = useRef(false)
   const autoAdvanceStartedRef = useRef(false)
 
-  const specComplete = project?.status === 'complete'
   const spec = project?.spec
+  const specComplete = spec?.stages?.spec?.status === 'complete' || project?.status === 'complete'
 
   // Get existing PCB data from spec
   const pcbArtifacts = spec?.pcb
