@@ -1,82 +1,95 @@
 <p align="center">
-  <img src="frontend/public/logo.png" alt="PHAESTUS" width="120" />
+  <img src="frontend/public/logo.png" alt="Phaestus" width="120" />
 </p>
 
-<h1 align="center">PHAESTUS</h1>
+# Phaestus
 
-<p align="center"><strong>Hardware design from natural language.</strong></p>
+Phaestus is a web app that turns a product idea into hardware deliverables:
 
-<p align="center">
-  <a href="https://phaestus.app">Live App</a> •
-  <a href="https://phaestus.app/blog">Dev Blog</a>
-</p>
+- specification and feasibility output
+- PCB artifacts from validated module blocks
+- enclosure geometry
+- firmware source and cloud compilation
+- export package for manufacturing and flashing
 
----
+The project is frontend-heavy. Most workflow logic lives in the React app, while Cloudflare Functions handle auth, persistence, and external service/API access.
 
-A frontend-heavy web app that uses LLMs to design hardware products from natural language. Generates a PRD, designs the circuit (PCB, Gerbers, BOM), creates a parametric enclosure, and generates firmware. Manufacturing file processing runs in the browser. Users can flash devices directly via WebSerial.
+## What the app does
 
-## What It Does
+The workspace runs through five stages:
 
-1. **Spec** — Feasibility analysis, iterative refinement, product renders, locked specification
-2. **PCB** — Block selection from pre-validated modules, grid layout, merged Gerbers/BOM
-3. **Enclosure** — OpenSCAD generation, real-time STL preview (WASM)
-4. **Firmware** — ESP32-C6 code generation, Monaco editor, cloud compilation
-5. **Export** — Manufacturing files, WebSerial flashing
-
-## Scope
-
-**Supported**: ESP32-C6, common sensors (BME280, PIR, etc.), WS2812B LEDs, OLED displays, motor drivers, LiPo/USB/DC power
-
-**Rejected**: FPGA, high voltage (>24V), safety-critical, healthcare, complex RF, precision analog
+1. Spec: analyze feasibility, refine requirements, finalize a buildable spec.
+2. PCB: select/place validated blocks, merge schematics/PCB outputs, generate manufacturing data.
+3. Enclosure: generate OpenSCAD-based enclosure artifacts and previews.
+4. Firmware: generate firmware and compile through PlatformIO service.
+5. Export: package outputs and support device flashing flow.
 
 ## Architecture
 
-```
-Browser (80% of code)
-├── React SPA
-├── Gerber/BOM/Panel merging (src/services/)
-├── KiCad S-expression parser
-└── WebSerial flashing
+- Frontend: React 19 + TypeScript + Vite (`frontend/`)
+- Edge/API: Cloudflare Pages Functions (`frontend/functions/`)
+- Database: Cloudflare D1 (SQLite)
+- Object storage: Cloudflare R2
+- LLM orchestration: LangGraph-based graph/node flow in `frontend/src/services/langgraph/`
+- External services:
+  - `PLATFORMIO_SERVICE_URL` for firmware compilation
+  - `KICAD_SERVICE_URL` for KiCad-related generation
 
-Cloudflare (thin proxy layer)
-├── Pages Functions → LLM APIs, external services
-├── D1 → SQLite database
-└── R2 → Asset storage
+## Repository layout
 
-External Services (env vars)
-├── PLATFORMIO_SERVICE_URL → Firmware compilation
-└── KICAD_SERVICE_URL → KiCad file generation
-```
+- `frontend/`: main app, API functions, tests, build scripts
+- `kicad-service/`: KiCad microservice
+- `platformio-service/`: firmware compile microservice
+- `kicad_seed_data/`: seed/reference PCB data
+- `branding/`: brand assets
 
-No persistent backend server. Secrets stay server-side via Cloudflare Functions.
+## Local development
 
-## Quick Start
+Prerequisites:
+
+- Node.js 20+
+- pnpm 9+
+
+Install and run:
 
 ```bash
 cd frontend
 pnpm install
-pnpm dev:full    # Full stack with D1/R2 (port 8788)
+pnpm dev:full
 ```
 
-## Development
+`dev:full` builds and starts local Pages runtime with D1/R2 bindings.
+
+## Useful commands (from `frontend/`)
 
 ```bash
-pnpm dev:full     # Full stack
-pnpm check        # CI check (typecheck + test + build)
-pnpm test:run     # Run tests
-pnpm db:migrate   # Run migrations
+pnpm dev           # Vite only
+pnpm dev:full      # full local stack (Pages + D1/R2)
+pnpm lint
+pnpm typecheck
+pnpm test:run
+pnpm check         # typecheck + tests + build (CI-equivalent)
+pnpm build
 ```
 
-## Tech Stack
+## Environment notes
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19, Vite, TypeScript, TailwindCSS 4, Zustand |
-| Backend | Cloudflare Pages Functions |
-| Database | Cloudflare D1 (SQLite) |
-| Storage | Cloudflare R2 |
-| LLM | OpenRouter |
-| Testing | Vitest (486 tests) |
+Configure required secrets and service URLs through Cloudflare/Wrangler env settings used by Pages Functions. Keep API keys server-side; do not expose provider keys to the browser.
+
+## Deployment
+
+Main branch deploys via GitHub Actions to Cloudflare Pages.
+
+Manual deploy (from `frontend/`):
+
+```bash
+pnpm build
+pnpm exec wrangler pages deploy dist --project-name=phaestus
+```
+
+## Constraints and scope
+
+Current flows are optimized around the existing validated block catalog and supported firmware/enclosure toolchain. Ideas outside that catalog or safety-critical/high-voltage domains are intentionally constrained in feasibility and stage routing.
 
 ## License
 
