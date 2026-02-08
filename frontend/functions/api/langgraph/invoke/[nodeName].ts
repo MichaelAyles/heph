@@ -488,6 +488,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   // Check for system prompt override (used by debug test endpoint)
   const systemPromptOverrideEncoded = context.request.headers.get('X-System-Prompt-Override')
+  if (systemPromptOverrideEncoded && !user.isAdmin) {
+    return Response.json({ error: 'Admin access required for prompt override' }, { status: 403 })
+  }
   const systemPrompt = systemPromptOverrideEncoded
     ? decodeURIComponent(systemPromptOverrideEncoded)
     : promptRow.system_prompt
@@ -660,14 +663,35 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const result = await llmResponse.json<{
       content: string
       model: string
-      usage?: {
-        prompt_tokens: number
-        completion_tokens: number
-        total_tokens: number
-      }
+      usage?: Record<string, unknown>
     }>()
 
-    return result
+    const rawUsage = result.usage
+    let normalizedUsage:
+      | {
+          prompt_tokens: number
+          completion_tokens: number
+          total_tokens: number
+        }
+      | undefined
+
+    if (rawUsage) {
+      const promptTokens = Number(rawUsage.prompt_tokens ?? rawUsage.promptTokens ?? 0)
+      const completionTokens = Number(rawUsage.completion_tokens ?? rawUsage.completionTokens ?? 0)
+      const totalTokens = Number(rawUsage.total_tokens ?? rawUsage.totalTokens ?? 0)
+
+      normalizedUsage = {
+        prompt_tokens: Number.isFinite(promptTokens) ? promptTokens : 0,
+        completion_tokens: Number.isFinite(completionTokens) ? completionTokens : 0,
+        total_tokens: Number.isFinite(totalTokens) ? totalTokens : 0,
+      }
+    }
+
+    return {
+      content: result.content,
+      model: result.model,
+      usage: normalizedUsage,
+    }
   }
 
   // Create LLM image function that proxies to our API
@@ -681,6 +705,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body: JSON.stringify({
         prompt: params.prompt,
         model: params.model || preferredModelAlias,
+        projectId: params.projectId || body.projectId,
       }),
     })
 
@@ -693,7 +718,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       imageUrl: string
       model: string
       latencyMs?: number
+      error?: string
+      rawResponse?: string
     }>()
+
+    if (!result.imageUrl || typeof result.imageUrl !== 'string') {
+      const errorDetails = result.error || result.rawResponse || 'No image returned by provider'
+      throw new Error(`Image API error: ${errorDetails}`)
+    }
 
     return {
       url: result.imageUrl,
@@ -777,9 +809,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         JSON.stringify(body.input),
         null,
         errorMessage,
-        body.config?.model || node.defaultTemperature.toString(),
+        body.config?.model || 'default',
         body.config?.temperature ?? node.defaultTemperature,
-        nodeContext.systemPromptOverride || null,
+        nodeContext.systemPrompt,
         JSON.stringify(body.input).slice(0, 1000),
         null,
         null,

@@ -5,8 +5,20 @@ import { convertToGeminiFormat } from '../../lib/gemini'
 import { getVertexAccessToken, getVertexUrl } from '../../lib/vertex-auth'
 import { getProviderModelDefaults, getProviderMode } from '../../lib/model-defaults'
 import { getSystemSettings } from '../../lib/system-settings'
+import {
+  assertProjectAccess,
+  ProjectAccessError,
+  resolveRequestedModel,
+} from '../../lib/llm-routing'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
-import type { PagesFunction, User, ChatMessage } from '../../lib/message-types'
+import type {
+  PagesFunction,
+  User,
+  ChatMessage,
+  OpenAIMessage,
+  OpenAITextContent,
+  OpenAIImageContent,
+} from '../../lib/message-types'
 
 interface StreamRequest {
   messages: ChatMessage[]
@@ -14,6 +26,29 @@ interface StreamRequest {
   temperature?: number
   maxTokens?: number
   projectId?: string
+}
+
+function convertToOpenRouterFormat(messages: ChatMessage[]): OpenAIMessage[] {
+  return messages.map((msg) => {
+    if (typeof msg.content === 'string') {
+      return { role: msg.role === 'tool' ? 'assistant' : msg.role, content: msg.content }
+    }
+
+    const content: (OpenAITextContent | OpenAIImageContent)[] = msg.content.map((part) => {
+      if (part.type === 'image') {
+        return {
+          type: 'image_url',
+          image_url: { url: `data:${part.mimeType};base64,${part.data}` },
+        }
+      }
+      return {
+        type: 'text',
+        text: part.text,
+      }
+    })
+
+    return { role: msg.role === 'tool' ? 'assistant' : msg.role, content }
+  })
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -24,16 +59,29 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     const body = (await context.request.json()) as StreamRequest
-    const { messages, projectId } = body
+    const { messages } = body
 
     await logger.debug('llm', 'Stream request received', {
       messageCount: messages?.length,
-      projectId,
+      projectId: body.projectId,
       model: body.model,
     })
 
     if (!messages || messages.length === 0) {
       return Response.json({ error: 'Messages required' }, { status: 400 })
+    }
+
+    let projectId: string | undefined
+    try {
+      projectId = await assertProjectAccess(env, user, body.projectId)
+    } catch (error) {
+      if (error instanceof ProjectAccessError) {
+        if (error.code === 'not_found') {
+          return Response.json({ error: 'Project not found' }, { status: 404 })
+        }
+        return Response.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      throw error
     }
 
     // Get settings
@@ -44,21 +92,37 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       env,
       settings as { llm_provider?: string; default_model?: string }
     )
-    const model = body.model || defaults.active.textModel
+    const modelResolution = resolveRequestedModel(
+      body.model,
+      defaults.active,
+      'text',
+      user.isAdmin === true
+    )
+    const model = modelResolution.model
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 4096
+
+    if (modelResolution.wasOverridden) {
+      await logger.warn('llm', 'Non-admin requested disallowed model, using active default', {
+        requestedModel: modelResolution.requestedModel,
+        resolvedModel: model,
+      })
+    }
 
     let upstreamResponse: Response
 
     if (provider === 'vertex') {
       // Vertex AI streaming
+      if (!env.GCP_SERVICE_ACCOUNT_JSON) {
+        return Response.json({ error: 'Vertex service account not configured' }, { status: 500 })
+      }
       const accessToken = await getVertexAccessToken(env.GCP_SERVICE_ACCOUNT_JSON!)
-      const projectId = env.GCP_PROJECT_ID || 'phaestus-app-api'
+      const gcpProjectId = env.GCP_PROJECT_ID || 'phaestus-app-api'
       const region = env.GCP_REGION || 'europe-west2'
       const contents = convertToGeminiFormat(messages)
 
       upstreamResponse = await fetch(
-        getVertexUrl(projectId, region, model, 'streamGenerateContent') + '?alt=sse',
+        getVertexUrl(gcpProjectId, region, model, 'streamGenerateContent') + '?alt=sse',
         {
           method: 'POST',
           headers: {
@@ -80,6 +144,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
       }
 
+      const openRouterMessages = convertToOpenRouterFormat(messages)
+
       upstreamResponse = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
         headers: {
@@ -90,7 +156,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         },
         body: JSON.stringify({
           model,
-          messages,
+          messages: openRouterMessages,
           temperature,
           max_tokens: maxTokens,
           stream: true,
@@ -134,7 +200,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Process the stream in the background
     // Pass messages for token estimation
-    processStream(
+    void processStream(
       upstreamResponse.body!,
       writable,
       provider,
@@ -174,6 +240,7 @@ async function processStream(
   const decoder = new TextDecoder()
 
   let fullContent = ''
+  let streamBuffer = ''
   const startTime = Date.now()
 
   // Track usage data from stream (OpenRouter sends it in final message)
@@ -184,50 +251,73 @@ async function processStream(
   } = {}
 
   try {
+    const processSsePayload = async (payload: string) => {
+      if (!payload || payload === '[DONE]') return
+
+      try {
+        const parsed = JSON.parse(payload)
+        let token = ''
+
+        if (provider === 'openrouter') {
+          token = parsed.choices?.[0]?.delta?.content || ''
+          if (parsed.usage) {
+            streamUsage = {
+              promptTokens: parsed.usage.prompt_tokens,
+              completionTokens: parsed.usage.completion_tokens,
+              totalCost: parsed.usage.total_cost,
+            }
+          }
+        } else {
+          token = parsed.candidates?.[0]?.content?.parts?.[0]?.text || ''
+          if (parsed.usageMetadata) {
+            streamUsage = {
+              promptTokens: parsed.usageMetadata.promptTokenCount,
+              completionTokens: parsed.usageMetadata.candidatesTokenCount,
+            }
+          }
+        }
+
+        if (token) {
+          fullContent += token
+          await writer.write(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`))
+        }
+      } catch {
+        // Skip malformed JSON payloads from upstream SSE.
+      }
+    }
+
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
 
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n').filter((line) => line.startsWith('data: '))
+      streamBuffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
 
-      for (const line of lines) {
-        const data = line.slice(6)
-        if (data === '[DONE]') continue
+      let eventBoundary = streamBuffer.indexOf('\n\n')
+      while (eventBoundary !== -1) {
+        const rawEvent = streamBuffer.slice(0, eventBoundary)
+        streamBuffer = streamBuffer.slice(eventBoundary + 2)
 
-        try {
-          const parsed = JSON.parse(data)
-          let token = ''
+        const payload = rawEvent
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.replace(/^data:\s?/, ''))
+          .join('\n')
+          .trim()
 
-          if (provider === 'openrouter') {
-            token = parsed.choices?.[0]?.delta?.content || ''
-            // Capture usage data from final chunk (OpenRouter includes it when finish_reason is set)
-            if (parsed.usage) {
-              streamUsage = {
-                promptTokens: parsed.usage.prompt_tokens,
-                completionTokens: parsed.usage.completion_tokens,
-                totalCost: parsed.usage.total_cost,
-              }
-            }
-          } else {
-            token = parsed.candidates?.[0]?.content?.parts?.[0]?.text || ''
-            // Gemini usage metadata
-            if (parsed.usageMetadata) {
-              streamUsage = {
-                promptTokens: parsed.usageMetadata.promptTokenCount,
-                completionTokens: parsed.usageMetadata.candidatesTokenCount,
-              }
-            }
-          }
+        await processSsePayload(payload)
+        eventBoundary = streamBuffer.indexOf('\n\n')
+      }
+    }
 
-          if (token) {
-            fullContent += token
-            // Forward the SSE event
-            await writer.write(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`))
-          }
-        } catch {
-          // Skip malformed JSON
-        }
+    if (streamBuffer.trim().length > 0) {
+      const fallbackPayloads = streamBuffer
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.replace(/^data:\s?/, '').trim())
+        .filter((line) => line.length > 0)
+
+      for (const payload of fallbackPayloads) {
+        await processSsePayload(payload)
       }
     }
 
@@ -288,30 +378,34 @@ async function logLlmRequest(
   errorMessage: string | null,
   actualCostUsd?: number
 ) {
-  const id = crypto.randomUUID().replace(/-/g, '')
-  // Use actual cost from provider if available, otherwise estimate
-  const costUsd = actualCostUsd ?? calculateCost(model, promptTokens, completionTokens)
+  try {
+    const id = crypto.randomUUID().replace(/-/g, '')
+    // Use actual cost from provider if available, otherwise estimate
+    const costUsd = actualCostUsd ?? calculateCost(model, promptTokens, completionTokens)
 
-  await env.DB.prepare(
+    await env.DB.prepare(
+      `
+      INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `
-    INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `
-  )
-    .bind(
-      id,
-      userId,
-      projectId || null,
-      model,
-      promptTokens,
-      completionTokens,
-      promptTokens + completionTokens,
-      latencyMs,
-      costUsd,
-      status,
-      errorMessage
     )
-    .run()
+      .bind(
+        id,
+        userId,
+        projectId || null,
+        model,
+        promptTokens,
+        completionTokens,
+        promptTokens + completionTokens,
+        latencyMs,
+        costUsd,
+        status,
+        errorMessage
+      )
+      .run()
+  } catch {
+    // Usage logging is best-effort and must not fail the request.
+  }
 }
 
 async function logConversation(

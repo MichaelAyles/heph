@@ -26,6 +26,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  if (!user.isAdmin) {
+    return Response.json({ error: 'Admin access required' }, { status: 403 })
+  }
 
   // Get OpenRouter API key from settings or env
   const settings = await env.DB.prepare(
@@ -50,7 +53,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
+      await response.text()
       // 403 typically means the key doesn't have permission (not a provisioning key)
       if (response.status === 403) {
         return Response.json(
@@ -62,7 +65,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         )
       }
       return Response.json(
-        { error: `OpenRouter API error: ${response.status}`, details: errorText, credits: null },
+        { error: `OpenRouter API error: ${response.status}`, credits: null },
         { status: 200 }
       )
     }
@@ -76,10 +79,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         remaining: result.data.total_credits - result.data.total_usage,
       },
     })
-  } catch (error) {
-    return Response.json(
-      { error: `Failed to fetch credits: ${String(error)}`, credits: null },
-      { status: 200 }
-    )
+  } catch (_error) {
+    return Response.json({ error: 'Failed to fetch credits', credits: null }, { status: 200 })
   }
 }

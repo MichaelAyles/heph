@@ -4,7 +4,7 @@
  * Uses LangGraph admin_test node for text model testing via /api/langgraph/invoke/admin_test
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
@@ -121,6 +121,7 @@ function formatNumber(num: number): string {
 
 export function AdminLLMsPage() {
   const queryClient = useQueryClient()
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['settings'],
@@ -191,43 +192,52 @@ export function AdminLLMsPage() {
     }
   }
 
-  const persistSettings = async (overrides?: {
+  const persistSettings = (overrides?: {
     provider?: ProviderMode
     openrouterTextModel?: string
     openrouterImageModel?: string
     vertexTextModel?: string
     vertexImageModel?: string
   }) => {
-    await mutation.mutateAsync(buildSettingsPayload(overrides))
+    const payload = buildSettingsPayload(overrides)
+
+    // Serialize writes to avoid out-of-order persistence during rapid UI changes.
+    saveQueueRef.current = saveQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        await mutation.mutateAsync(payload)
+      })
+
+    return saveQueueRef.current
   }
 
   const handleSave = () => {
-    void persistSettings()
+    void persistSettings().catch(() => undefined)
   }
 
   const handleProviderChange = (nextProvider: ProviderMode) => {
     setProvider(nextProvider)
-    void persistSettings({ provider: nextProvider })
+    void persistSettings({ provider: nextProvider }).catch(() => undefined)
   }
 
   const handleOpenrouterTextModelChange = (nextModel: string) => {
     setOpenrouterTextModel(nextModel)
-    void persistSettings({ openrouterTextModel: nextModel })
+    void persistSettings({ openrouterTextModel: nextModel }).catch(() => undefined)
   }
 
   const handleOpenrouterImageModelChange = (nextModel: string) => {
     setOpenrouterImageModel(nextModel)
-    void persistSettings({ openrouterImageModel: nextModel })
+    void persistSettings({ openrouterImageModel: nextModel }).catch(() => undefined)
   }
 
   const handleVertexTextModelChange = (nextModel: string) => {
     setVertexTextModel(nextModel)
-    void persistSettings({ vertexTextModel: nextModel })
+    void persistSettings({ vertexTextModel: nextModel }).catch(() => undefined)
   }
 
   const handleVertexImageModelChange = (nextModel: string) => {
     setVertexImageModel(nextModel)
-    void persistSettings({ vertexImageModel: nextModel })
+    void persistSettings({ vertexImageModel: nextModel }).catch(() => undefined)
   }
 
   const activeProviderLabel = provider

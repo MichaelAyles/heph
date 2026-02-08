@@ -343,6 +343,39 @@ describe('llm service', () => {
       expect(callbacks.onError).not.toHaveBeenCalled()
     })
 
+    it('should handle fragmented SSE payloads across multiple chunks', async () => {
+      const chunks = ['data: {"to', 'ken":"Hello"}\n\n', 'data: {"done":true}\n\n']
+
+      let chunkIndex = 0
+      const mockReader = {
+        read: vi.fn().mockImplementation(() => {
+          if (chunkIndex < chunks.length) {
+            const encoder = new TextEncoder()
+            const chunk = encoder.encode(chunks[chunkIndex++])
+            return Promise.resolve({ done: false, value: chunk })
+          }
+          return Promise.resolve({ done: true, value: undefined })
+        }),
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: { getReader: () => mockReader },
+      })
+
+      const callbacks: StreamCallbacks = {
+        onToken: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      }
+
+      await llm.chatStream({ messages: [] }, callbacks)
+
+      expect(callbacks.onToken).toHaveBeenCalledWith('Hello')
+      expect(callbacks.onComplete).toHaveBeenCalled()
+      expect(callbacks.onError).not.toHaveBeenCalled()
+    })
+
     it('should complete with accumulated content when stream ends without done event', async () => {
       const chunks = ['data: {"token":"Hello"}\n', 'data: {"token":" world"}\n']
 

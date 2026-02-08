@@ -172,19 +172,34 @@ class LLMService {
 
     const decoder = new TextDecoder()
     let fullContent = ''
+    let streamBuffer = ''
 
     try {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n').filter((line) => line.startsWith('data: '))
+        streamBuffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
 
-        for (const line of lines) {
-          const data = line.slice(6)
+        let eventBoundary = streamBuffer.indexOf('\n\n')
+        while (eventBoundary !== -1) {
+          const rawEvent = streamBuffer.slice(0, eventBoundary)
+          streamBuffer = streamBuffer.slice(eventBoundary + 2)
+
+          const payload = rawEvent
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.replace(/^data:\s?/, ''))
+            .join('\n')
+            .trim()
+
+          if (!payload) {
+            eventBoundary = streamBuffer.indexOf('\n\n')
+            continue
+          }
+
           try {
-            const parsed = JSON.parse(data)
+            const parsed = JSON.parse(payload)
 
             if (parsed.token) {
               fullContent += parsed.token
@@ -204,7 +219,40 @@ class LLMService {
               return
             }
           } catch {
-            // Skip malformed JSON
+            // Skip malformed JSON payloads.
+          }
+
+          eventBoundary = streamBuffer.indexOf('\n\n')
+        }
+      }
+
+      if (streamBuffer.trim().length > 0) {
+        const fallbackPayloads = streamBuffer
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.replace(/^data:\s?/, '').trim())
+          .filter((line) => line.length > 0)
+
+        for (const payload of fallbackPayloads) {
+          try {
+            const parsed = JSON.parse(payload)
+            if (parsed.token) {
+              fullContent += parsed.token
+              callbacks.onToken(parsed.token)
+            }
+            if (parsed.done) {
+              callbacks.onComplete({
+                content: parsed.content || fullContent,
+                model: options.model || 'unknown',
+              })
+              return
+            }
+            if (parsed.error) {
+              callbacks.onError(new Error(parsed.error))
+              return
+            }
+          } catch {
+            // Skip malformed JSON payloads.
           }
         }
       }

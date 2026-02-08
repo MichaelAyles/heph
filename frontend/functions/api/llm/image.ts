@@ -1,14 +1,21 @@
 import type { Env } from '../../env'
 import { calculateImageCost } from './pricing'
 import { createLogger } from '../../lib/logger'
-import { getProviderModelDefaults } from '../../lib/model-defaults'
+import { getProviderModelDefaults, getProviderMode } from '../../lib/model-defaults'
 import { getSystemSettings } from '../../lib/system-settings'
+import { getVertexAccessToken, getVertexUrl } from '../../lib/vertex-auth'
+import {
+  assertProjectAccess,
+  ProjectAccessError,
+  resolveRequestedModel,
+} from '../../lib/llm-routing'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
 import type { PagesFunction, User } from '../../lib/message-types'
 
 interface ImageRequest {
   prompt: string
   model?: string
+  projectId?: string
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -25,74 +32,116 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await logger.debug('llm', 'Image request received', {
       promptLength: prompt?.length,
       model: body.model,
+      projectId: body.projectId,
     })
 
     if (!prompt) {
       return Response.json({ error: 'Prompt required' }, { status: 400 })
     }
 
+    let projectId: string | undefined
+    try {
+      projectId = await assertProjectAccess(env, user, body.projectId)
+    } catch (error) {
+      if (error instanceof ProjectAccessError) {
+        if (error.code === 'not_found') {
+          return Response.json({ error: 'Project not found' }, { status: 404 })
+        }
+        return Response.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      throw error
+    }
+
     // Get settings
     const settings = await getSystemSettings(env)
-
-    const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
-    if (!apiKey) {
-      return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
-    }
+    const provider = getProviderMode(env, (settings?.llm_provider as string) || null)
 
     const defaults = getProviderModelDefaults(
       env,
       settings as { llm_provider?: string; default_model?: string }
     )
-    const defaultImageModel = defaults.active.imageModel
-    const defaultTextModel = defaults.active.textModel
-    const requestedModel = body.model
-    const model =
-      requestedModel === '__image_model__'
-        ? defaultImageModel || defaultTextModel
-        : requestedModel === '__text_model__'
-          ? defaultTextModel || defaultImageModel
-          : requestedModel || defaultImageModel
-    if (!model) {
-      return Response.json(
-        { error: 'IMAGE_MODEL_SLUG not configured in .dev.vars' },
-        { status: 500 }
-      )
+    const modelResolution = resolveRequestedModel(
+      body.model,
+      defaults.active,
+      'image',
+      user.isAdmin === true
+    )
+    const model = modelResolution.model
+
+    if (modelResolution.wasOverridden) {
+      await logger.warn('llm', 'Non-admin requested disallowed model, using active default', {
+        requestedModel: modelResolution.requestedModel,
+        resolvedModel: model,
+      })
     }
 
-    // Use chat completions with image generation request
-    const response = await fetch(OPENROUTER_API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': APP_URL,
-        'X-Title': 'Phaestus',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'user',
-            content: `Generate an image of: ${prompt}. Return the image directly.`,
+    let response: Response
+    if (provider === 'vertex') {
+      if (!env.GCP_SERVICE_ACCOUNT_JSON) {
+        return Response.json({ error: 'Vertex service account not configured' }, { status: 500 })
+      }
+      const accessToken = await getVertexAccessToken(env.GCP_SERVICE_ACCOUNT_JSON)
+      const gcpProjectId = env.GCP_PROJECT_ID || 'phaestus-app-api'
+      const region = env.GCP_REGION || 'europe-west2'
+
+      response = await fetch(getVertexUrl(gcpProjectId, region, model, 'generateContent'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: `Generate an image of: ${prompt}. Return the image directly.` }],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: 4096,
           },
-        ],
-        max_tokens: 4096,
-      }),
-    })
+        }),
+      })
+    } else {
+      const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
+      if (!apiKey) {
+        return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
+      }
+
+      response = await fetch(OPENROUTER_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': APP_URL,
+          'X-Title': 'Phaestus',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: `Generate an image of: ${prompt}. Return the image directly.`,
+            },
+          ],
+          max_tokens: 4096,
+        }),
+      })
+    }
 
     if (!response.ok) {
       const errorText = await response.text()
-      await logger.error('llm', 'Image API error', { error: errorText, model })
+      await logger.error('llm', 'Image API error', { error: errorText, model, provider })
 
-      // Log failed request - still charge cost as API quota was consumed
-      const id = crypto.randomUUID().replace(/-/g, '')
-      const costUsd = calculateImageCost(model)
-      await env.DB.prepare(
-        `INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
-         VALUES (?, ?, NULL, ?, 0, 0, 0, ?, ?, 'error', ?, datetime('now'))`
+      await logImageRequest(
+        env,
+        user.id,
+        projectId,
+        model,
+        Date.now() - startTime,
+        'error',
+        errorText
       )
-        .bind(id, user.id, model, Date.now() - startTime, costUsd, errorText)
-        .run()
 
       // Don't expose error details to client (may contain API keys or sensitive info)
       return Response.json({ error: 'Image generation failed' }, { status: 502 })
@@ -116,9 +165,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     let rawResponse: string | null = null
 
     const message = result.choices?.[0]?.message
+    const vertexPart = result.candidates?.[0]?.content?.parts?.[0] as
+      | { inlineData?: { mimeType?: string; data?: string }; fileData?: { fileUri?: string } }
+      | undefined
+
+    if (provider === 'vertex') {
+      if (vertexPart?.inlineData?.data) {
+        imageUrl = `data:${vertexPart.inlineData.mimeType || 'image/png'};base64,${vertexPart.inlineData.data}`
+      } else if (vertexPart?.fileData?.fileUri) {
+        imageUrl = vertexPart.fileData.fileUri
+      } else {
+        rawResponse = JSON.stringify(result).slice(0, 500)
+      }
+    }
 
     // Check for images array (Gemini format via OpenRouter)
-    if (message?.images && Array.isArray(message.images)) {
+    if (!imageUrl && message?.images && Array.isArray(message.images)) {
       for (const img of message.images) {
         if (img.type === 'image_url' && img.image_url?.url) {
           imageUrl = img.image_url.url
@@ -151,6 +213,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // If no image found, return the raw response for debugging
     if (!imageUrl) {
+      await logImageRequest(
+        env,
+        user.id,
+        projectId,
+        model,
+        latencyMs,
+        'error',
+        rawResponse || 'No image in provider response',
+        actualCostUsd
+      )
+
       return Response.json(
         {
           error: 'No image in response',
@@ -158,7 +231,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           model,
           latencyMs,
         },
-        { status: 200 }
+        { status: 502 }
       )
     }
 
@@ -198,14 +271,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // Log successful request with cost (prefer actual cost from OpenRouter)
-    const id = crypto.randomUUID().replace(/-/g, '')
     const costUsd = actualCostUsd ?? calculateImageCost(model)
-    await env.DB.prepare(
-      `INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
-       VALUES (?, ?, NULL, ?, 0, 0, 0, ?, ?, 'success', NULL, datetime('now'))`
-    )
-      .bind(id, user.id, model, latencyMs, costUsd)
-      .run()
+    await logImageRequest(env, user.id, projectId, model, latencyMs, 'success', null, costUsd)
 
     await logger.llm('Image generated', { model, latencyMs, costUsd })
 
@@ -217,5 +284,29 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   } catch (error) {
     await logger.error('llm', 'Image error', { error: String(error) })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+async function logImageRequest(
+  env: Env,
+  userId: string,
+  projectId: string | undefined,
+  model: string,
+  latencyMs: number,
+  status: 'success' | 'error',
+  errorMessage: string | null,
+  actualCostUsd?: number
+) {
+  try {
+    const id = crypto.randomUUID().replace(/-/g, '')
+    const costUsd = actualCostUsd ?? calculateImageCost(model)
+    await env.DB.prepare(
+      `INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
+       VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, datetime('now'))`
+    )
+      .bind(id, userId, projectId || null, model, latencyMs, costUsd, status, errorMessage)
+      .run()
+  } catch {
+    // Usage logging is best-effort and must not fail the request.
   }
 }

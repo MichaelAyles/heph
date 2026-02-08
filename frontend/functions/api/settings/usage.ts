@@ -13,6 +13,7 @@ interface User {
   id: string
   username: string
   displayName: string | null
+  isAdmin?: boolean
 }
 
 interface UsageStats {
@@ -24,7 +25,14 @@ interface UsageStats {
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env, data } = context
-  const user = data.user as User
+  const user = data.user as User | undefined
+
+  if (!user) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!user.isAdmin) {
+    return Response.json({ error: 'Admin access required' }, { status: 403 })
+  }
 
   // Get current user's usage by model
   const userUsage = await env.DB.prepare(

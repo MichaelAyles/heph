@@ -12,8 +12,21 @@ interface PagesFunction<E> {
   }): Promise<Response>
 }
 
+interface User {
+  id: string
+  isAdmin: boolean
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const { env } = context
+  const { env, data } = context
+  const user = data.user as User | undefined
+
+  if (!user) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!user.isAdmin) {
+    return Response.json({ error: 'Admin access required' }, { status: 403 })
+  }
 
   const row = await getSystemSettings(env)
 
@@ -38,7 +51,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 }
 
 export const onRequestPut: PagesFunction<Env> = async (context) => {
-  const { env } = context
+  const { env, data } = context
+  const user = data.user as User | undefined
+
+  if (!user) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!user.isAdmin) {
+    return Response.json({ error: 'Admin access required' }, { status: 403 })
+  }
 
   try {
     const body = (await context.request.json()) as {
@@ -92,7 +113,14 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
             new Date().toISOString()
           )
           .run()
-      } catch {
+      } catch (error) {
+        const isLegacySchemaError =
+          error instanceof Error &&
+          (/no such column/i.test(error.message) || /has no column named/i.test(error.message))
+        if (!isLegacySchemaError) {
+          throw error
+        }
+
         // Legacy schema fallback: only provider is persisted.
         if (body.llmProvider !== undefined) {
           await env.DB.prepare(
@@ -112,7 +140,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     return Response.json({
       settings: {
-        llmProvider: row!.llm_provider,
+        llmProvider: (row?.llm_provider as string) || 'openrouter',
         providerMode,
         textModel: models.active.textModel,
         imageModel: models.active.imageModel,

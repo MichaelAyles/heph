@@ -11,6 +11,11 @@ import { createLogger } from '../../lib/logger'
 import { getVertexAccessToken, getVertexUrl } from '../../lib/vertex-auth'
 import { getProviderModelDefaults, getProviderMode } from '../../lib/model-defaults'
 import { getSystemSettings } from '../../lib/system-settings'
+import {
+  assertProjectAccess,
+  ProjectAccessError,
+  resolveRequestedModel,
+} from '../../lib/llm-routing'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
 import type {
   PagesFunction,
@@ -82,6 +87,7 @@ interface GeminiFunctionDeclaration {
 
 function convertMessagesToGeminiFormat(messages: ChatMessage[]): GeminiContent[] {
   const result: GeminiContent[] = []
+  const toolNameByCallId = new Map<string, string>()
 
   for (const msg of messages) {
     if (msg.role === 'system') {
@@ -100,6 +106,7 @@ function convertMessagesToGeminiFormat(messages: ChatMessage[]): GeminiContent[]
 
       if (msg.toolCalls) {
         for (const tc of msg.toolCalls) {
+          toolNameByCallId.set(tc.id, tc.name)
           parts.push({
             functionCall: {
               name: tc.name,
@@ -115,12 +122,14 @@ function convertMessagesToGeminiFormat(messages: ChatMessage[]): GeminiContent[]
     } else if (msg.role === 'tool') {
       // Tool results need to be grouped with the model's function call
       // Gemini expects function_response parts in a user message
+      const functionName =
+        (msg.toolCallId && toolNameByCallId.get(msg.toolCallId)) || msg.toolCallId || 'unknown'
       result.push({
         role: 'user',
         parts: [
           {
             functionResponse: {
-              name: msg.toolCallId || 'unknown',
+              name: functionName,
               response: { result: msg.content },
             },
           },
@@ -305,7 +314,13 @@ function parseOpenRouterResponse(result: Record<string, unknown>): {
     toolCalls = choice.message.tool_calls.map((tc) => ({
       id: tc.id,
       name: tc.function.name,
-      arguments: JSON.parse(tc.function.arguments),
+      arguments: (() => {
+        try {
+          return JSON.parse(tc.function.arguments || '{}')
+        } catch {
+          return {}
+        }
+      })(),
     }))
   }
 
@@ -328,18 +343,31 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     const body = (await context.request.json()) as ToolChatRequest
-    const { messages, tools, projectId, thinking } = body
+    const { messages, tools, thinking } = body
 
     await logger.debug('llm', 'Tool chat request received', {
       messageCount: messages?.length,
       toolCount: tools?.length,
-      projectId,
+      projectId: body.projectId,
       model: body.model,
       thinkingEnabled: thinking?.type === 'enabled',
     })
 
     if (!messages || messages.length === 0) {
       return Response.json({ error: 'Messages required' }, { status: 400 })
+    }
+
+    let projectId: string | undefined
+    try {
+      projectId = await assertProjectAccess(env, user, body.projectId)
+    } catch (error) {
+      if (error instanceof ProjectAccessError) {
+        if (error.code === 'not_found') {
+          return Response.json({ error: 'Project not found' }, { status: 404 })
+        }
+        return Response.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      throw error
     }
 
     // Get settings
@@ -350,16 +378,32 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       env,
       settings as { llm_provider?: string; default_model?: string }
     )
-    const model = body.model || defaults.active.textModel
+    const modelResolution = resolveRequestedModel(
+      body.model,
+      defaults.active,
+      'text',
+      user.isAdmin === true
+    )
+    const model = modelResolution.model
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 8192
+
+    if (modelResolution.wasOverridden) {
+      await logger.warn('llm', 'Non-admin requested disallowed model, using active default', {
+        requestedModel: modelResolution.requestedModel,
+        resolvedModel: model,
+      })
+    }
 
     let response: Response
 
     if (provider === 'vertex') {
       // Vertex AI with tool calling
+      if (!env.GCP_SERVICE_ACCOUNT_JSON) {
+        return Response.json({ error: 'Vertex service account not configured' }, { status: 500 })
+      }
       const accessToken = await getVertexAccessToken(env.GCP_SERVICE_ACCOUNT_JSON!)
-      const projectId = env.GCP_PROJECT_ID || 'phaestus-app-api'
+      const gcpProjectId = env.GCP_PROJECT_ID || 'phaestus-app-api'
       const region = env.GCP_REGION || 'europe-west2'
       const contents = convertMessagesToGeminiFormat(messages)
 
@@ -384,7 +428,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }
       }
 
-      response = await fetch(getVertexUrl(projectId, region, model, 'generateContent'), {
+      response = await fetch(getVertexUrl(gcpProjectId, region, model, 'generateContent'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -496,7 +540,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         error
       )
 
-      return Response.json({ error: 'LLM API error', details: error }, { status: 502 })
+      return Response.json({ error: 'LLM API error' }, { status: 502 })
     }
 
     const result = (await response.json()) as Record<string, unknown>
@@ -504,6 +548,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     let parsed: { content: string; toolCalls?: ToolCall[]; thinking?: string; finishReason: string }
     let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
+    let actualCostUsd: number | undefined
 
     if (provider === 'openrouter') {
       parsed = parseOpenRouterResponse(result)
@@ -511,6 +556,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         prompt_tokens: number
         completion_tokens: number
         total_tokens: number
+        total_cost?: number
       }
       usage = usageData
         ? {
@@ -519,6 +565,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             totalTokens: usageData.total_tokens,
           }
         : undefined
+      actualCostUsd = usageData?.total_cost
     } else {
       parsed = parseGeminiResponse(result)
       const usageMetadata = result.usageMetadata as {
@@ -545,7 +592,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       usage?.completionTokens || 0,
       latencyMs,
       'success',
-      null
+      null,
+      actualCostUsd
     )
 
     // Log full conversation
@@ -577,11 +625,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       finishReason: parsed.finishReason,
     })
 
+    const usageResponse = usage
+      ? {
+          ...usage,
+          prompt_tokens: usage.promptTokens,
+          completion_tokens: usage.completionTokens,
+          total_tokens: usage.totalTokens,
+        }
+      : undefined
+
     const responseBody: ToolChatResponse = {
       content: parsed.content,
       model,
       toolCalls: parsed.toolCalls,
-      usage,
+      usage: usageResponse,
       thinking: parsed.thinking,
       finishReason: parsed.finishReason as ToolChatResponse['finishReason'],
     }
@@ -602,31 +659,36 @@ async function logLlmRequest(
   completionTokens: number,
   latencyMs: number,
   status: string,
-  errorMessage: string | null
+  errorMessage: string | null,
+  actualCostUsd?: number
 ) {
-  const id = crypto.randomUUID().replace(/-/g, '')
-  const costUsd = calculateCost(model, promptTokens, completionTokens)
+  try {
+    const id = crypto.randomUUID().replace(/-/g, '')
+    const costUsd = actualCostUsd ?? calculateCost(model, promptTokens, completionTokens)
 
-  await env.DB.prepare(
+    await env.DB.prepare(
+      `
+      INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `
-    INSERT INTO llm_requests (id, user_id, project_id, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, status, error_message, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `
-  )
-    .bind(
-      id,
-      userId,
-      projectId || null,
-      model,
-      promptTokens,
-      completionTokens,
-      promptTokens + completionTokens,
-      latencyMs,
-      costUsd,
-      status,
-      errorMessage
     )
-    .run()
+      .bind(
+        id,
+        userId,
+        projectId || null,
+        model,
+        promptTokens,
+        completionTokens,
+        promptTokens + completionTokens,
+        latencyMs,
+        costUsd,
+        status,
+        errorMessage
+      )
+      .run()
+  } catch {
+    // Usage logging is best-effort and must not fail the request.
+  }
 }
 
 async function logConversation(
