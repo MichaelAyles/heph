@@ -1,7 +1,6 @@
 # Project-specific exclusions
 /inspiration/
 /docs/
-agents.md
 .claude/
 /kicad_seed_data/
 chat.txt
