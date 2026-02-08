@@ -105,6 +105,7 @@ export function FirmwareStageView() {
   const [isCompiling, setIsCompiling] = useState(false)
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null)
   const [selectedBoard, setSelectedBoard] = useState('esp32-c6-devkitc-1')
+  const [showVibePostCompileSplash, setShowVibePostCompileSplash] = useState(false)
 
   // Flash state
   const [showFlashModal, setShowFlashModal] = useState(false)
@@ -550,6 +551,15 @@ export function FirmwareStageView() {
     setShowFlashModal(true)
   }
 
+  const handleContinueToExport = useCallback(async () => {
+    if (!project?.id) return
+    setShowVibePostCompileSplash(false)
+    const completed = await completeFirmwareStage()
+    if (completed) {
+      navigate(`/project/${project.id}/export`)
+    }
+  }, [completeFirmwareStage, navigate, project?.id])
+
   // Vibe mode: auto-generate, auto-compile, auto-fix compile failures, then advance.
   useVibeAutomation({
     enabled: isVibeMode && enclosureComplete && !!project?.id,
@@ -589,19 +599,7 @@ export function FirmwareStageView() {
       if (!result.success || signal.aborted) {
         return
       }
-
-      const stayOnFirmware = window.confirm(
-        "Return to this page and press 'flash to device' when you have the hardware.\n\nPress OK to stay here, or Cancel to continue to Export."
-      )
-
-      if (stayOnFirmware || signal.aborted) {
-        return
-      }
-
-      const completed = await completeFirmwareStage()
-      if (completed && !signal.aborted) {
-        navigate(`/project/${project.id}/export`)
-      }
+      setShowVibePostCompileSplash(true)
     },
     onError: (error) => {
       logger.firmware('Vibe firmware automation failed', { error })
@@ -691,6 +689,46 @@ export function FirmwareStageView() {
         selectedBoard={selectedBoard}
         onBoardChange={setSelectedBoard}
       />
+
+      {showVibePostCompileSplash && compileResult?.success && compileResult.firmware && (
+        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-xl border border-emerald-500/30 bg-surface-900 shadow-2xl p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-steel">Firmware compiled successfully</h3>
+            <p className="text-sm text-steel-dim">
+              You can flash this build now if your hardware is connected, or continue to the
+              manufacturing export page.
+            </p>
+            <p className="text-xs text-surface-400">
+              Return to this page and press{' '}
+              <span className="font-medium text-copper">Flash to device</span> when you have the
+              hardware.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                onClick={() => {
+                  setShowVibePostCompileSplash(false)
+                  handleFlashToDevice()
+                }}
+                className="px-3 py-2 rounded bg-copper/20 text-copper hover:bg-copper/30 transition-colors text-sm"
+              >
+                Flash To Device
+              </button>
+              <button
+                onClick={() => void handleContinueToExport()}
+                className="px-3 py-2 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+              >
+                Go To Export
+              </button>
+              <button
+                onClick={() => setShowVibePostCompileSplash(false)}
+                className="px-3 py-2 rounded bg-surface-700 text-steel-dim hover:text-steel hover:bg-surface-600 transition-colors text-sm"
+              >
+                Stay Here
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -70,6 +70,7 @@ export function PCBStageView() {
   const [isLoadingGerbers, setIsLoadingGerbers] = useState(false)
   const [configuredTapStates, setConfiguredTapStates] = useState<ResistorTapState[]>([])
   const [autoGenerateCountdown, setAutoGenerateCountdown] = useState<number | null>(null)
+  const [vibeCaptureStatus, setVibeCaptureStatus] = useState<string | null>(null)
   // Selected board for gerbers/3D view: null = main board, '__remote_type__' = cable-connected blocks
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null)
   const viewerRef = useRef<PCB3DViewerRef>(null)
@@ -531,10 +532,10 @@ export function PCBStageView() {
   )
 
   // Handle schematic and PCB merge - the critical integration!
-  const handleMergeSchematic = useCallback(async () => {
-    if (selectedBlocks.length === 0) return
-    if (!blocksData?.blocks) return
-    if (!project?.name) return
+  const handleMergeSchematic = useCallback(async (): Promise<boolean> => {
+    if (selectedBlocks.length === 0) return false
+    if (!blocksData?.blocks) return false
+    if (!project?.name) return false
 
     setIsMerging(true)
     setMergeError(null)
@@ -661,10 +662,12 @@ export function PCBStageView() {
       // Vibe mode defaults to 3D to highlight the generated board assembly.
       setViewMode('3d')
       setSelectedBoardId(null)
+      return true
     } catch (error) {
       logger.error('pcb', 'Merge failed', { error })
       setMergeError(error instanceof Error ? error.message : 'Failed to merge schematics')
       setCurrentStep('select_blocks')
+      return false
     } finally {
       setIsMerging(false)
     }
@@ -739,7 +742,12 @@ export function PCBStageView() {
         if (prev === null) return null
         if (prev <= 1) {
           clearInterval(interval)
-          void handleMergeSchematic()
+          void (async () => {
+            const merged = await handleMergeSchematic()
+            if (!merged) {
+              autoGenerateScheduledRef.current = false
+            }
+          })()
           return null
         }
         return prev - 1
@@ -769,10 +777,12 @@ export function PCBStageView() {
 
     void (async () => {
       try {
+        setVibeCaptureStatus('Opening 3D board preview...')
         setViewMode('3d')
         setSelectedBoardId(null)
-        await sleep(1500)
+        await sleep(1200)
 
+        setVibeCaptureStatus('Capturing main board screenshot...')
         const mainCapture = await viewerRef.current?.takeScreenshot()
         if (mainCapture) {
           await savePCBMutation.mutateAsync({
@@ -782,9 +792,11 @@ export function PCBStageView() {
         }
 
         if (remoteTypeBlocks.length > 0) {
+          setVibeCaptureStatus('Switching to remote board...')
           setSelectedBoardId(REMOTE_TYPE_BOARD_ID)
-          await sleep(1500)
+          await sleep(1200)
 
+          setVibeCaptureStatus('Capturing remote board screenshot...')
           const remoteCapture = await viewerRef.current?.takeScreenshot()
           if (remoteCapture) {
             await savePCBMutation.mutateAsync({
@@ -794,9 +806,13 @@ export function PCBStageView() {
           }
         }
 
+        setVibeCaptureStatus('Advancing to enclosure...')
         await completePCBStageAndAdvance()
       } catch (error) {
+        autoAdvanceStartedRef.current = false
         logger.error('pcb', 'Vibe automation failed while capturing 3D views', { error })
+      } finally {
+        setVibeCaptureStatus(null)
       }
     })()
   }, [
@@ -931,6 +947,12 @@ export function PCBStageView() {
           {autoGenerateCountdown !== null && (
             <div className="px-3 py-2 rounded border border-copper/30 bg-copper/10 text-copper text-sm">
               Vibe mode: auto-generating PCB artifacts in {autoGenerateCountdown}s...
+            </div>
+          )}
+          {vibeCaptureStatus && (
+            <div className="px-3 py-2 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-sm flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="animate-pulse">{vibeCaptureStatus}</span>
             </div>
           )}
 
