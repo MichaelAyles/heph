@@ -2,6 +2,7 @@ import type { Env } from '../../env'
 import { calculateCost } from './pricing'
 import { createLogger } from '../../lib/logger'
 import { convertToGeminiFormat } from '../../lib/gemini'
+import { getVertexAccessToken, getVertexUrl } from '../../lib/vertex-auth'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
 import type {
   PagesFunction,
@@ -67,7 +68,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'SELECT llm_provider, default_model, openrouter_api_key, gemini_api_key FROM system_settings WHERE id = 1'
     ).first()
 
-    const provider = (settings?.llm_provider as string) || 'openrouter'
+    const provider = env.GCP_SERVICE_ACCOUNT_JSON
+      ? 'vertex'
+      : (settings?.llm_provider as string) || 'openrouter'
     const defaultTextModel =
       env.TEXT_MODEL_SLUG || (settings?.default_model as string) || 'google/gemini-2.0-flash-001'
     const imageModelAliasTarget = env.IMAGE_MODEL_SLUG || defaultTextModel
@@ -81,11 +84,31 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 4096
 
-    let apiKey: string
     let response: Response
 
-    if (provider === 'openrouter') {
-      apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
+    if (provider === 'vertex') {
+      // Vertex AI (GCP)
+      const accessToken = await getVertexAccessToken(env.GCP_SERVICE_ACCOUNT_JSON!)
+      const projectId = env.GCP_PROJECT_ID || 'phaestus-app-api'
+      const region = env.GCP_REGION || 'europe-west2'
+      const contents = convertToGeminiFormat(messages)
+
+      response = await fetch(getVertexUrl(projectId, region, model, 'generateContent'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+          },
+        }),
+      })
+    } else if (provider === 'openrouter') {
+      const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
       if (!apiKey) {
         return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
       }
@@ -109,13 +132,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }),
       })
     } else {
-      // Gemini
-      apiKey = (settings?.gemini_api_key as string) || ''
+      // Gemini direct
+      const apiKey = (settings?.gemini_api_key as string) || ''
       if (!apiKey) {
         return Response.json({ error: 'Gemini API key not configured' }, { status: 500 })
       }
 
-      // Convert messages to Gemini format
       const contents = convertToGeminiFormat(messages)
 
       response = await fetch(
@@ -199,6 +221,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       // Use OpenRouter's actual cost if available (credits = USD)
       actualCostUsd = usageData?.total_cost
     } else {
+      // Gemini and Vertex AI use the same response format
       const candidates = result.candidates as Array<{
         content: { parts: Array<{ text: string }> }
       }>

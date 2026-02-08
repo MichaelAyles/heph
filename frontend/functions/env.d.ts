@@ -21,6 +21,11 @@ export interface Env {
   WORKOS_CLIENT_ID: string
   WORKOS_API_KEY: string
 
+  // Vertex AI (GCP)
+  GCP_SERVICE_ACCOUNT_JSON?: string
+  GCP_PROJECT_ID?: string
+  GCP_REGION?: string
+
   // KiCad microservice URL
   KICAD_SERVICE_URL?: string
 

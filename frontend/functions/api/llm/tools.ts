@@ -8,6 +8,7 @@
 import type { Env } from '../../env'
 import { calculateCost } from './pricing'
 import { createLogger } from '../../lib/logger'
+import { getVertexAccessToken, getVertexUrl } from '../../lib/vertex-auth'
 import { OPENROUTER_API_URL, APP_URL } from '../../lib/config'
 import type {
   PagesFunction,
@@ -344,7 +345,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'SELECT llm_provider, default_model, openrouter_api_key, gemini_api_key FROM system_settings WHERE id = 1'
     ).first()
 
-    const provider = (settings?.llm_provider as string) || 'openrouter'
+    const provider = env.GCP_SERVICE_ACCOUNT_JSON
+      ? 'vertex'
+      : (settings?.llm_provider as string) || 'openrouter'
     const model =
       body.model ||
       env.TEXT_MODEL_SLUG ||
@@ -353,11 +356,46 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const temperature = body.temperature ?? 0.7
     const maxTokens = body.maxTokens ?? 8192
 
-    let apiKey: string
     let response: Response
 
-    if (provider === 'openrouter') {
-      apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
+    if (provider === 'vertex') {
+      // Vertex AI with tool calling
+      const accessToken = await getVertexAccessToken(env.GCP_SERVICE_ACCOUNT_JSON!)
+      const projectId = env.GCP_PROJECT_ID || 'phaestus-app-api'
+      const region = env.GCP_REGION || 'europe-west2'
+      const contents = convertMessagesToGeminiFormat(messages)
+
+      const requestBody: Record<string, unknown> = {
+        contents,
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+        },
+      }
+
+      if (tools && tools.length > 0) {
+        requestBody.tools = [{ functionDeclarations: convertToolsToGeminiFormat(tools) }]
+      }
+
+      if (thinking?.type === 'enabled') {
+        requestBody.generationConfig = {
+          ...(requestBody.generationConfig as Record<string, unknown>),
+          thinkingConfig: {
+            thinkingBudget: thinking.budgetTokens || 10000,
+          },
+        }
+      }
+
+      response = await fetch(getVertexUrl(projectId, region, model, 'generateContent'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+    } else if (provider === 'openrouter') {
+      const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
       if (!apiKey) {
         return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
       }
@@ -386,7 +424,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       })
     } else {
       // Native Gemini API
-      apiKey = (settings?.gemini_api_key as string) || ''
+      const apiKey = (settings?.gemini_api_key as string) || ''
       if (!apiKey) {
         return Response.json({ error: 'Gemini API key not configured' }, { status: 500 })
       }
@@ -405,7 +443,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         requestBody.tools = [{ functionDeclarations: convertToolsToGeminiFormat(tools) }]
       }
 
-      // Enable thinking mode if requested (Gemini 2.0+)
       if (thinking?.type === 'enabled') {
         requestBody.generationConfig = {
           ...(requestBody.generationConfig as Record<string, unknown>),
