@@ -29,7 +29,7 @@ async function main() {
     const imageBuffer = new Uint8Array(await image.arrayBuffer())
     await fs.writeFile('graph.png', imageBuffer)
     console.log('PNG saved to: graph.png')
-  } catch (error) {
+  } catch {
     console.log('Note: PNG generation requires network access to mermaid.ink')
     console.log('You can paste the Mermaid code above into https://mermaid.live')
   }

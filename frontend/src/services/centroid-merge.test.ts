@@ -7,7 +7,6 @@ import {
   mergePanelizedCentroid,
   centroidToCSV,
   centroidToPos,
-  type CentroidEntry,
   type MergedCentroid,
 } from './centroid-merge'
 import type { PlacedBlock, RemoteBoard, PanelConfiguration } from '../db/schema'
@@ -125,9 +124,7 @@ describe('parsePositionFile', () => {
 
 describe('mergeMainBoardCentroid', () => {
   it('offsets components by grid position', () => {
-    const placedBlocks: PlacedBlock[] = [
-      { blockSlug: 'bme280', gridX: 1, gridY: 0, rotation: 0 },
-    ]
+    const placedBlocks: PlacedBlock[] = [{ blockSlug: 'bme280', gridX: 1, gridY: 0, rotation: 0 }]
     const positionFiles = new Map([['bme280', samplePositionFile]])
 
     const result = mergeMainBoardCentroid(placedBlocks, positionFiles)
@@ -140,9 +137,7 @@ describe('mergeMainBoardCentroid', () => {
   })
 
   it('applies vertical offset with overlap adjustment', () => {
-    const placedBlocks: PlacedBlock[] = [
-      { blockSlug: 'bme280', gridX: 0, gridY: 1, rotation: 0 },
-    ]
+    const placedBlocks: PlacedBlock[] = [{ blockSlug: 'bme280', gridX: 0, gridY: 1, rotation: 0 }]
     const positionFiles = new Map([['bme280', samplePositionFile]])
 
     const result = mergeMainBoardCentroid(placedBlocks, positionFiles)
@@ -182,9 +177,7 @@ describe('mergeMainBoardCentroid', () => {
   })
 
   it('calculates summary correctly', () => {
-    const placedBlocks: PlacedBlock[] = [
-      { blockSlug: 'bme280', gridX: 0, gridY: 0, rotation: 0 },
-    ]
+    const placedBlocks: PlacedBlock[] = [{ blockSlug: 'bme280', gridX: 0, gridY: 0, rotation: 0 }]
     const positionFiles = new Map([['bme280', samplePositionFile]])
 
     const result = mergeMainBoardCentroid(placedBlocks, positionFiles)
@@ -337,9 +330,7 @@ describe('mergePanelizedCentroid', () => {
   it('offsets remote boards by their panel positions', () => {
     const panelConfig: PanelConfiguration = {
       mainBoardPosition: { x: 5, y: 5 },
-      remoteBoards: [
-        { remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 },
-      ],
+      remoteBoards: [{ remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 }],
       vScoreLines: [],
       panelSize: { width: 100, height: 80 },
       panelMargin: 5,
@@ -360,9 +351,7 @@ describe('mergePanelizedCentroid', () => {
   it('duplicates entries for multiple copies', () => {
     const panelConfig: PanelConfiguration = {
       mainBoardPosition: { x: 5, y: 5 },
-      remoteBoards: [
-        { remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 3 },
-      ],
+      remoteBoards: [{ remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 3 }],
       vScoreLines: [],
       panelSize: { width: 200, height: 80 },
       panelMargin: 5,
@@ -387,9 +376,7 @@ describe('mergePanelizedCentroid', () => {
   it('calculates combined summary', () => {
     const panelConfig: PanelConfiguration = {
       mainBoardPosition: { x: 5, y: 5 },
-      remoteBoards: [
-        { remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 },
-      ],
+      remoteBoards: [{ remoteBoardId: 'rb1', position: { x: 60, y: 5 }, copies: 1 }],
       vScoreLines: [],
       panelSize: { width: 100, height: 80 },
       panelMargin: 5,

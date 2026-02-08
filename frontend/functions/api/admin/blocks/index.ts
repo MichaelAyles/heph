@@ -96,8 +96,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const requirements = getBlockFileRequirements(row.slug)
 
       // Calculate BOM status from definition
-      let bomStatus = { uniquePartTypes: 0, withLcsc: 0 }
-      let parsedDefinition: { components?: Array<{ value: string; footprint: string; lcscPartNumber?: string; nofit?: boolean }> } | null = null
+      const bomStatus = { uniquePartTypes: 0, withLcsc: 0 }
+      let parsedDefinition: {
+        components?: Array<{
+          value: string
+          footprint: string
+          lcscPartNumber?: string
+          nofit?: boolean
+        }>
+      } | null = null
 
       if (row.definition) {
         try {
@@ -113,7 +120,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
               }
             }
             bomStatus.uniquePartTypes = uniqueParts.size
-            bomStatus.withLcsc = Array.from(uniqueParts.values()).filter(p => p.hasLcsc).length
+            bomStatus.withLcsc = Array.from(uniqueParts.values()).filter((p) => p.hasLcsc).length
           }
         } catch {
           // Ignore parse errors
@@ -216,11 +223,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       : definition.bus?.power?.provides?.[0]
         ? { current_max_ma: -definition.bus.power.provides[0].maxMa }
         : { current_max_ma: 0 }
-    const components = definition.components?.map((c) => ({
-      ref: c.reference,
-      value: c.value,
-      package: c.footprint,
-    })) ?? []
+    const components =
+      definition.components?.map((c) => ({
+        ref: c.reference,
+        value: c.value,
+        package: c.footprint,
+      })) ?? []
 
     // For remote blocks, gridSize is undefined - default to 0x0
     const widthUnits = definition.gridSize?.[0] ?? 0
