@@ -281,6 +281,7 @@ export function SpecStageView() {
             <RefinementStep
               project={project}
               spec={spec}
+              autoProceed={controlMode === 'vibe_it'}
               onDecisions={handleDecisions}
               onComplete={handleRefinementComplete}
               onCancel={() => navigate('/projects')}

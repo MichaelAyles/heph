@@ -11,9 +11,13 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import JSZip from 'jszip'
+import { useNavigate } from 'react-router-dom'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { logger } from '@/lib/logger'
 import { invokeLangGraphNode, BreakpointCancelledError } from '@/services/langgraph/invoke'
+import { useAuthStore } from '@/stores/auth'
+import { runOrchestratorNode } from '@/services/langgraph/orchestrator-runner'
+import { useVibeAutomation } from '@/hooks/useVibeAutomation'
 import type { FirmwareProject } from '@/prompts/firmware'
 import {
   BuildPanel,
@@ -70,7 +74,11 @@ interface FirmwareModifyResponse {
 
 export function FirmwareStageView() {
   const { project } = useWorkspaceContext()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
+  const controlMode = user?.controlMode || 'fix_it'
+  const isVibeMode = controlMode === 'vibe_it'
 
   // File tree state
   const [fileTree, setFileTree] = useState<FileNode[]>(STARTER_TEMPLATE)
@@ -105,6 +113,25 @@ export function FirmwareStageView() {
 
   const spec = project?.spec
   const enclosureComplete = spec?.stages?.enclosure?.status === 'complete'
+
+  const invokeFirmwareNode = useCallback(
+    async (nodeName: string, input: Record<string, unknown>) => {
+      if (isVibeMode) {
+        return runOrchestratorNode({
+          nodeName,
+          input,
+          projectId: project?.id,
+        })
+      }
+
+      return invokeLangGraphNode({
+        nodeName,
+        input,
+        projectId: project?.id,
+      })
+    },
+    [isVibeMode, project?.id]
+  )
 
   // Load saved firmware from project spec
   useEffect(() => {
@@ -191,6 +218,33 @@ export function FirmwareStageView() {
     },
   })
 
+  const completeFirmwareStage = useCallback(async () => {
+    if (!project?.id || !project.spec) return false
+
+    const res = await fetch(`/api/projects/${project.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spec: {
+          ...project.spec,
+          stages: {
+            ...project.spec.stages,
+            firmware: {
+              status: 'complete',
+              completedAt: new Date().toISOString(),
+            },
+          },
+        },
+      }),
+    })
+
+    if (!res.ok) return false
+
+    queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+    queryClient.invalidateQueries({ queryKey: ['projects'] })
+    return true
+  }, [project?.id, project?.spec, queryClient])
+
   const handleSelectFile = useCallback(
     async (node: FileNode) => {
       // Save current file first if dirty
@@ -244,11 +298,7 @@ export function FirmwareStageView() {
     try {
       // Empty input - all context from @variables
       // Uses @projectName, @description, @finalSpec, @pcb.placedBlocks, @pcb.netList in system prompt
-      const genData = await invokeLangGraphNode({
-        nodeName: 'firmware_generate',
-        input: {},
-        projectId: project.id,
-      })
+      const genData = await invokeFirmwareNode('firmware_generate', {})
 
       const result = genData.output as FirmwareGenerateResponse['output']
 
@@ -282,14 +332,10 @@ export function FirmwareStageView() {
     }
   }
 
-  // Modify firmware using LangGraph firmware_modify node
-  const handleModify = async () => {
-    if (!project || !chatInput.trim()) return
+  const applyFirmwareModification = useCallback(
+    async (request: string): Promise<boolean> => {
+      if (!project || !request.trim()) return false
 
-    setIsModifying(true)
-    setGenerationError(null)
-
-    try {
       const currentFiles: FirmwareProject['files'] = flattenFiles(fileTree).map((f) => ({
         path: f.path,
         content: f.content,
@@ -302,17 +348,12 @@ export function FirmwareStageView() {
 
       // Only runtime inputs - files and modification request
       // Project context accessed via @finalSpec, @pcb.netList in system prompt
-      const modifyData = await invokeLangGraphNode({
-        nodeName: 'firmware_modify',
-        input: {
-          currentFiles,
-          request: chatInput,
-        },
-        projectId: project.id,
+      const modifyData = await invokeFirmwareNode('firmware_modify', {
+        currentFiles,
+        request,
       })
 
       const result = modifyData.output as FirmwareModifyResponse['output']
-
       if (!result.files || result.files.length === 0) {
         throw new Error('No files in response')
       }
@@ -347,9 +388,24 @@ export function FirmwareStageView() {
       }))
       await saveMutation.mutateAsync(allFiles)
       setIsDirty(false)
+      return true
+    },
+    [fileTree, invokeFirmwareNode, project, saveMutation, selectedFile]
+  )
 
-      setChatInput('')
-      setShowChat(false)
+  // Modify firmware using LangGraph firmware_modify node
+  const handleModify = async () => {
+    if (!project || !chatInput.trim()) return
+
+    setIsModifying(true)
+    setGenerationError(null)
+
+    try {
+      const modified = await applyFirmwareModification(chatInput)
+      if (modified) {
+        setChatInput('')
+        setShowChat(false)
+      }
     } catch (error) {
       logger.firmware('Firmware modification failed', { error })
       setGenerationError(error instanceof Error ? error.message : 'Modification failed')
@@ -404,40 +460,44 @@ export function FirmwareStageView() {
     // For now, just acknowledge the upload
   }
 
+  const runCompile = useCallback(async (): Promise<CompileResult> => {
+    // Gather all files from the file tree
+    const files = flattenFiles(fileTree).map((f) => ({
+      path: f.path,
+      content: f.content,
+    }))
+
+    // Include current editor content if it has unsaved changes
+    if (selectedFile && editorContent !== selectedFile.content) {
+      const existingIndex = files.findIndex((f) => f.path === selectedFile.path)
+      if (existingIndex >= 0) {
+        files[existingIndex].content = editorContent
+      }
+    }
+
+    logger.firmware('Starting compilation', { board: selectedBoard, fileCount: files.length })
+
+    const response = await fetch('/api/firmware/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        files,
+        board: selectedBoard,
+        framework: 'arduino',
+      }),
+    })
+
+    return (await response.json()) as CompileResult
+  }, [editorContent, fileTree, selectedBoard, selectedFile])
+
   // Compile firmware via PlatformIO service
-  const handleCompile = async () => {
+  const handleCompile = useCallback(async (): Promise<CompileResult> => {
     setIsCompiling(true)
     setCompileResult(null)
     setGenerationError(null)
 
     try {
-      // Gather all files from the file tree
-      const files = flattenFiles(fileTree).map((f) => ({
-        path: f.path,
-        content: f.content,
-      }))
-
-      // Include current editor content if it has unsaved changes
-      if (selectedFile && editorContent !== selectedFile.content) {
-        const existingIndex = files.findIndex((f) => f.path === selectedFile.path)
-        if (existingIndex >= 0) {
-          files[existingIndex].content = editorContent
-        }
-      }
-
-      logger.firmware('Starting compilation', { board: selectedBoard, fileCount: files.length })
-
-      const response = await fetch('/api/firmware/compile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          files,
-          board: selectedBoard,
-          framework: 'arduino',
-        }),
-      })
-
-      const result = (await response.json()) as CompileResult
+      const result = await runCompile()
       setCompileResult(result)
 
       if (result.success && result.firmware) {
@@ -448,17 +508,21 @@ export function FirmwareStageView() {
       } else {
         logger.firmware('Compilation failed', { error: result.error })
       }
+
+      return result
     } catch (error) {
       logger.firmware('Compile request failed', { error })
-      setCompileResult({
+      const failedResult: CompileResult = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to connect to compile service',
         buildOutput: '',
-      })
+      }
+      setCompileResult(failedResult)
+      return failedResult
     } finally {
       setIsCompiling(false)
     }
-  }
+  }, [runCompile])
 
   // Download compiled binary
   const handleDownloadBinary = () => {
@@ -486,6 +550,64 @@ export function FirmwareStageView() {
     setShowFlashModal(true)
   }
 
+  // Vibe mode: auto-generate, auto-compile, auto-fix compile failures, then advance.
+  useVibeAutomation({
+    enabled: isVibeMode && enclosureComplete && !!project?.id,
+    key: `firmware:${project?.id}`,
+    run: async (signal) => {
+      if (!project?.id) return
+
+      const hasGeneratedFirmware = (project.spec?.firmware?.files?.length || 0) > 0
+      if (!hasGeneratedFirmware) {
+        await handleGenerate()
+        if (signal.aborted) return
+      }
+
+      let result = await handleCompile()
+      let attempts = 0
+
+      while (!result.success && attempts < 3 && !signal.aborted) {
+        attempts++
+        const compileErrorContext = [
+          'Fix all compilation errors in the firmware.',
+          `Attempt: ${attempts}`,
+          `Compiler error: ${result.error || 'Unknown error'}`,
+          `Build output:\n${result.buildOutput || 'No build output available'}`,
+        ].join('\n\n')
+
+        setIsModifying(true)
+        try {
+          const modified = await applyFirmwareModification(compileErrorContext)
+          if (!modified) break
+        } finally {
+          setIsModifying(false)
+        }
+
+        result = await handleCompile()
+      }
+
+      if (!result.success || signal.aborted) {
+        return
+      }
+
+      const stayOnFirmware = window.confirm(
+        "Return to this page and press 'flash to device' when you have the hardware.\n\nPress OK to stay here, or Cancel to continue to Export."
+      )
+
+      if (stayOnFirmware || signal.aborted) {
+        return
+      }
+
+      const completed = await completeFirmwareStage()
+      if (completed && !signal.aborted) {
+        navigate(`/project/${project.id}/export`)
+      }
+    },
+    onError: (error) => {
+      logger.firmware('Vibe firmware automation failed', { error })
+    },
+  })
+
   if (!enclosureComplete) {
     return <NotReadyState />
   }
@@ -510,6 +632,9 @@ export function FirmwareStageView() {
         onComplete={() => {
           queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
           queryClient.invalidateQueries({ queryKey: ['projects'] })
+          if (isVibeMode && project?.id) {
+            navigate(`/project/${project.id}/export`)
+          }
         }}
       />
 

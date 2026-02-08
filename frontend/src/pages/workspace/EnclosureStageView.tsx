@@ -13,10 +13,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { ArrowRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useWorkspaceContext } from '@/components/workspace/WorkspaceLayout'
 import { useAuthStore } from '@/stores/auth'
 import { logger } from '@/lib/logger'
 import { invokeLangGraphNode, BreakpointCancelledError } from '@/services/langgraph/invoke'
+import { runOrchestratorNode } from '@/services/langgraph/orchestrator-runner'
 import { StageCompleteButton } from '@/components/workspace/StageCompleteButton'
 import {
   renderOpenSCAD,
@@ -108,9 +110,11 @@ interface EnclosureVisualCompareResponse {
 
 export function EnclosureStageView() {
   const { project } = useWorkspaceContext()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const controlMode = user?.controlMode || 'fix_it'
+  const isVibeMode = controlMode === 'vibe_it'
   const isDebugMode = controlMode === 'debug_it'
 
   // UI state
@@ -142,12 +146,33 @@ export function EnclosureStageView() {
 
   // STL Viewer ref for screenshots
   const stlViewerRef = useRef<STLViewerRef>(null)
+  const autoGenerateStartedRef = useRef(false)
+  const autoFinalizeStartedRef = useRef(false)
 
   const spec = project?.spec
   const pcbComplete = spec?.stages?.pcb?.status === 'complete'
   const pcbArtifacts = spec?.pcb
   const finalSpec = spec?.finalSpec
   const existingEnclosure = spec?.enclosure
+
+  const invokeEnclosureNode = useCallback(
+    async (nodeName: string, input: Record<string, unknown>) => {
+      if (isVibeMode) {
+        return runOrchestratorNode({
+          nodeName,
+          input,
+          projectId: project?.id,
+        })
+      }
+
+      return invokeLangGraphNode({
+        nodeName,
+        input,
+        projectId: project?.id,
+      })
+    },
+    [isVibeMode, project?.id]
+  )
 
   // Preload OpenSCAD WASM when entering this stage
   useEffect(() => {
@@ -251,22 +276,45 @@ export function EnclosureStageView() {
     },
   })
 
+  const completeEnclosureStageAndAdvance = useCallback(async () => {
+    if (!project?.id || !spec) return
+
+    const res = await fetch(`/api/projects/${project.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spec: {
+          ...spec,
+          stages: {
+            ...spec.stages,
+            enclosure: {
+              status: 'complete',
+              completedAt: new Date().toISOString(),
+            },
+          },
+        },
+      }),
+    })
+
+    if (res.ok) {
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      navigate(`/project/${project.id}/firmware`)
+    }
+  }, [navigate, project?.id, queryClient, spec])
+
   // Validate OpenSCAD code and return issues using LangGraph node
   const validateCode = useCallback(
     async (code: string): Promise<ValidationIssue[]> => {
       // Only runtime input - code being validated
       // PCB dimensions and features are now accessed via @pcb.boardSize and @finalSpec in system prompt
-      const data = await invokeLangGraphNode({
-        nodeName: 'enclosure_validation',
-        input: {
-          openScadCode: code,
-        },
-        projectId: project?.id,
+      const data = await invokeEnclosureNode('enclosure_validation', {
+        openScadCode: code,
       })
 
       return (data.output as EnclosureValidationResponse['output']).issues
     },
-    [project?.id]
+    [invokeEnclosureNode]
   )
 
   // Fix code based on validation issues using LangGraph node
@@ -274,18 +322,14 @@ export function EnclosureStageView() {
     async (code: string, issues: ValidationIssue[]): Promise<string> => {
       // Runtime inputs only - code and issues
       // PCB dimensions are now accessed via @pcb.boardSize in system prompt
-      const data = await invokeLangGraphNode({
-        nodeName: 'enclosure_fix',
-        input: {
-          openScadCode: code,
-          issues,
-        },
-        projectId: project?.id,
+      const data = await invokeEnclosureNode('enclosure_fix', {
+        openScadCode: code,
+        issues,
       })
 
       return (data.output as EnclosureFixResponse['output']).fixedCode
     },
-    [project?.id]
+    [invokeEnclosureNode]
   )
 
   // Generate OpenSCAD code using LangGraph nodes with validation loop
@@ -319,11 +363,7 @@ export function EnclosureStageView() {
 
         // Empty input - blueprint image comes from @image:visualization.selected
         // PCB dimensions and features are accessed via @pcb.boardSize and @finalSpec in system prompt
-        const visionData = await invokeLangGraphNode({
-          nodeName: 'enclosure_vision',
-          input: {},
-          projectId: project.id,
-        })
+        const visionData = await invokeEnclosureNode('enclosure_vision', {})
 
         code = (visionData.output as EnclosureVisionResponse['output']).openScadCode
       } else {
@@ -332,11 +372,7 @@ export function EnclosureStageView() {
 
         // Empty input - all context from @variables
         // Uses @projectName, @description, @pcb.boardSize, @finalSpec in system prompt
-        const textData = await invokeLangGraphNode({
-          nodeName: 'enclosure_text',
-          input: {},
-          projectId: project.id,
-        })
+        const textData = await invokeEnclosureNode('enclosure_text', {})
 
         code = (textData.output as EnclosureTextResponse['output']).openScadCode
       }
@@ -420,106 +456,107 @@ export function EnclosureStageView() {
         setIsGenerating(false)
       }
     }
-  }, [project, spec, pcbArtifacts, finalSpec, isDebugMode, saveEnclosureMutation, validateCode, fixCode])
-
-  // Regenerate with feedback using LangGraph node (includes validation loop)
-  const handleRegenerate = useCallback(async () => {
-    if (!project || !pcbArtifacts || !feedback.trim()) return
-
-    // Cancel any in-flight operation
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    abortControllerRef.current = new AbortController()
-    const signal = abortControllerRef.current.signal
-
-    setIsGenerating(true)
-    setRenderError(null)
-    setValidationStatus(null)
-    setValidationIssues([])
-    setValidationIteration(0)
-
-    try {
-      // Step 1: Regenerate with feedback using enclosure_regenerate node
-      setValidationStatus('Regenerating with feedback...')
-
-      // Only runtime inputs - current code and feedback
-      // Project context accessed via @projectName, @description, @pcb.boardSize, @finalSpec in system prompt
-      const regenData = await invokeLangGraphNode({
-        nodeName: 'enclosure_regenerate',
-        input: {
-          currentCode: openScadCode,
-          feedback,
-        },
-        projectId: project.id,
-      })
-
-      let code = (regenData.output as EnclosureRegenerateResponse['output']).openScadCode
-
-      // Step 2: Validation loop
-      for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
-        setValidationIteration(iteration)
-        setValidationStatus(
-          `Validating regenerated design (iteration ${iteration}/${MAX_VALIDATION_ITERATIONS})...`
-        )
-
-        const issues = await validateCode(code)
-        const criticalIssues = issues.filter((i) => i.severity === 'critical')
-        const warningIssues = issues.filter((i) => i.severity === 'warning')
-
-        setValidationIssues(issues)
-
-        // If no critical issues, we're done
-        if (criticalIssues.length === 0) {
-          if (warningIssues.length > 0 && iteration < MAX_VALIDATION_ITERATIONS) {
-            setValidationStatus(`Fixing ${warningIssues.length} warnings...`)
-            code = await fixCode(code, warningIssues)
-          }
-          break
-        }
-
-        // Fix critical issues
-        setValidationStatus(`Fixing ${criticalIssues.length} critical issues...`)
-        code = await fixCode(code, criticalIssues)
-      }
-
-      // Check if aborted before updating state
-      if (signal.aborted) return
-
-      setValidationStatus('Regeneration complete!')
-      setOpenScadCode(code)
-      setFeedback('')
-      await saveEnclosureMutation.mutateAsync({ openScadCode: code, feedback })
-
-      // Clear status after a moment (with cleanup)
-      const timeoutId = setTimeout(() => setValidationStatus(null), 3000)
-      signal.addEventListener('abort', () => clearTimeout(timeoutId))
-    } catch (error) {
-      // Don't show error if operation was aborted
-      if (signal.aborted) return
-
-      if (error instanceof BreakpointCancelledError) {
-        setRenderError('Regeneration cancelled at debug breakpoint')
-      } else {
-        logger.enclosure('Failed to regenerate enclosure', { error })
-        setRenderError(error instanceof Error ? error.message : 'Failed to regenerate')
-      }
-    } finally {
-      if (!signal.aborted) {
-        setIsGenerating(false)
-      }
-    }
   }, [
     project,
     spec,
     pcbArtifacts,
     finalSpec,
-    openScadCode,
-    feedback,
+    isDebugMode,
     saveEnclosureMutation,
     validateCode,
     fixCode,
   ])
+
+  // Regenerate with feedback using LangGraph node (includes validation loop)
+  const handleRegenerate = useCallback(
+    async (overrideFeedback?: string) => {
+      const feedbackToUse = (overrideFeedback ?? feedback).trim()
+      if (!project || !pcbArtifacts || !feedbackToUse) return false
+
+      // Cancel any in-flight operation
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+      abortControllerRef.current = new AbortController()
+      const signal = abortControllerRef.current.signal
+
+      setIsGenerating(true)
+      setRenderError(null)
+      setValidationStatus(null)
+      setValidationIssues([])
+      setValidationIteration(0)
+
+      try {
+        // Step 1: Regenerate with feedback using enclosure_regenerate node
+        setValidationStatus('Regenerating with feedback...')
+
+        // Only runtime inputs - current code and feedback
+        // Project context accessed via @projectName, @description, @pcb.boardSize, @finalSpec in system prompt
+        const regenData = await invokeEnclosureNode('enclosure_regenerate', {
+          currentCode: openScadCode,
+          feedback: feedbackToUse,
+        })
+
+        let code = (regenData.output as EnclosureRegenerateResponse['output']).openScadCode
+
+        // Step 2: Validation loop
+        for (let iteration = 1; iteration <= MAX_VALIDATION_ITERATIONS; iteration++) {
+          setValidationIteration(iteration)
+          setValidationStatus(
+            `Validating regenerated design (iteration ${iteration}/${MAX_VALIDATION_ITERATIONS})...`
+          )
+
+          const issues = await validateCode(code)
+          const criticalIssues = issues.filter((i) => i.severity === 'critical')
+          const warningIssues = issues.filter((i) => i.severity === 'warning')
+
+          setValidationIssues(issues)
+
+          // If no critical issues, we're done
+          if (criticalIssues.length === 0) {
+            if (warningIssues.length > 0 && iteration < MAX_VALIDATION_ITERATIONS) {
+              setValidationStatus(`Fixing ${warningIssues.length} warnings...`)
+              code = await fixCode(code, warningIssues)
+            }
+            break
+          }
+
+          // Fix critical issues
+          setValidationStatus(`Fixing ${criticalIssues.length} critical issues...`)
+          code = await fixCode(code, criticalIssues)
+        }
+
+        // Check if aborted before updating state
+        if (signal.aborted) return false
+
+        setValidationStatus('Regeneration complete!')
+        setOpenScadCode(code)
+        setFeedback('')
+        await saveEnclosureMutation.mutateAsync({ openScadCode: code, feedback: feedbackToUse })
+
+        // Clear status after a moment (with cleanup)
+        const timeoutId = setTimeout(() => setValidationStatus(null), 3000)
+        signal.addEventListener('abort', () => clearTimeout(timeoutId))
+        return true
+      } catch (error) {
+        // Don't show error if operation was aborted
+        if (signal.aborted) return false
+
+        if (error instanceof BreakpointCancelledError) {
+          setRenderError('Regeneration cancelled at debug breakpoint')
+        } else {
+          logger.enclosure('Failed to regenerate enclosure', { error })
+          setRenderError(error instanceof Error ? error.message : 'Failed to regenerate')
+        }
+        return false
+      } finally {
+        if (!signal.aborted) {
+          setIsGenerating(false)
+        }
+      }
+    },
+    [project, pcbArtifacts, openScadCode, feedback, saveEnclosureMutation, validateCode, fixCode]
+  )
 
   // Run a single validation + fix iteration (debug mode)
   const handleRunValidation = useCallback(async () => {
@@ -648,8 +685,8 @@ export function EnclosureStageView() {
   }, [])
 
   // Render OpenSCAD to STL
-  const handleRender = useCallback(async () => {
-    if (!openScadCode) return
+  const handleRender = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!openScadCode) return { success: false, error: 'No OpenSCAD code to render' }
 
     setIsRendering(true)
     setRenderError(null)
@@ -673,9 +710,12 @@ export function EnclosureStageView() {
       const blobUrl = createSTLBlobUrl(result.stl)
       setStlBlobUrl(blobUrl)
       setCurrentStep('preview')
+      return { success: true }
     } catch (error) {
       logger.enclosure('Failed to render STL', { error })
-      setRenderError(error instanceof Error ? error.message : 'Failed to render STL')
+      const message = error instanceof Error ? error.message : 'Failed to render STL'
+      setRenderError(message)
+      return { success: false, error: message }
     } finally {
       setIsRendering(false)
     }
@@ -713,6 +753,52 @@ export function EnclosureStageView() {
   // Blueprint info
   const blueprintIndex = spec?.selectedBlueprint ?? 0
   const blueprintUrl = spec?.blueprints?.[blueprintIndex]?.url
+
+  // Vibe mode: auto-start enclosure generation.
+  useEffect(() => {
+    if (!isVibeMode || !pcbComplete) return
+    if (autoGenerateStartedRef.current) return
+    if (currentStep !== 'generate' || isGenerating || !!openScadCode) return
+
+    autoGenerateStartedRef.current = true
+    void handleGenerate()
+  }, [currentStep, handleGenerate, isGenerating, isVibeMode, openScadCode, pcbComplete])
+
+  // Vibe mode: auto-render, auto-regenerate on render errors, then complete and advance.
+  useEffect(() => {
+    if (!isVibeMode || !project?.id) return
+    if (autoFinalizeStartedRef.current) return
+    if (currentStep !== 'edit' || !openScadCode || isGenerating || isRendering) return
+
+    autoFinalizeStartedRef.current = true
+    void (async () => {
+      let attempts = 0
+      while (attempts < 5) {
+        attempts++
+        const renderResult = await handleRender()
+        if (renderResult.success) {
+          await completeEnclosureStageAndAdvance()
+          return
+        }
+
+        const regenFeedback = `OpenSCAD render failed with error: ${renderResult.error || 'Unknown error'}. Regenerate enclosure code to resolve this exact rendering issue while preserving the original design intent.`
+        const regenerated = await handleRegenerate(regenFeedback)
+        if (!regenerated) break
+      }
+
+      autoFinalizeStartedRef.current = false
+    })()
+  }, [
+    completeEnclosureStageAndAdvance,
+    currentStep,
+    handleRegenerate,
+    handleRender,
+    isGenerating,
+    isRendering,
+    isVibeMode,
+    openScadCode,
+    project?.id,
+  ])
 
   if (!pcbComplete) {
     return <NotReadyState />
@@ -762,6 +848,9 @@ export function EnclosureStageView() {
               onComplete={() => {
                 queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
                 queryClient.invalidateQueries({ queryKey: ['projects'] })
+                if (isVibeMode && project?.id) {
+                  navigate(`/project/${project.id}/firmware`)
+                }
               }}
             />
           </div>
