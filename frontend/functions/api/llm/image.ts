@@ -103,7 +103,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }),
       })
     } else {
-      const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
+      const apiKey = env.OPENROUTER_API_KEY || ''
       if (!apiKey) {
         return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
       }

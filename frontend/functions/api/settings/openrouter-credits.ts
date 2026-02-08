@@ -30,12 +30,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  // Get OpenRouter API key from settings or env
-  const settings = await env.DB.prepare(
-    'SELECT openrouter_api_key FROM system_settings WHERE id = 1'
-  ).first()
-
-  const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
+  // OpenRouter key is sourced from environment secrets.
+  const apiKey = env.OPENROUTER_API_KEY || ''
 
   if (!apiKey) {
     return Response.json(

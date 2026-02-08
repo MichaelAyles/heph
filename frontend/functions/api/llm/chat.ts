@@ -139,7 +139,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }),
       })
     } else if (provider === 'openrouter') {
-      const apiKey = (settings?.openrouter_api_key as string) || env.OPENROUTER_API_KEY || ''
+      const apiKey = env.OPENROUTER_API_KEY || ''
       if (!apiKey) {
         return Response.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
       }
@@ -163,28 +163,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         }),
       })
     } else {
-      // Gemini direct
-      const apiKey = (settings?.gemini_api_key as string) || ''
-      if (!apiKey) {
-        return Response.json({ error: 'Gemini API key not configured' }, { status: 500 })
-      }
-
-      const contents = convertToGeminiFormat(messages)
-
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents,
-            generationConfig: {
-              temperature,
-              maxOutputTokens: maxTokens,
-            },
-          }),
-        }
-      )
+      return Response.json({ error: 'Unsupported LLM provider' }, { status: 500 })
     }
 
     if (!response.ok) {
