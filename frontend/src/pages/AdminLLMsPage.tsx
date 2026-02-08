@@ -275,7 +275,7 @@ export function AdminLLMsPage() {
   const settings = data?.settings
 
   return (
-    <div className="min-h-screen bg-ash">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-ash">
       {/* Header */}
       <header className="h-14 flex items-center justify-between px-8 border-b border-surface-700">
         <div className="flex items-center gap-4">
@@ -316,7 +316,7 @@ export function AdminLLMsPage() {
       </header>
 
       {/* Content */}
-      <div className="p-8 overflow-auto">
+      <div className="flex-1 p-8 overflow-auto">
         <div className="max-w-2xl space-y-8">
           {/* Server Configuration Status */}
           <section className="p-4 bg-surface-800 border border-surface-700">
