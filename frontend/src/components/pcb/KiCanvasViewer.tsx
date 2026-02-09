@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, AlertCircle, Maximize2, Minimize2 } from 'lucide-react'
+import { AlertCircle, Maximize2, Minimize2 } from 'lucide-react'
 import { clsx } from 'clsx'
 
 interface KiCanvasViewerProps {
@@ -66,8 +66,6 @@ export function KiCanvasViewer({
 }: KiCanvasViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const embedRef = useRef<HTMLElement | null>(null)
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -75,7 +73,6 @@ export function KiCanvasViewer({
   useEffect(() => {
     if (!src && !content) {
       setError('No source or content provided')
-      setLoading(false)
       return
     }
 
@@ -83,7 +80,6 @@ export function KiCanvasViewer({
 
     async function init() {
       try {
-        setLoading(true)
         setError(null)
 
         // Load KiCanvas script
@@ -124,43 +120,23 @@ export function KiCanvasViewer({
         // Listen for load/error events
         embed.addEventListener('load', () => {
           if (mounted) {
-            // Clear the fallback timeout since we loaded successfully
-            if (loadingTimeoutRef.current) {
-              clearTimeout(loadingTimeoutRef.current)
-              loadingTimeoutRef.current = null
-            }
-            setLoading(false)
             onLoad?.()
           }
         })
 
         embed.addEventListener('error', (e: Event) => {
           if (mounted) {
-            // Clear the fallback timeout since we got an error
-            if (loadingTimeoutRef.current) {
-              clearTimeout(loadingTimeoutRef.current)
-              loadingTimeoutRef.current = null
-            }
             const msg = (e as CustomEvent).detail?.message || 'Failed to load document'
             setError(msg)
-            setLoading(false)
             onError?.(msg)
           }
         })
 
         containerRef.current.appendChild(embed)
-
-        // Set a fallback timeout for loading - clear loading state if no event fires
-        loadingTimeoutRef.current = setTimeout(() => {
-          if (mounted) {
-            setLoading(false)
-          }
-        }, 5000)
       } catch (err) {
         if (mounted) {
           const msg = err instanceof Error ? err.message : 'Failed to initialize viewer'
           setError(msg)
-          setLoading(false)
           onError?.(msg)
         }
       }
@@ -170,11 +146,6 @@ export function KiCanvasViewer({
 
     return () => {
       mounted = false
-      // Clear the loading timeout
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current)
-        loadingTimeoutRef.current = null
-      }
       // Clean up embed on unmount
       if (embedRef.current && embedRef.current.parentNode) {
         embedRef.current.parentNode.removeChild(embedRef.current)
@@ -215,16 +186,6 @@ export function KiCanvasViewer({
         className
       )}
     >
-      {/* Loading overlay */}
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-surface-900/80 z-10">
-          <div className="text-center">
-            <Loader2 className="w-8 h-8 text-copper animate-spin mx-auto mb-2" strokeWidth={1.5} />
-            <p className="text-sm text-steel-dim">Loading {type}...</p>
-          </div>
-        </div>
-      )}
-
       {/* Error state */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface-900/80 z-10">
