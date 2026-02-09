@@ -23,6 +23,11 @@ interface RenderResult {
   logs: string[]
   success: boolean
   error?: string
+  backendUsed?: 'manifold' | 'cgal'
+}
+
+interface RenderOptions {
+  forceBackend?: 'manifold' | 'cgal'
 }
 
 // Lazy-loaded module reference
@@ -37,6 +42,17 @@ const SUPPRESSED_WARNINGS = [
   'WARNING:',
   'DEPRECATED:',
 ]
+
+function chooseBackendOrder(
+  code: string,
+  forceBackend?: 'manifold' | 'cgal'
+): Array<'manifold' | 'cgal'> {
+  if (forceBackend === 'manifold') return ['manifold']
+  if (forceBackend === 'cgal') return ['cgal']
+  void code
+  // Robust default: try CGAL first, then Manifold as fallback.
+  return ['cgal', 'manifold']
+}
 
 /**
  * Load the OpenSCAD WASM module from public folder
@@ -123,7 +139,10 @@ async function loadOpenSCAD(): Promise<OpenSCADModule> {
  * Render OpenSCAD code to STL
  * Uses Manifold backend for dramatically faster rendering (~100x faster than CGAL)
  */
-export async function renderOpenSCAD(code: string): Promise<RenderResult> {
+export async function renderOpenSCAD(
+  code: string,
+  options: RenderOptions = {}
+): Promise<RenderResult> {
   const logs: string[] = []
 
   // Suppress known WASM warnings during rendering
@@ -156,25 +175,54 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
     // Write the OpenSCAD code to a virtual file
     module.FS.writeFile('/input.scad', code)
 
-    // Run OpenSCAD with Manifold backend for much faster rendering
-    // --backend=manifold uses the Manifold geometry kernel instead of CGAL
-    // --export-format=binstl for binary STL (smaller, faster)
-    const exitCode = module.callMain([
-      '/input.scad',
-      '-o',
-      '/output.stl',
-      '--backend=manifold',
-      '--export-format=binstl',
-    ])
+    const backends = chooseBackendOrder(code, options.forceBackend)
+    let stl: Uint8Array | null = null
+    let backendUsed: 'manifold' | 'cgal' | undefined
+    const errors: string[] = []
 
-    if (exitCode !== 0) {
-      throw new Error(`OpenSCAD exited with code ${exitCode}`)
+    for (const backend of backends) {
+      try {
+        try {
+          module.FS.unlink('/output.stl')
+        } catch {
+          // File may not exist from prior attempt
+        }
+
+        const exitCode = module.callMain([
+          '/input.scad',
+          '-o',
+          '/output.stl',
+          `--backend=${backend}`,
+          '--export-format=binstl',
+        ])
+
+        if (exitCode !== 0) {
+          errors.push(`${backend}: OpenSCAD exited with code ${exitCode}`)
+          continue
+        }
+
+        const stlData = module.FS.readFile('/output.stl')
+        const output =
+          stlData instanceof Uint8Array ? stlData : new TextEncoder().encode(stlData as string)
+
+        if (output.byteLength === 0) {
+          errors.push(`${backend}: Empty STL output`)
+          continue
+        }
+
+        stl = output
+        backendUsed = backend
+        break
+      } catch (error) {
+        errors.push(`${backend}: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
 
-    // Read the output STL file
-    const stlData = module.FS.readFile('/output.stl')
-    const stl =
-      stlData instanceof Uint8Array ? stlData : new TextEncoder().encode(stlData as string)
+    if (!stl || !backendUsed) {
+      throw new Error(
+        errors.length > 0 ? `All OpenSCAD backends failed: ${errors.join(' | ')}` : 'Render failed'
+      )
+    }
 
     // Clean up virtual files
     try {
@@ -188,6 +236,7 @@ export async function renderOpenSCAD(code: string): Promise<RenderResult> {
       stl,
       logs,
       success: true,
+      backendUsed,
     }
   } catch (error) {
     return {

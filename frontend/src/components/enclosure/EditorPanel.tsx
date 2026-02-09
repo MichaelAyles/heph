@@ -3,7 +3,16 @@
  */
 
 import { clsx } from 'clsx'
-import { Download, Play, MessageSquare, RefreshCw, Loader2, CheckCircle, Bug } from 'lucide-react'
+import {
+  Download,
+  Play,
+  Shield,
+  MessageSquare,
+  RefreshCw,
+  Loader2,
+  CheckCircle,
+  Bug,
+} from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import type { EditorPanelProps } from './types'
 import { MAX_VALIDATION_ITERATIONS } from './types'
@@ -21,6 +30,7 @@ export function EditorPanel({
   validationIssues,
   debugMode,
   onRender,
+  onFastRender,
   onRegenerate,
   onDownloadSource,
   onRunValidation,
@@ -82,6 +92,30 @@ export function EditorPanel({
                 ? 'bg-surface-700 text-steel-dim cursor-not-allowed'
                 : 'bg-copper text-surface-900 hover:bg-copper-light'
             )}
+            title="Default robust render (CGAL)"
+          >
+            {isRendering ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Rendering...
+              </>
+            ) : (
+              <>
+                <Shield className="w-3.5 h-3.5" />
+                Render
+              </>
+            )}
+          </button>
+          <button
+            onClick={onFastRender}
+            disabled={isRendering || !openScadCode}
+            className={clsx(
+              'px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1.5 transition-colors',
+              isRendering || !openScadCode
+                ? 'bg-surface-700 text-steel-dim cursor-not-allowed'
+                : 'bg-surface-700 text-steel hover:bg-surface-600'
+            )}
+            title="Fast render (Manifold)"
           >
             {isRendering ? (
               <>
@@ -91,7 +125,7 @@ export function EditorPanel({
             ) : (
               <>
                 <Play className="w-3.5 h-3.5" />
-                Render
+                Fast Render
               </>
             )}
           </button>

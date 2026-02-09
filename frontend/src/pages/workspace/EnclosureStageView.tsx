@@ -761,41 +761,54 @@ export function EnclosureStageView() {
   }, [])
 
   // Render OpenSCAD to STL
-  const handleRender = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    if (!openScadCode) return { success: false, error: 'No OpenSCAD code to render' }
+  const handleRender = useCallback(
+    async (forceBackend?: 'manifold' | 'cgal'): Promise<{ success: boolean; error?: string }> => {
+      if (!openScadCode) return { success: false, error: 'No OpenSCAD code to render' }
 
-    setIsRendering(true)
-    setRenderError(null)
+      setIsRendering(true)
+      setRenderError(null)
 
-    // Clear all old render state so the viewer unmounts and shows loading,
-    // and any errors from this render will be visible (not hidden behind old model)
-    if (stlBlobUrl) {
-      revokeSTLBlobUrl(stlBlobUrl)
-    }
-    setStlBlobUrl(null)
-    setStlData(null)
-
-    try {
-      const result = await renderOpenSCAD(openScadCode)
-
-      if (!result.success) {
-        throw new Error(result.error || 'Render failed')
+      // Clear all old render state so the viewer unmounts and shows loading,
+      // and any errors from this render will be visible (not hidden behind old model)
+      if (stlBlobUrl) {
+        revokeSTLBlobUrl(stlBlobUrl)
       }
+      setStlBlobUrl(null)
+      setStlData(null)
 
-      setStlData(result.stl)
-      const blobUrl = createSTLBlobUrl(result.stl)
-      setStlBlobUrl(blobUrl)
-      setCurrentStep('preview')
-      return { success: true }
-    } catch (error) {
-      logger.enclosure('Failed to render STL', { error })
-      const message = error instanceof Error ? error.message : 'Failed to render STL'
-      setRenderError(message)
-      return { success: false, error: message }
-    } finally {
-      setIsRendering(false)
-    }
-  }, [openScadCode, stlBlobUrl])
+      try {
+        const result = await renderOpenSCAD(openScadCode, {
+          forceBackend,
+        })
+
+        if (!result.success) {
+          throw new Error(result.error || 'Render failed')
+        }
+
+        setStlData(result.stl)
+        const blobUrl = createSTLBlobUrl(result.stl)
+        setStlBlobUrl(blobUrl)
+        setCurrentStep('preview')
+        return { success: true }
+      } catch (error) {
+        logger.enclosure('Failed to render STL', { error, forceBackend })
+        const message = error instanceof Error ? error.message : 'Failed to render STL'
+        setRenderError(message)
+        return { success: false, error: message }
+      } finally {
+        setIsRendering(false)
+      }
+    },
+    [openScadCode, stlBlobUrl]
+  )
+
+  const handleDefaultRender = useCallback(() => {
+    void handleRender('cgal')
+  }, [handleRender])
+
+  const handleFastRender = useCallback(() => {
+    void handleRender('manifold')
+  }, [handleRender])
 
   // Download STL file
   const handleDownload = useCallback(() => {
@@ -984,7 +997,8 @@ export function EnclosureStageView() {
               validationIteration={validationIteration}
               validationIssues={validationIssues}
               debugMode={isDebugMode}
-              onRender={handleRender}
+              onRender={handleDefaultRender}
+              onFastRender={handleFastRender}
               onRegenerate={handleRegenerate}
               onDownloadSource={handleDownloadSource}
               onRunValidation={handleRunValidation}

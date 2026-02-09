@@ -35,6 +35,7 @@ export interface EditorPanelProps {
   validationIssues: ValidationIssue[]
   debugMode: boolean
   onRender: () => void
+  onFastRender: () => void
   onRegenerate: () => void
   onDownloadSource: () => void
   onRunValidation: () => void
