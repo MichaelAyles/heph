@@ -38,6 +38,10 @@ export interface Env {
 
   // Shared bearer token for internal microservice calls
   INTERNAL_SERVICE_TOKEN?: string
+
+  // Optional login notifications for watched users
+  LOGIN_NOTIFY_WEBHOOK_URL?: string
+  LOGIN_NOTIFY_USERS?: string
 }
 
 // Extend the context with our typed env

@@ -55,6 +55,8 @@ Create `.dev.vars` for local development:
 OPENROUTER_API_KEY=sk-or-v1-...
 TEXT_MODEL_SLUG=google/gemini-2.0-flash-001
 IMAGE_MODEL_SLUG=google/gemini-2.0-flash-exp
+LOGIN_NOTIFY_WEBHOOK_URL=https://hooks.slack.com/services/...
+LOGIN_NOTIFY_USERS=ycombinator,gemini3
 ```
 
 ## Scripts

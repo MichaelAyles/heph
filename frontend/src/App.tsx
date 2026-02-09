@@ -24,6 +24,7 @@ import { BlogPostPage } from '@/pages/BlogPostPage'
 import { AdminBlogPage } from '@/pages/AdminBlogPage'
 import { AdminComponentsPage } from '@/pages/AdminComponentsPage'
 import { AdminLangGraphPage } from '@/pages/AdminLangGraphPage'
+import { AdminLoginsPage } from '@/pages/AdminLoginsPage'
 import {
   SpecStageView,
   PCBStageView,
@@ -66,6 +67,7 @@ function AuthenticatedApp() {
         <Route path="blocks" element={<BlocksPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="admin/logs" element={<AdminLogsPage />} />
+        <Route path="admin/logins" element={<AdminLoginsPage />} />
         <Route path="admin/users" element={<AdminUsersPage />} />
         <Route path="admin/blocks" element={<AdminBlocksPage />} />
         <Route path="admin/llms" element={<AdminLLMsPage />} />

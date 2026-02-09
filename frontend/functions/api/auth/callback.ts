@@ -7,6 +7,7 @@
 
 import type { Env } from '../../env'
 import { createLogger } from '../../lib/logger'
+import { maybeNotifyWatchedLogin } from '../../lib/login-notifier'
 
 interface PagesFunction<E> {
   (context: {
@@ -29,6 +30,14 @@ interface WorkOSAuthResponse {
   user: WorkOSUser
   access_token: string
   refresh_token: string
+}
+
+function getClientIp(request: Request): string | undefined {
+  return (
+    request.headers.get('CF-Connecting-IP') ||
+    request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
+    undefined
+  )
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -165,6 +174,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     await env.DB.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?")
       .bind(user!.id)
       .run()
+
+    await maybeNotifyWatchedLogin({
+      env,
+      userId: user!.id,
+      username: user!.username,
+      loginMethod: 'oauth',
+      ipAddress: getClientIp(request),
+    })
 
     // Redirect to app with session cookie
     const isSecure = url.protocol === 'https:'

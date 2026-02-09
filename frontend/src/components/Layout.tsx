@@ -10,6 +10,7 @@ import {
   User,
   Users,
   ScrollText,
+  Bell,
   Cpu,
   Zap,
   Shield,
@@ -48,6 +49,7 @@ const adminNavigation = [
   { name: 'LLMs', href: '/admin/llms', icon: Cpu },
   { name: 'LangGraph', href: '/admin/langgraph', icon: Network },
   { name: 'Blog', href: '/admin/blog', icon: FileText },
+  { name: 'Logins', href: '/admin/logins', icon: Bell },
   { name: 'Logs', href: '/admin/logs', icon: ScrollText },
 ]
 
