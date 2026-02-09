@@ -46,7 +46,7 @@ async function callLLM(
       model,
       messages,
       temperature: 0.1, // Low temperature for structured output
-      max_tokens: 4096,
+      max_tokens: 16384,
     }),
   })
 

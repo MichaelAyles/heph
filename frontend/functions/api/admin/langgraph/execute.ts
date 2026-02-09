@@ -91,7 +91,7 @@ async function callLLM(
   )
   const model = defaults.active.textModel
   const temperature = 0.7
-  const maxTokens = 4096
+  const maxTokens = 16384
 
   // Build messages array
   const messages = [

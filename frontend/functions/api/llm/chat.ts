@@ -103,7 +103,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     )
     const model = modelResolution.model
     const temperature = body.temperature ?? 0.7
-    const maxTokens = body.maxTokens ?? 4096
+    const maxTokens = body.maxTokens ?? 16384
 
     if (modelResolution.wasOverridden) {
       await logger.warn('llm', 'Non-admin requested disallowed model, using active default', {

@@ -98,7 +98,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             },
           ],
           generationConfig: {
-            maxOutputTokens: 4096,
+            maxOutputTokens: 16384,
           },
         }),
       })
@@ -124,7 +124,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
               content: `Generate an image of: ${prompt}. Return the image directly.`,
             },
           ],
-          max_tokens: 4096,
+          max_tokens: 16384,
         }),
       })
     }
