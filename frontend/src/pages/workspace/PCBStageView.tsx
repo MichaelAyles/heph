@@ -77,6 +77,7 @@ export function PCBStageView() {
   const autoAiSuggestedRef = useRef(false)
   const autoGenerateScheduledRef = useRef(false)
   const autoAdvanceStartedRef = useRef(false)
+  const handleMergeSchematicRef = useRef<() => Promise<boolean>>(async () => false)
 
   const spec = project?.spec
   const specComplete = spec?.stages?.spec?.status === 'complete' || project?.status === 'complete'
@@ -751,6 +752,10 @@ export function PCBStageView() {
     }
   }, [selectedBlocks, blocksData?.blocks, blockDefinitions, project?.name, savePCBMutation])
 
+  useEffect(() => {
+    handleMergeSchematicRef.current = handleMergeSchematic
+  }, [handleMergeSchematic])
+
   // Handle documentation download
   const handleDownloadDocs = useCallback(() => {
     if (!documentOutput || !project?.name) return
@@ -821,7 +826,7 @@ export function PCBStageView() {
         if (prev <= 1) {
           clearInterval(interval)
           void (async () => {
-            const merged = await handleMergeSchematic()
+            const merged = await handleMergeSchematicRef.current()
             if (!merged) {
               autoGenerateScheduledRef.current = false
             }
@@ -835,7 +840,6 @@ export function PCBStageView() {
     return () => clearInterval(interval)
   }, [
     blocksData?.blocks,
-    handleMergeSchematic,
     isAiSuggesting,
     isMerging,
     isVibeMode,
