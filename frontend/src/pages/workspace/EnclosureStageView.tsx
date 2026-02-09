@@ -199,7 +199,10 @@ export function EnclosureStageView() {
       setOpenScadCode(existingEnclosure.openScadCode)
       setCurrentStep('edit')
     }
-  }, [existingEnclosure, openScadCode])
+    if (existingEnclosure?.renderImage && !renderScreenshot) {
+      setRenderScreenshot(existingEnclosure.renderImage)
+    }
+  }, [existingEnclosure, openScadCode, renderScreenshot])
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -210,38 +213,55 @@ export function EnclosureStageView() {
     }
   }, [stlBlobUrl])
 
+  const loadLatestProjectSpec = useCallback(async () => {
+    if (!project?.id) throw new Error('Project is required')
+
+    const projectRes = await fetch(`/api/projects/${project.id}`)
+    if (!projectRes.ok) throw new Error('Failed to load latest project state')
+
+    const projectData = (await projectRes.json()) as {
+      project?: {
+        spec?: Record<string, unknown> | null
+      }
+    }
+
+    const latestSpec = (projectData.project?.spec || {}) as Record<string, unknown>
+    const latestEnclosure = ((latestSpec.enclosure as Record<string, unknown> | undefined) ||
+      {}) as Record<string, unknown>
+
+    return { latestSpec, latestEnclosure }
+  }, [project?.id])
+
+  const captureRenderedEnclosureImage = useCallback(async (): Promise<string | null> => {
+    if (!stlViewerRef.current) return null
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 700 : 350))
+      const screenshot = await stlViewerRef.current.takeScreenshot()
+      if (screenshot) return screenshot
+    }
+
+    return null
+  }, [])
+
   // Mutation to save enclosure data
   const saveEnclosureMutation = useMutation({
     mutationFn: async (data: { openScadCode: string; stlUrl?: string; feedback?: string }) => {
-      if (!project?.id) throw new Error('Project is required to save enclosure data')
+      const { latestSpec, latestEnclosure } = await loadLatestProjectSpec()
+      const latestStages = (latestSpec.stages as Record<string, unknown> | undefined) || {}
+      const latestEnclosureStage =
+        (latestStages.enclosure as Record<string, unknown> | undefined) || {}
+      const latestIterations =
+        (latestEnclosure.iterations as
+          | Array<{
+              feedback?: string
+              openScadCode?: string
+              stlUrl?: string
+              timestamp?: string
+            }>
+          | undefined) || []
 
-      // Fetch latest project spec before each write to avoid stale-spec overwrite races.
-      const projectRes = await fetch(`/api/projects/${project.id}`)
-      if (!projectRes.ok) throw new Error('Failed to load latest project state')
-
-      const projectData = (await projectRes.json()) as {
-        project?: {
-          spec?: {
-            enclosure?: {
-              iterations?: Array<{
-                feedback?: string
-                openScadCode?: string
-                stlUrl?: string
-                timestamp?: string
-              }>
-              [key: string]: unknown
-            }
-            stages?: Record<string, unknown>
-            [key: string]: unknown
-          } | null
-        }
-      }
-
-      const latestSpec = projectData.project?.spec || {}
-      const latestEnclosure = latestSpec.enclosure || {}
-      const latestIterations = latestEnclosure.iterations || []
-
-      const res = await fetch(`/api/projects/${project.id}`, {
+      const res = await fetch(`/api/projects/${project?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -262,8 +282,8 @@ export function EnclosureStageView() {
               ],
             },
             stages: {
-              ...latestSpec.stages,
-              enclosure: { status: 'in_progress' },
+              ...latestStages,
+              enclosure: { ...latestEnclosureStage, status: 'in_progress' },
             },
           },
         }),
@@ -276,18 +296,69 @@ export function EnclosureStageView() {
     },
   })
 
+  const saveEnclosureRenderMutation = useMutation({
+    mutationFn: async (renderImage: string) => {
+      const { latestSpec, latestEnclosure } = await loadLatestProjectSpec()
+      const latestStages = (latestSpec.stages as Record<string, unknown> | undefined) || {}
+      const latestEnclosureStage =
+        (latestStages.enclosure as Record<string, unknown> | undefined) || {}
+      const enclosureStatus =
+        latestEnclosureStage.status === 'complete' ? 'complete' : 'in_progress'
+
+      const res = await fetch(`/api/projects/${project?.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spec: {
+            ...latestSpec,
+            enclosure: {
+              ...latestEnclosure,
+              renderImage,
+            },
+            stages: {
+              ...latestStages,
+              enclosure: {
+                ...latestEnclosureStage,
+                status: enclosureStatus,
+              },
+            },
+          },
+        }),
+      })
+
+      if (!res.ok) throw new Error('Failed to save enclosure render image')
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
+    },
+  })
+
   const completeEnclosureStageAndAdvance = useCallback(async () => {
-    if (!project?.id || !spec) return
+    if (!project?.id) return
+
+    const { latestSpec, latestEnclosure } = await loadLatestProjectSpec()
+    const latestStages = (latestSpec.stages as Record<string, unknown> | undefined) || {}
+    const latestEnclosureStage =
+      (latestStages.enclosure as Record<string, unknown> | undefined) || {}
+
+    const hasRenderImage =
+      typeof latestEnclosure.renderImage === 'string' && latestEnclosure.renderImage.length > 0
+    if (!hasRenderImage) {
+      setRenderError('Render the enclosure successfully before proceeding to firmware.')
+      return
+    }
 
     const res = await fetch(`/api/projects/${project.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         spec: {
-          ...spec,
+          ...latestSpec,
           stages: {
-            ...spec.stages,
+            ...latestStages,
             enclosure: {
+              ...latestEnclosureStage,
               status: 'complete',
               completedAt: new Date().toISOString(),
             },
@@ -301,7 +372,7 @@ export function EnclosureStageView() {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       navigate(`/project/${project.id}/firmware`)
     }
-  }, [navigate, project?.id, queryClient, spec])
+  }, [loadLatestProjectSpec, navigate, project?.id, queryClient])
 
   // Validate OpenSCAD code and return issues using LangGraph node
   const validateCode = useCallback(
@@ -626,6 +697,11 @@ export function EnclosureStageView() {
         throw new Error('Failed to capture render screenshot')
       }
       setRenderScreenshot(renderBase64)
+      try {
+        await saveEnclosureRenderMutation.mutateAsync(renderBase64)
+      } catch (error) {
+        logger.warn('enclosure', 'Failed to save render screenshot for gallery', { error })
+      }
 
       // Fetch blueprint as base64
       const blueprintBase64 = await fetchImageAsBase64(blueprintUrl)
@@ -668,7 +744,7 @@ export function EnclosureStageView() {
     } finally {
       setIsVisualValidating(false)
     }
-  }, [spec, project?.id])
+  }, [project?.id, saveEnclosureRenderMutation, spec])
 
   // Handle accepting the current design
   const handleAcceptDesign = useCallback(() => {
@@ -773,10 +849,25 @@ export function EnclosureStageView() {
     autoFinalizeStartedRef.current = true
     void (async () => {
       let attempts = 0
-      while (attempts < 5) {
+      while (attempts < 8) {
         attempts++
         const renderResult = await handleRender()
         if (renderResult.success) {
+          const renderImage = await captureRenderedEnclosureImage()
+          if (!renderImage) {
+            setRenderError('Enclosure rendered but preview capture failed. Retrying render...')
+            continue
+          }
+
+          setRenderScreenshot(renderImage)
+          try {
+            await saveEnclosureRenderMutation.mutateAsync(renderImage)
+          } catch (error) {
+            logger.warn('enclosure', 'Failed to persist enclosure render image', { error })
+            setRenderError('Failed to save enclosure preview. Retrying...')
+            continue
+          }
+
           await completeEnclosureStageAndAdvance()
           return
         }
@@ -786,9 +877,13 @@ export function EnclosureStageView() {
         if (!regenerated) break
       }
 
+      setRenderError(
+        'Vibe mode could not produce a renderable enclosure automatically. Review OpenSCAD errors and retry.'
+      )
       autoFinalizeStartedRef.current = false
     })()
   }, [
+    captureRenderedEnclosureImage,
     completeEnclosureStageAndAdvance,
     currentStep,
     handleRegenerate,
@@ -798,6 +893,7 @@ export function EnclosureStageView() {
     isVibeMode,
     openScadCode,
     project?.id,
+    saveEnclosureRenderMutation,
   ])
 
   if (!pcbComplete) {
@@ -844,7 +940,9 @@ export function EnclosureStageView() {
               stage="enclosure"
               spec={spec || null}
               projectId={project?.id || ''}
-              canComplete={!!spec?.enclosure?.openScadCode}
+              canComplete={
+                !!spec?.enclosure?.openScadCode && !!(spec?.enclosure?.renderImage || stlData)
+              }
               onComplete={() => {
                 queryClient.invalidateQueries({ queryKey: ['project', project?.id] })
                 queryClient.invalidateQueries({ queryKey: ['projects'] })

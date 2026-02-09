@@ -6,7 +6,18 @@
 
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, ArrowLeft, User, Calendar, Cpu, Box, Code, Zap, CheckCircle2 } from 'lucide-react'
+import {
+  Loader2,
+  ArrowLeft,
+  User,
+  Calendar,
+  Cpu,
+  Box,
+  Code,
+  Zap,
+  CheckCircle2,
+  Image as ImageIcon,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 
 // =============================================================================
@@ -36,10 +47,13 @@ interface ProjectSpec {
   pcb: {
     boardSize: { width: number; height: number } | null
     placedBlocks: Array<{ blockSlug: string; gridX: number; gridY: number }> | null
+    assembly3dImage?: string | null
+    remoteTypeAssembly3dImage?: string | null
   } | null
   enclosure: {
     style: string | null
     stlUrl: string | null
+    renderImage?: string | null
   } | null
   firmware: {
     language: string | null
@@ -57,6 +71,11 @@ interface GalleryProject {
   updatedAt: string
   authorUsername: string
   spec: ProjectSpec | null
+}
+
+function toInlinePngDataUrl(base64: string | null | undefined): string | null {
+  if (!base64) return null
+  return base64.startsWith('data:image/') ? base64 : `data:image/png;base64,${base64}`
 }
 
 // =============================================================================
@@ -245,6 +264,38 @@ function EnclosureSection({ spec }: { spec: ProjectSpec }) {
   )
 }
 
+function ArtifactRendersSection({ spec }: { spec: ProjectSpec }) {
+  const enclosureRender = toInlinePngDataUrl(spec.enclosure?.renderImage)
+  const mainPcbRender = toInlinePngDataUrl(spec.pcb?.assembly3dImage)
+  const peripheralPcbRender = toInlinePngDataUrl(spec.pcb?.remoteTypeAssembly3dImage)
+
+  const renders = [
+    { key: 'enclosure', title: 'Enclosure Render', src: enclosureRender },
+    { key: 'main-pcb', title: 'Main PCB 3D', src: mainPcbRender },
+    { key: 'peripheral-pcb', title: 'Peripheral PCB 3D', src: peripheralPcbRender },
+  ].filter((render) => !!render.src)
+
+  if (renders.length === 0) return null
+
+  return (
+    <SectionCard title="Generated Renders" icon={ImageIcon} className="md:col-span-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {renders.map((render) => (
+          <div
+            key={render.key}
+            className="bg-surface-800 border border-surface-700 overflow-hidden"
+          >
+            <div className="aspect-video bg-surface-900">
+              <img src={render.src!} alt={render.title} className="w-full h-full object-cover" />
+            </div>
+            <div className="px-3 py-2 text-sm text-steel">{render.title}</div>
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  )
+}
+
 function FirmwareSection({ spec }: { spec: ProjectSpec }) {
   if (!spec.firmware?.files?.length) return null
 
@@ -363,6 +414,11 @@ export function GalleryDetailPage() {
       ? project.spec.blueprints[project.spec.selectedBlueprint]?.url
       : project.spec?.blueprints?.[0]?.url
 
+  const selectedHeroImageUrl =
+    toInlinePngDataUrl(project.spec?.enclosure?.renderImage) ||
+    toInlinePngDataUrl(project.spec?.pcb?.assembly3dImage) ||
+    selectedBlueprintUrl
+
   return (
     <div className="min-h-screen bg-ash">
       {/* Header */}
@@ -393,10 +449,10 @@ export function GalleryDetailPage() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex gap-8">
             {/* Thumbnail */}
-            {selectedBlueprintUrl && (
+            {selectedHeroImageUrl && (
               <div className="w-80 h-60 bg-surface-800 rounded-lg overflow-hidden shrink-0">
                 <img
-                  src={selectedBlueprintUrl}
+                  src={selectedHeroImageUrl}
                   alt={project.name}
                   className="w-full h-full object-cover"
                 />
@@ -430,6 +486,7 @@ export function GalleryDetailPage() {
             <SpecificationSection spec={project.spec} />
             <PCBSection spec={project.spec} />
             <EnclosureSection spec={project.spec} />
+            <ArtifactRendersSection spec={project.spec} />
             <FirmwareSection spec={project.spec} />
             <FeasibilitySection spec={project.spec} />
           </div>

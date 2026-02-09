@@ -187,21 +187,49 @@ export function PCBStageView() {
   ])
 
   // Mutation to save PCB data
+  const loadLatestProjectSpec = useCallback(async () => {
+    if (!project?.id) throw new Error('Project is required')
+
+    const projectRes = await fetch(`/api/projects/${project.id}`)
+    if (!projectRes.ok) throw new Error('Failed to load latest project state')
+
+    const projectData = (await projectRes.json()) as {
+      project?: {
+        spec?: Record<string, unknown> | null
+      }
+    }
+
+    const latestSpec = (projectData.project?.spec || {}) as Record<string, unknown>
+    const latestPcb = ((latestSpec.pcb as Record<string, unknown> | undefined) || {}) as Record<
+      string,
+      unknown
+    >
+
+    return { latestSpec, latestPcb }
+  }, [project?.id])
+
   const savePCBMutation = useMutation({
     mutationFn: async (pcbData: Partial<PCBArtifacts> & { placedBlocks: PlacedBlock[] }) => {
+      const { latestSpec, latestPcb } = await loadLatestProjectSpec()
+      const latestStages = (latestSpec.stages as Record<string, unknown> | undefined) || {}
+      const latestPcbStage = (latestStages.pcb as Record<string, unknown> | undefined) || {}
+
       const res = await fetch(`/api/projects/${project?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spec: {
-            ...spec,
+            ...latestSpec,
             pcb: {
-              ...spec?.pcb,
+              ...latestPcb,
               ...pcbData,
             },
             stages: {
-              ...spec?.stages,
-              pcb: { status: pcbData.schematicData ? 'complete' : 'in_progress' },
+              ...latestStages,
+              pcb: {
+                ...latestPcbStage,
+                status: pcbData.schematicData ? 'complete' : 'in_progress',
+              },
             },
           },
         }),
@@ -217,17 +245,22 @@ export function PCBStageView() {
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
   const completePCBStageAndAdvance = useCallback(async () => {
-    if (!project?.id || !spec) return
+    if (!project?.id) return
+
+    const { latestSpec } = await loadLatestProjectSpec()
+    const latestStages = (latestSpec.stages as Record<string, unknown> | undefined) || {}
+    const latestPcbStage = (latestStages.pcb as Record<string, unknown> | undefined) || {}
 
     const res = await fetch(`/api/projects/${project.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         spec: {
-          ...spec,
+          ...latestSpec,
           stages: {
-            ...spec.stages,
+            ...latestStages,
             pcb: {
+              ...latestPcbStage,
               status: 'complete',
               completedAt: new Date().toISOString(),
             },
@@ -241,7 +274,7 @@ export function PCBStageView() {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       navigate(`/project/${project.id}/enclosure`)
     }
-  }, [navigate, project?.id, queryClient, spec])
+  }, [loadLatestProjectSpec, navigate, project?.id, queryClient])
 
   // Handle capturing 3D view for enclosure generation
   const handleCapture3DImage = useCallback(

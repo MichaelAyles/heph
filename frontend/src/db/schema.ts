@@ -287,6 +287,8 @@ export interface EnclosureArtifacts {
   openScadCode?: string
   // Generated STL URL (R2)
   stlUrl?: string
+  // Rendered enclosure screenshot (base64 PNG) for gallery/display
+  renderImage?: string
   // User feedback iterations
   iterations: EnclosureIteration[]
 }

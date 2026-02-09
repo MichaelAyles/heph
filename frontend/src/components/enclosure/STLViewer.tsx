@@ -54,9 +54,10 @@ interface STLModelProps {
   url: string
   color: string
   onLoad?: () => void
+  onBounds?: (box: THREE.Box3) => void
 }
 
-function STLModel({ url, color, onLoad }: STLModelProps) {
+function STLModel({ url, color, onLoad, onBounds }: STLModelProps) {
   const geometry = useLoader(STLLoader, url)
   const meshRef = useRef<THREE.Mesh>(null)
 
@@ -69,10 +70,14 @@ function STLModel({ url, color, onLoad }: STLModelProps) {
         const center = new THREE.Vector3()
         box.getCenter(center)
         geometry.translate(-center.x, -center.y, -center.z)
+        geometry.computeBoundingBox()
+        if (geometry.boundingBox) {
+          onBounds?.(geometry.boundingBox.clone())
+        }
       }
       onLoad?.()
     }
-  }, [geometry, onLoad])
+  }, [geometry, onBounds, onLoad])
 
   return (
     <mesh ref={meshRef} geometry={geometry}>
@@ -85,9 +90,10 @@ interface STLDataModelProps {
   data: Uint8Array
   color: string
   onLoad?: () => void
+  onBounds?: (box: THREE.Box3) => void
 }
 
-function STLDataModel({ data, color, onLoad }: STLDataModelProps) {
+function STLDataModel({ data, color, onLoad, onBounds }: STLDataModelProps) {
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null)
   const meshRef = useRef<THREE.Mesh>(null)
 
@@ -106,11 +112,15 @@ function STLDataModel({ data, color, onLoad }: STLDataModelProps) {
       const center = new THREE.Vector3()
       box.getCenter(center)
       geom.translate(-center.x, -center.y, -center.z)
+      geom.computeBoundingBox()
+      if (geom.boundingBox) {
+        onBounds?.(geom.boundingBox.clone())
+      }
     }
 
     setGeometry(geom)
     onLoad?.()
-  }, [data, onLoad])
+  }, [data, onBounds, onLoad])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!geometry) return null
@@ -165,8 +175,15 @@ export const STLViewer = forwardRef<STLViewerRef, STLViewerProps>(function STLVi
 ) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [rotating, setRotating] = useState(autoRotate)
+  const [gridY, setGridY] = useState(-50)
   const containerRef = useRef<HTMLDivElement>(null)
   const glRef = useRef<THREE.WebGLRenderer | null>(null)
+
+  const handleModelBounds = useCallback((box: THREE.Box3) => {
+    const height = box.max.y - box.min.y
+    const clearance = Math.max(2, height * 0.05)
+    setGridY(box.min.y - clearance)
+  }, [])
 
   // Handle WebGL renderer ready
   const handleGLReady = useCallback((gl: THREE.WebGLRenderer) => {
@@ -276,14 +293,19 @@ export const STLViewer = forwardRef<STLViewerRef, STLViewerProps>(function STLVi
         <Suspense fallback={<LoadingFallback />}>
           <Center>
             {src ? (
-              <STLModel url={src} color={color} onLoad={onLoad} />
+              <STLModel url={src} color={color} onLoad={onLoad} onBounds={handleModelBounds} />
             ) : data ? (
-              <STLDataModel data={data} color={color} onLoad={onLoad} />
+              <STLDataModel
+                data={data}
+                color={color}
+                onLoad={onLoad}
+                onBounds={handleModelBounds}
+              />
             ) : null}
           </Center>
         </Suspense>
 
-        {showGrid && <gridHelper args={[200, 20, '#444444', '#333333']} position={[0, -50, 0]} />}
+        {showGrid && <gridHelper args={[200, 20, '#444444', '#333333']} position={[0, gridY, 0]} />}
 
         <OrbitControls
           enablePan={true}

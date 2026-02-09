@@ -28,6 +28,12 @@ interface GalleryProject {
   thumbnailUrl: string | null
 }
 
+function toInlinePngDataUrl(base64: unknown): string | null {
+  if (typeof base64 !== 'string' || base64.length === 0) return null
+  if (base64.startsWith('data:image/')) return base64
+  return `data:image/png;base64,${base64}`
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env } = context
   const url = new URL(context.request.url)
@@ -69,14 +75,26 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     let thumbnailUrl: string | null = null
 
     try {
-      const spec = JSON.parse(row.spec as string)
+      const spec = JSON.parse(row.spec as string) as {
+        finalSpec?: { summary?: string }
+        blueprints?: Array<{ url?: string }>
+        selectedBlueprint?: number | null
+        pcb?: { assembly3dImage?: string }
+        enclosure?: { renderImage?: string }
+      }
+
       if (spec.finalSpec) {
         specSummary = spec.finalSpec.summary || null
       }
-      // Get the first blueprint as thumbnail
-      if (spec.blueprints && spec.blueprints.length > 0) {
-        thumbnailUrl = spec.blueprints[spec.selectedBlueprint || 0]?.url || spec.blueprints[0]?.url
-      }
+
+      const enclosureRender = toInlinePngDataUrl(spec.enclosure?.renderImage)
+      const pcbRender = toInlinePngDataUrl(spec.pcb?.assembly3dImage)
+      const selectedBlueprint =
+        spec.blueprints && spec.blueprints.length > 0
+          ? spec.blueprints[spec.selectedBlueprint || 0]?.url || spec.blueprints[0]?.url || null
+          : null
+
+      thumbnailUrl = selectedBlueprint || enclosureRender || pcbRender
     } catch {
       // Ignore parse errors
     }

@@ -83,6 +83,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             ? {
                 boardSize: spec.pcb.boardSize,
                 placedBlocks: spec.pcb.placedBlocks,
+                assembly3dImage: spec.pcb.assembly3dImage,
+                remoteTypeAssembly3dImage: spec.pcb.remoteTypeAssembly3dImage,
               }
             : null,
           // Enclosure info
@@ -90,6 +92,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             ? {
                 style: spec.enclosure.style,
                 stlUrl: spec.enclosure.stlUrl,
+                renderImage: spec.enclosure.renderImage,
               }
             : null,
           // Firmware info (high-level only)
