@@ -895,7 +895,8 @@ export function PCBStageView() {
         setVibeCaptureStatus('Opening 3D board preview...')
         setViewMode('3d')
         setSelectedBoardId(null)
-        await sleep(1200)
+        setVibeCaptureStatus('Showing main board in 3D for 5s...')
+        await sleep(5000)
 
         setVibeCaptureStatus('Capturing main board screenshot...')
         const mainCapture = await viewerRef.current?.takeScreenshot()
@@ -909,7 +910,8 @@ export function PCBStageView() {
         if (remoteTypeBlocks.length > 0) {
           setVibeCaptureStatus('Switching to remote board...')
           setSelectedBoardId(REMOTE_TYPE_BOARD_ID)
-          await sleep(1200)
+          setVibeCaptureStatus('Showing remote board in 3D for 5s...')
+          await sleep(5000)
 
           setVibeCaptureStatus('Capturing remote board screenshot...')
           const remoteCapture = await viewerRef.current?.takeScreenshot()
