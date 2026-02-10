@@ -1,5 +1,6 @@
 import type { Env } from '../../env'
 import { createLogger } from '../../lib/logger'
+import { clampPagination } from '../../lib/pagination'
 
 interface PagesFunction<E> {
   (context: {
@@ -27,8 +28,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url)
 
   const status = url.searchParams.get('status')
-  const limit = parseInt(url.searchParams.get('limit') || '50')
-  const offset = parseInt(url.searchParams.get('offset') || '0')
+  const { limit, offset } = clampPagination(
+    url.searchParams.get('limit'),
+    url.searchParams.get('offset')
+  )
 
   let query =
     'SELECT id, name, description, status, spec, created_at, updated_at FROM projects WHERE user_id = ?'

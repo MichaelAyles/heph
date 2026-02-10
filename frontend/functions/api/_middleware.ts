@@ -113,7 +113,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     username: result.username,
     displayName: result.display_name,
     isAdmin,
-    controlMode: result.control_mode || 'vibe_it',
+    controlMode: result.control_mode || 'fix_it',
   }
 
   // Log request for admin users

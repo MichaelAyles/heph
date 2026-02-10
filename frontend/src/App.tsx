@@ -108,6 +108,7 @@ function AppContent() {
         <Route path="/gallery/:id" element={<GalleryDetailPage />} />
         <Route path="/blog" element={<BlogPage />} />
         <Route path="/blog/:slug" element={<BlogPostPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     )
   }

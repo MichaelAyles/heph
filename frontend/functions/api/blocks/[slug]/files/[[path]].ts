@@ -43,6 +43,18 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Filename required' }, { status: 400 })
   }
 
+  // Validate filename: reject path traversal, backslashes, control characters
+  if (
+    filename.includes('..') ||
+    filename.includes('\\') ||
+    /[\x00-\x1f\x7f]/.test(filename) ||
+    filename.startsWith('/') ||
+    filename.endsWith('/') ||
+    filename.includes('//')
+  ) {
+    return Response.json({ error: 'Invalid filename' }, { status: 400 })
+  }
+
   // Verify block exists
   const block = await env.DB.prepare('SELECT slug FROM pcb_blocks WHERE slug = ? AND is_active = 1')
     .bind(slug)

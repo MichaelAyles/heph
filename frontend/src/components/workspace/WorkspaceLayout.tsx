@@ -35,7 +35,7 @@ export function WorkspaceLayout() {
 
   // Update active stage when route changes
   useEffect(() => {
-    if (currentStage && ['spec', 'pcb', 'enclosure', 'firmware', 'export'].includes(currentStage)) {
+    if (currentStage && ['spec', 'pcb', 'enclosure', 'firmware', 'export', 'files'].includes(currentStage)) {
       setActiveStage(currentStage)
     }
   }, [currentStage, setActiveStage])

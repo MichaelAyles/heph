@@ -6,6 +6,7 @@
 import type { Env } from '../../env'
 import { createLogger } from '../../lib/logger'
 import { safeJsonParse } from '../../lib/json'
+import { clampPagination } from '../../lib/pagination'
 
 interface PagesFunction<E> {
   (context: {
@@ -44,8 +45,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   const url = new URL(context.request.url)
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500)
-  const offset = parseInt(url.searchParams.get('offset') || '0')
+  const { limit, offset } = clampPagination(
+    url.searchParams.get('limit'),
+    url.searchParams.get('offset'),
+    100,
+    500
+  )
   const level = url.searchParams.get('level') // debug, info, warn, error
   const category = url.searchParams.get('category') // api, llm, auth, etc.
   const requestId = url.searchParams.get('requestId')

@@ -32,6 +32,20 @@ const GRID_UNIT_MM = 12.7
 // Edge overlap for bus connections in mm
 const EDGE_OVERLAP_MM = 1.0
 
+// Signal name normalization: maps variant net names to canonical BusSignal names
+const SIGNAL_ALIASES: Record<string, string> = {
+  SPI0_MOSI: 'SPI_MOSI',
+  SPI0_MISO: 'SPI_MISO',
+  SPI0_SCK: 'SPI_SCK',
+  SPI0_CS: 'SPI_CS0',
+  I2C0_SDA: 'I2C1_SDA',
+  I2C0_SCL: 'I2C1_SCL',
+}
+
+function normalizeSignalName(name: string): string {
+  return SIGNAL_ALIASES[name] || name
+}
+
 export interface MergeResult {
   schematic: string // KiCad schematic S-expression
   pcb?: string // KiCad PCB S-expression
@@ -554,20 +568,19 @@ function buildPcbNetMapping(loadedBlocks: LoadedPcbBlock[]): NetMappingResult {
   let nextNetId = 1
 
   // Standard bus signals that should be shared across all blocks
+  // Uses canonical names from BusSignalSchema
   const busSignals = [
     'GND',
     'V3V3',
     '3V3',
     'VBUS',
     '5V0',
-    'I2C0_SDA',
-    'I2C0_SCL',
     'I2C1_SDA',
     'I2C1_SCL',
-    'SPI0_MOSI',
-    'SPI0_MISO',
-    'SPI0_SCK',
-    'SPI0_CS',
+    'SPI_MOSI',
+    'SPI_MISO',
+    'SPI_SCK',
+    'SPI_CS0',
     'GPIO_0',
     'GPIO_1',
     'GPIO_2',
@@ -581,6 +594,8 @@ function buildPcbNetMapping(loadedBlocks: LoadedPcbBlock[]): NetMappingResult {
     'AUX_2',
     'AUX_3',
     'AUX_4',
+    'AUX_5',
+    'AUX_6',
   ]
 
   // Reserve net 0 for unconnected
@@ -598,14 +613,17 @@ function buildPcbNetMapping(loadedBlocks: LoadedPcbBlock[]): NetMappingResult {
       const netName = net.name || ''
       const localKey = `${loaded.block.slug}:${netName}`
 
+      // Normalize variant signal names to canonical form (e.g. SPI0_MOSI → SPI_MOSI)
+      const canonicalName = normalizeSignalName(netName)
+
       if (netName === '') {
         // Unconnected net
         netMapping.set(localKey, 0)
         netNameMapping.set(localKey, '')
-      } else if (globalNets.has(netName)) {
-        // Bus signal - use existing global ID and name
-        netMapping.set(localKey, globalNets.get(netName)!)
-        netNameMapping.set(localKey, netName)
+      } else if (globalNets.has(canonicalName)) {
+        // Bus signal - use existing global ID and canonical name
+        netMapping.set(localKey, globalNets.get(canonicalName)!)
+        netNameMapping.set(localKey, canonicalName)
       } else {
         // Block-local signal - create new global ID with block prefix
         const globalName = `${loaded.block.slug}_${netName}`
