@@ -8,6 +8,7 @@
  */
 
 import type { Env } from '../../env'
+import { safeJsonParse } from '../../lib/json'
 
 interface User {
   id: string
@@ -55,8 +56,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     nodeName: row.node_name,
     systemPrompt: row.system_prompt,
     userContext: row.user_context,
-    fullInput: JSON.parse(row.full_input),
-    invocationConfig: row.invocation_config ? JSON.parse(row.invocation_config) : null,
+    fullInput: safeJsonParse(row.full_input, {}),
+    invocationConfig: safeJsonParse(row.invocation_config, null),
     tokenEstimate: row.token_estimate || 0,
     projectId: row.project_id || undefined,
     threadId: row.thread_id || undefined,

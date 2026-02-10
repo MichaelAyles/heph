@@ -8,6 +8,7 @@
  */
 
 import type { Env } from '../../env'
+import { safeJsonParse } from '../../lib/json'
 
 interface User {
   id: string
@@ -125,8 +126,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     costUsd: row.cost_usd,
     // Only include these if requested
     ...(includeDebug && {
-      input: row.input_json ? JSON.parse(row.input_json) : null,
-      output: row.output_json ? JSON.parse(row.output_json) : null,
+      input: safeJsonParse(row.input_json, null),
+      output: safeJsonParse(row.output_json, null),
       systemPrompt: row.system_prompt,
       userPrompt: row.user_prompt,
       rawResponse: row.raw_response,

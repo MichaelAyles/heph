@@ -14,24 +14,35 @@ RUN mkdir -p /var/lib/apt/lists/partial && \
 # Create app directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files needed for dependency install/build
 COPY package*.json ./
+COPY tsconfig.json ./
 
-# Install production dependencies
-RUN npm install --production
+# Install dependencies (including dev deps for TypeScript compilation)
+RUN npm ci
 
-# Copy compiled code
-COPY dist/ ./dist/
+# Copy source and build
+COPY src/ ./src/
+RUN npm run build
 
-# Create temp directories
-RUN mkdir -p /tmp/uploads /tmp/kicad
+# Remove dev dependencies to keep runtime image smaller
+RUN npm prune --omit=dev
+
+# Create non-root runtime user
+RUN groupadd --system appuser && useradd --system --gid appuser appuser
+
+# Create temp directories with correct ownership
+RUN mkdir -p /tmp/uploads /tmp/kicad && chown -R appuser:appuser /tmp/uploads /tmp/kicad
 
 # Expose port
 EXPOSE 3000
 
+# Switch to non-root user for runtime
+USER appuser
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD sh -c 'curl -f "http://localhost:${PORT:-3000}/health" || exit 1'
 
 # Run the server
 CMD ["node", "dist/index.js"]

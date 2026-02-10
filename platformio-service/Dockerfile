@@ -42,11 +42,20 @@ RUN npm run build
 # Remove dev dependencies
 RUN npm prune --production
 
-# Create temp directories
-RUN mkdir -p /tmp/uploads /tmp/pio-build
+# Create non-root runtime user
+RUN groupadd --system appuser && useradd --system --gid appuser --home /home/appuser --create-home appuser
+
+# Copy PlatformIO toolchains to appuser home so pio can find them at runtime
+RUN cp -r /root/.platformio /home/appuser/.platformio && chown -R appuser:appuser /home/appuser/.platformio
+
+# Create temp directories with correct ownership
+RUN mkdir -p /tmp/uploads /tmp/pio-build && chown -R appuser:appuser /tmp/uploads /tmp/pio-build
 
 # Expose port
 EXPOSE 3000
+
+# Switch to non-root user for runtime
+USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

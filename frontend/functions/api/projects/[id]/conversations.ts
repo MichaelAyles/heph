@@ -5,6 +5,7 @@
 
 import type { Env } from '../../../env'
 import { createLogger } from '../../../lib/logger'
+import { safeJsonParse } from '../../../lib/json'
 
 interface PagesFunction<E> {
   (context: {
@@ -83,7 +84,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       projectId: row.project_id,
       userId: row.user_id,
       requestId: row.request_id,
-      messagesIn: JSON.parse(row.messages_in),
+      messagesIn: safeJsonParse(row.messages_in, []),
       messageOut: row.message_out,
       model: row.model,
       temperature: row.temperature,

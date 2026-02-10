@@ -17,8 +17,12 @@ const PORT = process.env.PORT || 3000
 const INTERNAL_TOKEN = process.env.SERVICE_AUTH_TOKEN
 
 function isAuthorizedInternalRequest(req: express.Request): boolean {
-  // If token isn't configured, keep local/dev behavior unchanged.
-  if (!INTERNAL_TOKEN) return true
+  if (!INTERNAL_TOKEN) {
+    // Only allow bypass in development; fail closed in production.
+    if (process.env.NODE_ENV === 'production') return false
+    console.warn('SERVICE_AUTH_TOKEN is unset — allowing request (non-production)')
+    return true
+  }
 
   const auth = req.headers.authorization
   if (!auth?.startsWith('Bearer ')) return false
@@ -30,8 +34,9 @@ function isAuthorizedInternalRequest(req: express.Request): boolean {
 // Multer config for file uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadDir = path.join(os.tmpdir(), 'pio-uploads', Date.now().toString())
-    await fs.mkdir(uploadDir, { recursive: true })
+    const baseDir = path.join(os.tmpdir(), 'pio-uploads')
+    await fs.mkdir(baseDir, { recursive: true })
+    const uploadDir = await fs.mkdtemp(path.join(baseDir, 'upload-'))
     cb(null, uploadDir)
   },
   filename: (req, file, cb) => {

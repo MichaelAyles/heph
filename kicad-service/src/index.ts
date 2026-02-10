@@ -9,8 +9,12 @@ const PORT = process.env.PORT || 3000
 const INTERNAL_TOKEN = process.env.SERVICE_AUTH_TOKEN
 
 function isAuthorizedInternalRequest(req: Request): boolean {
-  // If token isn't configured, keep local/dev behavior unchanged.
-  if (!INTERNAL_TOKEN) return true
+  if (!INTERNAL_TOKEN) {
+    // Only allow bypass in development; fail closed in production.
+    if (process.env.NODE_ENV === 'production') return false
+    console.warn('SERVICE_AUTH_TOKEN is unset — allowing request (non-production)')
+    return true
+  }
 
   const auth = req.headers.authorization
   if (!auth?.startsWith('Bearer ')) return false

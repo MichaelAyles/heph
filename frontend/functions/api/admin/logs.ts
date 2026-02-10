@@ -5,6 +5,7 @@
 
 import type { Env } from '../../env'
 import { createLogger } from '../../lib/logger'
+import { safeJsonParse } from '../../lib/json'
 
 interface PagesFunction<E> {
   (context: {
@@ -105,7 +106,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     // Parse metadata JSON
     const logs = results.map((log) => ({
       ...log,
-      metadata: log.metadata ? JSON.parse(log.metadata) : null,
+      metadata: safeJsonParse(log.metadata, null),
     }))
 
     return Response.json({

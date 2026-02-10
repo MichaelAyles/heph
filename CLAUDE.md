@@ -30,6 +30,20 @@ pnpm check         # Run all CI checks (typecheck, lint, test, build)
 pnpm test:run      # Single test run
 ```
 
+## Linear Tracking
+
+**All features must be tracked in Linear**, no exceptions. This applies even if:
+- The feature is small or completed quickly
+- The request came directly from the user (not from an existing Linear issue)
+- The work is already in progress or done
+
+**Workflow**:
+1. Before starting work on a feature, create a Linear issue (or find the existing one) and set it to "In Progress"
+2. When the feature is complete, mark the Linear issue as "Done" and add a comment referencing the relevant git commit(s) (e.g., `Fixed in 9b49067`)
+3. If a feature was completed without a Linear issue, create one after the fact, add a comment with the commit(s), and immediately mark it "Done"
+
+**Project**: This repo is tracked under the **Mike Ayles / Heph** project in Linear. Do not look at or interact with other Linear projects unless explicitly asked.
+
 ## Pre-Commit Checklist
 
 **CRITICAL: NEVER commit when `pnpm check` fails.**

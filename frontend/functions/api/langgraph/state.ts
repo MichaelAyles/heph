@@ -6,6 +6,7 @@
  */
 
 import type { Env } from '../../env'
+import { safeJsonParse } from '../../lib/json'
 
 interface User {
   id: string
@@ -38,7 +39,7 @@ async function updateProjectSpecAtomic(
       throw new Error('Project not found')
     }
 
-    const existingSpec = current.spec ? JSON.parse(current.spec) : {}
+    const existingSpec = safeJsonParse(current.spec, {})
     const updatedSpec = patch(existingSpec)
     const nextUpdatedAt = new Date().toISOString()
 
@@ -102,7 +103,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   if (!checkpoint) {
     // No checkpoint exists yet, return state from project spec
-    const spec = project.spec ? JSON.parse(project.spec) : null
+    const spec = safeJsonParse(project.spec, null)
     return Response.json({
       threadId,
       checkpointId: null,
@@ -113,8 +114,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     })
   }
 
-  const checkpointData = JSON.parse(checkpoint.checkpoint)
-  const _metadata = JSON.parse(checkpoint.metadata) // Available for future use
+  const checkpointData = safeJsonParse(checkpoint.checkpoint, { channel_values: {} })
+  const _metadata = safeJsonParse(checkpoint.metadata, {}) // Available for future use
 
   return Response.json({
     threadId,

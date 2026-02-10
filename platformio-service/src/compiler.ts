@@ -124,19 +124,24 @@ async function runPlatformIO(projectDir: string): Promise<{ success: boolean; ou
     })
 
     // Timeout after 5 minutes
+    let killed = false
     const timeout = setTimeout(() => {
+      killed = true
       proc.kill('SIGTERM')
-      resolve({
-        success: false,
-        output: output + '\n[TIMEOUT] Compilation timed out after 5 minutes',
-      })
+      // Escalate to SIGKILL if still running after 10s grace period
+      setTimeout(() => {
+        if (!proc.killed) {
+          console.warn('[PIO] Process did not exit after SIGTERM, sending SIGKILL')
+          proc.kill('SIGKILL')
+        }
+      }, 10_000)
     }, 5 * 60 * 1000)
 
     proc.on('close', (code) => {
       clearTimeout(timeout)
       resolve({
-        success: code === 0,
-        output: output + (errorOutput ? '\n--- STDERR ---\n' + errorOutput : ''),
+        success: !killed && code === 0,
+        output: output + (killed ? '\n[TIMEOUT] Compilation timed out after 5 minutes' : '') + (errorOutput ? '\n--- STDERR ---\n' + errorOutput : ''),
       })
     })
 
@@ -186,7 +191,9 @@ async function findFirmwareBinary(projectDir: string, board: string): Promise<st
  * Main compile function
  */
 export async function compileFirmware(input: CompileInput): Promise<CompileResult> {
-  const projectDir = path.join(os.tmpdir(), 'pio-build', `project-${Date.now()}`)
+  const baseDir = path.join(os.tmpdir(), 'pio-build')
+  await fs.mkdir(baseDir, { recursive: true })
+  const projectDir = await fs.mkdtemp(path.join(baseDir, 'project-'))
 
   try {
     // Create project directory structure

@@ -1,4 +1,5 @@
 import type { Env } from '../../env'
+import { safeJsonParse } from '../../lib/json'
 
 interface PagesFunction<E> {
   (context: {
@@ -29,18 +30,18 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     description: row.description,
     widthUnits: row.width_units,
     heightUnits: row.height_units,
-    taps: JSON.parse((row.taps as string) || '[]'),
-    i2cAddresses: row.i2c_addresses ? JSON.parse(row.i2c_addresses as string) : null,
+    taps: safeJsonParse(row.taps as string, []),
+    i2cAddresses: safeJsonParse(row.i2c_addresses as string | null, null),
     spiCs: row.spi_cs,
-    power: row.power ? JSON.parse(row.power as string) : { currentMaxMa: 0 },
-    components: row.components ? JSON.parse(row.components as string) : [],
+    power: safeJsonParse(row.power as string | null, { currentMaxMa: 0 }),
+    components: safeJsonParse(row.components as string | null, []),
     isValidated: row.is_validated === 1,
     // New fields for PCB merging
-    edges: row.edges ? JSON.parse(row.edges as string) : undefined,
-    files: row.files ? JSON.parse(row.files as string) : undefined,
-    netMappings: row.net_mappings ? JSON.parse(row.net_mappings as string) : undefined,
+    edges: safeJsonParse(row.edges as string | null, undefined),
+    files: safeJsonParse(row.files as string | null, undefined),
+    netMappings: safeJsonParse(row.net_mappings as string | null, undefined),
     // Full block definition with LCSC part numbers
-    definition: row.definition ? JSON.parse(row.definition as string) : undefined,
+    definition: safeJsonParse(row.definition as string | null, undefined),
   }
 
   return Response.json({ block })

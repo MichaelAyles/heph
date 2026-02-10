@@ -109,14 +109,14 @@ export function PCBStageView() {
   }, [blocksData?.blocks])
 
   // Initialize selected blocks from spec if available
-  useMemo(() => {
+  useEffect(() => {
     if (pcbArtifacts?.placedBlocks && selectedBlocks.length === 0) {
       setSelectedBlocks(pcbArtifacts.placedBlocks)
     }
   }, [pcbArtifacts?.placedBlocks])
 
   // Initialize tap states from spec if available
-  useMemo(() => {
+  useEffect(() => {
     if (pcbArtifacts?.resistorTapStates && configuredTapStates.length === 0) {
       setConfiguredTapStates(pcbArtifacts.resistorTapStates)
     }
@@ -815,7 +815,7 @@ export function PCBStageView() {
   )
 
   // Update currentStep based on existing data
-  useMemo(() => {
+  useEffect(() => {
     if (pcbArtifacts?.schematicData && currentStep === 'select_blocks') {
       setCurrentStep('preview')
     }
