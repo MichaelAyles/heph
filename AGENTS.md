@@ -64,6 +64,19 @@ Microservices:
 - Use a branch only for clearly breaking/high-risk experiments that may need isolation or rollback
 - If a branch is used for a breaking experiment, merge quickly and delete it after completion
 
+## Linear Tracking
+**All features must be tracked in Linear**, no exceptions. This applies even if:
+- The feature is small or completed quickly
+- The request came directly from the user (not from an existing Linear issue)
+- The work is already in progress or done
+
+**Workflow**:
+1. Before starting work on a feature, create a Linear issue (or find the existing one) and set it to "In Progress"
+2. When the feature is complete, mark the Linear issue as "Done"
+3. If a feature was completed without a Linear issue, create one after the fact and immediately mark it "Done"
+
+**Project**: This repo is tracked under the **Mike Ayles / Heph** project in Linear. Do not look at or interact with other Linear projects unless explicitly asked.
+
 ## Editing Priorities
 When making changes, prioritize:
 1. Correctness of spec/workspace progression
