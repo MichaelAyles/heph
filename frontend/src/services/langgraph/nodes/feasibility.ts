@@ -99,13 +99,14 @@ async function invokeFeasibility(
     projectId: context.projectId,
   })
 
-  // Extract JSON from response
-  const jsonMatch = response.content.match(/\{[\s\S]*\}/)
+  // Extract JSON from response — try code block first, then greedy match
+  const codeBlockMatch = response.content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
+  const jsonMatch = codeBlockMatch ? codeBlockMatch[1] : response.content.match(/\{[\s\S]*\}/)?.[0]
   if (!jsonMatch) {
     throw new Error('No JSON found in response')
   }
 
-  const parsed = JSON.parse(jsonMatch[0])
+  const parsed = JSON.parse(jsonMatch)
   const validated = FeasibilityOutputSchema.parse(parsed)
 
   return {

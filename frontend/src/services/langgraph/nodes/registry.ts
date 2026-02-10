@@ -173,17 +173,17 @@ export async function invokeNode(
   const endTime = new Date().toISOString()
   const durationMs = Date.now() - startMs
 
-  // Validate output
+  // Validate output — use validated data when possible, fall back to raw on extra-field mismatches
   const outputParseResult = node.outputSchema.safeParse(result.output)
   if (!outputParseResult.success) {
     console.warn(
-      `Output validation failed for node "${nodeName}": ${outputParseResult.error.message}`
+      `Output validation failed for node "${nodeName}": ${outputParseResult.error.message}`,
+      { issues: outputParseResult.error.issues }
     )
-    // Continue anyway - output may have extra fields
   }
 
   return {
-    output: result.output,
+    output: outputParseResult.success ? outputParseResult.data : result.output,
     nodeId,
     debug: {
       nodeName,

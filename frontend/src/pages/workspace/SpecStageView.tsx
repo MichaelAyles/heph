@@ -176,7 +176,7 @@ export function SpecStageView() {
     })
   }
 
-  const handleFinalizeComplete = (finalSpec: FinalSpec) => {
+  const handleFinalizeComplete = async (finalSpec: FinalSpec) => {
     // Update spec stage status to complete
     const defaultStage = { status: 'pending' as const }
     const updatedStages = {
@@ -187,13 +187,13 @@ export function SpecStageView() {
       export: spec?.stages?.export || defaultStage,
     }
 
-    updateMutation.mutate({
+    await updateMutation.mutateAsync({
       status: 'complete',
       name: finalSpec.name || project?.name || 'New Project',
       spec: { ...spec!, finalSpec, stages: updatedStages },
     })
 
-    // Navigate to PCB stage since spec is complete
+    // Navigate to PCB stage only after save succeeds
     navigate(`/project/${project?.id}/pcb`)
   }
 

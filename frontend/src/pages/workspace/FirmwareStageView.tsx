@@ -162,18 +162,19 @@ export function FirmwareStageView() {
     }
   }, [fileTree, selectedFile])
 
+  // Fetch latest project spec to avoid overwriting concurrent edits
+  const loadLatestSpec = useCallback(async () => {
+    if (!project?.id) throw new Error('Project is required')
+    const res = await fetch(`/api/projects/${project.id}`)
+    if (!res.ok) throw new Error('Failed to load latest project state')
+    const data = (await res.json()) as { project?: { spec?: Record<string, unknown> | null } }
+    return (data.project?.spec || {}) as Record<string, unknown>
+  }, [project?.id])
+
   // Save firmware to project
   const saveMutation = useMutation({
     mutationFn: async (files: FirmwareProject['files']) => {
-      const spec = project?.spec || {
-        description: '',
-        feasibility: null,
-        openQuestions: [],
-        decisions: [],
-        blueprints: [],
-        selectedBlueprint: null,
-        finalSpec: null,
-      }
+      const latestSpec = await loadLatestSpec()
 
       // Convert files to match FirmwareFile schema (cpp | c | h | json)
       const firmwareFiles = files.map((f) => ({
@@ -183,7 +184,7 @@ export function FirmwareStageView() {
       }))
 
       // Update firmware artifacts
-      spec.firmware = {
+      latestSpec.firmware = {
         files: firmwareFiles as {
           path: string
           content: string
@@ -193,22 +194,23 @@ export function FirmwareStageView() {
       }
 
       // Update stage status
-      spec.stages = spec.stages || {
+      const stages = (latestSpec.stages as Record<string, unknown> | undefined) || {
         spec: { status: 'complete' },
         pcb: { status: 'complete' },
         enclosure: { status: 'complete' },
         firmware: { status: 'pending' },
         export: { status: 'pending' },
       }
-      spec.stages.firmware = {
+      ;(stages as Record<string, unknown>).firmware = {
         status: 'complete',
         completedAt: new Date().toISOString(),
       }
+      latestSpec.stages = stages
 
       const response = await fetch(`/api/projects/${project?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spec }),
+        body: JSON.stringify({ spec: latestSpec }),
       })
 
       if (!response.ok) throw new Error('Failed to save firmware')
@@ -220,16 +222,19 @@ export function FirmwareStageView() {
   })
 
   const completeFirmwareStage = useCallback(async () => {
-    if (!project?.id || !project.spec) return false
+    if (!project?.id) return false
+
+    const latestSpec = await loadLatestSpec()
+    const stages = (latestSpec.stages as Record<string, unknown> | undefined) || {}
 
     const res = await fetch(`/api/projects/${project.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         spec: {
-          ...project.spec,
+          ...latestSpec,
           stages: {
-            ...project.spec.stages,
+            ...stages,
             firmware: {
               status: 'complete',
               completedAt: new Date().toISOString(),
@@ -244,7 +249,7 @@ export function FirmwareStageView() {
     queryClient.invalidateQueries({ queryKey: ['project', project.id] })
     queryClient.invalidateQueries({ queryKey: ['projects'] })
     return true
-  }, [project?.id, project?.spec, queryClient])
+  }, [project?.id, loadLatestSpec, queryClient])
 
   const handleSelectFile = useCallback(
     async (node: FileNode) => {

@@ -26,12 +26,9 @@ const loginAttempts = new Map<
 >()
 
 function getClientIdentifier(request: Request): string {
-  // Use CF-Connecting-IP header (set by Cloudflare) or fall back to a hash of user-agent
-  const ip =
-    request.headers.get('CF-Connecting-IP') ||
-    request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
-    'unknown'
-  return ip
+  // Only use CF-Connecting-IP (set by Cloudflare edge, not spoofable).
+  // X-Forwarded-For is excluded because it can be forged by clients.
+  return request.headers.get('CF-Connecting-IP') || 'unknown'
 }
 
 function getClientIp(request: Request): string | undefined {
