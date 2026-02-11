@@ -10,7 +10,7 @@ The rest of this post is about everything that didn't.
 
 ## What Went Right
 
-The core thesis held up. PHAESTUS selected blocks from the library, merged them into a single board, panelized it for manufacturing, generated Gerbers, and sent them off to JLCPCB. The boards came back, the components were placed, and after some rework the device turned on and worked.
+The core thesis held up. PHAESTUS selected blocks from the library, merged them into a single board, panelized it for manufacturing, generated Gerbers, BOM, and pick-and-place files, and sent them off to JLCPCB. The boards came back with all the passives and connectors machine-placed and soldered by JLCPCB's SMT assembly line - the BOM and centroid file generators worked correctly. The only components I had to hand-solder were the XIAO MCU module (out of stock at JLCPCB) and the USB-C connector (wrong footprint). After that rework, the device turned on and worked.
 
 The 3D-printed enclosure fit. The parametric OpenSCAD design that the AI generated matched the board dimensions, the button cutouts lined up, and the USB-C port landed in the right spot. For a first attempt at AI-generated hardware in a box, that's a win.
 
