@@ -1,6 +1,16 @@
 {
-  "generatedAt": "2026-02-11T12:49:10.194Z",
+  "generatedAt": "2026-02-11T13:17:37.136Z",
   "entries": [
+    {
+      "slug": "blog0048",
+      "number": 48,
+      "title": "Blog 48: How AI Generates a 3D-Printable Enclosure from a Product Blueprint",
+      "date": "February 11, 2026",
+      "excerpt": "Blog 47 covered the physical side - 23 iterations of printing snap-fit cases until the tolerances worked. This post is about the other half: how PHAESTUS gets from \"here's what the product should l...",
+      "thumbnailPath": "/blogs/blog0048/image-injection-debug.png",
+      "markdownPath": "/blogs/blog0048/blog.md",
+      "readingTime": 10
+    },
     {
       "slug": "blog0047",
       "number": 47,
