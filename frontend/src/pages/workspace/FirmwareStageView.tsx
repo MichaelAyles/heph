@@ -493,6 +493,20 @@ export function FirmwareStageView() {
       }),
     })
 
+    // Guard against non-JSON error responses (HTML error pages, plain text, etc.)
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      const text = await response.text()
+      return {
+        success: false,
+        error:
+          response.status === 524
+            ? 'Compilation timed out. The service may be waking up — try again in a moment.'
+            : `Compilation service error (HTTP ${response.status})`,
+        buildOutput: text.slice(0, 1000),
+      } as CompileResult
+    }
+
     return (await response.json()) as CompileResult
   }, [editorContent, fileTree, selectedBoard, selectedFile])
 

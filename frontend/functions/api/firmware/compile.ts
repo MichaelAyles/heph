@@ -36,10 +36,7 @@ export const onRequestPost: PagesFunction<Env, '', AuthenticatedRequest> = async
   const serviceUrl = env.PLATFORMIO_SERVICE_URL
   if (!serviceUrl) {
     await logger.warn('firmware', 'PlatformIO service not configured')
-    return Response.json(
-      { error: 'Firmware compilation service not configured' },
-      { status: 503 }
-    )
+    return Response.json({ error: 'Firmware compilation service not configured' }, { status: 503 })
   }
 
   try {
@@ -53,14 +50,9 @@ export const onRequestPost: PagesFunction<Env, '', AuthenticatedRequest> = async
     }
 
     // Validate at least main.cpp exists
-    const hasMain = body.files.some(
-      (f) => f.path === 'src/main.cpp' || f.path === 'main.cpp'
-    )
+    const hasMain = body.files.some((f) => f.path === 'src/main.cpp' || f.path === 'main.cpp')
     if (!hasMain) {
-      return Response.json(
-        { error: 'Missing src/main.cpp or main.cpp' },
-        { status: 400 }
-      )
+      return Response.json({ error: 'Missing src/main.cpp or main.cpp' }, { status: 400 })
     }
 
     await logger.info('firmware', `Compiling firmware with ${body.files.length} files`, {
@@ -70,24 +62,60 @@ export const onRequestPost: PagesFunction<Env, '', AuthenticatedRequest> = async
 
     const startTime = Date.now()
 
-    // Call PlatformIO service
+    // Call PlatformIO service with timeout
     const serviceHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
     if (env.INTERNAL_SERVICE_TOKEN) {
       serviceHeaders.Authorization = `Bearer ${env.INTERNAL_SERVICE_TOKEN}`
     }
 
-    const response = await fetch(`${serviceUrl}/compile`, {
-      method: 'POST',
-      headers: serviceHeaders,
-      body: JSON.stringify({
-        files: body.files,
-        board: body.board || 'esp32-c6-devkitc-1',
-        framework: body.framework || 'arduino',
-      }),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 90_000) // 90s timeout (under Cloudflare's 100s limit)
+
+    let response: Response
+    try {
+      response = await fetch(`${serviceUrl}/compile`, {
+        method: 'POST',
+        headers: serviceHeaders,
+        signal: controller.signal,
+        body: JSON.stringify({
+          files: body.files,
+          board: body.board || 'esp32-c6-devkitc-1',
+          framework: body.framework || 'arduino',
+        }),
+      })
+    } catch (fetchError) {
+      clearTimeout(timeout)
+      const duration = Date.now() - startTime
+      const isTimeout = fetchError instanceof DOMException && fetchError.name === 'AbortError'
+      const message = isTimeout
+        ? 'Compilation timed out (90s). The service may be waking up — try again in a moment.'
+        : 'Firmware compilation service unavailable'
+
+      await logger.warn('firmware', message, { duration })
+      return Response.json({ success: false, error: message, duration }, { status: 504 })
+    }
+    clearTimeout(timeout)
+
+    const duration = Date.now() - startTime
+
+    // Handle non-JSON responses (502 text, HTML error pages, etc.)
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      const text = await response.text()
+      await logger.warn('firmware', 'Non-JSON response from PlatformIO service', {
+        status: response.status,
+        contentType,
+        body: text.slice(0, 500),
+        duration,
+      })
+      const message =
+        response.status === 502
+          ? 'Compilation service is starting up — try again in 30 seconds.'
+          : `Compilation service returned an error (HTTP ${response.status})`
+      return Response.json({ success: false, error: message, duration }, { status: 502 })
+    }
 
     const result = (await response.json()) as CompileResponse
-    const duration = Date.now() - startTime
 
     if (!response.ok || !result.success) {
       await logger.warn('firmware', 'Compilation failed', {
@@ -122,15 +150,11 @@ export const onRequestPost: PagesFunction<Env, '', AuthenticatedRequest> = async
       error: error instanceof Error ? error.message : 'Unknown error',
     })
 
-    if (error instanceof Error && error.message.includes('fetch')) {
-      return Response.json(
-        { error: 'Firmware compilation service unavailable' },
-        { status: 503 }
-      )
-    }
-
     return Response.json(
-      { error: error instanceof Error ? error.message : 'Internal error' },
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal error',
+      },
       { status: 500 }
     )
   }
