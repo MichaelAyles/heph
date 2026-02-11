@@ -49,6 +49,8 @@ A step-by-step UI that guides users through the process:
 
 The terminal output is particularly useful for debugging. If something goes wrong, users can see exactly what esptool reported.
 
+![Flash modal connected to ESP32-C6, ready to flash](flash-connected.png)
+
 **3. BuildPanel Integration**
 
 After a successful compile, a "Flash to Device" button appears next to "Download firmware.bin". This only shows up if the browser supports WebSerial—Firefox and Safari users see the download button but not the flash button.
@@ -103,6 +105,10 @@ reportProgress: (fileIndex: number, written: number, total: number) => {
   })
 }
 ```
+
+![Flashing in progress at 12%](flash-progress.png)
+
+![Flashing nearly complete at 95%](flash-nearly-done.png)
 
 We pipe this to the modal's progress bar. The terminal also shows esptool's verbose output through a terminal interface:
 

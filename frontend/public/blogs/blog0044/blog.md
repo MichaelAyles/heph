@@ -15,6 +15,7 @@ Frontend → /api/firmware/compile → Railway PlatformIO Service → firmware.b
 ```
 
 The service is straightforward:
+
 - Express server accepting JSON with source files
 - Creates temporary PlatformIO project
 - Runs `pio run`
@@ -46,11 +47,11 @@ The compiler auto-selects the right platform based on the target board.
 
 First compile on a cold container takes longer because PlatformIO downloads dependencies. Subsequent builds are faster:
 
-| Scenario | Time |
-|----------|------|
-| First build (cold) | ~80-120s |
-| Rebuild (warm) | ~20-40s |
-| With libraries (FastLED, etc.) | +10-30s |
+| Scenario                       | Time     |
+| ------------------------------ | -------- |
+| First build (cold)             | ~80-120s |
+| Rebuild (warm)                 | ~20-40s  |
+| With libraries (FastLED, etc.) | +10-30s  |
 
 The Docker image pre-installs both platform versions (~1GB of toolchains) to minimize cold start dependency downloads.
 
@@ -65,11 +66,14 @@ The firmware stage now has:
 
 The build panel shows success/failure status, compilation duration, and firmware size. On failure, you see the full error output to debug the issue.
 
+![Build succeeded - showing PlatformIO output, download and flash buttons](build-succeeded.png)
+
 ## What's Next
 
 The compiled firmware still needs to be flashed manually via USB. Browser-based flashing via WebSerial is technically possible (ESP Web Tools does it), but that's a future enhancement.
 
 For now, users can:
+
 1. Design their hardware in PHAESTUS
 2. Generate firmware with AI
 3. Edit in the Monaco editor
@@ -82,17 +86,20 @@ One less tool to install locally.
 ## Technical Details
 
 **Service Stack:**
+
 - Python 3.11 + Node.js 20
 - PlatformIO Core
 - Pioarduino platform (ESP32-C6)
 - Espressif32 6.5.0 (ESP32/S3)
 
 **Deployment:**
+
 - Railway.app (auto-scales, Docker-based)
 - ~2GB Docker image
 - 5 minute compile timeout
 
 **API:**
+
 - `POST /compile` - Compile firmware from source files
 - `GET /boards` - List supported boards
 - `GET /health` - Health check
