@@ -1,7 +1,7 @@
 import type { Env } from '../env'
 import { createLogger } from './logger'
 
-const DEFAULT_NOTIFICATION_USERS = ['ycombinator', 'gemini3']
+const DEFAULT_NOTIFICATION_USERS = ['ycombinator', 'gemini3', 'mike']
 
 function parseNotifyUsers(rawUsers?: string): string[] {
   const users = (

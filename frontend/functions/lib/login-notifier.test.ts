@@ -9,13 +9,14 @@ describe('login-notifier', () => {
 
   describe('user matching', () => {
     it('returns default tracked users when env list is not set', () => {
-      expect(getTrackedLoginUsers()).toEqual(['ycombinator', 'gemini3'])
+      expect(getTrackedLoginUsers()).toEqual(['ycombinator', 'gemini3', 'mike'])
     })
 
     it('uses default watched users when env list is not set', () => {
       expect(__testables.shouldNotifyForUser('ycombinator')).toBe(true)
       expect(__testables.shouldNotifyForUser('gemini3')).toBe(true)
-      expect(__testables.shouldNotifyForUser('mike')).toBe(false)
+      expect(__testables.shouldNotifyForUser('mike')).toBe(true)
+      expect(__testables.shouldNotifyForUser('randomuser')).toBe(false)
     })
 
     it('uses custom watched users from env var', () => {
@@ -61,7 +62,7 @@ describe('login-notifier', () => {
 
       await maybeNotifyWatchedLogin({
         env,
-        username: 'mike',
+        username: 'randomuser',
         loginMethod: 'password',
       })
 
