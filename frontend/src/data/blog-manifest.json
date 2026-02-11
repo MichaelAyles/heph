@@ -1,6 +1,16 @@
 {
-  "generatedAt": "2026-02-11T12:27:05.658Z",
+  "generatedAt": "2026-02-11T12:45:07.807Z",
   "entries": [
+    {
+      "slug": "blog0047",
+      "number": 47,
+      "title": "Blog 47: Enclosure Design - 23 Iterations to a Snap-Fit Case",
+      "date": "2026-02-11",
+      "excerpt": "The PCB was ordered. The firmware compiled. But a bare circuit board isn't a product. It needs a case - something you can hold, something that protects the electronics, something with holes for but...",
+      "thumbnailPath": "/blogs/blog0047/openscad-render.png",
+      "markdownPath": "/blogs/blog0047/blog.md",
+      "readingTime": 6
+    },
     {
       "slug": "blog0046",
       "number": 46,
