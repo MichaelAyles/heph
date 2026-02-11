@@ -1,6 +1,16 @@
 {
-  "generatedAt": "2026-02-11T12:12:58.947Z",
+  "generatedAt": "2026-02-11T12:27:05.658Z",
   "entries": [
+    {
+      "slug": "blog0046",
+      "number": 46,
+      "title": "Blog 46: First Hardware Build - What Went Right, What Went Wrong",
+      "date": "2026-02-11",
+      "excerpt": "We have a working Bluetooth remote control. It connects, it sends keypresses, the LED lights up. It's real hardware, designed by AI, manufactured at JLCPCB, assembled on a desk in the UK. That part...",
+      "thumbnailPath": "/blogs/blog0046/PXL_20260209_133313473.jpg",
+      "markdownPath": "/blogs/blog0046/blog.md",
+      "readingTime": 5
+    },
     {
       "slug": "blog0045",
       "number": 45,
