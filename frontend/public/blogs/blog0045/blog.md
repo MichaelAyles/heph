@@ -1,5 +1,7 @@
 # Blog 45: Browser-Based Firmware Flashing with WebSerial
 
+**Date: January 26, 2026**
+
 Until now, PHAESTUS could generate firmware, compile it in the cloud, and let you download the binary. But then you'd need to install esptool, open a terminal, figure out the right COM port, and run a command that looks like gibberish to anyone who isn't a firmware developer. We wanted something better.
 
 ## The WebSerial API

@@ -1,5 +1,7 @@
 # Authentication Architecture: Simple Now, Scalable Later
 
+**Date:** 2025-12-30
+
 ## The Problem
 
 Phaestus needs authentication for several reasons:

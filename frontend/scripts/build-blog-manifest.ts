@@ -50,9 +50,11 @@ function extractTitle(content: string): string {
   return match ? match[1].trim() : 'Untitled'
 }
 
-// Extract date from markdown (looks for **Date**: or **Date:** pattern)
+// Extract date from markdown
+// Supports all formats: **Date**: V, **Date:** V, **Date: V**, **Date**: V | ...
 function extractDate(content: string): string {
-  const match = content.match(/\*\*Date\*\*:?\s*(.+)$/m)
+  // Match any **Date variation, capture the date value (stop at |, **, or end of line)
+  const match = content.match(/\*\*Date\**:?\*?\*?\s*([^|\n*]+)/m)
   if (match) {
     return match[1].trim()
   }

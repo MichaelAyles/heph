@@ -1,5 +1,7 @@
 # Blog 43: We Ordered Our First Board!
 
+**Date: January 22, 2026**
+
 After weeks of wrestling with Gerber files, debugging coordinate systems, and learning more about PCB manufacturing than I ever expected, we finally did it. The order is in. Real boards are being fabricated in Shenzhen right now.
 
 ![JLCPCB Order Confirmation](2026-01-22%2013_51_50-NVIDIA%20GeForce%20Overlay.png)
@@ -27,12 +29,14 @@ If you've been following this blog, you know the journey hasn't been smooth. Wha
 The panel contains two boards that will snap apart after assembly:
 
 **Main Board** (left side) - An ESP32-C6 development platform with:
+
 - XIAO ESP32-C6 module (WiFi 6, BLE 5.3, Zigbee/Thread)
 - USB-C power input with protection
 - LiPo battery connector
 - 6-pin FFC connector for the remote board
 
 **Remote IO Board** (right side) - A 4-channel input/output panel:
+
 - AW9523B I2C GPIO expander
 - 4 tactile buttons
 - 4 RGB LEDs
@@ -64,6 +68,7 @@ Still worth it. Absolutely worth it.
 ## What Happens Next
 
 The boards should arrive in about two weeks. Then comes the moment of truth:
+
 - Do the components actually fit their footprints?
 - Did we get all the rotations right?
 - Does the FFC cable actually connect the two boards?
@@ -85,4 +90,4 @@ The boards are ordered. The rest is waiting.
 
 ---
 
-*Next up: Either a triumphant "it works!" post, or a detailed post-mortem. Hardware has a way of keeping you humble.*
+_Next up: Either a triumphant "it works!" post, or a detailed post-mortem. Hardware has a way of keeping you humble._
