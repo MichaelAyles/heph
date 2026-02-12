@@ -1,9 +1,41 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PlusCircle, Cpu, Zap, Package, ArrowRight } from 'lucide-react'
+import { PlusCircle, Cpu, Zap, Package, ArrowRight, X, Info } from 'lucide-react'
+
+const BANNER_DISMISSED_KEY = 'hackathon-banner-dismissed'
 
 export function HomePage() {
+  const [bannerVisible, setBannerVisible] = useState(
+    () => localStorage.getItem(BANNER_DISMISSED_KEY) !== 'true'
+  )
+
+  const dismissBanner = () => {
+    setBannerVisible(false)
+    localStorage.setItem(BANNER_DISMISSED_KEY, 'true')
+  }
+
   return (
     <div className="flex-1 flex flex-col">
+      {bannerVisible && (
+        <div className="bg-copper/10 border-b border-copper/20 px-4 py-3">
+          <div className="max-w-5xl mx-auto flex items-start gap-3">
+            <Info className="w-5 h-5 text-copper mt-0.5 shrink-0" strokeWidth={1.5} />
+            <p className="text-sm text-steel flex-1">
+              This app has been checkpointed to comply with hackathon submission terms. Development
+              continues in the background — if you'd like to see the latest build, reach out to me
+              and I'll provide a preview URL.
+            </p>
+            <button
+              onClick={dismissBanner}
+              className="text-steel-dim hover:text-steel transition-colors shrink-0 mt-0.5"
+              aria-label="Dismiss banner"
+            >
+              <X className="w-4 h-4" strokeWidth={1.5} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="max-w-3xl text-center">
